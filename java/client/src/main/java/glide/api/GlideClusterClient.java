@@ -223,10 +223,10 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
         if (transaction.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
+                    transaction, true, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    transaction, Optional.empty(), this::handleArrayOrNullResponse);
+                    transaction, true, Optional.empty(), this::handleArrayOrNullResponse);
         }
     }
 
@@ -237,33 +237,33 @@ public class GlideClusterClient extends BaseClient
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
         if (transaction.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    transaction, Optional.of(options), this::handleArrayOrNullResponseBinary);
+                    transaction, true, Optional.of(options), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    transaction, Optional.of(options), this::handleArrayOrNullResponse);
+                    transaction, true, Optional.of(options), this::handleArrayOrNullResponse);
         }
     }
 
     @Override
-    public CompletableFuture<Object[]> exec(@NonNull ClusterBatch batch) {
+    public CompletableFuture<Object[]> exec(@NonNull ClusterBatch batch, boolean raiseOnError) {
         if (batch.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    batch, Optional.empty(), this::handleArrayOrNullResponseBinary);
+                    batch, raiseOnError, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    batch, Optional.empty(), this::handleArrayOrNullResponse);
+                    batch, raiseOnError, Optional.empty(), this::handleArrayOrNullResponse);
         }
     }
 
     @Override
     public CompletableFuture<Object[]> exec(
-            @NonNull ClusterBatch batch, @NonNull ClusterBatchOptions options) {
+            @NonNull ClusterBatch batch, boolean raiseOnError, @NonNull ClusterBatchOptions options) {
         if (batch.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    batch, Optional.of(options), this::handleArrayOrNullResponseBinary);
+                    batch, raiseOnError, Optional.of(options), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    batch, Optional.of(options), this::handleArrayOrNullResponse);
+                    batch, raiseOnError, Optional.of(options), this::handleArrayOrNullResponse);
         }
     }
 

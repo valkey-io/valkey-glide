@@ -960,7 +960,7 @@ public class PubSubTests {
                         .publish("two", "mnk", true)
                         .publish("three", "xyz", true);
         var exception =
-                assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
+                assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction, false).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("crossslot"));
     }
@@ -1006,14 +1006,14 @@ public class PubSubTests {
                     new Batch(true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((GlideClient) sender).exec(transaction).get();
+            ((GlideClient) sender).exec(transaction, false).get();
         } else {
             var transaction =
                     new ClusterBatch(true)
                             .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((GlideClusterClient) sender).exec(transaction).get();
+            ((GlideClusterClient) sender).exec(transaction, false).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -1451,8 +1451,8 @@ public class PubSubTests {
         // no channels exists yet
         var result =
                 standalone
-                        ? ((GlideClient) client).exec((Batch) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
+                        ? ((GlideClient) client).exec((Batch) transaction, false).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
         assertDeepEquals(
                 new Object[] {
                     new String[0], // pubsubChannels()
@@ -1480,8 +1480,8 @@ public class PubSubTests {
 
         result =
                 standalone
-                        ? ((GlideClient) client).exec((Batch) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
+                        ? ((GlideClient) client).exec((Batch) transaction, false).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
 
         // convert arrays to sets, because we can't compare arrays - they received reordered
         result[0] = Set.of((Object[]) result[0]);

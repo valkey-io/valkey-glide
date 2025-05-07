@@ -28,13 +28,13 @@ public interface TransactionsBaseCommands {
      *     <pre>{@code
      * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
      * transaction.set("sampleKey", "foobar");
-     * Object[] result = client.exec(transaction).get();
+     * Object[] result = client.exec(transaction, false).get();
      * assert result != null; // Executes successfully and keys are unwatched.
      *
      * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
      * transaction.set("sampleKey", "foobar");
      * assert client.set("sampleKey", "hello world").get().equals("OK");
-     * Object[] result = client.exec(transaction).get();
+     * Object[] result = client.exec(transaction, true).get();
      * assert result == null; // null is returned when the watched key is modified before transaction execution.
      * }</pre>
      */
@@ -58,13 +58,13 @@ public interface TransactionsBaseCommands {
      *     <pre>{@code
      * assert client.watch(new GlideString[] {gs("sampleKey")}).get().equals("OK");
      * transaction.set(gs("sampleKey"), gs("foobar"));
-     * Object[] result = client.exec(transaction).get();
+     * Object[] result = client.exec(transaction, false).get();
      * assert result != null; // Executes successfully and keys are unwatched.
      *
      * assert client.watch(new GlideString[] {gs("sampleKey")}).get().equals("OK");
      * transaction.set(gs("sampleKey"), gs("foobar"));
      * assert client.set(gs("sampleKey"), gs("hello world")).get().equals("OK");
-     * Object[] result = client.exec(transaction).get();
+     * Object[] result = client.exec(transaction, true).get();
      * assert result == null; // null is returned when the watched key is modified before transaction execution.
      * }</pre>
      */

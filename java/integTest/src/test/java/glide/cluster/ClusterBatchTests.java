@@ -80,7 +80,7 @@ public class ClusterBatchTests {
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient) {
         ClusterBatch transaction = new ClusterBatch(true).customCommand(new String[] {"info"});
-        Object[] result = clusterClient.exec(transaction).get();
+        Object[] result = clusterClient.exec(transaction, true).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
@@ -89,7 +89,7 @@ public class ClusterBatchTests {
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient, boolean isAtomic) {
         ClusterBatch batch = new ClusterBatch(isAtomic).customCommand(new String[] {"ping"});
-        Object[] result = clusterClient.exec(batch).get();
+        Object[] result = clusterClient.exec(batch, true).get();
         assertEquals(result[0], "PONG");
     }
 
@@ -100,7 +100,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic).info().info();
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(RANDOM).build();
 
-        Object[] result = clusterClient.exec(batch, options).get();
+        Object[] result = clusterClient.exec(batch, true, options).get();
 
         assertTrue(((String) result[0]).contains("# Stats"));
         assertTrue(((String) result[1]).contains("# Stats"));
@@ -132,7 +132,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         Object[] expectedResult = builder.apply(batch, isAtomic);
 
-        Object[] results = clusterClient.exec(batch).get();
+        Object[] results = clusterClient.exec(batch, true).get();
         assertDeepEquals(expectedResult, results);
     }
 
@@ -166,7 +166,7 @@ public class ClusterBatchTests {
         }
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
-        Object[] results = clusterClient.exec(batch, options).get();
+        Object[] results = clusterClient.exec(batch, true, options).get();
 
         assertDeepEquals(expectedResult, results);
     }
@@ -189,7 +189,7 @@ public class ClusterBatchTests {
                     value, // batch.get(key);
                 };
 
-        Object[] result = clusterClient.exec(batch).get();
+        Object[] result = clusterClient.exec(batch, true).get();
         assertArrayEquals(expectedResult, result);
     }
 
@@ -198,7 +198,7 @@ public class ClusterBatchTests {
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient, boolean isAtomic) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
-        var response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave()).get();
+        var response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave(), true).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -215,7 +215,7 @@ public class ClusterBatchTests {
             batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
             batch.set(objectFreqKey, "");
             batch.objectFreq(objectFreqKey);
-            var response = clusterClient.exec(batch).get();
+            var response = clusterClient.exec(batch, true).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
@@ -232,7 +232,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         batch.set(objectIdletimeKey, "");
         batch.objectIdletime(objectIdletimeKey);
-        var response = clusterClient.exec(batch).get();
+        var response = clusterClient.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -245,7 +245,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         batch.set(objectRefcountKey, "");
         batch.objectRefcount(objectRefcountKey);
-        var response = clusterClient.exec(batch).get();
+        var response = clusterClient.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -261,7 +261,7 @@ public class ClusterBatchTests {
         batch.zrankWithScore(zSetKey1, "one");
         batch.zrevrankWithScore(zSetKey1, "one");
 
-        Object[] result = clusterClient.exec(batch).get();
+        Object[] result = clusterClient.exec(batch, true).get();
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
@@ -287,7 +287,7 @@ public class ClusterBatchTests {
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(OK, clusterClient.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertNull(clusterClient.exec(setFoobarTransaction).get()); // Sanity check
+        assertNull(clusterClient.exec(setFoobarTransaction, true).get()); // Sanity check
         assertNull(clusterClient.get(key1).get());
         assertEquals(helloString, clusterClient.get(key2).get());
         assertNull(clusterClient.get(key3).get());
@@ -296,14 +296,14 @@ public class ClusterBatchTests {
         // transaction is executed.
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(helloString, clusterClient.get(key2).get());
-        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(foobarString, clusterClient.get(key2).get());
         assertEquals(foobarString, clusterClient.get(key3).get());
 
         // Transaction executes command successfully with unmodified watched keys
         assertEquals(OK, clusterClient.watch(keys).get());
-        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(foobarString, clusterClient.get(key2).get());
         assertEquals(foobarString, clusterClient.get(key3).get());
@@ -312,7 +312,7 @@ public class ClusterBatchTests {
         // transaction.
         assertEquals(OK, clusterClient.watch(new String[] {key4}).get());
         setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
-        assertArrayEquals(expectedExecResponse, clusterClient.exec(setHelloTransaction).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setHelloTransaction, true).get());
         assertEquals(helloString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(helloString, clusterClient.get(key2).get());
         assertEquals(helloString, clusterClient.get(key3).get());
@@ -345,7 +345,7 @@ public class ClusterBatchTests {
         assertEquals(OK, clusterClient.unwatch().get());
         assertEquals(OK, clusterClient.unwatch(ALL_PRIMARIES).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString);
-        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, clusterClient.get(key1).get());
         assertEquals(foobarString, clusterClient.get(key2).get());
     }
@@ -357,7 +357,7 @@ public class ClusterBatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         ClusterBatch batch = new ClusterBatch(isAtomic).publish("messagae", "Schannel", true);
 
-        assertArrayEquals(new Object[] {0L}, clusterClient.exec(batch).get());
+        assertArrayEquals(new Object[] {0L}, clusterClient.exec(batch, true).get());
     }
 
     @ParameterizedTest
@@ -422,7 +422,7 @@ public class ClusterBatchTests {
                     .lrange(key6, 0, -1);
         }
 
-        Object[] results = clusterClient.exec(batch).get();
+        Object[] results = clusterClient.exec(batch, true).get();
         Object[] expectedResult =
                 new Object[] {
                     3L, // lpush(key1, new String[] {"3", "1", "2"})
@@ -469,7 +469,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
 
         batch.set(key, "value").wait(numreplicas, timeout);
-        Object[] results = clusterClient.exec(batch).get();
+        Object[] results = clusterClient.exec(batch, true).get();
         Object[] expectedResult =
                 new Object[] {
                     OK, // set(key,  "value")
@@ -493,7 +493,7 @@ public class ClusterBatchTests {
 
         // Verify functionDump
         ClusterBatch batch = new ClusterBatch(isAtomic).withBinaryOutput().functionDump();
-        Object[] result = clusterClient.exec(batch).get();
+        Object[] result = clusterClient.exec(batch, true).get();
         GlideString payload = (GlideString) result[0];
 
         // Verify functionRestore
@@ -505,7 +505,7 @@ public class ClusterBatchTests {
         ClusterBatchOptions options =
                 ClusterBatchOptions.builder().route(new SlotIdRoute(1, SlotType.PRIMARY)).build();
 
-        Object[] response = clusterClient.exec(batch, options).get();
+        Object[] response = clusterClient.exec(batch, true, options).get();
         assertEquals(OK, response[0]);
     }
 
@@ -544,7 +544,7 @@ public class ClusterBatchTests {
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
-        Object[] results = clusterClient.exec(batch).get();
+        Object[] results = clusterClient.exec(batch, true).get();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedStreamInfo.put("max-deleted-entry-id", "0-0");
@@ -575,7 +575,7 @@ public class ClusterBatchTests {
 
         var batch = new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = clusterClient.exec(batch).get();
+        var responses = clusterClient.exec(batch, true).get();
 
         assertDeepEquals(
                 new Object[] {

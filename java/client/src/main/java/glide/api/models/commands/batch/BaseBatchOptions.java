@@ -2,7 +2,6 @@
 package glide.api.models.commands.batch;
 
 import glide.api.models.configuration.BaseClientConfiguration;
-import glide.api.models.exceptions.RequestException;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
@@ -22,17 +21,4 @@ public abstract class BaseBatchOptions {
      * BaseClientConfiguration#requestTimeout} will be used.
      */
     private final Integer timeout;
-
-    /**
-     * Determines how errors are handled within the batch response.
-     *
-     * <p>When set to {@code true}, the first encountered error in the batch will be raised as an
-     * exception of type {@link RequestException} after all retries and reconnections have been
-     * executed.
-     *
-     * <p>When set to {@code false}, errors will be included as part of the batch response, allowing
-     * the caller to process both successful and failed commands together. In this case, error details
-     * will be provided as instances of {@link RequestException}.
-     */
-    private final Boolean raiseOnError;
 }

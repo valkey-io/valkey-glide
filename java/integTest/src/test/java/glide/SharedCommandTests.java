@@ -15508,12 +15508,12 @@ public class SharedCommandTests {
                                 GlideClusterClient clusterClient = (GlideClusterClient) client;
                                 ClusterBatch clusterBatch = (ClusterBatch) batch;
                                 ClusterBatchOptions options = (ClusterBatchOptions) initialOptions;
-                                clusterClient.exec(clusterBatch, options).get();
+                                clusterClient.exec(clusterBatch, false, options).get();
                             } else {
                                 GlideClient standaloneClient = (GlideClient) client;
                                 Batch standaloneBatch = (Batch) batch;
                                 BatchOptions options = (BatchOptions) initialOptions;
-                                standaloneClient.exec(standaloneBatch, options).get();
+                                standaloneClient.exec(standaloneBatch, false, options).get();
                             }
                         });
         assertInstanceOf(
@@ -15531,9 +15531,9 @@ public class SharedCommandTests {
         Object[] result =
                 isCluster
                         ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, (ClusterBatchOptions) options2)
+                                .exec((ClusterBatch) batch, true, (ClusterBatchOptions) options2)
                                 .get()
-                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) options2).get();
+                        : ((GlideClient) client).exec((Batch) batch, true, (BatchOptions) options2).get();
 
         assertEquals(1, result.length);
     }
@@ -15549,17 +15549,11 @@ public class SharedCommandTests {
         BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
 
         batch.set(key, "hello").lpop(key).del(new String[] {key}).rename(key, key2);
-        BaseBatchOptions raiseFalse =
-                isCluster
-                        ? ClusterBatchOptions.builder().raiseOnError(false).build()
-                        : BatchOptions.builder().raiseOnError(false).build();
 
         Object[] result =
                 isCluster
-                        ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseFalse)
-                                .get()
-                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseFalse).get();
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
 
         assertEquals(4, result.length);
         assertEquals(result[0], "OK");
@@ -15569,21 +15563,14 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, result[3]);
         assertTrue(((RequestException) result[3]).getMessage().contains("no such key"));
 
-        BaseBatchOptions raiseTrue =
-                isCluster
-                        ? ClusterBatchOptions.builder().raiseOnError(true).build()
-                        : BatchOptions.builder().raiseOnError(true).build();
-
         ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> {
                             if (isCluster) {
-                                ((GlideClusterClient) client)
-                                        .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseTrue)
-                                        .get();
+                                ((GlideClusterClient) client).exec((ClusterBatch) batch, true).get();
                             } else {
-                                ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseTrue).get();
+                                ((GlideClient) client).exec((Batch) batch, true).get();
                             }
                         });
         assertInstanceOf(RequestException.class, exception.getCause());

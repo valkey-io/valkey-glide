@@ -157,32 +157,33 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
         if (transaction.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
+                    transaction, true, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    transaction, Optional.empty(), this::handleArrayOrNullResponse);
+                    transaction, true, Optional.empty(), this::handleArrayOrNullResponse);
         }
     }
 
     @Override
-    public CompletableFuture<Object[]> exec(@NonNull Batch batch) {
+    public CompletableFuture<Object[]> exec(@NonNull Batch batch, boolean raiseOnError) {
         if (batch.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    batch, Optional.empty(), this::handleArrayOrNullResponseBinary);
+                    batch, raiseOnError, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    batch, Optional.empty(), this::handleArrayOrNullResponse);
+                    batch, raiseOnError, Optional.empty(), this::handleArrayOrNullResponse);
         }
     }
 
     @Override
-    public CompletableFuture<Object[]> exec(@NonNull Batch batch, @NonNull BatchOptions options) {
+    public CompletableFuture<Object[]> exec(
+            @NonNull Batch batch, boolean raiseOnError, @NonNull BatchOptions options) {
         if (batch.isBinaryOutput()) {
             return commandManager.submitNewBatch(
-                    batch, Optional.of(options), this::handleArrayOrNullResponseBinary);
+                    batch, raiseOnError, Optional.of(options), this::handleArrayOrNullResponseBinary);
         } else {
             return commandManager.submitNewBatch(
-                    batch, Optional.of(options), this::handleArrayOrNullResponse);
+                    batch, raiseOnError, Optional.of(options), this::handleArrayOrNullResponse);
         }
     }
 

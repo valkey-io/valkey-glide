@@ -6,6 +6,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.exceptions.RequestException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -56,8 +57,8 @@ public interface GenericCommands {
     CompletableFuture<Object> customCommand(GlideString[] args);
 
     /**
-     * @deprecated Use {@link #exec(Batch)} instead. This method is being replaced by a more flexible
-     *     approach using {@link Batch}.
+     * @deprecated Use {@link #exec(Batch, boolean)} instead. This method is being replaced by a more
+     *     flexible approach using {@link Batch}.
      *     <p>Executes a transaction by processing the queued commands.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
@@ -69,7 +70,7 @@ public interface GenericCommands {
      *           return <code>null</code>.
      *     </ul>
      *
-     * @see #exec(Batch)
+     * @see #exec(Batch, boolean)
      * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @example
@@ -93,6 +94,13 @@ public interface GenericCommands {
      * </ul>
      *
      * @param batch A {@link Batch} containing the commands to execute.
+     * @param raiseOnError Determines how errors are handled within the batch response.
+     *     <p>When set to {@code true}, the first encountered error in the batch will be raised as an
+     *     exception of type {@link RequestException} after all retries and reconnections have been
+     *     executed.
+     *     <p>When set to {@code false}, errors will be included as part of the batch response,
+     *     allowing the caller to process both successful and failed commands together. In this case,
+     *     error details will be provided as instances of {@link RequestException}.
      * @return A {@link CompletableFuture} resolving to an array of results, where each entry
      *     corresponds to a command’s execution result.
      * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
@@ -106,7 +114,7 @@ public interface GenericCommands {
      *     .set("key", "1")                 // Set a value for key
      *     .incr("key")                     // Increment the value of the key
      *     .get("key");                     // Get the value of the key
-     * Object[] result = client.exec(transaction).get();
+     * Object[] result = client.exec(transaction, true).get();
      * System.out.println("Transaction Batch Result: " + Arrays.toString(result));
      * // Expected Output: Transaction Batch Result: [OK, 2, 2]
      *
@@ -116,12 +124,12 @@ public interface GenericCommands {
      *     .set("key2", "value2")          // Set value for key2
      *     .get("key1")                    // Get value for key1
      *     .get("key2");                   // Get value for key2
-     * Object[] pipelineResult = client.exec(pipeline).get();
+     * Object[] pipelineResult = client.exec(pipeline, true).get();
      * System.out.println("Pipeline Batch Result: " + Arrays.toString(pipelineResult));
      * // Expected Output: Pipeline Batch Result: [OK, OK, value1, value2]
      * }</pre>
      */
-    CompletableFuture<Object[]> exec(Batch batch);
+    CompletableFuture<Object[]> exec(Batch batch, boolean raiseOnError);
 
     /**
      * Executes a batch by processing the queued commands with additional options.
@@ -134,6 +142,13 @@ public interface GenericCommands {
      * </ul>
      *
      * @param batch A {@link Batch} containing the commands to execute.
+     * @param raiseOnError Determines how errors are handled within the batch response.
+     *     <p>When set to {@code true}, the first encountered error in the batch will be raised as an
+     *     exception of type {@link RequestException} after all retries and reconnections have been
+     *     executed.
+     *     <p>When set to {@code false}, errors will be included as part of the batch response,
+     *     allowing the caller to process both successful and failed commands together. In this case,
+     *     error details will be provided as instances of {@link RequestException}.
      * @param options A {@link BatchOptions} object containing execution options.
      * @return A {@link CompletableFuture} resolving to an array of results, where each entry
      *     corresponds to a command’s execution result.
@@ -146,14 +161,13 @@ public interface GenericCommands {
      * // Example 1: Atomic Batch (Transaction) with BatchOptions
      *  BatchOptions options = BatchOptions.builder()
      *     .timeout(1000) // Set a timeout of 1000 milliseconds
-     *     .raiseOnError(false) // Do not raise an error on failure
      *     .build();
      *
      * Batch transaction = new Batch(true) // Atomic (Transactional)
      *     .set("key", "1")
      *     .incr("key")
      *     .customCommand(new String[] {"get", "key"});
-     * Object[] result = client.exec(transaction, options).get();
+     * Object[] result = client.exec(transaction, false, options).get();
      * System.out.println("Transaction Result: " + Arrays.toString(result));
      * // Expected Output: Transaction Result: [OK, 2, 2]
      *
@@ -161,7 +175,6 @@ public interface GenericCommands {
      * // Commands can operate on different hash slots.
      * BatchOptions options = BatchOptions.builder()
      *     .timeout(1000) // Set a timeout of 1000 milliseconds
-     *     .raiseOnError(false) // Do not raise an error on failure
      *     .build();
      *
      * Batch pipeline = new Batch(false) // Non-Atomic (Pipeline)
@@ -169,12 +182,12 @@ public interface GenericCommands {
      *     .customCommand(new String[] {"set", "key2", "value2"})
      *     .customCommand(new String[] {"get", "key1"})
      *     .customCommand(new String[] {"get", "key2"});
-     * Object[] result = client.exec(pipeline, options).get();
+     * Object[] result = client.exec(pipeline, false, options).get();
      * System.out.println("Pipeline Result: " + Arrays.toString(result));
      * // Expected Output: Pipeline Result: [OK, OK, value1, value2]
      * }</pre>
      */
-    CompletableFuture<Object[]> exec(Batch batch, BatchOptions options);
+    CompletableFuture<Object[]> exec(Batch batch, boolean raiseOnError, BatchOptions options);
 
     /**
      * Move <code>key</code> from the currently selected database to the database specified by <code>

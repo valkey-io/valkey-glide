@@ -466,11 +466,11 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(false), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch);
+        CompletableFuture<Object[]> response = service.exec(batch, false);
         Object[] payload = response.get();
 
         // verify
@@ -485,17 +485,18 @@ public class GlideClientTest {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
         Batch batch = new Batch(isAtomic).ping().ping();
-        BatchOptions options = BatchOptions.builder().raiseOnError(true).timeout(1000).build();
+        BatchOptions options = BatchOptions.builder().timeout(1000).build();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+        when(commandManager.<Object[]>submitNewBatch(
+                        eq(batch), eq(false), eq(Optional.of(options)), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch, options);
+        CompletableFuture<Object[]> response = service.exec(batch, false, options);
         Object[] payload = response.get();
 
         // verify
