@@ -13,7 +13,7 @@ import {
 import { gte } from "semver";
 import {
     BitwiseOperation,
-    ClusterTransaction,
+    ClusterBatch,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -39,6 +39,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
 import {
+    batchTest,
     checkClusterResponse,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
@@ -53,8 +54,7 @@ import {
     intoArray,
     intoString,
     parseEndpoints,
-    transactionTest,
-    validateTransactionResponse,
+    validateBatchResponse,
     waitForNotBusy,
 } from "./TestUtilities";
 
@@ -311,30 +311,37 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `config get and config set transactions test_%p`,
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `config get and config set batch test with protocol=%p and isAtomic=%p`,
+        async (protocol, isAtomic) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction()
+
+            const batch = new ClusterBatch(isAtomic)
                 .configSet({ timeout: "1000" })
                 .configGet(["timeout"]);
-            const result = await client.exec(transaction);
+            const result = await client.exec(batch, true);
             expect(result).toEqual([
                 "OK",
                 convertRecordToGlideRecord({ timeout: "1000" }),
             ]);
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                const transaction = new ClusterTransaction()
+                const batch = new ClusterBatch(isAtomic)
                     .configSet({
                         timeout: "2000",
                         "cluster-node-timeout": "16000",
                     })
                     .configGet(["timeout", "cluster-node-timeout"]);
                 const result = (await client.exec(
-                    transaction,
+                    batch,
+                    true,
                 )) as GlideRecord<unknown>[];
                 const convertedResult = [
                     result[0],
@@ -379,45 +386,63 @@ describe("GlideClusterClient", () => {
             describe.each([Decoder.String, Decoder.Bytes])(
                 "Decoder String = %s",
                 (decoder) => {
-                    it(
-                        "can send transactions",
-                        async () => {
-                            client = await GlideClusterClient.createClient(
-                                getClientConfigurationOption(
-                                    cluster.getAddresses(),
-                                    protocol,
-                                ),
+                    describe.each([true, false])(
+                        "isAtomic = %s",
+                        (isAtomic) => {
+                            it(
+                                "can send batches",
+                                async () => {
+                                    client =
+                                        await GlideClusterClient.createClient(
+                                            getClientConfigurationOption(
+                                                cluster.getAddresses(),
+                                                protocol,
+                                            ),
+                                        );
+
+                                    const batch = new ClusterBatch(isAtomic);
+
+                                    const expectedRes = await batchTest(
+                                        batch,
+                                        cluster,
+                                        decoder,
+                                    );
+
+                                    if (
+                                        !cluster.checkIfServerVersionLessThan(
+                                            "7.0.0",
+                                        )
+                                    ) {
+                                        batch.publish("message", "key", true);
+                                        expectedRes.push([
+                                            'publish("message", "key", true)',
+                                            0,
+                                        ]);
+
+                                        batch.pubsubShardChannels();
+                                        expectedRes.push([
+                                            "pubsubShardChannels()",
+                                            [],
+                                        ]);
+                                        batch.pubsubShardNumSub([]);
+                                        expectedRes.push([
+                                            "pubsubShardNumSub()",
+                                            [],
+                                        ]);
+                                    }
+
+                                    const result = await client.exec(
+                                        batch,
+                                        true,
+                                        {
+                                            decoder: Decoder.String,
+                                        },
+                                    );
+                                    validateBatchResponse(result, expectedRes);
+                                },
+                                TIMEOUT,
                             );
-
-                            const transaction = new ClusterTransaction();
-
-                            const expectedRes = await transactionTest(
-                                transaction,
-                                cluster,
-                                decoder,
-                            );
-
-                            if (
-                                !cluster.checkIfServerVersionLessThan("7.0.0")
-                            ) {
-                                transaction.publish("message", "key", true);
-                                expectedRes.push([
-                                    'publish("message", "key", true)',
-                                    0,
-                                ]);
-
-                                transaction.pubsubShardChannels();
-                                expectedRes.push(["pubsubShardChannels()", []]);
-                                transaction.pubsubShardNumSub([]);
-                                expectedRes.push(["pubsubShardNumSub()", []]);
-                            }
-
-                            const result = await client.exec(transaction, {
-                                decoder: Decoder.String,
-                            });
-                            validateTransactionResponse(result, expectedRes);
                         },
-                        TIMEOUT,
                     );
                 },
             );
@@ -433,7 +458,7 @@ describe("GlideClusterClient", () => {
             const client2 = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction();
+            const transaction = new ClusterBatch(true);
             transaction.get("key");
             const result1 = await client1.watch(["key"]);
             expect(result1).toEqual("OK");
@@ -441,7 +466,7 @@ describe("GlideClusterClient", () => {
             const result2 = await client2.set("key", "foo");
             expect(result2).toEqual("OK");
 
-            const result3 = await client1.exec(transaction);
+            const result3 = await client1.exec(transaction, true);
             expect(result3).toBeNull();
 
             client1.close();
@@ -577,9 +602,14 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object freq transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object freq batch test with protocol=%p and isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -590,14 +620,14 @@ describe("GlideClusterClient", () => {
             const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
-                const transaction = new ClusterTransaction();
-                transaction.configSet({
+                const batch = new ClusterBatch(isAtomic);
+                batch.configSet({
                     [maxmemoryPolicyKey]: "allkeys-lfu",
                 });
-                transaction.set(key, "foo");
-                transaction.objectFreq(key);
+                batch.set(key, "foo");
+                batch.objectFreq(key);
 
-                const response = await client.exec(transaction);
+                const response = await client.exec(batch, true);
                 expect(response).not.toBeNull();
 
                 if (response != null) {
@@ -618,9 +648,14 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object idletime transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object idletime batch test with protocol=%p and isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -631,24 +666,24 @@ describe("GlideClusterClient", () => {
             const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
-                const transaction = new ClusterTransaction();
-                transaction.configSet({
+                const batch = new ClusterBatch(isAtomic);
+                batch.configSet({
                     // OBJECT IDLETIME requires a non-LFU maxmemory-policy
                     [maxmemoryPolicyKey]: "allkeys-random",
                 });
-                transaction.set(key, "foo");
-                transaction.objectIdletime(key);
+                batch.set(key, "foo");
+                batch.objectIdletime(key);
 
-                const response = await client.exec(transaction);
+                const response = await client.exec(batch, true);
                 expect(response).not.toBeNull();
 
                 if (response != null) {
                     expect(response.length).toEqual(3);
-                    // transaction.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
+                    // batch.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
                     expect(response[0]).toEqual("OK");
-                    // transaction.set(key, "foo");
+                    // batch.set(key, "foo");
                     expect(response[1]).toEqual("OK");
-                    // transaction.objectIdletime(key);
+                    // batch.objectIdletime(key);
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
@@ -663,25 +698,30 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object refcount transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object refcount batch test with protocol=%p and isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
             const key = getRandomKey();
-            const transaction = new ClusterTransaction();
-            transaction.set(key, "foo");
-            transaction.objectRefcount(key);
+            const batch = new ClusterBatch(isAtomic);
+            batch.set(key, "foo");
+            batch.objectRefcount(key);
 
-            const response = await client.exec(transaction);
+            const response = await client.exec(batch, true);
             expect(response).not.toBeNull();
 
             if (response != null) {
                 expect(response.length).toEqual(2);
-                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
-                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
+                expect(response[0]).toEqual("OK"); // batch.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // batch.objectRefcount(key);
             }
 
             client.close();
@@ -725,22 +765,24 @@ describe("GlideClusterClient", () => {
                 expect.stringContaining("Redis ver. "),
             );
 
-            // transaction tests
-            const transaction = new ClusterTransaction();
-            transaction.lolwut();
-            transaction.lolwut({ version: 5 });
-            transaction.lolwut({ parameters: [1, 2] });
-            transaction.lolwut({ version: 6, parameters: [42] });
-            const results = await client.exec(transaction);
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                const batch = new ClusterBatch(isAtomic);
+                batch.lolwut();
+                batch.lolwut({ version: 5 });
+                batch.lolwut({ parameters: [1, 2] });
+                batch.lolwut({ version: 6, parameters: [42] });
+                const results = await client.exec(batch, true);
 
-            if (results) {
-                for (const element of results) {
-                    expect(intoString(element)).toEqual(
-                        expect.stringContaining("Redis ver. "),
-                    );
+                if (results) {
+                    for (const element of results) {
+                        expect(intoString(element)).toEqual(
+                            expect.stringContaining("Redis ver. "),
+                        );
+                    }
+                } else {
+                    throw new Error("Invalid LOLWUT batch test results.");
                 }
-            } else {
-                throw new Error("Invalid LOLWUT transaction test results.");
             }
 
             client.close();
@@ -802,14 +844,16 @@ describe("GlideClusterClient", () => {
             ).toEqual(true);
             expect(await client.get(destination)).toEqual(value2);
 
-            //transaction tests
-            const transaction = new ClusterTransaction();
-            transaction.set(source, value1);
-            transaction.copy(source, destination, { replace: true });
-            transaction.get(destination);
-            const results = await client.exec(transaction);
-
-            expect(results).toEqual(["OK", true, value1]);
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                expect(await client.flushall()).toEqual("OK");
+                const batch = new ClusterBatch(isAtomic);
+                batch.set(source, value1);
+                batch.copy(source, destination, { replace: true });
+                batch.get(destination);
+                const results = await client.exec(batch, true);
+                expect(results).toEqual(["OK", true, value1]);
+            }
 
             client.close();
         },
@@ -927,34 +971,38 @@ describe("GlideClusterClient", () => {
                 "x",
             ]);
 
-            // check transaction and options
-            const transaction = new ClusterTransaction()
-                .lpush(key4, ["3", "1", "2"])
-                .sort(key4, {
-                    orderBy: SortOrder.DESC,
-                    limit: { count: 2, offset: 0 },
-                })
-                .sortStore(key4, key5, {
-                    orderBy: SortOrder.ASC,
-                    limit: { count: 100, offset: 1 },
-                })
-                .lrange(key5, 0, -1);
+            for (const isAtomic of [true, false]) {
+                await client.del([key5, key4]);
+                // check batch and options
+                const batch = new ClusterBatch(isAtomic)
+                    .lpush(key4, ["3", "1", "2"])
+                    .sort(key4, {
+                        orderBy: SortOrder.DESC,
+                        limit: { count: 2, offset: 0 },
+                    })
+                    .sortStore(key4, key5, {
+                        orderBy: SortOrder.ASC,
+                        limit: { count: 100, offset: 1 },
+                    })
+                    .lrange(key5, 0, -1);
 
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.sortReadOnly(key4, {
-                    orderBy: SortOrder.DESC,
-                    limit: { count: 2, offset: 0 },
-                });
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    batch.sortReadOnly(key4, {
+                        orderBy: SortOrder.DESC,
+                        limit: { count: 2, offset: 0 },
+                    });
+                }
+
+                const result = await client.exec(batch, true);
+
+                const expectedResult = [3, ["3", "2"], 2, ["2", "3"]];
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expectedResult.push(["3", "2"]);
+                }
+
+                expect(result).toEqual(expectedResult);
             }
-
-            const result = await client.exec(transaction);
-            const expectedResult = [3, ["3", "2"], 2, ["2", "3"]];
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                expectedResult.push(["3", "2"]);
-            }
-
-            expect(result).toEqual(expectedResult);
 
             client.close();
         },
@@ -1813,25 +1861,34 @@ describe("GlideClusterClient", () => {
                     ).toEqual(name1);
 
                     // Verify functionDump
-                    let transaction = new ClusterTransaction().functionDump();
-                    const result = await client.exec(transaction, {
-                        decoder: Decoder.Bytes,
-                        route: route,
-                    });
+                    for (const isAtomic of [true, false]) {
+                        const batch = new ClusterBatch(isAtomic).functionDump();
+                        const result = await client.exec(batch, true, {
+                            decoder: Decoder.Bytes,
+                            route: route,
+                        });
 
-                    if (!result) {
-                        throw new Error("Transaction failed: result is null");
+                        if (!result) {
+                            throw new Error(
+                                "Batch execution failed: result is null",
+                            );
+                        }
+
+                        const data = result[0] as Buffer;
+
+                        // Verify functionRestore
+                        const restoreBatch = new ClusterBatch(isAtomic)
+                            .functionRestore(
+                                data,
+                                FunctionRestorePolicy.REPLACE,
+                            )
+                            .fcall(name2, [], ["meow"]);
+                        expect(
+                            await client.exec(restoreBatch, true, {
+                                route: route,
+                            }),
+                        ).toEqual(["OK", "meow"]);
                     }
-
-                    const data = result[0] as Buffer;
-
-                    // Verify functionRestore
-                    transaction = new ClusterTransaction()
-                        .functionRestore(data, FunctionRestorePolicy.REPLACE)
-                        .fcall(name2, [], ["meow"]);
-                    expect(
-                        await client.exec(transaction, { route: route }),
-                    ).toEqual(["OK", "meow"]);
                 } finally {
                     expect(await client.functionFlush()).toEqual("OK");
                     client.close();
@@ -1882,8 +1939,8 @@ describe("GlideClusterClient", () => {
             const key2 = "{key}-2" + getRandomKey();
             const key3 = "{key}-3" + getRandomKey();
             const key4 = "{key}-4" + getRandomKey();
-            const setFoobarTransaction = new ClusterTransaction();
-            const setHelloTransaction = new ClusterTransaction();
+            const setFoobarTransaction = new ClusterBatch(true);
+            const setHelloTransaction = new ClusterBatch(true);
 
             // Returns null when a watched key is modified before it is executed in a transaction command.
             // Transaction commands are not performed.
@@ -1893,7 +1950,7 @@ describe("GlideClusterClient", () => {
                 .set(key1, "foobar")
                 .set(key2, "foobar")
                 .set(key3, "foobar");
-            let results = await client.exec(setFoobarTransaction);
+            let results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(null);
             // sanity check
             expect(await client.get(key1)).toEqual(null);
@@ -1906,7 +1963,7 @@ describe("GlideClusterClient", () => {
                 "OK",
             );
             expect(await client.get(key2)).toEqual("hello");
-            results = await client.exec(setFoobarTransaction);
+            results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -1915,7 +1972,7 @@ describe("GlideClusterClient", () => {
 
             // Transaction executes command successfully with unmodified watched keys
             expect(await client.watch([key1, key2, key3])).toEqual("OK");
-            results = await client.exec(setFoobarTransaction);
+            results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -1929,7 +1986,7 @@ describe("GlideClusterClient", () => {
                 .set(key1, "hello")
                 .set(key2, "hello")
                 .set(key3, "hello");
-            results = await client.exec(setHelloTransaction);
+            results = await client.exec(setHelloTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("hello");
@@ -1953,7 +2010,7 @@ describe("GlideClusterClient", () => {
 
             const key1 = "{key}-1" + getRandomKey();
             const key2 = "{key}-2" + getRandomKey();
-            const setFoobarTransaction = new ClusterTransaction();
+            const setFoobarTransaction = new ClusterBatch(true);
 
             // UNWATCH returns OK when there no watched keys
             expect(await client.unwatch()).toEqual("OK");
@@ -1966,7 +2023,7 @@ describe("GlideClusterClient", () => {
                 "OK",
             );
             setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
-            const results = await client.exec(setFoobarTransaction);
+            const results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -2225,6 +2282,113 @@ describe("GlideClusterClient", () => {
             } finally {
                 // Ensure the client is properly closed
                 glideClientForTesting?.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should handle crosslot pipeline using protocol %p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                const pipeline = new ClusterBatch(false);
+                // This are known keys for crosslot
+                pipeline.set("abc", "value");
+                pipeline.get("xyz");
+                const results = await client.exec(pipeline, true);
+
+                expect(results).toEqual(["OK", null]);
+            } finally {
+                client.close();
+            }
+        },
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "should handle route batch using protocol %p and isAtomic=%p",
+        async (protocol, isAtomic) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                expect(await client.configResetStat()).toEqual("OK");
+                const key = getRandomKey();
+                const pipeline = new ClusterBatch(isAtomic);
+                pipeline.set(key, "value");
+                pipeline.get(key);
+                const results = await client.exec(pipeline, true, {
+                    route: { type: "primarySlotKey", key: key },
+                });
+
+                expect(results).toEqual(["OK", "value"]);
+
+                // Check that no MOVED error occurred
+                const errorStats = (await client.info({
+                    sections: [InfoOptions.Errorstats],
+                    route: "allNodes",
+                })) as Record<string, string>;
+
+                for (const infoStr of Object.values(errorStats)) {
+                    expect(infoStr).toBe("# Errorstats\r\n");
+                }
+            } finally {
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "batch with retry configurations using protocol %p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 2000,
+                }),
+            );
+
+            try {
+                expect(await client.configResetStat()).toEqual("OK");
+                const key = getRandomKey();
+                const transaction = new ClusterBatch(true);
+                transaction.set(key, "value");
+                transaction.get(key);
+                await expect(
+                    client.exec(transaction, true, {
+                        retryStrategy: {
+                            retryConnectionError: true,
+                            retryServerError: true,
+                        },
+                    }),
+                ).rejects.toThrow(
+                    "Retry strategy is not supported for atomic batches.",
+                );
+
+                const pipeline = new ClusterBatch(false);
+                pipeline.set(key, "value");
+                pipeline.get(key);
+                expect(
+                    await client.exec(pipeline, true, {
+                        retryStrategy: {
+                            retryConnectionError: true,
+                            retryServerError: true,
+                        },
+                    }),
+                ).toEqual(["OK", "value"]);
+            } finally {
+                client.close();
             }
         },
     );

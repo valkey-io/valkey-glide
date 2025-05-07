@@ -3,10 +3,10 @@
  */
 
 import { BaseClient, DecoderOption, GlideString } from "../BaseClient";
+import { Batch, ClusterBatch } from "../Batch";
 import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
-import { ClusterTransaction, Transaction } from "../Transaction";
 
 export type ReturnTypeJson<T> = T | (T | null)[];
 export type UniversalReturnTypeJson<T> = T | T[];
@@ -1160,12 +1160,12 @@ export class GlideJson {
 }
 
 /**
- * Transaction implementation for JSON module. Transactions allow the execution of a group of
- * commands in a single step. See {@link Transaction} and {@link ClusterTransaction}.
+ * Batch implementation for JSON module. Batches allow the execution of a group of
+ * commands in a single step. See {@link Batch} and {@link ClusterBatch}.
  *
  * @example
  * ```typescript
- * const transaction = new Transaction();
+ * const transaction = new Batch(true);
  * JsonBatch.set(transaction, "doc", ".", '{"a": 1.0, "b": 2}');
  * JsonBatch.get(transaction, "doc");
  * const result = await client.exec(transaction);
@@ -1178,7 +1178,7 @@ export class JsonBatch {
     /**
      * Sets the JSON value at the specified `path` stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - Represents the path within the JSON document where the value will be set.
      *      The key will be modified only if `value` is added as the last child in the specified `path`, or if the specified `path` acts as the parent of a new child being added.
@@ -1191,25 +1191,25 @@ export class JsonBatch {
      *       If `value` isn't set because of `conditionalChange`, returns `null`.
      */
     static set(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         value: GlideString,
         options?: { conditionalChange: ConditionalChange },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args: GlideString[] = ["JSON.SET", key, path, value];
 
         if (options?.conditionalChange !== undefined) {
             args.push(options.conditionalChange);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Retrieves the JSON value at the specified `paths` stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) Options for formatting the byte representation of the JSON data. See {@link JsonGetOptions}.
@@ -1229,10 +1229,10 @@ export class JsonBatch {
      * In case of multiple paths, and `paths` are a mix of both JSONPath and legacy path, the command behaves as if all are JSONPath paths.
      */
     static get(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: JsonGetOptions,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.GET", key];
 
         if (options) {
@@ -1240,13 +1240,13 @@ export class JsonBatch {
             args.push(...optionArgs);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Retrieves the JSON values at the specified `path` stored at multiple `keys`.
      *
-     * @remarks When in cluster mode, all keys in the transaction must be mapped to the same slot.
+     * @remarks When in cluster mode, all keys in the batch must be mapped to the same slot.
      *
      * @param client - The client to execute the command.
      * @param keys - The keys of the JSON documents.
@@ -1262,19 +1262,19 @@ export class JsonBatch {
      * - If a `key` doesn't exist, the corresponding array element will be `null`.
      */
     static mget(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         keys: GlideString[],
         path: GlideString,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.MGET", ...keys, path];
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Inserts one or more values into the array at the specified `path` within the JSON
      * document stored at `key`, before the given `index`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param index - The array index before which values are inserted.
@@ -1294,21 +1294,21 @@ export class JsonBatch {
      * - If the index is out of bounds or `key` doesn't exist, an error is raised.
      */
     static arrinsert(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         index: number,
         values: GlideString[],
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.ARRINSERT", key, path, index.toString(), ...values];
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Pops an element from the array located at `path` in the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) See {@link JsonArrPopOptions}.
      *
@@ -1325,22 +1325,22 @@ export class JsonBatch {
      * - If the index is out of bounds or `key` doesn't exist, an error is raised.
      */
     static arrpop(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: JsonArrPopOptions,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.ARRPOP", key];
         if (options?.path) args.push(options?.path);
         if (options && "index" in options && options.index)
             args.push(options?.index.toString());
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document. Defaults to the root (`"."`) if not specified.
@@ -1358,14 +1358,14 @@ export class JsonBatch {
      * - If the index is out of bounds or `key` doesn't exist, an error is raised.
      */
     static arrlen(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.ARRLEN", key];
         if (options?.path) args.push(options?.path);
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
@@ -1374,7 +1374,7 @@ export class JsonBatch {
      * If `end` >= size (size of the array), it is treated as size-1.
      * If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param start - The start index, inclusive.
@@ -1395,12 +1395,12 @@ export class JsonBatch {
      *       - If an index argument is out of bounds, an error is raised.
      */
     static arrtrim(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         start: number,
         end: number,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args: GlideString[] = [
             "JSON.ARRTRIM",
             key,
@@ -1408,7 +1408,7 @@ export class JsonBatch {
             start.toString(),
             end.toString(),
         ];
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
@@ -1416,7 +1416,7 @@ export class JsonBatch {
      * Out of range errors are treated by rounding the index to the array's `start` and `end.
      * If `start` > `end`, return `-1` (not found).
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param scalar - The scalar value to search for.
@@ -1434,12 +1434,12 @@ export class JsonBatch {
      *       not found. If the value at the `path` is not an array, an error is raised.
      */
     static arrindex(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         scalar: GlideString | number | boolean | null,
         options?: { start: number; end?: number },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.ARRINDEX", key, path];
 
         if (typeof scalar === `number`) {
@@ -1455,13 +1455,13 @@ export class JsonBatch {
         if (options?.start !== undefined) args.push(options?.start.toString());
         if (options?.end !== undefined) args.push(options?.end.toString());
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document. Defaults to the root (`"."`) if not specified.
@@ -1472,23 +1472,23 @@ export class JsonBatch {
      * - Note that when sending legacy path syntax, If `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
      */
     static toggle(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.TOGGLE", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
@@ -1496,24 +1496,24 @@ export class JsonBatch {
      * Command Response - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      */
     static del(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.DEL", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Deletes the JSON value at the specified `path` within the JSON document stored at `key`. This command is
      * an alias of {@link del}.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
@@ -1521,23 +1521,23 @@ export class JsonBatch {
      * Command Response - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      */
     static forget(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.FORGET", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Reports the type of values at the given path.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: Defaults to root (`"."`) if not provided.
@@ -1554,24 +1554,24 @@ export class JsonBatch {
      *       - `null` if the JSON path is invalid or does not exist.
      */
     static type(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.TYPE", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Clears arrays or objects at the specified JSON path in the document stored at `key`.
      * Numeric values are set to `0`, boolean values are set to `false`, and string values are converted to empty strings.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The JSON path to the arrays or objects to be cleared. Defaults to root if not provided.
@@ -1582,17 +1582,17 @@ export class JsonBatch {
      * If `key doesn't exist, an error is raised.
      */
     static clear(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.CLEAR", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
@@ -1606,7 +1606,7 @@ export class JsonBatch {
      * - JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.
      * - JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
@@ -1621,24 +1621,24 @@ export class JsonBatch {
      *     - If `key` doesn't exist, `null` is returned.
      */
     static resp(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.RESP", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Returns the length of the JSON string value stored at the specified `path` within
      * the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
@@ -1655,23 +1655,23 @@ export class JsonBatch {
      *     - If `key` doesn't exist, `null` is returned.
      */
     static strlen(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.STRLEN", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -1689,11 +1689,11 @@ export class JsonBatch {
      *       - If `key` doesn't exist, an error is raised.
      */
     static strappend(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         value: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.STRAPPEND", key];
 
         if (options) {
@@ -1702,14 +1702,14 @@ export class JsonBatch {
 
         args.push(value);
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Appends one or more `values` to the JSON array at the specified `path` within the JSON
      * document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param values - The JSON values to be appended to the array.
@@ -1728,19 +1728,19 @@ export class JsonBatch {
      * - If the index is out of bounds or `key` doesn't exist, an error is raised.
      */
     static arrappend(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         values: GlideString[],
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.ARRAPPEND", key, path, ...values];
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Reports memory usage in bytes of a JSON object at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -1756,23 +1756,23 @@ export class JsonBatch {
      *     - If `key` doesn't exist, returns `null`.
      */
     static debugMemory(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.DEBUG", "MEMORY", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Reports the number of fields at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -1788,23 +1788,23 @@ export class JsonBatch {
      *     - If `key` doesn't exist, returns `null`.
      */
     static debugFields(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.DEBUG", "FIELDS", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param num - The number to increment or decrement by.
@@ -1822,19 +1822,19 @@ export class JsonBatch {
      *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
      */
     static numincrby(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         num: number,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.NUMINCRBY", key, path, num.toString()];
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param num - The number to multiply by.
@@ -1852,19 +1852,19 @@ export class JsonBatch {
      *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
      */
     static nummultby(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         path: GlideString,
         num: number,
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.NUMMULTBY", key, path, num.toString()];
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
@@ -1881,23 +1881,23 @@ export class JsonBatch {
      *    - If `key` doesn't exist, `null` is returned.
      */
     static objlen(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.OBJLEN", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 
     /**
      * Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - A transaction to add commands to.
+     * @param batch - A batch to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document where the key names will be retrieved. Defaults to root (`"."`) if not provided.
@@ -1915,16 +1915,16 @@ export class JsonBatch {
      *    - If `key` doesn't exist, `null` is returned.
      */
     static objkeys(
-        transaction: Transaction | ClusterTransaction,
+        batch: Batch | ClusterBatch,
         key: GlideString,
         options?: { path: GlideString },
-    ): Transaction | ClusterTransaction {
+    ): Batch | ClusterBatch {
         const args = ["JSON.OBJKEYS", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return transaction.customCommand(args);
+        return batch.customCommand(args);
     }
 }

@@ -9,13 +9,14 @@ import { promisify } from "util";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Batch,
     BitFieldGet,
     BitFieldSet,
     BitOffset,
     BitOffsetMultiplier,
     BitmapIndexType,
     BitwiseOperation,
-    ClusterTransaction,
+    ClusterBatch,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -37,7 +38,6 @@ import {
     SignedEncoding,
     SortOrder,
     TimeUnit,
-    Transaction,
     UnsignedEncoding,
     convertRecordToGlideRecord,
 } from "..";
@@ -587,7 +587,7 @@ export function checkFunctionStatsResponse(
  *
  * @param testName - The name of the test.
  * @param response - One of the transaction results received from `exec` call.
- * @param expectedResponse - One of the expected result data from {@link transactionTest}.
+ * @param expectedResponse - One of the expected result data from {@link batchTest}.
  */
 export function checkAndHandleFlakyTests(
     testName: string,
@@ -628,11 +628,11 @@ export function checkAndHandleFlakyTests(
 }
 
 /**
- * Check transaction response.
- * @param response - Transaction result received from `exec` call.
- * @param expectedResponseData - Expected result data from {@link transactionTest}.
+ * Check batch response.
+ * @param response - Batch result received from `exec` call.
+ * @param expectedResponseData - Expected result data from {@link batchTest}.
  */
-export function validateTransactionResponse(
+export function validateBatchResponse(
     response: GlideReturnType[] | null,
     expectedResponseData: [string, GlideReturnType][],
 ) {
@@ -672,20 +672,19 @@ export function validateTransactionResponse(
 
     if (failedChecks.length > 0) {
         throw new Error(
-            "Checks failed in transaction response:\n" +
-                failedChecks.join("\n"),
+            "Checks failed in batch response:\n" + failedChecks.join("\n"),
         );
     }
 }
 
 /**
- * Populates a transaction with commands to test the decodable commands with various default decoders.
- * @param baseTransaction - A transaction.
+ * Populates a batch with commands to test the decodable commands with various default decoders.
+ * @param baseBatch - A batch.
  * @param valueEncodedResponse - Represents the encoded response of "value" to compare
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function encodableTransactionTest(
-    baseTransaction: Transaction | ClusterTransaction,
+export async function encodableBatchTest(
+    baseBatch: Batch | ClusterBatch,
     valueEncodedResponse: GlideReturnType,
 ): Promise<[string, GlideReturnType][]> {
     const key = "{key}" + getRandomKey(); // string
@@ -693,21 +692,21 @@ export async function encodableTransactionTest(
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.set(key, value);
+    baseBatch.set(key, value);
     responseData.push(["set(key, value)", "OK"]);
-    baseTransaction.get(key);
+    baseBatch.get(key);
     responseData.push(["get(key)", valueEncodedResponse]);
 
     return responseData;
 }
 
 /**
- * Populates a transaction with commands to test the decoded response.
- * @param baseTransaction - A transaction.
+ * Populates a batch with commands to test the decoded response.
+ * @param baseBatch - A batch.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function encodedTransactionTest(
-    baseTransaction: Transaction | ClusterTransaction,
+export async function encodedBatchTest(
+    baseBatch: Batch | ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const key1 = "{key}" + getRandomKey(); // string
     const key2 = "{key}" + getRandomKey(); // string
@@ -720,29 +719,29 @@ export async function encodedTransactionTest(
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.set(key1, value);
+    baseBatch.set(key1, value);
     responseData.push(["set(key1, value)", "OK"]);
-    baseTransaction.set(key2, value);
+    baseBatch.set(key2, value);
     responseData.push(["set(key2, value)", "OK"]);
-    baseTransaction.get(key1);
+    baseBatch.get(key1);
     responseData.push(["get(key1)", valueEncoded]);
-    baseTransaction.get(key2);
+    baseBatch.get(key2);
     responseData.push(["get(key2)", valueEncoded]);
 
-    baseTransaction.set(key, value);
+    baseBatch.set(key, value);
     responseData.push(["set(key, value)", "OK"]);
-    baseTransaction.customCommand(["DUMP", key]);
+    baseBatch.customCommand(["DUMP", key]);
     responseData.push(['customCommand(["DUMP", key])', dumpResult]);
-    baseTransaction.del([key]);
+    baseBatch.del([key]);
     responseData.push(["del(key)", 1]);
-    baseTransaction.get(key);
+    baseBatch.get(key);
     responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
+    baseBatch.customCommand(["RESTORE", key, "0", dumpResult]);
     responseData.push([
         'customCommand(["RESTORE", key, "0", dumpResult])',
         "OK",
     ]);
-    baseTransaction.get(key);
+    baseBatch.get(key);
     responseData.push(["get(key)", valueEncoded]);
 
     return responseData;
@@ -760,15 +759,16 @@ function decodeString(str: string, decoder: Decoder): GlideString {
 }
 
 /**
- * Populates a transaction with commands to test.
- * @param baseTransaction - A transaction.
+ * Populates a batch with commands to test.
+ * @param baseBatch - A batch.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function transactionTest(
-    baseTransaction: Transaction | ClusterTransaction,
+export async function batchTest(
+    baseBatch: Batch | ClusterBatch,
     cluster: ValkeyCluster,
     decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
+    const clusterMode = baseBatch instanceof ClusterBatch;
     // initialize key values to work within the same hashslot
     const [
         key1, // string
@@ -868,100 +868,100 @@ export async function transactionTest(
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.publish(test, key1);
+    baseBatch.publish(test, key1);
     responseData.push(['publish("test_message", key1)', 0]);
-    baseTransaction.pubsubChannels();
+    baseBatch.pubsubChannels();
     responseData.push(["pubsubChannels()", []]);
-    baseTransaction.pubsubNumPat();
+    baseBatch.pubsubNumPat();
     responseData.push(["pubsubNumPat()", 0]);
-    baseTransaction.pubsubNumSub([]);
+    baseBatch.pubsubNumSub([]);
     responseData.push(["pubsubNumSub()", []]);
 
-    baseTransaction.flushall();
+    baseBatch.flushall();
     responseData.push(["flushall()", "OK"]);
-    baseTransaction.flushall(FlushMode.SYNC);
+    baseBatch.flushall(FlushMode.SYNC);
     responseData.push(["flushall(FlushMode.SYNC)", "OK"]);
-    baseTransaction.flushdb();
+    baseBatch.flushdb();
     responseData.push(["flushdb()", "OK"]);
-    baseTransaction.flushdb(FlushMode.SYNC);
+    baseBatch.flushdb(FlushMode.SYNC);
     responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
-    baseTransaction.dbsize();
+    baseBatch.dbsize();
     responseData.push(["dbsize()", 0]);
-    baseTransaction.set(key1, foo);
+    baseBatch.set(key1, foo);
     responseData.push(['set(key1, "foo")', "OK"]);
-    baseTransaction.set(key1, bar, { returnOldValue: true });
+    baseBatch.set(key1, bar, { returnOldValue: true });
     responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction.getex(key1);
+        baseBatch.getex(key1);
         responseData.push(["getex(key1)", "bar"]);
-        baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
+        baseBatch.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
         responseData.push([
             'getex(key1, {expiry: { type: "seconds", count: 1 }})',
             "bar",
         ]);
     }
 
-    baseTransaction.randomKey();
+    baseBatch.randomKey();
     responseData.push(["randomKey()", key1.toString()]);
-    baseTransaction.getrange(key1, 0, -1);
+    baseBatch.getrange(key1, 0, -1);
     responseData.push(["getrange(key1, 0, -1)", "bar"]);
-    baseTransaction.getdel(key1);
+    baseBatch.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
-    baseTransaction.set(key1, bar);
+    baseBatch.set(key1, bar);
     responseData.push(['set(key1, "bar")', "OK"]);
-    baseTransaction.objectEncoding(key1);
+    baseBatch.objectEncoding(key1);
     responseData.push(["objectEncoding(key1)", "embstr"]);
-    baseTransaction.type(key1);
+    baseBatch.type(key1);
     responseData.push(["type(key1)", "string"]);
-    baseTransaction.echo(value);
+    baseBatch.echo(value);
     responseData.push(["echo(value)", value.toString()]);
-    baseTransaction.persist(key1);
+    baseBatch.persist(key1);
     responseData.push(["persist(key1)", false]);
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.expireTime(key1);
+        baseBatch.expireTime(key1);
         responseData.push(["expiretime(key1)", -1]);
 
-        baseTransaction.pexpireTime(key1);
+        baseBatch.pexpireTime(key1);
         responseData.push(["pexpiretime(key1)", -1]);
     }
 
-    baseTransaction.set(key2, baz, { returnOldValue: true });
+    baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
-    baseTransaction.customCommand(["MGET", key1, key2]);
+    baseBatch.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
-    baseTransaction.mset([{ key: key3, value }]);
+    baseBatch.mset([{ key: key3, value }]);
     responseData.push(["mset({ [key3]: value })", "OK"]);
-    baseTransaction.msetnx([{ key: key3, value }]);
+    baseBatch.msetnx([{ key: key3, value }]);
     responseData.push(["msetnx({ [key3]: value })", false]);
-    baseTransaction.mget([key1, key2]);
+    baseBatch.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
-    baseTransaction.strlen(key1);
+    baseBatch.strlen(key1);
     responseData.push(["strlen(key1)", 3]);
-    baseTransaction.setrange(key1, 0, "GLIDE");
+    baseBatch.setrange(key1, 0, "GLIDE");
     responseData.push(["setrange(key1, 0, 'GLIDE')", 5]);
-    baseTransaction.del([key1]);
+    baseBatch.del([key1]);
     responseData.push(["del([key1])", 1]);
-    baseTransaction.append(key1, "bar");
+    baseBatch.append(key1, "bar");
     responseData.push(["append(key1, value)", 3]);
-    baseTransaction.del([key1]);
+    baseBatch.del([key1]);
     responseData.push(["del([key1])", 1]);
-    baseTransaction.hset(key4, [{ field, value }]);
+    baseBatch.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
-    baseTransaction.hscan(key4, "0");
+    baseBatch.hscan(key4, "0");
     responseData.push([
         'hscan(key4, "0")',
         ["0", [field.toString(), value.toString()]],
     ]);
 
     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
-        baseTransaction.hscan(key4, "0", { noValues: false });
+        baseBatch.hscan(key4, "0", { noValues: false });
         responseData.push([
             'hscan(key4, "0", {noValues: false})',
             ["0", [field.toString(), value.toString()]],
         ]);
-        baseTransaction.hscan(key4, "0", {
+        baseBatch.hscan(key4, "0", {
             match: "*",
             count: 20,
             noValues: true,
@@ -972,98 +972,93 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.hscan(key4, "0", { match: "*", count: 20 });
+    baseBatch.hscan(key4, "0", { match: "*", count: 20 });
     responseData.push([
         'hscan(key4, "0", {match: "*", count: 20})',
         ["0", [field.toString(), value.toString()]],
     ]);
-    baseTransaction.hstrlen(key4, field);
+    baseBatch.hstrlen(key4, field);
     responseData.push(["hstrlen(key4, field)", value.length]);
-    baseTransaction.hlen(key4);
+    baseBatch.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
-    baseTransaction.hrandfield(key4);
+    baseBatch.hrandfield(key4);
     responseData.push(["hrandfield(key4)", field.toString()]);
-    baseTransaction.hrandfieldCount(key4, -2);
+    baseBatch.hrandfieldCount(key4, -2);
     responseData.push([
         "hrandfieldCount(key4, -2)",
         [field.toString(), field.toString()],
     ]);
-    baseTransaction.hrandfieldWithValues(key4, 2);
+    baseBatch.hrandfieldWithValues(key4, 2);
     responseData.push([
         "hrandfieldWithValues(key4, 2)",
         [[field.toString(), value.toString()]],
     ]);
-    baseTransaction.hsetnx(key4, field, value);
+    baseBatch.hsetnx(key4, field, value);
     responseData.push(["hsetnx(key4, field, value)", false]);
-    baseTransaction.hvals(key4);
+    baseBatch.hvals(key4);
     responseData.push(["hvals(key4)", [value.toString()]]);
-    baseTransaction.hkeys(key4);
+    baseBatch.hkeys(key4);
     responseData.push(["hkeys(key4)", [field.toString()]]);
-    baseTransaction.hget(key4, field);
+    baseBatch.hget(key4, field);
     responseData.push(["hget(key4, field)", value.toString()]);
-    baseTransaction.hgetall(key4);
+    baseBatch.hgetall(key4);
     responseData.push([
         "hgetall(key4)",
         [{ key: field.toString(), value: value.toString() }],
     ]);
-    baseTransaction.hdel(key4, [field]);
+    baseBatch.hdel(key4, [field]);
     responseData.push(["hdel(key4, [field])", 1]);
-    baseTransaction.hmget(key4, [field]);
+    baseBatch.hmget(key4, [field]);
     responseData.push(["hmget(key4, [field])", [null]]);
-    baseTransaction.hexists(key4, field);
+    baseBatch.hexists(key4, field);
     responseData.push(["hexists(key4, field)", false]);
-    baseTransaction.hrandfield(key4);
+    baseBatch.hrandfield(key4);
     responseData.push(["hrandfield(key4)", null]);
 
-    baseTransaction.lpush(key5, [field1, field2, field3, field4]);
+    baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.lpush(key24, [field1.toString(), field2.toString()]);
+        baseBatch.lpush(key24, [field1.toString(), field2.toString()]);
         responseData.push(["lpush(key22, [1, 2])", 2]);
-        baseTransaction.lmpop([key24], ListDirection.LEFT);
+        baseBatch.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key24], ListDirection.LEFT)",
             [{ key: key24.toString(), value: [field2.toString()] }],
         ]);
-        baseTransaction.lpush(key24, [field2]);
+        baseBatch.lpush(key24, [field2]);
         responseData.push(["lpush(key24, [2])", 2]);
-        baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
+        baseBatch.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key24], ListDirection.LEFT, 0.1, 1)",
             [{ key: key24.toString(), value: [field2.toString()] }],
         ]);
     }
 
-    baseTransaction.lpop(key5);
+    baseBatch.lpop(key5);
     responseData.push(["lpop(key5)", field4.toString()]);
-    baseTransaction.llen(key5);
+    baseBatch.llen(key5);
     responseData.push(["llen(key5)", 3]);
-    baseTransaction.lrem(key5, 1, field1);
+    baseBatch.lrem(key5, 1, field1);
     responseData.push(['lrem(key5, 1, field + "1")', 1]);
-    baseTransaction.ltrim(key5, 0, 1);
+    baseBatch.ltrim(key5, 0, 1);
     responseData.push(["ltrim(key5, 0, 1)", "OK"]);
-    baseTransaction.lset(key5, 0, field3);
+    baseBatch.lset(key5, 0, field3);
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
-    baseTransaction.lrange(key5, 0, -1);
+    baseBatch.lrange(key5, 0, -1);
     responseData.push([
         "lrange(key5, 0, -1)",
         [field3.toString(), field2.toString()],
     ]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction.lmove(
-            key5,
-            key20,
-            ListDirection.LEFT,
-            ListDirection.LEFT,
-        );
+        baseBatch.lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT);
         responseData.push([
             "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
             field3.toString(),
         ]);
 
-        baseTransaction.blmove(
+        baseBatch.blmove(
             key20,
             key5,
             ListDirection.LEFT,
@@ -1076,104 +1071,104 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.lpopCount(key5, 2);
+    baseBatch.lpopCount(key5, 2);
     responseData.push([
         "lpopCount(key5, 2)",
         [field3.toString(), field2.toString()],
     ]);
 
-    baseTransaction.linsert(
+    baseBatch.linsert(
         key5,
         InsertPosition.Before,
         "nonExistingPivot",
         "element",
     );
     responseData.push(["linsert", 0]);
-    baseTransaction.rpush(key6, [field1, field2, field3]);
+    baseBatch.rpush(key6, [field1, field2, field3]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
     ]);
-    baseTransaction.lindex(key6, 0);
+    baseBatch.lindex(key6, 0);
     responseData.push(["lindex(key6, 0)", field1.toString()]);
-    baseTransaction.rpop(key6);
+    baseBatch.rpop(key6);
     responseData.push(["rpop(key6)", field3.toString()]);
-    baseTransaction.rpopCount(key6, 2);
+    baseBatch.rpopCount(key6, 2);
     responseData.push([
         "rpopCount(key6, 2)",
         [field2.toString(), field1.toString()],
     ]);
-    baseTransaction.rpushx(key15, [underscore]); // key15 is empty
+    baseBatch.rpushx(key15, [underscore]); // key15 is empty
     responseData.push(['rpushx(key15, ["_"])', 0]);
-    baseTransaction.lpushx(key15, [underscore]);
+    baseBatch.lpushx(key15, [underscore]);
     responseData.push(['lpushx(key15, ["_"])', 0]);
-    baseTransaction.rpush(key16, [field1, field1, field2, field3, field3]);
+    baseBatch.rpush(key16, [field1, field1, field2, field3, field3]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
-    baseTransaction.lpos(key16, field1, { rank: 2 });
+    baseBatch.lpos(key16, field1, { rank: 2 });
     responseData.push(["lpos(key16, field1, { rank: 2 })", 1]);
-    baseTransaction.lpos(key16, field1, { rank: 2, count: 0 });
+    baseBatch.lpos(key16, field1, { rank: 2, count: 0 });
     responseData.push(["lpos(key16, field1, { rank: 2, count: 0 })", [1]]);
-    baseTransaction.sadd(key7, [bar, foo]);
+    baseBatch.sadd(key7, [bar, foo]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
-    baseTransaction.sunionstore(key7, [key7, key7]);
+    baseBatch.sunionstore(key7, [key7, key7]);
     responseData.push(["sunionstore(key7, [key7, key7])", 2]);
-    baseTransaction.sunion([key7, key7]);
+    baseBatch.sunion([key7, key7]);
     responseData.push(["sunion([key7, key7])", new Set(["bar", "foo"])]);
-    baseTransaction.sinter([key7, key7]);
+    baseBatch.sinter([key7, key7]);
     responseData.push(["sinter([key7, key7])", new Set(["bar", "foo"])]);
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.sintercard([key7, key7]);
+        baseBatch.sintercard([key7, key7]);
         responseData.push(["sintercard([key7, key7])", 2]);
-        baseTransaction.sintercard([key7, key7], { limit: 1 });
+        baseBatch.sintercard([key7, key7], { limit: 1 });
         responseData.push(["sintercard([key7, key7], { limit: 1 })", 1]);
     }
 
-    baseTransaction.sinterstore(key7, [key7, key7]);
+    baseBatch.sinterstore(key7, [key7, key7]);
     responseData.push(["sinterstore(key7, [key7, key7])", 2]);
-    baseTransaction.sdiff([key7, key7]);
+    baseBatch.sdiff([key7, key7]);
     responseData.push(["sdiff([key7, key7])", new Set()]);
-    baseTransaction.sdiffstore(key7, [key7]);
+    baseBatch.sdiffstore(key7, [key7]);
     responseData.push(["sdiffstore(key7, [key7])", 2]);
-    baseTransaction.srem(key7, [foo]);
+    baseBatch.srem(key7, [foo]);
     responseData.push(['srem(key7, ["foo"])', 1]);
-    baseTransaction.sscan(key7, "0");
+    baseBatch.sscan(key7, "0");
     responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
-    baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
+    baseBatch.sscan(key7, "0", { match: "*", count: 20 });
     responseData.push([
         'sscan(key7, "0", {match: "*", count: 20})',
         ["0", ["bar"]],
     ]);
-    baseTransaction.scard(key7);
+    baseBatch.scard(key7);
     responseData.push(["scard(key7)", 1]);
-    baseTransaction.sismember(key7, bar);
+    baseBatch.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction.smismember(key7, [bar, foo, baz]);
+        baseBatch.smismember(key7, [bar, foo, baz]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
             [true, false, false],
         ]);
     }
 
-    baseTransaction.smembers(key7);
+    baseBatch.smembers(key7);
     responseData.push(["smembers(key7)", new Set(["bar"])]);
-    baseTransaction.srandmember(key7);
+    baseBatch.srandmember(key7);
     responseData.push(["srandmember(key7)", "bar"]);
-    baseTransaction.srandmemberCount(key7, 2);
+    baseBatch.srandmemberCount(key7, 2);
     responseData.push(["srandmemberCount(key7, 2)", ["bar"]]);
-    baseTransaction.srandmemberCount(key7, -2);
+    baseBatch.srandmemberCount(key7, -2);
     responseData.push(["srandmemberCount(key7, -2)", ["bar", "bar"]]);
-    baseTransaction.spop(key7);
+    baseBatch.spop(key7);
     responseData.push(["spop(key7)", "bar"]);
-    baseTransaction.spopCount(key7, 2);
+    baseBatch.spopCount(key7, 2);
     responseData.push(["spopCount(key7, 2)", new Set()]);
-    baseTransaction.smove(key7, key7, non_existing_member);
+    baseBatch.smove(key7, key7, non_existing_member);
     responseData.push(['smove(key7, key7, "non_existing_member")', false]);
-    baseTransaction.scard(key7);
+    baseBatch.scard(key7);
     responseData.push(["scard(key7)", 0]);
-    baseTransaction.zadd(key8, [
+    baseBatch.zadd(key8, [
         { element: member1, score: 1 },
         { element: member2, score: 2 },
         { element: member3, score: 3.5 },
@@ -1183,50 +1178,50 @@ export async function transactionTest(
         { element: "negInfMember", score: "-inf" },
     ]);
     responseData.push(["zadd(key8, { ... } ", 7]);
-    baseTransaction.zrank(key8, member1);
+    baseBatch.zrank(key8, member1);
     responseData.push(['zrank(key8, "member1")', 1]);
-    baseTransaction.zrank(key8, "negInfMember");
+    baseBatch.zrank(key8, "negInfMember");
     responseData.push(['zrank(key8, "negInfMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
-        baseTransaction.zrankWithScore(key8, member1);
+        baseBatch.zrankWithScore(key8, member1);
         responseData.push(['zrankWithScore(key8, "member1")', [1, 1]]);
-        baseTransaction.zrankWithScore(key8, "negInfMember");
+        baseBatch.zrankWithScore(key8, "negInfMember");
         responseData.push([
             'zrankWithScore(key8, "negInfMember")',
             [0, -Infinity],
         ]);
     }
 
-    baseTransaction.zrevrank(key8, "member5");
+    baseBatch.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 1]);
-    baseTransaction.zrevrank(key8, "infMember");
+    baseBatch.zrevrank(key8, "infMember");
     responseData.push(['zrevrank(key8, "infMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
-        baseTransaction.zrevrankWithScore(key8, "member5");
+        baseBatch.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [1, 5]]);
-        baseTransaction.zrevrankWithScore(key8, "infMember");
+        baseBatch.zrevrankWithScore(key8, "infMember");
         responseData.push([
             'zrevrankWithScore(key8, "infMember")',
             [0, Infinity],
         ]);
     }
 
-    baseTransaction.zaddIncr(key8, member2, 1);
+    baseBatch.zaddIncr(key8, member2, 1);
     responseData.push(['zaddIncr(key8, "member2", 1)', 3]);
-    baseTransaction.zincrby(key8, 0.3, member1);
+    baseBatch.zincrby(key8, 0.3, member1);
     responseData.push(['zincrby(key8, 0.3, "member1")', 1.3]);
-    baseTransaction.zrem(key8, [member1]);
+    baseBatch.zrem(key8, [member1]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
-    baseTransaction.zcard(key8);
+    baseBatch.zcard(key8);
     responseData.push(["zcard(key8)", 6]);
 
-    baseTransaction.zscore(key8, member2);
+    baseBatch.zscore(key8, member2);
     responseData.push(['zscore(key8, "member2")', 3.0]);
-    baseTransaction.zscore(key8, "infMember");
+    baseBatch.zscore(key8, "infMember");
     responseData.push(['zscore(key8, "infMember")', Infinity]);
-    baseTransaction.zrange(key8, { start: 0, end: -1 });
+    baseBatch.zrange(key8, { start: 0, end: -1 });
     responseData.push([
         "zrange(key8, { start: 0, end: -1 })",
         [
@@ -1238,7 +1233,7 @@ export async function transactionTest(
             "infMember",
         ],
     ]);
-    baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
+    baseBatch.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
         "zrangeWithScores(key8, { start: 0, end: -1 })",
         convertRecordToGlideRecord({
@@ -1250,22 +1245,22 @@ export async function transactionTest(
             infMember: Infinity,
         }),
     ]);
-    baseTransaction.zadd(key12, [
+    baseBatch.zadd(key12, [
         { element: one, score: 1 },
         { element: two, score: 2 },
     ]);
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
-    baseTransaction.zscan(key12, "0");
+    baseBatch.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
 
     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
-        baseTransaction.zscan(key12, "0", { noScores: false });
+        baseBatch.zscan(key12, "0", { noScores: false });
         responseData.push([
             'zscan(key12, "0", {noScores: false})',
             ["0", [one.toString(), "1", two.toString(), "2"]],
         ]);
 
-        baseTransaction.zscan(key12, "0", {
+        baseBatch.zscan(key12, "0", {
             match: "*",
             count: 20,
             noScores: true,
@@ -1276,43 +1271,43 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.zscan(key12, "0", { match: "*", count: 20 });
+    baseBatch.zscan(key12, "0", { match: "*", count: 20 });
     responseData.push([
         'zscan(key12, "0", {match: "*", count: 20})',
         ["0", ["one", "1", "two", "2"]],
     ]);
-    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
+    baseBatch.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction.zrangeStore(key8, key8, { start: 0, end: -1 });
+        baseBatch.zrangeStore(key8, key8, { start: 0, end: -1 });
         responseData.push([
             "zrangeStore(key8, key8, { start: 0, end: -1 })",
             6,
         ]);
-        baseTransaction.zdiff([key13, key12]);
+        baseBatch.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
-        baseTransaction.zdiffWithScores([key13, key12]);
+        baseBatch.zdiffWithScores([key13, key12]);
         responseData.push([
             "zdiffWithScores([key13, key12])",
             convertRecordToGlideRecord({ three: 3.5 }),
         ]);
-        baseTransaction.zdiffstore(key13, [key13, key13]);
+        baseBatch.zdiffstore(key13, [key13, key13]);
         responseData.push(["zdiffstore(key13, [key13, key13])", 0]);
-        baseTransaction.zunionstore(key5, [key12, key13]);
+        baseBatch.zunionstore(key5, [key12, key13]);
         responseData.push(["zunionstore(key5, [key12, key13])", 2]);
-        baseTransaction.zmscore(key12, ["two", "one"]);
+        baseBatch.zmscore(key12, ["two", "one"]);
         responseData.push(['zmscore(key12, ["two", "one"]', [2.0, 1.0]]);
-        baseTransaction.zinterstore(key12, [key12, key13]);
+        baseBatch.zinterstore(key12, [key12, key13]);
         responseData.push(["zinterstore(key12, [key12, key13])", 0]);
 
         if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-            baseTransaction.zadd(key26, [
+            baseBatch.zadd(key26, [
                 { element: one, score: 1 },
                 { element: two, score: 2 },
             ]);
             responseData.push(["zadd(key26, { one: 1, two: 2 })", 2]);
-            baseTransaction.zadd(key27, [
+            baseBatch.zadd(key27, [
                 { element: one, score: 1 },
                 { element: two, score: 2 },
                 { element: three, score: 3.5 },
@@ -1321,14 +1316,14 @@ export async function transactionTest(
                 "zadd(key27, { one: 1, two: 2, three: 3.5 })",
                 3,
             ]);
-            baseTransaction.zinter([key27, key26]);
+            baseBatch.zinter([key27, key26]);
             responseData.push(["zinter([key27, key26])", ["one", "two"]]);
-            baseTransaction.zinterWithScores([key27, key26]);
+            baseBatch.zinterWithScores([key27, key26]);
             responseData.push([
                 "zinterWithScores([key27, key26])",
                 convertRecordToGlideRecord({ one: 2, two: 4 }),
             ]);
-            baseTransaction.zunionWithScores([key27, key26]);
+            baseBatch.zunionWithScores([key27, key26]);
             responseData.push([
                 "zunionWithScores([key27, key26])",
                 convertRecordToGlideRecord({ one: 2, two: 4, three: 3.5 }).sort(
@@ -1337,57 +1332,53 @@ export async function transactionTest(
             ]);
         }
     } else {
-        baseTransaction.zinterstore(key12, [key12, key13]);
+        baseBatch.zinterstore(key12, [key12, key13]);
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
+    baseBatch.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
         "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
         5,
     ]);
-    baseTransaction.zlexcount(
-        key8,
-        { value: "a" },
-        InfBoundary.PositiveInfinity,
-    );
+    baseBatch.zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity);
     responseData.push([
         'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
         6,
     ]);
-    baseTransaction.zpopmin(key8);
+    baseBatch.zpopmin(key8);
     responseData.push([
         "zpopmin(key8)",
         convertRecordToGlideRecord({ negInfMember: -Infinity }),
     ]);
-    baseTransaction.zpopmax(key8);
+    baseBatch.zpopmax(key8);
     responseData.push([
         "zpopmax(key8)",
         convertRecordToGlideRecord({ infMember: Infinity }),
     ]);
-    baseTransaction.zadd(key8, [{ element: member6, score: 6 }]);
+    baseBatch.zadd(key8, [{ element: member6, score: 6 }]);
     responseData.push(["zadd(key8, {member6: 6})", 1]);
-    baseTransaction.bzpopmax([key8], 0.5);
+    baseBatch.bzpopmax([key8], 0.5);
     responseData.push([
         "bzpopmax([key8], 0.5)",
         [key8.toString(), "member6", 6],
     ]);
-    baseTransaction.zadd(key8, [{ element: member7, score: 1 }]);
+    baseBatch.zadd(key8, [{ element: member7, score: 1 }]);
     responseData.push(["zadd(key8, {member7: 1})", 1]);
-    baseTransaction.bzpopmin([key8], 0.5);
+    baseBatch.bzpopmin([key8], 0.5);
     responseData.push([
         "bzpopmin([key8], 0.5)",
         [key8.toString(), "member7", 1],
     ]);
-    baseTransaction.zremRangeByRank(key8, 1, 1);
+    baseBatch.zremRangeByRank(key8, 1, 1);
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
-    baseTransaction.zremRangeByScore(
+    baseBatch.zremRangeByScore(
         key8,
         InfBoundary.NegativeInfinity,
         InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 3]); // key8 is now empty
-    baseTransaction.zremRangeByLex(
+    baseBatch.zremRangeByLex(
         key8,
         InfBoundary.NegativeInfinity,
         InfBoundary.PositiveInfinity,
@@ -1395,74 +1386,74 @@ export async function transactionTest(
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.zadd(key14, [
+        baseBatch.zadd(key14, [
             { element: one, score: 1.0 },
             { element: two, score: 2.0 },
         ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
-        baseTransaction.zintercard([key8, key14]);
+        baseBatch.zintercard([key8, key14]);
         responseData.push(["zintercard([key8, key14])", 0]);
-        baseTransaction.zintercard([key8, key14], { limit: 1 });
+        baseBatch.zintercard([key8, key14], { limit: 1 });
         responseData.push(["zintercard([key8, key14], { limit: 1 })", 0]);
-        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        baseBatch.zmpop([key14], ScoreFilter.MAX);
         responseData.push([
             "zmpop([key14], MAX)",
             [key14.toString(), [{ key: "two", value: 2.0 }]],
         ]);
-        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        baseBatch.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push([
             "zmpop([key14], MAX, 1)",
             [key14.toString(), [{ key: "one", value: 1.0 }]],
         ]);
-        baseTransaction.zadd(key14, [
+        baseBatch.zadd(key14, [
             { element: one, score: 1.0 },
             { element: two, score: 2.0 },
         ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
-        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
+        baseBatch.bzmpop([key14], ScoreFilter.MAX, 0.1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1)",
             [key14.toString(), [{ key: "two", value: 2.0 }]],
         ]);
-        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
+        baseBatch.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
             [key14.toString(), [{ key: "one", value: 1.0 }]],
         ]);
     }
 
-    baseTransaction.xadd(key9, [[field, value1]], { id: "0-1" });
+    baseBatch.xadd(key9, [[field, value1]], { id: "0-1" });
     responseData.push([
         'xadd(key9, [["field", "value1"]], { id: "0-1" })',
         "0-1",
     ]);
-    baseTransaction.xadd(key9, [[field, value2]], { id: "0-2" });
+    baseBatch.xadd(key9, [[field, value2]], { id: "0-2" });
     responseData.push([
         'xadd(key9, [["field", "value2"]], { id: "0-2" })',
         "0-2",
     ]);
-    baseTransaction.xadd(key9, [[field, value3]], { id: "0-3" });
+    baseBatch.xadd(key9, [[field, value3]], { id: "0-3" });
     responseData.push([
         'xadd(key9, [["field", "value3"]], { id: "0-3" })',
         "0-3",
     ]);
-    baseTransaction.xlen(key9);
+    baseBatch.xlen(key9);
     responseData.push(["xlen(key9)", 3]);
-    baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
+    baseBatch.xrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrange(key9)",
         convertRecordToGlideRecord({
             "0-1": [[field.toString(), value1.toString()]],
         }),
     ]);
-    baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
+    baseBatch.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrevrange(key9)",
         convertRecordToGlideRecord({
             "0-1": [[field.toString(), value1.toString()]],
         }),
     ]);
-    baseTransaction.xread([{ key: key9, value: "0-1" }]);
+    baseBatch.xread([{ key: key9, value: "0-1" }]);
     responseData.push([
         'xread({ [key9]: "0-1" })',
         [
@@ -1481,7 +1472,7 @@ export async function transactionTest(
             },
         ],
     ]);
-    baseTransaction.xtrim(key9, {
+    baseBatch.xtrim(key9, {
         method: "minid",
         threshold: "0-2",
         exact: true,
@@ -1490,30 +1481,28 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
-    baseTransaction.xinfoGroups(key9);
+    baseBatch.xinfoGroups(key9);
     responseData.push(["xinfoGroups(key9)", []]);
-    baseTransaction.xgroupCreate(key9, groupName1, "0-0");
+    baseBatch.xgroupCreate(key9, groupName1, "0-0");
     responseData.push(['xgroupCreate(key9, groupName1, "0-0")', "OK"]);
-    baseTransaction.xgroupCreate(key9, groupName2, "0-0", { mkStream: true });
+    baseBatch.xgroupCreate(key9, groupName2, "0-0", { mkStream: true });
     responseData.push([
         'xgroupCreate(key9, groupName2, "0-0", { mkStream: true })',
         "OK",
     ]);
-    baseTransaction.xinfoConsumers(key9, groupName1);
+    baseBatch.xinfoConsumers(key9, groupName1);
     responseData.push(["xinfoConsumers(key9, groupName1)", []]);
-    baseTransaction.xdel(key9, ["0-3", "0-5"]);
+    baseBatch.xdel(key9, ["0-3", "0-5"]);
     responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
 
     // key9 has one entry here: {"0-2":[["field","value2"]]}
 
-    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
+    baseBatch.xgroupCreateConsumer(key9, groupName1, consumer);
     responseData.push([
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.xreadgroup(groupName1, consumer, [
-        { key: key9, value: ">" },
-    ]);
+    baseBatch.xreadgroup(groupName1, consumer, [{ key: key9, value: ">" }]);
     responseData.push([
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         [
@@ -1528,12 +1517,12 @@ export async function transactionTest(
             },
         ],
     ]);
-    baseTransaction.xpending(key9, groupName1);
+    baseBatch.xpending(key9, groupName1);
     responseData.push([
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer.toString(), "1"]]],
     ]);
-    baseTransaction.xpendingWithOptions(key9, groupName1, {
+    baseBatch.xpendingWithOptions(key9, groupName1, {
         start: InfBoundary.NegativeInfinity,
         end: InfBoundary.PositiveInfinity,
         count: 10,
@@ -1542,14 +1531,14 @@ export async function transactionTest(
         "xpendingWithOptions(key9, groupName1, -, +, 10)",
         [["0-2", consumer.toString(), 0, 1]],
     ]);
-    baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
+    baseBatch.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
         convertRecordToGlideRecord({
             "0-2": [[field.toString(), value2.toString()]],
         }),
     ]);
-    baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
+    baseBatch.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
         retryCount: 0,
         idle: 0,
@@ -1560,12 +1549,12 @@ export async function transactionTest(
             "0-2": [[field.toString(), value2.toString()]],
         }),
     ]);
-    baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
+    baseBatch.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaimJustId(key9, groupName1, consumer, 0, ["0-2"])',
         ["0-2"],
     ]);
-    baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"], {
+    baseBatch.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
         retryCount: 0,
         idle: 0,
@@ -1576,7 +1565,7 @@ export async function transactionTest(
     ]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction.xautoclaim(key9, groupName1, consumer, 0, "0-0", {
+        baseBatch.xautoclaim(key9, groupName1, consumer, 0, "0-0", {
             count: 1,
         });
         responseData.push([
@@ -1596,7 +1585,7 @@ export async function transactionTest(
                       }),
                   ],
         ]);
-        baseTransaction.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
+        baseBatch.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
         responseData.push([
             'xautoclaimJustId(key9, groupName1, consumer, 0, "0-0")',
             !cluster.checkIfServerVersionLessThan("7.0.0")
@@ -1605,57 +1594,57 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.xack(key9, groupName1, ["0-3"]);
+    baseBatch.xack(key9, groupName1, ["0-3"]);
     responseData.push(["xack(key9, groupName1, ['0-3'])", 0]);
-    baseTransaction.xgroupSetId(key9, groupName1, "0-2");
+    baseBatch.xgroupSetId(key9, groupName1, "0-2");
     responseData.push(["xgroupSetId(key9, groupName1, '0-2')", "OK"]);
-    baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
+    baseBatch.xgroupDelConsumer(key9, groupName1, consumer);
     responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 1]);
-    baseTransaction.xgroupDestroy(key9, groupName1);
+    baseBatch.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
-    baseTransaction.xgroupDestroy(key9, groupName2);
+    baseBatch.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
-    baseTransaction.rename(key9, key10);
+    baseBatch.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
-    baseTransaction.exists([key10]);
+    baseBatch.exists([key10]);
     responseData.push(["exists([key10])", 1]);
-    baseTransaction.touch([key10]);
+    baseBatch.touch([key10]);
     responseData.push(["touch([key10])", 1]);
-    baseTransaction.renamenx(key10, key9);
+    baseBatch.renamenx(key10, key9);
     responseData.push(["renamenx(key10, key9)", true]);
-    baseTransaction.exists([key9, key10]);
+    baseBatch.exists([key9, key10]);
     responseData.push(["exists([key9, key10])", 1]);
-    baseTransaction.rpush(key6, [field1, field2, field3]);
+    baseBatch.rpush(key6, [field1, field2, field3]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
     ]);
-    baseTransaction.brpop([key6], 0.1);
+    baseBatch.brpop([key6], 0.1);
     responseData.push([
         "brpop([key6], 0.1)",
         [key6.toString(), field3.toString()],
     ]);
-    baseTransaction.blpop([key6], 0.1);
+    baseBatch.blpop([key6], 0.1);
     responseData.push([
         "blpop([key6], 0.1)",
         [key6.toString(), field1.toString()],
     ]);
 
-    baseTransaction.setbit(key17, 1, 1);
+    baseBatch.setbit(key17, 1, 1);
     responseData.push(["setbit(key17, 1, 1)", 0]);
-    baseTransaction.getbit(key17, 1);
+    baseBatch.getbit(key17, 1);
     responseData.push(["getbit(key17, 1)", 1]);
-    baseTransaction.set(key17, "foobar");
+    baseBatch.set(key17, "foobar");
     responseData.push(['set(key17, "foobar")', "OK"]);
-    baseTransaction.bitcount(key17);
+    baseBatch.bitcount(key17);
     responseData.push(["bitcount(key17)", 26]);
-    baseTransaction.bitcount(key17, { start: 1, end: 1 });
+    baseBatch.bitcount(key17, { start: 1, end: 1 });
     responseData.push(["bitcount(key17, { start: 1, end: 1 })", 6]);
-    baseTransaction.bitpos(key17, 1);
+    baseBatch.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
     if (!cluster.checkIfServerVersionLessThan("6.0.0")) {
-        baseTransaction.bitfieldReadOnly(key17, [
+        baseBatch.bitfieldReadOnly(key17, [
             new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
         ]);
         responseData.push([
@@ -1664,18 +1653,18 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.set(key19, "abcdef");
+    baseBatch.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
-    baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
+    baseBatch.bitop(BitwiseOperation.AND, key19, [key19, key17]);
     responseData.push([
         "bitop(BitwiseOperation.AND, key19, [key19, key17])",
         6,
     ]);
-    baseTransaction.get(key19);
+    baseBatch.get(key19);
     responseData.push(["get(key19)", "`bc`ab"]);
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.bitcount(key17, {
+        baseBatch.bitcount(key17, {
             start: 5,
             end: 30,
             indexType: BitmapIndexType.BIT,
@@ -1684,7 +1673,7 @@ export async function transactionTest(
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
         ]);
-        baseTransaction.bitpos(key17, 1, {
+        baseBatch.bitpos(key17, 1, {
             start: 44,
             end: 50,
             indexType: BitmapIndexType.BIT,
@@ -1696,15 +1685,15 @@ export async function transactionTest(
     }
 
     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
-        baseTransaction.set(key17, "foobar");
+        baseBatch.set(key17, "foobar");
         responseData.push(['set(key17, "foobar")', "OK"]);
-        baseTransaction.bitcount(key17, {
+        baseBatch.bitcount(key17, {
             start: 0,
         });
         responseData.push(["bitcount(key17, {start:0 }", 26]);
     }
 
-    baseTransaction.bitfield(key17, [
+    baseBatch.bitfield(key17, [
         new BitFieldSet(
             new UnsignedEncoding(10),
             new BitOffsetMultiplier(3),
@@ -1713,13 +1702,13 @@ export async function transactionTest(
     ]);
     responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
-    baseTransaction.pfadd(key11, [one, two, three]);
+    baseBatch.pfadd(key11, [one, two, three]);
     responseData.push(["pfadd(key11, [one, two, three])", 1]);
-    baseTransaction.pfmerge(key11, []);
+    baseBatch.pfmerge(key11, []);
     responseData.push(["pfmerge(key11, [])", "OK"]);
-    baseTransaction.pfcount([key11]);
+    baseBatch.pfcount([key11]);
     responseData.push(["pfcount([key11])", 3]);
-    baseTransaction.geoadd(
+    baseBatch.geoadd(
         key18,
         new Map<GlideString, GeospatialData>([
             [palermo, { longitude: 13.361389, latitude: 38.115556 }],
@@ -1727,7 +1716,7 @@ export async function transactionTest(
         ]),
     );
     responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);
-    baseTransaction.geopos(key18, [palermo, catania]);
+    baseBatch.geopos(key18, [palermo, catania]);
     responseData.push([
         'geopos(key18, ["palermo", "catania"])',
         [
@@ -1735,34 +1724,34 @@ export async function transactionTest(
             [15.08726745843887329, 37.50266842333162032],
         ],
     ]);
-    baseTransaction.geodist(key18, palermo, catania);
+    baseBatch.geodist(key18, palermo, catania);
     responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
-    baseTransaction.geodist(key18, palermo, catania, {
+    baseBatch.geodist(key18, palermo, catania, {
         unit: GeoUnit.KILOMETERS,
     });
     responseData.push([
         'geodist(key18, "palermo", "catania", { unit: GeoUnit.KILOMETERS })',
         166.2742,
     ]);
-    baseTransaction.geohash(key18, [palermo, catania, non_existing_member]);
+    baseBatch.geohash(key18, [palermo, catania, non_existing_member]);
     responseData.push([
         'geohash(key18, ["palermo", "catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
-    baseTransaction.zadd(key23, { one: 1.0 });
+    baseBatch.zadd(key23, { one: 1.0 });
     responseData.push(["zadd(key23, {one: 1.0}", 1]);
-    baseTransaction.zrandmember(key23);
+    baseBatch.zrandmember(key23);
     responseData.push(["zrandmember(key23)", "one"]);
-    baseTransaction.zrandmemberWithCount(key23, 1);
+    baseBatch.zrandmemberWithCount(key23, 1);
     responseData.push(["zrandmemberWithCount(key23, 1)", ["one"]]);
-    baseTransaction.zrandmemberWithCountWithScores(key23, 1);
+    baseBatch.zrandmemberWithCountWithScores(key23, 1);
     responseData.push([
         "zrandmemberWithCountWithScores(key23, 1)",
         [["one", 1.0]],
     ]);
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-        baseTransaction
+        baseBatch
             .geosearch(
                 key18,
                 { member: palermo },
@@ -1849,7 +1838,7 @@ export async function transactionTest(
             ],
         ]);
 
-        baseTransaction.geosearchstore(
+        baseBatch.geosearchstore(
             key25,
             key18,
             { position: { longitude: 15, latitude: 37 } },
@@ -1870,49 +1859,57 @@ export async function transactionTest(
     );
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.functionFlush();
+        baseBatch.functionFlush();
         responseData.push(["functionFlush()", "OK"]);
-        baseTransaction.functionLoad(code);
+        baseBatch.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
-        baseTransaction.functionLoad(code, true);
+        baseBatch.functionLoad(code, true);
         responseData.push(["functionLoad(code, true)", libName]);
-        baseTransaction.functionList({ libNamePattern: "another" });
-        responseData.push(['functionList("another")', []]);
-        baseTransaction.fcall(funcName, [], ["one", "two"]);
-        responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
-        baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
-        responseData.push([
-            'fcallReadonly(funcName, [], ["one", "two"]',
-            "one",
-        ]);
-        baseTransaction.functionStats();
-        responseData.push([
-            "functionStats()",
-            convertRecordToGlideRecord({
-                running_script: null,
-                engines: convertRecordToGlideRecord({
-                    LUA: convertRecordToGlideRecord({
-                        libraries_count: 1,
-                        functions_count: 1,
+
+        if (baseBatch.isAtomic && !clusterMode) {
+            baseBatch.functionList({ libNamePattern: "another" });
+            responseData.push(['functionList("another")', []]);
+            baseBatch.functionStats();
+            responseData.push([
+                "functionStats()",
+                convertRecordToGlideRecord({
+                    running_script: null,
+                    engines: convertRecordToGlideRecord({
+                        LUA: convertRecordToGlideRecord({
+                            libraries_count: 1,
+                            functions_count: 1,
+                        }),
                     }),
                 }),
-            }),
-        ]);
-        baseTransaction.functionDelete(libName);
-        responseData.push(["functionDelete(libName)", "OK"]);
-        baseTransaction.functionFlush();
-        responseData.push(["functionFlush()", "OK"]);
-        baseTransaction.functionFlush(FlushMode.ASYNC);
-        responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
-        baseTransaction.functionFlush(FlushMode.SYNC);
-        responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
-        baseTransaction.functionList({
-            libNamePattern: libName,
-            withCode: true,
-        });
-        responseData.push(["functionList({ libName, true})", []]);
+            ]);
+        }
 
-        baseTransaction
+        baseBatch.fcall(funcName, [key1], ["one", "two"]);
+        responseData.push(['fcall(funcName, [key1], ["one", "two"])', "one"]);
+        baseBatch.fcallReadonly(funcName, [key1], ["one", "two"]);
+        responseData.push([
+            'fcallReadonly(funcName, [key1], ["one", "two"]',
+            "one",
+        ]);
+
+        baseBatch.functionDelete(libName);
+        responseData.push(["functionDelete(libName)", "OK"]);
+        baseBatch.functionFlush();
+        responseData.push(["functionFlush()", "OK"]);
+        baseBatch.functionFlush(FlushMode.ASYNC);
+        responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
+        baseBatch.functionFlush(FlushMode.SYNC);
+        responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
+
+        if (baseBatch.isAtomic && clusterMode) {
+            baseBatch.functionList({
+                libNamePattern: libName,
+                withCode: true,
+            });
+            responseData.push(["functionList({ libName, true})", []]);
+        }
+
+        baseBatch
             .mset([
                 { key: key1, value: "abcd" },
                 { key: key2, value: "bcde" },
@@ -1976,7 +1973,7 @@ export async function transactionTest(
         );
     }
 
-    baseTransaction
+    baseBatch
         .lpush(key21, ["3", "1", "2"])
         .sort(key21)
         .sortStore(key21, key22)
@@ -1989,7 +1986,7 @@ export async function transactionTest(
     );
 
     if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseTransaction.sortReadOnly(key21);
+        baseBatch.sortReadOnly(key21);
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
@@ -1997,70 +1994,70 @@ export async function transactionTest(
 }
 
 /**
- * Populates a transaction with JSON commands to test.
- * @param baseTransaction - A transaction.
+ * Populates a batch with JSON commands to test.
+ * @param baseBatch - A batch.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
 export async function JsonBatchForArrCommands(
-    baseTransaction: ClusterTransaction,
+    baseBatch: ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "{key}:1" + getRandomKey();
     const jsonValue = { a: 1.0, b: 2 };
 
     // JSON.SET
-    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseBatch, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "{ a: 1.0, b: 2 }")', "OK"]);
 
     // JSON.CLEAR
-    JsonBatch.clear(baseTransaction, key, { path: "$" });
+    JsonBatch.clear(baseBatch, key, { path: "$" });
     responseData.push(['clear(key, "bar")', 1]);
 
-    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseBatch, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"]);
 
     // JSON.GET
-    JsonBatch.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseBatch, key, { path: "." });
     responseData.push(['get(key, {path: "."})', JSON.stringify(jsonValue)]);
 
     const jsonValue2 = { a: 1.0, b: [1, 2] };
-    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseBatch, key, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key, "$", "{ "a": 1, b: ["1", "2"] }")', "OK"]);
 
     // JSON.ARRAPPEND
-    JsonBatch.arrappend(baseTransaction, key, "$.b", ["3", "4"]);
+    JsonBatch.arrappend(baseBatch, key, "$.b", ["3", "4"]);
     responseData.push(['arrappend(key, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
     // JSON.GET to check JSON.ARRAPPEND was successful.
     const jsonValueAfterAppend = { a: 1.0, b: [1, 2, 3, 4] };
-    JsonBatch.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseBatch, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterAppend),
     ]);
 
     // JSON.ARRINDEX
-    JsonBatch.arrindex(baseTransaction, key, "$.b", "2");
+    JsonBatch.arrindex(baseBatch, key, "$.b", "2");
     responseData.push(['arrindex(key, "$.b", "1")', [1]]);
 
     // JSON.ARRINSERT
-    JsonBatch.arrinsert(baseTransaction, key, "$.b", 2, ["5"]);
+    JsonBatch.arrinsert(baseBatch, key, "$.b", 2, ["5"]);
     responseData.push(['arrinsert(key, "$.b", 4, [\'"5"\'])', [5]]);
 
     // JSON.GET to check JSON.ARRINSERT was successful.
     const jsonValueAfterArrInsert = { a: 1.0, b: [1, 2, 5, 3, 4] };
-    JsonBatch.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseBatch, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrInsert),
     ]);
 
     // JSON.ARRLEN
-    JsonBatch.arrlen(baseTransaction, key, { path: "$.b" });
+    JsonBatch.arrlen(baseBatch, key, { path: "$.b" });
     responseData.push(['arrlen(key, "$.b")', [5]]);
 
     // JSON.ARRPOP
-    JsonBatch.arrpop(baseTransaction, key, {
+    JsonBatch.arrpop(baseBatch, key, {
         path: "$.b",
         index: 2,
     });
@@ -2068,19 +2065,19 @@ export async function JsonBatchForArrCommands(
 
     // JSON.GET to check JSON.ARRPOP was successful.
     const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
-    JsonBatch.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseBatch, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrpop),
     ]);
 
     // JSON.ARRTRIM
-    JsonBatch.arrtrim(baseTransaction, key, "$.b", 1, 2);
+    JsonBatch.arrtrim(baseBatch, key, "$.b", 1, 2);
     responseData.push(['arrtrim(key, "$.b", 2, 3)', [2]]);
 
     // JSON.GET to check JSON.ARRTRIM was successful.
     const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
-    JsonBatch.get(baseTransaction, key, { path: "." });
+    JsonBatch.get(baseBatch, key, { path: "." });
     responseData.push([
         'get(key, {path: "."})',
         JSON.stringify(jsonValueAfterArrTrim),
@@ -2089,71 +2086,71 @@ export async function JsonBatchForArrCommands(
 }
 
 export async function CreateJsonBatchCommands(
-    baseTransaction: ClusterTransaction,
+    baseBatch: ClusterBatch,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "{key}:1" + getRandomKey();
     const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
-    JsonBatch.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    JsonBatch.set(baseBatch, key, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    JsonBatch.debugMemory(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugMemory(baseBatch, key, { path: "$.a" });
     responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
 
     // JSON.DEBUG FIELDS
-    JsonBatch.debugFields(baseTransaction, key, { path: "$.a" });
+    JsonBatch.debugFields(baseBatch, key, { path: "$.a" });
     responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
 
     // JSON.OBJLEN
-    JsonBatch.objlen(baseTransaction, key, { path: "." });
+    JsonBatch.objlen(baseBatch, key, { path: "." });
     responseData.push(["objlen(key)", 4]);
 
     // JSON.OBJKEY
-    JsonBatch.objkeys(baseTransaction, key, { path: "." });
+    JsonBatch.objkeys(baseBatch, key, { path: "." });
     responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
 
     // JSON.NUMINCRBY
-    JsonBatch.numincrby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.numincrby(baseBatch, key, "$.a[*]", 10.0);
     responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
 
     // JSON.NUMMULTBY
-    JsonBatch.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    JsonBatch.nummultby(baseBatch, key, "$.a[*]", 10.0);
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    JsonBatch.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
+    JsonBatch.strappend(baseBatch, key, '"-test"', { path: "$.c" });
     responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
-    JsonBatch.strlen(baseTransaction, key, { path: "$.c" });
+    JsonBatch.strlen(baseBatch, key, { path: "$.c" });
     responseData.push(['strlen(key, "$.c")', [6]]);
 
     // JSON.TYPE
-    JsonBatch.type(baseTransaction, key, { path: "$.a" });
+    JsonBatch.type(baseBatch, key, { path: "$.a" });
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET
     const key2 = "{key}:2" + getRandomKey();
     const key3 = "{key}:3" + getRandomKey();
     const jsonValue2 = { b: [3, 4], c: "c", d: true };
-    JsonBatch.set(baseTransaction, key2, "$", JSON.stringify(jsonValue2));
+    JsonBatch.set(baseBatch, key2, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key2, "$")', "OK"]);
 
-    JsonBatch.mget(baseTransaction, [key, key2, key3], "$.a");
+    JsonBatch.mget(baseBatch, [key, key2, key3], "$.a");
     responseData.push([
         'json.mget([key, key2, key3], "$.a")',
         ["[[110,120]]", "[]", null],
     ]);
 
     // JSON.TOGGLE
-    JsonBatch.toggle(baseTransaction, key, { path: "$.d" });
+    JsonBatch.toggle(baseBatch, key, { path: "$.d" });
     responseData.push(['toggle(key2, "$.d")', [false]]);
 
     // JSON.RESP
-    JsonBatch.resp(baseTransaction, key, { path: "$" });
+    JsonBatch.resp(baseBatch, key, { path: "$" });
     responseData.push([
         'resp(key, "$")',
         [
@@ -2168,11 +2165,11 @@ export async function CreateJsonBatchCommands(
     ]);
 
     // JSON.DEL
-    JsonBatch.del(baseTransaction, key, { path: "$.d" });
+    JsonBatch.del(baseBatch, key, { path: "$.d" });
     responseData.push(['del(key, { path: "$.d" })', 1]);
 
     // JSON.FORGET
-    JsonBatch.forget(baseTransaction, key, { path: "$.c" });
+    JsonBatch.forget(baseBatch, key, { path: "$.c" });
     responseData.push(['forget(key, {path: "$.c" })', 1]);
 
     return responseData;

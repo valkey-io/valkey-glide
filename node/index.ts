@@ -4,12 +4,12 @@
 
 export { ClusterScanCursor, Script } from "glide-rs";
 export * from "./src/BaseClient";
+export * from "./src/Batch";
 export * from "./src/Commands";
 export * from "./src/Errors";
 export * from "./src/GlideClient";
 export * from "./src/GlideClusterClient";
 export * from "./src/Logger";
-export * from "./src/server-modules/GlideJson";
 export * from "./src/server-modules/GlideFt";
 export * from "./src/server-modules/GlideFtOptions";
-export * from "./src/Transaction";
+export * from "./src/server-modules/GlideJson";

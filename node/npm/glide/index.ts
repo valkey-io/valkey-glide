@@ -166,6 +166,8 @@ function initialize() {
         ConnectionError,
         ClusterTransaction,
         Transaction,
+        Batch,
+        ClusterBatch,
         PubSubMsg,
         ScoreFilter,
         SignedEncoding,
@@ -193,6 +195,9 @@ function initialize() {
         UniversalReturnTypeJson,
         Score,
         ElementAndScore,
+        BatchOptions,
+        ClusterBatchOptions,
+        ClusterBatchRetryStrategy,
     } = nativeBinding;
 
     module.exports = {
@@ -319,6 +324,8 @@ function initialize() {
         ConnectionError,
         ClusterTransaction,
         Transaction,
+        Batch,
+        ClusterBatch,
         PubSubMsg,
         ScoreFilter,
         SignedEncoding,
@@ -344,6 +351,9 @@ function initialize() {
         UniversalReturnTypeJson,
         Score,
         ElementAndScore,
+        BatchOptions,
+        ClusterBatchOptions,
+        ClusterBatchRetryStrategy,
     };
 
     globalObject = Object.assign(global, nativeBinding);

@@ -15,7 +15,9 @@ import {
     GlideString,
     PubSubMsg,
 } from "./BaseClient";
+import { Batch } from "./Batch";
 import {
+    BatchOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -60,7 +62,6 @@ import {
     ScanOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
-import { Transaction } from "./Transaction";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -292,29 +293,64 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Execute a transaction by processing the queued commands.
+     * Execute a batch by processing the queued commands.
+     *
+     * **Notes:**
+     * - **Atomic Batches - Transactions:** If the transaction fails due to a `WATCH` command, `EXEC` will return `null`.
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
-     * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
-     * @param options - (Optional) See {@link DecoderOption}.
+     * @param batch - A {@link Batch} object containing a list of commands to be executed.
+     * @param raiseOnError - Determines how errors are handled within the batch response.
+     *   - If `true`, the first the first encountered error in the batch will be raised as an exception of type {@link RequestError}
+     * after all retries and reconnections have been exhausted.
+     *  - If `false`, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together.
+     * In this case, error details will be provided as instances of {@link RequestError} in the response list.
+     * @param options - (Optional) See {@link BatchOptions} and {@link DecoderOption}.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
      *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
+     *
+     * @see {@link https://valkey.io/docs/topics/transactions/|Valkey Transactions (Atomic Batches)} for details.
+     * @see {@link https://valkey.io/docs/topics/pipelining/|Valkey Pipelines (Non-Atomic Batches)} for details.
+     *
+     * @example
+     * ```typescript
+     * // Example 1: Atomic Batch (Transaction) with Options
+     * const transaction = new Batch(true) // Atomic (Transactional)
+     *     .set("key", "value")
+     *     .get("key");
+     *
+     * const result = await client.exec(transaction, false, {timeout: 1000}); // Execute the transaction with raiseOnError = false and a timeout of 1000ms
+     * console.log(result); // Output: ['OK', 'value']
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example 2: Non-Atomic Batch (Pipelining) with Options
+     * const pipeline = new Batch(false) // Non-Atomic (Pipelining)
+     *    .set("key1", "value1")
+     *    .set("key2", "value2")
+     *   .get("key1")
+     *   .get("key2");
+     *
+     * const result = await client.exec(pipeline, false, {timeout: 1000}); // Execute the pipeline with raiseOnError = false and a timeout of 1000ms
+     * console.log(result); // Output: ['OK', 'OK', 'value1', 'value2']
+     * ```
      */
     public async exec(
-        transaction: Transaction,
-        options?: DecoderOption,
+        batch: Batch,
+        raiseOnError: boolean,
+        options?: BatchOptions & DecoderOption,
     ): Promise<GlideReturnType[] | null> {
         return this.createWritePromise<GlideReturnType[] | null>(
-            transaction.commands,
+            batch.commands,
             options,
+            batch.isAtomic,
+            raiseOnError,
         ).then((result) =>
-            this.processResultWithSetCommands(
-                result,
-                transaction.setCommandsIndexes,
-            ),
+            this.processResultWithSetCommands(result, batch.setCommandsIndexes),
         );
     }
 

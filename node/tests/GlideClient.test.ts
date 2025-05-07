@@ -12,6 +12,7 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import {
+    Batch,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -22,27 +23,26 @@ import {
     ProtocolVersion,
     RequestError,
     Script,
-    Transaction,
     convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    batchTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    encodableTransactionTest,
+    encodableBatchTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
     getRandomKey,
     getServerVersion,
     parseEndpoints,
-    transactionTest,
-    validateTransactionResponse,
+    validateBatchResponse,
     waitForNotBusy,
 } from "./TestUtilities";
 // This timeout is used for tests like transactions and copy with DB, it should not be used for other tests
@@ -280,40 +280,54 @@ describe("GlideClient", () => {
             describe.each([Decoder.String, Decoder.Bytes])(
                 "Decoder String = %s",
                 (decoder) => {
-                    it(
-                        "can send transactions",
-                        async () => {
-                            client = await GlideClient.createClient(
-                                getClientConfigurationOption(
-                                    cluster.getAddresses(),
-                                    protocol,
-                                ),
-                            );
-                            const transaction = new Transaction();
-                            const expectedRes = await transactionTest(
-                                transaction,
-                                cluster,
-                                decoder,
-                            );
-                            transaction.select(0);
-                            const result = await client.exec(transaction, {
-                                decoder: Decoder.String,
-                            });
-                            expectedRes.push(["select(0)", "OK"]);
+                    describe.each([true, false])(
+                        "isAtomic = %s",
+                        (isAtomic) => {
+                            it(
+                                "can send batches",
+                                async () => {
+                                    client = await GlideClient.createClient(
+                                        getClientConfigurationOption(
+                                            cluster.getAddresses(),
+                                            protocol,
+                                        ),
+                                    );
+                                    const batch = new Batch(isAtomic);
+                                    const expectedRes = await batchTest(
+                                        batch,
+                                        cluster,
+                                        decoder,
+                                    );
+                                    batch.select(0);
+                                    const result = await client.exec(
+                                        batch,
+                                        true,
+                                        {
+                                            decoder: Decoder.String,
+                                        },
+                                    );
+                                    expectedRes.push(["select(0)", "OK"]);
 
-                            validateTransactionResponse(result, expectedRes);
-                            client.close();
+                                    validateBatchResponse(result, expectedRes);
+                                    client.close();
+                                },
+                                TIMEOUT,
+                            );
                         },
-                        TIMEOUT,
                     );
                 },
             );
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `dump and restore transactions_%p`,
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `dump and restore batches_%p with isAtomic=%p`,
+        async (protocol, isAtomic) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -321,23 +335,23 @@ describe("GlideClient", () => {
             const key2 = getRandomKey();
             const value = "value";
 
-            const transaction1 = new Transaction().set(key1, value).dump(key1);
+            const batch1 = new Batch(isAtomic).set(key1, value).dump(key1);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(transaction1, { decoder: Decoder.String }),
+                client.exec(batch1, true, { decoder: Decoder.String }),
             ).rejects.toThrow(
                 /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
             );
 
-            const result = await client.exec(transaction1, {
+            const result = await client.exec(batch1, true, {
                 decoder: Decoder.Bytes,
             });
             expect(result?.[0]).toEqual("OK");
             const dump = result?.[1] as Buffer;
 
-            const transaction2 = new Transaction().restore(key2, 0, dump);
-            expect(await client.exec(transaction2)).toEqual(["OK"]);
+            const batch2 = new Batch(isAtomic).restore(key2, 0, dump);
+            expect(await client.exec(batch2, true)).toEqual(["OK"]);
 
             expect(value).toEqual(await client.get(key2));
 
@@ -345,9 +359,14 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transaction with default string decoder_%p`,
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `can send batches with default string decoder_%p with isAtomic=%p`,
+        async (protocol, isAtomic) => {
             const clientConfig = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
@@ -355,23 +374,25 @@ describe("GlideClient", () => {
             clientConfig.defaultDecoder = Decoder.String;
             client = await GlideClient.createClient(clientConfig);
             expect(await client.select(0)).toEqual("OK");
-            const transaction = new Transaction();
-            const expectedRes = await encodableTransactionTest(
-                transaction,
-                "value",
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction);
+            const batch = new Batch(isAtomic);
+            const expectedRes = await encodableBatchTest(batch, "value");
+            batch.select(0);
+            const result = await client.exec(batch, true);
             expectedRes.push(["select(0)", "OK"]);
 
-            validateTransactionResponse(result, expectedRes);
+            validateBatchResponse(result, expectedRes);
             client.close();
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transaction with default bytes decoder_%p`,
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `can send batch with default bytes decoder_%p with isAtomic=%p`,
+        async (protocol, isAtomic) => {
             const clientConfig = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
@@ -379,17 +400,14 @@ describe("GlideClient", () => {
             clientConfig.defaultDecoder = Decoder.Bytes;
             client = await GlideClient.createClient(clientConfig);
             expect(await client.select(0)).toEqual("OK");
-            const transaction = new Transaction();
+            const batch = new Batch(isAtomic);
             const valueEncoded = Buffer.from("value");
-            const expectedRes = await encodableTransactionTest(
-                transaction,
-                valueEncoded,
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction);
+            const expectedRes = await encodableBatchTest(batch, valueEncoded);
+            batch.select(0);
+            const result = await client.exec(batch, true);
             expectedRes.push(["select(0)", "OK"]);
 
-            validateTransactionResponse(result, expectedRes);
+            validateBatchResponse(result, expectedRes);
             client.close();
         },
     );
@@ -403,7 +421,7 @@ describe("GlideClient", () => {
             const client2 = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new Transaction();
+            const transaction = new Batch(true);
             transaction.get("key");
             const result1 = await client1.watch(["key"]);
             expect(result1).toEqual("OK");
@@ -411,7 +429,7 @@ describe("GlideClient", () => {
             const result2 = await client2.set("key", "foo");
             expect(result2).toEqual("OK");
 
-            const result3 = await client1.exec(transaction);
+            const result3 = await client1.exec(transaction, true);
             expect(result3).toBeNull();
 
             client1.close();
@@ -419,9 +437,14 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object freq transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object freq batch test_%p with isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -432,14 +455,14 @@ describe("GlideClient", () => {
             const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
-                const transaction = new Transaction();
-                transaction.configSet({
+                const batch = new Batch(isAtomic);
+                batch.configSet({
                     [maxmemoryPolicyKey]: "allkeys-lfu",
                 });
-                transaction.set(key, "foo");
-                transaction.objectFreq(key);
+                batch.set(key, "foo");
+                batch.objectFreq(key);
 
-                const response = await client.exec(transaction);
+                const response = await client.exec(batch, true);
                 expect(response).not.toBeNull();
 
                 if (response != null) {
@@ -460,9 +483,14 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object idletime transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object idletime batch test_%p with isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -473,24 +501,24 @@ describe("GlideClient", () => {
             const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
-                const transaction = new Transaction();
-                transaction.configSet({
+                const batch = new Batch(isAtomic);
+                batch.configSet({
                     // OBJECT IDLETIME requires a non-LFU maxmemory-policy
                     [maxmemoryPolicyKey]: "allkeys-random",
                 });
-                transaction.set(key, "foo");
-                transaction.objectIdletime(key);
+                batch.set(key, "foo");
+                batch.objectIdletime(key);
 
-                const response = await client.exec(transaction);
+                const response = await client.exec(batch, true);
                 expect(response).not.toBeNull();
 
                 if (response != null) {
                     expect(response.length).toEqual(3);
-                    // transaction.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
+                    // batch.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
                     expect(response[0]).toEqual("OK");
-                    // transaction.set(key, "foo");
+                    // batch.set(key, "foo");
                     expect(response[1]).toEqual("OK");
-                    // transaction.objectIdletime(key);
+                    // batch.objectIdletime(key);
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
@@ -505,25 +533,30 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "object refcount transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "object refcount batch test_%p with isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
             const key = getRandomKey();
-            const transaction = new Transaction();
-            transaction.set(key, "foo");
-            transaction.objectRefcount(key);
+            const batch = new Batch(isAtomic);
+            batch.set(key, "foo");
+            batch.objectRefcount(key);
 
-            const response = await client.exec(transaction);
+            const response = await client.exec(batch, true);
             expect(response).not.toBeNull();
 
             if (response != null) {
                 expect(response.length).toEqual(2);
-                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
-                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
+                expect(response[0]).toEqual("OK"); // batch.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // batch.objectRefcount(key);
             }
 
             client.close();
@@ -555,22 +588,24 @@ describe("GlideClient", () => {
             });
             expect(result5).toEqual(expect.stringContaining("Redis ver. "));
 
-            // transaction tests
-            const transaction = new Transaction();
-            transaction.lolwut();
-            transaction.lolwut({ version: 5 });
-            transaction.lolwut({ parameters: [1, 2] });
-            transaction.lolwut({ version: 6, parameters: [42] });
-            const results = await client.exec(transaction);
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                const batch = new Batch(isAtomic);
+                batch.lolwut();
+                batch.lolwut({ version: 5 });
+                batch.lolwut({ parameters: [1, 2] });
+                batch.lolwut({ version: 6, parameters: [42] });
+                const results = await client.exec(batch, true);
 
-            if (results) {
-                for (const element of results) {
-                    expect(element).toEqual(
-                        expect.stringContaining("Redis ver. "),
-                    );
+                if (results) {
+                    for (const element of results) {
+                        expect(element).toEqual(
+                            expect.stringContaining("Redis ver. "),
+                        );
+                    }
+                } else {
+                    throw new Error("Invalid LOLWUT batch test results.");
                 }
-            } else {
-                throw new Error("Invalid LOLWUT transaction test results.");
             }
 
             client.close();
@@ -654,18 +689,20 @@ describe("GlideClient", () => {
             expect(await client.select(index1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value2);
 
-            //transaction tests
-            const transaction = new Transaction();
-            transaction.select(index1);
-            transaction.set(source, value1);
-            transaction.copy(source, destination, {
-                destinationDB: index1,
-                replace: true,
-            });
-            transaction.get(destination);
-            const results = await client.exec(transaction);
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                const batch = new Batch(isAtomic);
+                batch.select(index1);
+                batch.set(source, value1);
+                batch.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                });
+                batch.get(destination);
+                const results = await client.exec(batch, true);
 
-            expect(results).toEqual(["OK", "OK", true, value1]);
+                expect(results).toEqual(["OK", "OK", true, value1]);
+            }
 
             client.close();
         },
@@ -695,17 +732,20 @@ describe("GlideClient", () => {
 
             await expect(client.move(key1, -1)).rejects.toThrow(RequestError);
 
-            //transaction tests
-            const transaction = new Transaction();
-            transaction.select(1);
-            transaction.move(key2, 0);
-            transaction.set(key2, value);
-            transaction.move(key2, 0);
-            transaction.select(0);
-            transaction.get(key2);
-            const results = await client.exec(transaction);
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                expect(await client.flushall()).toEqual("OK");
+                const batch = new Batch(isAtomic);
+                batch.select(1);
+                batch.move(key2, 0);
+                batch.set(key2, value);
+                batch.move(key2, 0);
+                batch.select(0);
+                batch.get(key2);
+                const results = await client.exec(batch, true);
 
-            expect(results).toEqual(["OK", false, "OK", true, "OK", value]);
+                expect(results).toEqual(["OK", false, "OK", true, "OK", value]);
+            }
 
             client.close();
         },
@@ -1311,18 +1351,23 @@ describe("GlideClient", () => {
                 );
                 expect(await client.functionLoad(code)).toEqual(name1);
 
-                // Verify functionDump
-                let transaction = new Transaction().functionDump();
-                const result = await client.exec(transaction, {
-                    decoder: Decoder.Bytes,
-                });
-                const data = result?.[0] as Buffer;
+                for (const isAtomic of [true, false]) {
+                    // Verify functionDump
+                    let batch = new Batch(isAtomic).functionDump();
+                    const result = await client.exec(batch, true, {
+                        decoder: Decoder.Bytes,
+                    });
+                    const data = result?.[0] as Buffer;
 
-                // Verify functionRestore
-                transaction = new Transaction()
-                    .functionRestore(data, FunctionRestorePolicy.REPLACE)
-                    .fcall(name2, [], ["meow"]);
-                expect(await client.exec(transaction)).toEqual(["OK", "meow"]);
+                    // Verify functionRestore
+                    batch = new Batch(isAtomic)
+                        .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                        .fcall(name2, [], ["meow"]);
+                    expect(await client.exec(batch, true)).toEqual([
+                        "OK",
+                        "meow",
+                    ]);
+                }
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 client.close();
@@ -1377,8 +1422,8 @@ describe("GlideClient", () => {
             const key2 = "{key}-2" + getRandomKey();
             const key3 = "{key}-3" + getRandomKey();
             const key4 = "{key}-4" + getRandomKey();
-            const setFoobarTransaction = new Transaction();
-            const setHelloTransaction = new Transaction();
+            const setFoobarTransaction = new Batch(true);
+            const setHelloTransaction = new Batch(true);
 
             // Returns null when a watched key is modified before it is executed in a transaction command.
             // Transaction commands are not performed.
@@ -1388,7 +1433,7 @@ describe("GlideClient", () => {
                 .set(key1, "foobar")
                 .set(key2, "foobar")
                 .set(key3, "foobar");
-            let results = await client.exec(setFoobarTransaction);
+            let results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(null);
             // sanity check
             expect(await client.get(key1)).toEqual(null);
@@ -1399,7 +1444,7 @@ describe("GlideClient", () => {
             // transaction is executed.
             expect(await client.watch([key1, key2, key3])).toEqual("OK");
             expect(await client.get(key2)).toEqual("hello");
-            results = await client.exec(setFoobarTransaction);
+            results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -1410,7 +1455,7 @@ describe("GlideClient", () => {
             expect(await client.watch([key1, Buffer.from(key2), key3])).toEqual(
                 "OK",
             );
-            results = await client.exec(setFoobarTransaction);
+            results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -1424,7 +1469,7 @@ describe("GlideClient", () => {
                 .set(key1, "hello")
                 .set(key2, "hello")
                 .set(key3, "hello");
-            results = await client.exec(setHelloTransaction);
+            results = await client.exec(setHelloTransaction, true);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("hello");
@@ -1449,7 +1494,7 @@ describe("GlideClient", () => {
             const key1 = "{key}-1" + getRandomKey();
             const key2 = "{key}-2" + getRandomKey();
 
-            const setFoobarTransaction = new Transaction();
+            const setFoobarTransaction = new Batch(true);
 
             // UNWATCH returns OK when there no watched keys
             expect(await client.unwatch()).toEqual("OK");
@@ -1459,7 +1504,7 @@ describe("GlideClient", () => {
             expect(await client.set(key2, "hello")).toEqual("OK");
             expect(await client.unwatch()).toEqual("OK");
             setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
-            const results = await client.exec(setFoobarTransaction);
+            const results = await client.exec(setFoobarTransaction, true);
             expect(results).toEqual(["OK", "OK"]);
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
@@ -1470,20 +1515,25 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "xinfo stream transaction test_%p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "xinfo stream batch test_%p with isAtomic=%p",
+        async (protocol, isAtomic) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
             const key = getRandomKey();
 
-            const transaction = new Transaction();
-            transaction.xadd(key, [["field1", "value1"]], { id: "0-1" });
-            transaction.xinfoStream(key);
-            transaction.xinfoStream(key, true);
-            const result = await client.exec(transaction);
+            const batch = new Batch(isAtomic);
+            batch.xadd(key, [["field1", "value1"]], { id: "0-1" });
+            batch.xinfoStream(key);
+            batch.xinfoStream(key, true);
+            const result = await client.exec(batch, true);
             expect(result).not.toBeNull();
 
             const versionLessThan7 =
@@ -1684,7 +1734,7 @@ describe("GlideClient", () => {
                 ]);
                 expect(allTasksStatus).toBe("pending");
             } finally {
-                await client.close();
+                client.close();
             }
         },
     );

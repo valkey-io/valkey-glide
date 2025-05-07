@@ -7,19 +7,20 @@ import Long from "long";
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BaseClientConfiguration, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
+    ElementAndScore,
     GlideRecord,
     GlideString,
     HashDataType,
-    Score,
     ObjectType,
+    Score,
     SortedSetDataType,
-    ElementAndScore,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "./GlideClusterClient";
+import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
@@ -4205,4 +4206,184 @@ export function createScriptFlush(mode?: FlushMode): command_request.Command {
 /** @internal */
 export function createScriptKill(): command_request.Command {
     return createCommand(RequestType.ScriptKill, []);
+}
+
+/**
+ * Base options settings class for sending a batch request. Shared settings for standalone and
+ * cluster batch requests.
+ *
+ * ### Timeout
+ * The duration in milliseconds that the client should wait for the batch request to complete.
+ * This duration encompasses sending the request, awaiting a response from the server, and any
+ * required reconnections or retries. If the specified timeout is exceeded for a pending request,
+ * it will result in a timeout error. If not explicitly set, the client's {@link BaseClientConfiguration.requestTimeout | requestTimeout} will be used.
+ *
+ * @example
+ * ```javascript
+ * const options: BaseBatchOptions = {
+ *   timeout: 5000, // 5 seconds
+ * };
+ * ```
+ */
+export interface BaseBatchOptions {
+    /**
+     * The duration in milliseconds that the client should wait for the batch request to complete.
+     * This duration encompasses sending the request, awaiting a response from the server, and any
+     * required reconnections or retries. If the specified timeout is exceeded for a pending request,
+     * it will result in a timeout error. If not explicitly set, the client's {@link BaseClientConfiguration.requestTimeout | requestTimeout} will be used.
+     */
+    timeout?: number;
+}
+
+/** Options for a batch request for a standalone client.
+ *
+ * @example
+ * ```javascript
+ * const options: BatchOptions = {
+ *   timeout: 5000, // 5 seconds
+ * };
+ * ```
+ */
+export type BatchOptions = {} & BaseBatchOptions;
+
+/**
+ * Options for a batch request for a cluster client.
+ *
+ * ### Route
+ * Configures single-node routing for the batch request. The client will send the batch to the
+ * specified node defined by <code>route</code>.
+ *
+ * ### Retry Strategy
+ * ⚠️ **Please read {@link ClusterBatchRetryStrategy} carefully before enabling these configurations.**
+ * Defines the retry strategy for handling batch request failures.
+ *
+ * This strategy determines whether failed commands should be retried, potentially impacting
+ * execution order.
+ *
+ * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
+ * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
+ *
+ * **⚠️ Warnings:**
+ *
+ * - Retrying server errors may cause commands targeting the same slot to execute out of order.
+ * - Retrying connection errors may lead to duplicate executions, as it is unclear which
+ *   commands have already been processed.
+ *
+ * **Note:** Currently, retry strategies are supported only for non-atomic batches.
+ *
+ * **Recommendation:** It is recommended to increase the timeout in {@link BaseBatchOptions.timeout | BaseBatchOptions}
+ * when enabling these strategies.
+ *
+ * **Default:** Both `retryServerError` and `retryConnectionError` are set to `false`.
+ *
+ * @example
+ * ```javascript
+ * const options: ClusterBatchOptions = {
+ *   timeout: 5000, // 5 seconds
+ *   route: "randomNode",
+ *   retryStrategy: {
+ *     retryServerError: false,
+ *     retryConnectionError: false,
+ *   },
+ * };
+ * ```
+ */
+export type ClusterBatchOptions = {
+    /**
+     * Configures single-node routing for the batch request. The client will send the batch to the
+     * specified node defined by `route`.
+     *
+     * If a redirection error occurs:
+     *
+     * - For Atomic Batches (Transactions), the entire transaction will be redirected.
+     * - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+     *   will be redirected.
+     */
+    route?: SingleNodeRoute;
+
+    /**
+     * ⚠️ **Please see {@link ClusterBatchRetryStrategy} and read carefully before enabling these configurations.**
+     *
+     * Defines the retry strategy for handling batch request failures.
+     *
+     * This strategy determines whether failed commands should be retried, potentially impacting
+     * execution order.
+     *
+     * - If `retryServerError` is `true`, retriable errors (e.g., `TRYAGAIN`) will trigger a retry.
+     * - If `retryConnectionError` is `true`, connection failures will trigger a retry.
+     *
+     * **⚠️ Warnings:**
+     *
+     * - Retrying server errors may cause commands targeting the same slot to execute out of order.
+     * - Retrying connection errors may lead to duplicate executions, as it is unclear which
+     *   commands have already been processed.
+     *
+     * **Note:** Currently, retry strategies are supported only for non-atomic batches.
+     *
+     * **Recommendation:** It is recommended to increase the timeout in {@link BaseBatchOptions.timeout | BaseBatchOptions}
+     * when enabling these strategies.
+     *
+     * **Default:** Both `retryServerError` and `retryConnectionError` are set to `false`.
+     */
+    retryStrategy?: ClusterBatchRetryStrategy;
+} & BaseBatchOptions;
+
+/**
+ * Defines a retry strategy for batch requests, allowing control over retries in case of server or
+ * connection errors.
+ *
+ * This strategy determines whether failed commands should be retried, impacting execution order
+ * and potential side effects.
+ *
+ * ### Behavior
+ *
+ * - If `retryServerError` is `true`, failed commands with a retriable error (e.g., `TRYAGAIN`) will be retried.
+ * - If `retryConnectionError` is `true`, batch requests will be retried on connection failures.
+ *
+ * ### Cautions
+ *
+ * - **Server Errors:** Retrying may cause commands targeting the same slot to be executed out of order.
+ * - **Connection Errors:** Retrying may lead to duplicate executions, since the server might have already received and processed the request before the error occurred.
+ *
+ * ### Example Scenario
+ *
+ * ```
+ * MGET key {key}:1
+ * SET key "value"
+ * ```
+ *
+ * Expected response when keys are empty:
+ *
+ * ```
+ * [null, null]
+ * OK
+ * ```
+ *
+ * However, if the slot is migrating, both commands may return an `ASK` error and be redirected.
+ * Upon `ASK` redirection, a multi-key command may return a `TRYAGAIN` error (triggering a retry), while
+ * the `SET` command succeeds immediately. This can result in an unintended reordering of commands if
+ * the first command is retried after the slot stabilizes:
+ *
+ * ```
+ * ["value", null]
+ * OK
+ * ```
+ *
+ * **Note:** Currently, retry strategies are supported only for non-atomic batches.
+ */
+export interface ClusterBatchRetryStrategy {
+    /**
+     * If `true`, failed commands with a retriable error (e.g., `TRYAGAIN`) will be automatically retried.
+     *
+     * ⚠️ **Warning:** Enabling this flag may cause commands targeting the same slot to execute out of order.
+     */
+    retryServerError: boolean;
+
+    /**
+     * If `true`, batch requests will be retried in case of connection errors.
+     *
+     * ⚠️ **Warning:** Retrying after a connection error may lead to duplicate executions, since
+     * the server might have already received and processed the request before the error occurred.
+     */
+    retryConnectionError: boolean;
 }

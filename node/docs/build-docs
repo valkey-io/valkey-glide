@@ -1,7 +1,7 @@
 #!/bin/bash -e
 npm install --save-dev typedoc
 typedoc src/BaseClient.ts                   \
-        src/Transaction.ts                  \
+        src/Batch.ts                  \
         src/GlideClient.ts                  \
         src/GlideClusterClient.ts           \
         src/Errors.ts                       \
