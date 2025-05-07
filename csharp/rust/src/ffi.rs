@@ -568,11 +568,7 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
 ///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
 pub(crate) unsafe fn get_pipeline_options(
     ptr: *const BatchOptionsInfo,
-) -> (
-    Option<RoutingInfo>,
-    Option<u32>,
-    PipelineRetryStrategy,
-) {
+) -> (Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy) {
     if ptr.is_null() {
         return (None, None, PipelineRetryStrategy::new(false, false));
     }

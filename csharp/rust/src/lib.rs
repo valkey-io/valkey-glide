@@ -308,8 +308,7 @@ pub unsafe extern "C" fn batch(
         }
     };
 
-    let (routing, timeout, pipeline_retry_strategy) =
-        unsafe { get_pipeline_options(options_ptr) };
+    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client.runtime.spawn(async move {
         let mut panic_guard = PanicGuard {
