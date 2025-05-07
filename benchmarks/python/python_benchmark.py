@@ -17,6 +17,7 @@ import numpy as np
 import redis.asyncio as redispy  # type: ignore
 from glide import (
     GlideClient,
+    TGlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,

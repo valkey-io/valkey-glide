@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from glide.async_commands.core import CoreCommands
+from glide.commands.async_commands.core import CoreCommands
 from glide.exceptions import ConfigurationError
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
