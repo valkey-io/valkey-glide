@@ -39,8 +39,6 @@ export class OpenTelemetry {
     private static _instance: OpenTelemetry | null = null;
     private static openTelemetryConfig: OpenTelemetryConfig | null = null;
 
-    private constructor() {}
-
     /**
      * Example usage:
      * ```typescript
@@ -66,6 +64,7 @@ export class OpenTelemetry {
             this.internalInit(openTelemetryConfig);
             return;
         }
+
         Logger.log(
             "warn",
             "GlideOpenTelemetry",
