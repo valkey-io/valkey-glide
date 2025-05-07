@@ -73,7 +73,7 @@ public class StandaloneClientTests
     // TODO: remove this test once we add tests with these commands
     public async Task CustomCommandWithDifferentReturnTypes()
     {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClientWithExtraTimeout();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
 
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);

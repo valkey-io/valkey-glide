@@ -308,7 +308,7 @@ pub unsafe extern "C" fn batch(
         }
     };
 
-    let (routing, pipeline_timeout, pipeline_retry_strategy) =
+    let (routing, timeout, pipeline_retry_strategy) =
         unsafe { get_pipeline_options(options_ptr) };
 
     client.runtime.spawn(async move {
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn batch(
         let result = if pipeline.is_atomic() {
             core.client
                 .clone()
-                .send_transaction(&pipeline, routing, pipeline_timeout, raise_on_error)
+                .send_transaction(&pipeline, routing, timeout, raise_on_error)
                 .await
         } else {
             core.client
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn batch(
                     &pipeline,
                     routing,
                     raise_on_error,
-                    pipeline_timeout,
+                    timeout,
                     pipeline_retry_strategy,
                 )
                 .await

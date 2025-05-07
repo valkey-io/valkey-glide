@@ -291,8 +291,6 @@ internal class FFI
         [MarshalAs(UnmanagedType.U1)]
         public bool RetryConnectionError;
         [MarshalAs(UnmanagedType.U1)]
-        public bool RaiseOnError;
-        [MarshalAs(UnmanagedType.U1)]
         public bool HasTimeout;
         public uint Timeout;
         public IntPtr Route;
