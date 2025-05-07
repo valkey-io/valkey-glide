@@ -302,29 +302,24 @@ jobs:
                       go/reports/**
 
     test-pubsub:
-        runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
-        timeout-minutes: 25
+        name: Go PubSub Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
+        needs: get-matrices
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                go: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
-                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
-                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
-        container:
-            image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+
         steps:
-            - name: Install git
-              run: |
-                  yum update
-                  yum install -y git tar
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -345,48 +340,47 @@ jobs:
                   path: |
                       ffi/target
                       glide-core/src/generated
-                  key: ${{ matrix.host.IMAGE }}-go
-                  restore-keys: ${{ matrix.host.IMAGE }}
+                  key: ${{ matrix.host.TARGET }}-go
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Install & build & test
               working-directory: go
               run: |
                   make install-tools build
-                  make -k unit-test integ-test
+                  make -k pubsub-test test-filter=TestPubSub
 
-            - name: Upload test reports
+            - name: Upload logs and reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-pubsub
+                  name: test-report-go-pubsub-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
+                      utils/clusters/**
+                      benchmarks/results/**
                       go/reports/**
 
     test-long-timeout:
-        runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
-        timeout-minutes: 25
+        name: Go Long Timeout Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
+        needs: get-matrices
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                go: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
-                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
-                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
-        container:
-            image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+
         steps:
-            - name: Install git
-              run: |
-                  yum update
-                  yum install -y git tar
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -407,8 +401,10 @@ jobs:
                   path: |
                       ffi/target
                       glide-core/src/generated
-                  key: ${{ matrix.host.IMAGE }}-go
-                  restore-keys: ${{ matrix.host.IMAGE }}
+                  key: ${{ matrix.host.TARGET }}-go
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - name: Install & build & test
               working-directory: go
@@ -416,11 +412,13 @@ jobs:
                   make install-tools build
                   make -k long-timeout-test test-filter=TestLongTimeout
 
-            - name: Upload test reports
+            - name: Upload logs and reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-long-timeout
+                  name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
+                      utils/clusters/**
+                      benchmarks/results/**
                       go/reports/**
