@@ -145,6 +145,19 @@ public class ConnectionManager {
             connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
         }
 
+        if (configuration.getReconnectStrategy() != null) {
+            var reconnectionStrategyBuilder =
+                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
+                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
+                            .setFactor(configuration.getReconnectStrategy().getFactor());
+            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
+                reconnectionStrategyBuilder.setJitterPercent(
+                        configuration.getReconnectStrategy().getJitterPercent());
+            }
+            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -239,19 +252,6 @@ public class ConnectionManager {
             connectionRequestBuilder =
                     setupConnectionRequestBuilderAdvancedBaseConfiguration(
                             connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
-
-        if (configuration.getReconnectStrategy() != null) {
-            var reconnectionStrategyBuilder =
-                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
-                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
-                            .setFactor(configuration.getReconnectStrategy().getFactor());
-            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
-                reconnectionStrategyBuilder.setJitterPercent(
-                        configuration.getReconnectStrategy().getJitterPercent());
-            }
-            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
         }
 
         return connectionRequestBuilder;
