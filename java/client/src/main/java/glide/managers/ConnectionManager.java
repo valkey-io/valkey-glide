@@ -243,7 +243,7 @@ public class ConnectionManager {
 
         if (configuration.getReconnectStrategy() != null) {
             var reconnectionStrategyBuilder =
-                    ConnectionRequestOuterClass.BackoffStrategy.newBuilder()
+                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
                             .setNumOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
                             .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
                             .setFactor(configuration.getReconnectStrategy().getFactor());
