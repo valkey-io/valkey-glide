@@ -154,12 +154,12 @@ mod cluster_async {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(exporter.clone())
+            .with_trace_exporter(Some(exporter.clone()))
             .build();
         assert_eq!(GlideOpenTelemetry::get_span_interval(glide_ot_config), 400);
         // check the default interval
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_trace_exporter(exporter)
+            .with_trace_exporter(Some(exporter))
             .build();
         assert_eq!(
             GlideOpenTelemetry::get_span_interval(glide_ot_config.clone()),

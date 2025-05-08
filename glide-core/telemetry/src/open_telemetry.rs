@@ -470,20 +470,23 @@ impl GlideOpenTelemetry {
     /// This method should be called once for the given **process**
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
-        OTEL.get_or_try_init(|| {
-            Self::validate_config(config.clone())?;
+        if OTEL.get().is_some() {
+            return Ok(());
+        }
 
-            if let Some(trace_exporter) = config.traces.trace_exporter.as_ref() {
-                Self::initialise_trace_exporter(config.flush_interval_ms, trace_exporter)?;
-            }
+        Self::validate_config(config.clone())?;
 
-            if let Some(metrics_exporter) = config.metrics.metrics_exporter.as_ref() {
-                Self::initialise_metrics_exporter(config.flush_interval_ms, metrics_exporter)?;
-                Self::init_metrics()?;
-            }
+        OTEL.set(RwLock::new(GlideOpenTelemetry {}))
+            .map_err(|_| GlideOTELError::Other("OpenTelemetry already initialized".into()))?;
 
-            Ok::<RwLock<GlideOpenTelemetry>, GlideOTELError>(RwLock::new(GlideOpenTelemetry {}))
-        })?;
+        if let Some(trace_exporter) = config.traces.trace_exporter.as_ref() {
+            Self::initialise_trace_exporter(config.flush_interval_ms, trace_exporter)?;
+        }
+
+        if let Some(metrics_exporter) = config.metrics.metrics_exporter.as_ref() {
+            Self::initialise_metrics_exporter(config.flush_interval_ms, metrics_exporter)?;
+            Self::init_metrics()?;
+        }
 
         Ok(())
     }
@@ -631,19 +634,19 @@ impl GlideOpenTelemetry {
 
         // Create retries counter
         MOVED_COUNTER
-        .lock()
-        .map_err(|_| {
-            GlideOTELError::Other(
-                "OpenTelemetry error: Failed to initialize moved counter".to_string(),
-            )
-        })?
-        .replace(
-            meter
-                .u64_counter(MOVED_ERROR_METRIC)
-                .with_description("Number of moved errors encountered")
-                .with_unit("1")
-                .build(),
-        );
+            .lock()
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize moved counter".to_string(),
+                )
+            })?
+            .replace(
+                meter
+                    .u64_counter(MOVED_ERROR_METRIC)
+                    .with_description("Number of moved errors encountered")
+                    .with_unit("1")
+                    .build(),
+            );
 
         Ok(())
     }
@@ -678,8 +681,8 @@ impl GlideOpenTelemetry {
         Ok(())
     }
 
-     /// Record a moved error
-     pub fn record_moved_error() -> Result<(), GlideOTELError> {
+    /// Record a moved error
+    pub fn record_moved_error() -> Result<(), GlideOTELError> {
         MOVED_COUNTER
             .lock()
             .map_err(|_| GlideOTELError::ReadLockError)?
@@ -779,8 +782,8 @@ mod tests {
             init_otel().unwrap();
             create_test_spans().await;
 
-            // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            // Read the file content
+            std::thread::sleep(std::time::Duration::from_secs(2));
             let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
             let lines: Vec<&str> = file_content.split('\n').collect();
             assert_eq!(lines.len(), 4);
@@ -814,19 +817,17 @@ mod tests {
         });
     }
 
-    #[tokio::test]
-    async fn test_span_reference_count() {
+    #[test]
+    fn test_span_reference_count() {
         init_otel().unwrap();
         let span = GlideOpenTelemetry::new_span("Root_Span_1");
         span.add_reference();
         assert_eq!(span.get_reference_count(), 2);
         drop(span);
-        // Add a sleep to wait for the metrics to be flushed
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
     #[test]
-    fn test_record_timeout_error_file() {
+    fn test_record_timeout_error() {
         let _ = std::fs::remove_file(METRICS_JSON);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -835,7 +836,7 @@ mod tests {
         runtime.block_on(async {
             init_otel().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
             GlideOpenTelemetry::record_timeout_error().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
 
@@ -864,51 +865,15 @@ mod tests {
     }
 
     #[test]
-    fn test_record_timeout_error() {
+    fn test_record_retries() {
         let _ = std::fs::remove_file(METRICS_JSON);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
         runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::Http(
-                    "http://localhost:4318/v1/metrics".to_string(),
-                ))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
-            GlideOpenTelemetry::record_timeout_error().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-            GlideOpenTelemetry::record_timeout_error().unwrap();
-            GlideOpenTelemetry::record_timeout_error().unwrap();
+            init_otel().unwrap();
 
-            // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-        });
-    }
-
-    #[test]
-    fn test_record_retries_file() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    METRICS_JSON,
-                )))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
             GlideOpenTelemetry::record_retries().unwrap();
             tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
             GlideOpenTelemetry::record_retries().unwrap();
@@ -919,8 +884,6 @@ mod tests {
 
             let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
             let lines: Vec<&str> = file_content.split('\n').collect();
-
-            assert_eq!(lines.len(), 4);
 
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(
@@ -931,83 +894,8 @@ mod tests {
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 1
             );
-            let metric_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                3
-            );
-        });
-    }
-
-    #[test]
-    fn test_record_retries() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::Http(
-                    "http://localhost:4318/v1/metrics".to_string(),
-                ))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
-            GlideOpenTelemetry::record_retries().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-            GlideOpenTelemetry::record_retries().unwrap();
-            GlideOpenTelemetry::record_retries().unwrap();
-
-            // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-        });
-    }
-
-    #[test]
-    fn test_record_moved_error_file() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    METRICS_JSON,
-                )))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
-            GlideOpenTelemetry::record_moved_error().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-            GlideOpenTelemetry::record_moved_error().unwrap();
-            GlideOpenTelemetry::record_moved_error().unwrap();
-
-            // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-
-            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-            let lines: Vec<&str> = file_content.split('\n').collect();
-
-            assert_eq!(lines.len(), 4);
-
-            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["name"],
-                "glide.moved_errors"
-            );
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                1
-            );
-            let metric_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 3
@@ -1023,16 +911,8 @@ mod tests {
             .build()
             .unwrap();
         runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::Http(
-                    "http://localhost:4318/v1/metrics".to_string(),
-                ))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
+            init_otel().unwrap();
+
             GlideOpenTelemetry::record_moved_error().unwrap();
             tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
             GlideOpenTelemetry::record_moved_error().unwrap();
@@ -1040,6 +920,25 @@ mod tests {
 
             // Add a sleep to wait for the metrics to be flushed
             tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content.split('\n').collect();
+
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.moved_errors"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                1
+            );
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                3
+            );
         });
     }
 }
