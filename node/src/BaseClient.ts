@@ -578,6 +578,13 @@ export type ReadFrom =
  *
  * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
  *
+ * ### Reconnection Strategy
+ * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
+ *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
+ *     - After this limit is reached, the retry interval becomes constant.
+ *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
+ *
  * @example
  * ```typescript
  * const config: BaseClientConfiguration = {
@@ -597,6 +604,12 @@ export type ReadFrom =
  *   clientAz: 'us-east-1a',
  *   defaultDecoder: Decoder.String,
  *   inflightRequestsLimit: 1000,
+ *   connectionBackoff: {
+ *     numberOfRetries: 10, // Maximum retries before delay becomes constant
+ *     factor: 500,        // Base delay in milliseconds
+ *     exponentBase: 2,    // Delay doubles with each retry (2^N)
+ *     jitterPercent: 20,   // Optional jitter percentage
+ *   },
  * };
  * ```
  */
@@ -682,6 +695,38 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+
+    /**
+     * Strategy used to determine how and when to reconnect, in case of connection failures.
+     * The time between attempts grows exponentially, following the formula rand(0 ... factor * (exponentBase ^ N)), where N is the number of failed attempts,
+     * and rand(...) applies a jitter of up to jitterPercent% to introduce randomness and reduce retry storms.
+     * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+     * reconnect attempt is successful.
+     * If not set, a default backoff strategy will be used.
+     */
+    connectionBackoff?: {
+        /**
+         * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+         * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
+         * Value must be an integer.
+         */
+        numberOfRetries: number;
+        /**
+         * The multiplier that will be applied to the waiting time between each retry.
+         * Value must be an integer.
+         */
+        factor: number;
+        /**
+         * The exponent base configured for the strategy.
+         * Value must be an integer.
+         */
+        exponentBase: number;
+        /** The Jitter percent on the calculated duration.
+         * If not set, a default value will be used.
+         * Value is optional, and must be an integer.
+         */
+        jitterPercent?: number;
+    };
 }
 
 /**
@@ -7801,6 +7846,7 @@ export class BaseClient {
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
+
         return {
             protocol,
             clientName: options.clientName,
@@ -7814,6 +7860,7 @@ export class BaseClient {
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
+            connectionRetryStrategy: options.connectionBackoff,
         };
     }
 
