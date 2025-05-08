@@ -244,7 +244,7 @@ public class ConnectionManager {
         if (configuration.getReconnectStrategy() != null) {
             var reconnectionStrategyBuilder =
                     ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
                             .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
                             .setFactor(configuration.getReconnectStrategy().getFactor());
             if (configuration.getReconnectStrategy().getJitterPercent() != null) {
