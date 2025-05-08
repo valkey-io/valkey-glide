@@ -7916,6 +7916,10 @@ func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, 
 
 // Returns the serialized payload of all loaded libraries.
 //
+// Note:
+//
+//	When in cluster mode, the command will be routed to a random node.
+//
 // Since:
 //
 //	Valkey 7.0 and above.
@@ -7936,6 +7940,10 @@ func (client *baseClient) FunctionDump() (string, error) {
 }
 
 // Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
 //
 // Since:
 //
@@ -7961,6 +7969,10 @@ func (client *baseClient) FunctionRestore(payload string) (string, error) {
 }
 
 // Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
 //
 // Since:
 //
