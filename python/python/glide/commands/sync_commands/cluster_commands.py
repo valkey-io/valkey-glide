@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, cast
 
-from glide.commands.batch import ClusterBatch
-
-from glide.commands.command_args import ObjectType
-from glide.commands.core_options import (
-    FlushMode,
-    FunctionRestorePolicy,
-    InfoSection,
-)
+from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
 from glide.commands.sync_commands.core import CoreCommands
 from glide.constants import (
     TOK,
@@ -20,12 +13,10 @@ from glide.constants import (
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
-    TSingleNodeRoute,
 )
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ...glide import ClusterScanCursor, Script
 
 class ClusterCommands(CoreCommands):
     def custom_command(
@@ -100,9 +91,7 @@ class ClusterCommands(CoreCommands):
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
-        return cast(
-            TOK, self._execute_command(RequestType.ConfigResetStat, [], route)
-        )
+        return cast(TOK, self._execute_command(RequestType.ConfigResetStat, [], route))
 
     def config_rewrite(
         self,
@@ -124,9 +113,7 @@ class ClusterCommands(CoreCommands):
             >>> client.config_rewrite()
                 'OK'
         """
-        return cast(
-            TOK, self._execute_command(RequestType.ConfigRewrite, [], route)
-        )
+        return cast(TOK, self._execute_command(RequestType.ConfigRewrite, [], route))
 
     def client_id(
         self,
@@ -178,9 +165,7 @@ class ClusterCommands(CoreCommands):
                 b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(
-            bytes, self._execute_command(RequestType.Ping, argument, route)
-        )
+        return cast(bytes, self._execute_command(RequestType.Ping, argument, route))
 
     def config_get(
         self, parameters: List[TEncodable], route: Optional[Route] = None
@@ -638,9 +623,7 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.FunctionStats, [], route),
         )
 
-    def function_dump(
-        self, route: Optional[Route] = None
-    ) -> TClusterResponse[bytes]:
+    def function_dump(self, route: Optional[Route] = None) -> TClusterResponse[bytes]:
         """
         Returns the serialized payload of all loaded libraries.
 
@@ -708,9 +691,7 @@ class ClusterCommands(CoreCommands):
             TOK, self._execute_command(RequestType.FunctionRestore, args, route)
         )
 
-    def time(
-        self, route: Optional[Route] = None
-    ) -> TClusterResponse[List[bytes]]:
+    def time(self, route: Optional[Route] = None) -> TClusterResponse[List[bytes]]:
         """
         Returns the server time.
 
