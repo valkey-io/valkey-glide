@@ -251,7 +251,7 @@ public class ConnectionManager {
                 reconnectionStrategyBuilder.setJitterPercent(
                         configuration.getReconnectStrategy().getJitterPercent());
             }
-            connectionRequestBuilder.setBackoffStrategy(reconnectionStrategyBuilder.build());
+            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
         }
 
         return connectionRequestBuilder;
