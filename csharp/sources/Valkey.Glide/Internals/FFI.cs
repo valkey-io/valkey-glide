@@ -30,6 +30,7 @@ internal class FFI
             {
                 FreeMemory();
                 FreeStructPtr(_ptr);
+                _ptr = IntPtr.Zero;
             }
         }
 
@@ -94,11 +95,51 @@ internal class FFI
         }
     }
 
+    internal class Batch : Marshallable
+    {
+        private readonly Cmd[] _cmds;
+        private IntPtr[] _cmdPtrs;
+        private GCHandle _pinnedCmds;
+        private BatchInfo _batch;
+
+        public Batch(Cmd[] cmds, bool isAtomic)
+        {
+            _cmds = cmds;
+            _batch = new() { IsAtomic = isAtomic, CmdCount = (nuint)cmds.Length };
+            _cmdPtrs = [];
+        }
+
+        protected override void FreeMemory()
+        {
+            for (int i = 0; i < _cmds.Length; i++)
+            {
+                _cmds[i].Dispose();
+            }
+            _pinnedCmds.Free();
+            ArrayPool<IntPtr>.Shared.Return(_cmdPtrs);
+        }
+
+        protected override IntPtr AllocateAndCopy()
+        {
+            // 1. Allocate memory for commands and marshal them
+            _cmdPtrs = ArrayPool<IntPtr>.Shared.Rent(_cmds.Length);
+            for (int i = 0; i < _cmds.Length; i++)
+            {
+                _cmdPtrs[i] = _cmds[i].ToPtr();
+            }
+
+            // 2. Pin it
+            _pinnedCmds = GCHandle.Alloc(_cmdPtrs, GCHandleType.Pinned);
+            _batch.Cmds = _pinnedCmds.AddrOfPinnedObject();
+
+            return StructToPtr(_batch);
+        }
+    }
+
     // A wrapper for a route
     internal class Route : Marshallable
     {
         private readonly RouteInfo _info;
-        private readonly IntPtr _ptr = IntPtr.Zero;
 
         public Route(
             RouteType requestType,
@@ -117,9 +158,41 @@ internal class FFI
             };
         }
 
-        protected override void FreeMemory() => FreeStructPtr(_ptr);
+        protected override void FreeMemory() { }
 
         protected override IntPtr AllocateAndCopy() => StructToPtr(_info);
+    }
+
+    internal class BatchOptions : Marshallable
+    {
+        private BatchOptionsInfo _info;
+        private readonly Route? _route;
+
+        public BatchOptions(
+            bool? retryServerError = false,
+            bool? retryConnectionError = false,
+            uint? timeout = null,
+            Route? route = null
+            )
+        {
+            _route = route;
+            _info = new()
+            {
+                RetryServerError = retryServerError ?? false,
+                RetryConnectionError = retryConnectionError ?? false,
+                HasTimeout = timeout is not null,
+                Timeout = timeout ?? 0,
+                Route = IntPtr.Zero,
+            };
+        }
+
+        protected override void FreeMemory() => _route?.Dispose();
+
+        protected override IntPtr AllocateAndCopy()
+        {
+            _info.Route = _route?.ToPtr() ?? IntPtr.Zero;
+            return StructToPtr(_info);
+        }
     }
 
     // A wrapper for connection request
@@ -201,6 +274,28 @@ internal class FFI
         public IntPtr ArgLengths;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BatchInfo
+    {
+        public nuint CmdCount;
+        public IntPtr Cmds;
+        [MarshalAs(UnmanagedType.U1)]
+        public bool IsAtomic;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BatchOptionsInfo
+    {
+        [MarshalAs(UnmanagedType.U1)]
+        public bool RetryServerError;
+        [MarshalAs(UnmanagedType.U1)]
+        public bool RetryConnectionError;
+        [MarshalAs(UnmanagedType.U1)]
+        public bool HasTimeout;
+        public uint Timeout;
+        public IntPtr Route;
+    }
+
     // TODO: generate this with a bindings generator
     internal enum RequestType : int
     {
@@ -266,5 +361,28 @@ internal class FFI
         [MarshalAs(UnmanagedType.LPStr)]
         public string? ClientName;
         // TODO more config params, see ffi.rs
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    internal struct NodeAddress
+    {
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string Host;
+        public ushort Port;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    internal struct AuthenticationInfo(string? username, string password)
+    {
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string? Username = username;
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string Password = password;
+    }
+
+    internal enum TlsMode : uint
+    {
+        NoTls = 0,
+        SecureTls = 2,
     }
 }

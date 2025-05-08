@@ -1,7 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using static Valkey.Glide.Commands.Options.InfoOptions;
-
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
@@ -104,25 +102,5 @@ public class StandaloneClientTests
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
-    }
-
-    [Fact]
-    public async Task Info()
-    {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
-
-        string info = await client.Info();
-        Assert.Multiple([
-            () => Assert.Contains("# Server", info),
-            () => Assert.Contains("# Replication", info),
-            () => Assert.DoesNotContain("# Latencystats", info),
-        ]);
-
-        info = await client.Info([Section.REPLICATION]);
-        Assert.Multiple([
-            () => Assert.DoesNotContain("# Server", info),
-            () => Assert.Contains("# Replication", info),
-            () => Assert.DoesNotContain("# Latencystats", info),
-        ]);
     }
 }

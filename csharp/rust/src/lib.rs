@@ -2,15 +2,15 @@
 
 mod ffi;
 use ffi::{
-    create_cmd, create_connection_request, create_route, CmdInfo, ConnectionConfig, ResponseValue,
-    RouteInfo,
+    BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo, create_cmd,
+    create_connection_request, create_pipeline, create_route, get_pipeline_options,
 };
 use glide_core::{
     client::Client as GlideClient,
-    errors::{error_message, error_type, RequestErrorType},
+    errors::{RequestErrorType, error_message, error_type},
 };
 use std::{
-    ffi::{c_char, c_void, CStr, CString},
+    ffi::{CStr, CString, c_char, c_void},
     sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
@@ -86,7 +86,7 @@ unsafe fn report_error(
     );
     unsafe { failure_callback(callback_index, err_ptr, error_type) };
     // free memory
-    _ = CString::from_raw(err_ptr);
+    _ = unsafe { CString::from_raw(err_ptr) };
 }
 
 /// Panic Guard as per <https://www.reddit.com/r/rust/comments/zg2xcu/comment/izi758v/>
@@ -121,7 +121,7 @@ impl Drop for PanicGuard {
 /// * `success_callback` and `failure_callback` must be valid pointers to the corresponding FFI functions.
 ///   See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client(
     config: *const ConnectionConfig,
     success_callback: SuccessCallback,
@@ -177,7 +177,7 @@ pub unsafe extern "C-unwind" fn create_client(
 ///
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn close_client(client_ptr: *const c_void) {
     assert!(!client_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
@@ -185,17 +185,17 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 }
 
 /// Execute a command.
-/// Expects that arguments will be kept valid until the callback is called.
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * Pointers to callbacks stored in [`Client`] should remain valid. See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
-/// * `cmd_ptr` must not be `null`. See the safety documentation of [`create_cmd`].
+/// * `cmd_ptr` must not be `null`.
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
@@ -243,21 +243,110 @@ pub unsafe extern "C-unwind" fn command(
         match result {
             Ok(value) => {
                 let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
-                unsafe {
-                    (core.success_callback)(callback_index, ptr);
-                }
+                unsafe { (core.success_callback)(callback_index, ptr) };
             }
-            Err(err) => {
-                let err_str = error_message(&err);
-                unsafe {
-                    report_error(
-                        core.failure_callback,
-                        callback_index,
-                        err_str,
-                        error_type(&err),
-                    );
-                }
+            Err(err) => unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    error_message(&err),
+                    error_type(&err),
+                );
+            },
+        };
+        panic_guard.panicked = false;
+        drop(panic_guard);
+    });
+
+    panic_guard.panicked = false;
+    drop(panic_guard);
+}
+
+/// Execute a batch.
+///
+/// # Safety
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `batch_ptr` must not be `null`.
+/// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
+/// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
+#[allow(rustdoc::private_intra_doc_links)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn batch(
+    client_ptr: *const c_void,
+    callback_index: usize,
+    batch_ptr: *const BatchInfo,
+    raise_on_error: bool,
+    options_ptr: *const BatchOptionsInfo,
+) {
+    let client = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut Client)
+    };
+    let core = client.core.clone();
+
+    let mut panic_guard = PanicGuard {
+        panicked: true,
+        failure_callback: core.failure_callback,
+        callback_index,
+    };
+
+    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+        Ok(pipeline) => pipeline,
+        Err(err) => {
+            unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    err,
+                    RequestErrorType::Unspecified,
+                );
             }
+            return;
+        }
+    };
+
+    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
+
+    client.runtime.spawn(async move {
+        let mut panic_guard = PanicGuard {
+            panicked: true,
+            failure_callback: core.failure_callback,
+            callback_index,
+        };
+
+        let result = if pipeline.is_atomic() {
+            core.client
+                .clone()
+                .send_transaction(&pipeline, routing, timeout, raise_on_error)
+                .await
+        } else {
+            core.client
+                .clone()
+                .send_pipeline(
+                    &pipeline,
+                    routing,
+                    raise_on_error,
+                    timeout,
+                    pipeline_retry_strategy,
+                )
+                .await
+        };
+        match result {
+            Ok(value) => {
+                let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
+                unsafe { (core.success_callback)(callback_index, ptr) };
+            }
+            Err(err) => unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    error_message(&err),
+                    error_type(&err),
+                );
+            },
         };
         panic_guard.panicked = false;
         drop(panic_guard);
@@ -273,7 +362,7 @@ pub unsafe extern "C-unwind" fn command(
 /// * `ptr` must not be `null`.
 /// * `ptr` must be able to be safely casted to a valid [`Box<ResponseValue>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_respose(ptr: *mut ResponseValue) {
     unsafe {
         Box::leak(Box::from_raw(ptr)).free_memory();
@@ -306,54 +395,45 @@ impl From<Level> for logger_core::Level {
     }
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `message` and `log_identifier` must not be `null`.
-/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-#[no_mangle]
+/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn log(
     log_level: Level,
     log_identifier: *const c_char,
     message: *const c_char,
 ) {
-    unsafe {
-        logger_core::log(
-            log_level.into(),
-            CStr::from_ptr(log_identifier)
-                .to_str()
-                .expect("Can not read log_identifier argument."),
-            CStr::from_ptr(message)
-                .to_str()
-                .expect("Can not read message argument."),
-        );
-    }
+    logger_core::log(
+        log_level.into(),
+        unsafe { CStr::from_ptr(log_identifier) }
+            .to_str()
+            .expect("Can not read log_identifier argument."),
+        unsafe { CStr::from_ptr(message) }
+            .to_str()
+            .expect("Can not read message argument."),
+    );
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `file_name` must not be `null`.
-/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-#[no_mangle]
+/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
-    let file_name_as_str;
-    unsafe {
-        file_name_as_str = if file_name.is_null() {
-            None
-        } else {
-            Some(
-                CStr::from_ptr(file_name)
-                    .to_str()
-                    .expect("Can not read string argument."),
-            )
-        };
+    let file_name_as_str = if file_name.is_null() {
+        None
+    } else {
+        Some(
+            unsafe { CStr::from_ptr(file_name) }
+                .to_str()
+                .expect("Can not read string argument."),
+        )
+    };
 
-        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
-        logger_level.into()
-    }
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
+    logger_level.into()
 }

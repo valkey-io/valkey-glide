@@ -4,11 +4,13 @@ using System.Runtime.InteropServices;
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
+using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
+using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
@@ -72,23 +74,37 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        Cmd cmd = new(requestType, arguments);
+        using Cmd cmd = new(requestType, arguments);
 
         // 2. Allocate memory for route
-        FFI.Route? ffiRoute = route?.ToFfi();
+        using FFI.Route? ffiRoute = route?.ToFfi();
 
         // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
         CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
-        // All data must be copied in sync manner, so we
 
-        // 4. Free memories allocated
-        ffiRoute?.Dispose();
-
-        cmd.Dispose();
-
-        // 5. Get a response and Handle it
+        // 4. Get a response and Handle it
         return responseHandler(await message);
+
+        // All memory allocated is auto-freed by `using` operator
+    }
+
+    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
+    {
+        // 1. Allocate memory for batch, which allocates all nested Cmds
+        using FFI.Batch ffiBatch = batch.ToFFI();
+
+        // 2. Allocate memory for options
+        using FFI.BatchOptions? ffiOptions = options?.ToFfi();
+
+        // 3. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall();
+        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), raiseOnError, ffiOptions?.ToPtr() ?? IntPtr.Zero);
+
+        // 4. Get a response and Handle it
+        return HandleServerResponse<object?[]?>(await message, true);
+
+        // All memory allocated is auto-freed by `using` operator
     }
 
     protected internal static string HandleOk(IntPtr response)
@@ -201,6 +217,9 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
     private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
+
+    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "batch")]
+    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, [MarshalAs(UnmanagedType.U1)] bool raiseOnError, IntPtr opts);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "free_respose")]
     private static extern void FreeResponse(IntPtr response);
