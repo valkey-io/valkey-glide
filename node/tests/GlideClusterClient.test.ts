@@ -35,7 +35,7 @@ import {
     SortOrder,
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
-} from "..";
+} from "./build-ts";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
 import {

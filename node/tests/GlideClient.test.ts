@@ -24,9 +24,9 @@ import {
     RequestError,
     Script,
     convertGlideRecordToRecord,
-} from "..";
+} from "./build-ts";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { command_request } from "../src/ProtobufMessage";
+import { command_request } from "./build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     batchTest,

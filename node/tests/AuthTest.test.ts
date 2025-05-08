@@ -16,7 +16,7 @@ import {
     GlideClusterClient,
     ProtocolVersion,
     RequestError,
-} from "..";
+} from "./build-ts";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,

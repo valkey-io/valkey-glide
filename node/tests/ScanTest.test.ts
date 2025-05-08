@@ -12,7 +12,7 @@ import {
     GlideString,
     ObjectType,
     ProtocolVersion,
-} from "..";
+} from "./build-ts";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     flushAndCloseClient,

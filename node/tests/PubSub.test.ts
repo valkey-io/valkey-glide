@@ -22,7 +22,7 @@ import {
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
-} from "..";
+} from "./build-ts";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,

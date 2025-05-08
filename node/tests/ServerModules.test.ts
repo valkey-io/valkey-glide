@@ -29,7 +29,7 @@ import {
     RequestError,
     SortOrder,
     VectorField,
-} from "..";
+} from "./build-ts";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     CreateJsonBatchCommands,

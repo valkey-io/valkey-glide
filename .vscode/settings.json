@@ -69,5 +69,6 @@
         "**/frontmatter.json": "jsonc",
         "**/.frontmatter/config/*.json": "jsonc",
         "iosfwd": "cpp"
-    }
+    },
+    "cmake.ignoreCMakeListsMissing": true
 }

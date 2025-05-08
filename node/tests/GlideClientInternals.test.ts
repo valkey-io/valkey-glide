@@ -12,7 +12,7 @@ import {
     createLeakedMap,
     createLeakedString,
     MAX_REQUEST_ARGS_LEN,
-} from "glide-rs";
+} from "./build-ts";
 import Long from "long";
 import net from "net";
 import os from "os";
@@ -41,7 +41,7 @@ import {
     command_request,
     connection_request,
     response,
-} from "../src/ProtobufMessage";
+} from "./build-ts/ProtobufMessage";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 

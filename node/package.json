@@ -1,9 +1,21 @@
 {
     "name": "@valkey/valkey-glide",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
-    "main": "build-ts/index.js",
-    "module": "build-ts/index.js",
-    "types": "./build-ts/index.d.ts",
+    "main": "build-ts/src/index.js",
+    "module": "build-ts/src/index.js",
+    "types": "build-ts/src/index.d.ts",
+    "exports": {
+        ".": {
+            "require": "./build-ts/src/index.js",
+            "import": "./build-ts/src/index.js",
+            "types": "./build-ts/src/index.d.ts"
+        }
+    },
+    "files": [
+        "build-ts/**",
+        "types/**",
+        "dist/**"
+    ],
     "type": "commonjs",
     "repository": {
         "type": "git",
@@ -11,41 +23,39 @@
     },
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "dependencies": {
-        "glide-rs": "file:rust-client",
         "long": "5",
         "protobufjs": "7"
     },
-    "bundleDependencies": [
-        "glide-rs"
-    ],
     "scripts": {
-        "build": "npm run prereq && npm run build-internal && npm run build-protobuf && npm run build-external",
-        "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external:release",
-        "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
-        "build-internal": "cd rust-client && npm run build",
-        "build-internal:release": "cd rust-client && npm run build:release",
-        "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
-        "build-external": "rm -rf build-ts && tsc && npm run copy-protobuf-type",
-        "build-external:release": "rm -rf build-ts && tsc --stripInternal && npm run copy-protobuf-type",
+        "build": "npm run prereq && npm run build:rust-client:dev && npm run build-protobuf && npm run build:ts",
+        "build:release": "npm run prereq && npm run build:rust-client:release && npm run build-protobuf && npm run build:ts:release",
+        "build:benchmark": "npm run prereq && npm run build:rust-client:benchmark && npm run build-protobuf && npm run build:ts",
+        "build:rust-client:dev": "cd rust-client && npm run build:dev",
+        "build:rust-client:release": "cd rust-client && npm run build:release:gnu",
+        "build:rust-client:benchmark": "cd rust-client && npm run build:benchmark",
+        "build:ts": "rm -rf build-ts && tsc && npm run copy-protobuf-type",
+        "build:ts:release": "rm -rf build-ts && tsc --stripInternal && npm run copy-protobuf-type",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
-        "copy-protobuf-type": "cp src/ProtobufMessage.d.ts build-ts/src/ProtobufMessage.d.ts",
-        "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
-        "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
-        "docs": "npm run build && ./docs/build-docs",
+        "compile-protobuf-files": "pbjs -t static-module -w commonjs -o src/ProtobufMessage.js ../glide-core/src/protobuf/*.proto && pbts -o src/ProtobufMessage.d.ts src/ProtobufMessage.js",
+        "copy-protobuf-type": "mkdir -p build-ts/src && cp src/ProtobufMessage.d.ts build-ts/src/ProtobufMessage.d.ts",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
+        "clean": "rm -rf build-ts dist/*/target node_modules rust-client/node_modules */node_modules rust-client/target glide-logs rust-client/glide-rs.*.node src/glide-rs.*.node rust-client/index.* src/ProtobufMessage.* *.tsbuildinfo test-report*.html yarn.lock package-lock.json rust-client/package-lock.json rust-client/Cargo.lock",
+        "clean:deep": "npm run clean && find . -name 'node_modules' -type d -prune -exec rm -rf {} + 2>/dev/null || true && find . -name '*.node' -type f -delete && find . -name 'target' -type d -not -path './docs/*' -prune -exec rm -rf {} + 2>/dev/null || true && find . -name '*.log' -type f -delete && find . \\( -name 'package-lock.json' -o -name 'yarn.lock' -o -name 'Cargo.lock' \\) -type f -delete",
         "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
         "test-local": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='Validation of Exported Symbols' --testPathIgnorePatterns='ServerModules'",
         "test-dbg": "npm run build-test-utils && jest --runInBand",
         "test-minimum": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
         "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='(GlideJson|GlideFt)'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
-        "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
+        "repl": "npx ts-node --project tsconfig.json",
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
-        "install-linting": "cd ../ & npm install",
+        "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
+        "install-linting": "cd ../ && npm install",
+        "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
+        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
         "prepack": "npmignore --auto",
         "prereq": "npm install",
-        "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
-        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
+        "prepublishOnly": "cd rust-client && npm run prepublishOnly && cd .. && npm run build:release"
     },
     "devDependencies": {
         "@jest/globals": "29",

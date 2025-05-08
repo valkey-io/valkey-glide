@@ -40,7 +40,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
-} from "..";
+} from "./build-ts";
 import ValkeyCluster from "../../utils/TestUtils";
 const execAsync = promisify(exec);
 
