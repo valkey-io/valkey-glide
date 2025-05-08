@@ -260,7 +260,7 @@ public class CommandManager {
         }
 
         // Create a span for the command if OpenTelemetry is configured
-        // TODO: Only create spans if OpenTelemetry config exists
+        // TODO: Only create spans if OpenTelemetry config exists (#3318)
         // TODO: Add a condition to create a span statistic, such as only 1% of the requests
         String commandName = determineCommandName(command);
         long spanPtr = OpenTelemetryResolver.createOtelSpan(commandName);

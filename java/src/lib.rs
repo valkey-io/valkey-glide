@@ -688,11 +688,23 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createOtel
 ///
 /// This function is meant to be invoked by Java using JNI.
 ///
+/// # Safety
+///
+/// This function is unsafe because:
+/// * It dereferences a raw pointer (`span_ptr`) that was previously created by `createOtelSpan`
+/// * It assumes the pointer points to a valid `GlideSpan` object
+/// * It converts the raw pointer back to an Arc and drops it, which will deallocate the memory if this is the last reference
+///
+/// The caller must ensure:
+/// * The `span_ptr` is a valid pointer obtained from `createOtelSpan`
+/// * The pointer is not used after this function is called
+/// * The pointer is not dropped more than once
+///
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
 /// * `span_ptr` - The pointer to the span to drop.
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<'local>(
+pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     span_ptr: jlong,

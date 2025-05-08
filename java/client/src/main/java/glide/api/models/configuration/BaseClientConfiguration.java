@@ -72,14 +72,6 @@ public abstract class BaseClientConfiguration {
      */
     private final ProtocolVersion protocol;
 
-    /**
-     * OpenTelemetry configuration options.
-     *
-     * <p>Use this to configure OpenTelemetry integration, including traces and metrics collection. If
-     * not set, OpenTelemetry integration will be disabled.
-     */
-    private final OpenTelemetryConfig openTelemetryConfig;
-
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
 
     /**
