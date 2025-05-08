@@ -1,16 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from dataclasses import dataclass
-from typing import (
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Set,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
 
 from glide.commands.bitmap import (
     BitFieldGet,
@@ -21,6 +10,16 @@ from glide.commands.bitmap import (
     _create_bitfield_read_only_args,
 )
 from glide.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
+from glide.commands.core_options import (
+    ConditionalChange,
+    ExpireOptions,
+    ExpiryGetEx,
+    ExpirySet,
+    InsertPosition,
+    OnlyIfEqual,
+    UpdateOptions,
+    _build_sort_args,
+)
 from glide.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -59,17 +58,9 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
-from glide.commands.core_options import (
-     ConditionalChange,
-     ExpireOptions,
-     ExpiryGetEx,
-     ExpirySet,
-     InsertPosition,
-     OnlyIfEqual,
-     UpdateOptions,
-     _build_sort_args
-)
+
 from ...glide import ClusterScanCursor
+
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -142,9 +133,7 @@ class CoreCommands(Protocol):
             >>> client.update_connection_password("new_password", immediate_auth=True)
             'OK'
         """
-        return cast(
-            TOK, self._update_connection_password(password, immediate_auth)
-        )
+        return cast(TOK, self._update_connection_password(password, immediate_auth))
 
     def set(
         self,
@@ -266,9 +255,7 @@ class CoreCommands(Protocol):
             >>> client.getdel("key")
                 None
         """
-        return cast(
-            Optional[bytes], self._execute_command(RequestType.GetDel, [key])
-        )
+        return cast(Optional[bytes], self._execute_command(RequestType.GetDel, [key]))
 
     def getrange(self, key: TEncodable, start: int, end: int) -> bytes:
         """
@@ -302,9 +289,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             bytes,
-            self._execute_command(
-                RequestType.GetRange, [key, str(start), str(end)]
-            ),
+            self._execute_command(RequestType.GetRange, [key, str(start), str(end)]),
         )
 
     def append(self, key: TEncodable, value: TEncodable) -> int:
@@ -376,9 +361,7 @@ class CoreCommands(Protocol):
 
             If `key` does not exist, an error is thrown.
         """
-        return cast(
-            TOK, self._execute_command(RequestType.Rename, [key, new_key])
-        )
+        return cast(TOK, self._execute_command(RequestType.Rename, [key, new_key]))
 
     def renamenx(self, key: TEncodable, new_key: TEncodable) -> bool:
         """
@@ -476,9 +459,7 @@ class CoreCommands(Protocol):
             >>> client.incrby("key" , 5)
                 15
         """
-        return cast(
-            int, self._execute_command(RequestType.IncrBy, [key, str(amount)])
-        )
+        return cast(int, self._execute_command(RequestType.IncrBy, [key, str(amount)]))
 
     def incrbyfloat(self, key: TEncodable, amount: float) -> float:
         """
@@ -530,9 +511,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            self._execute_command(
-                RequestType.SetRange, [key, str(offset), value]
-            ),
+            self._execute_command(RequestType.SetRange, [key, str(offset), value]),
         )
 
     def mset(self, key_value_map: Mapping[TEncodable, TEncodable]) -> TOK:
@@ -667,9 +646,7 @@ class CoreCommands(Protocol):
             >>> client.decrby("key" , 5)
                 5
         """
-        return cast(
-            int, self._execute_command(RequestType.DecrBy, [key, str(amount)])
-        )
+        return cast(int, self._execute_command(RequestType.DecrBy, [key, str(amount)]))
 
     def touch(self, keys: List[TEncodable]) -> int:
         """
@@ -817,9 +794,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.HIncrBy, [key, field, str(amount)]),
         )
 
-    def hincrbyfloat(
-        self, key: TEncodable, field: TEncodable, amount: float
-    ) -> float:
+    def hincrbyfloat(self, key: TEncodable, field: TEncodable, amount: float) -> float:
         """
         Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
         amount.
@@ -843,9 +818,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             float,
-            self._execute_command(
-                RequestType.HIncrByFloat, [key, field, str(amount)]
-            ),
+            self._execute_command(RequestType.HIncrByFloat, [key, field, str(amount)]),
         )
 
     def hexists(self, key: TEncodable, field: TEncodable) -> bool:
@@ -869,9 +842,7 @@ class CoreCommands(Protocol):
             >>> client.hexists("my_hash", "nonexistent_field")
                 False
         """
-        return cast(
-            bool, self._execute_command(RequestType.HExists, [key, field])
-        )
+        return cast(bool, self._execute_command(RequestType.HExists, [key, field]))
 
     def hgetall(self, key: TEncodable) -> Dict[bytes, bytes]:
         """
@@ -896,9 +867,7 @@ class CoreCommands(Protocol):
             Dict[bytes, bytes], self._execute_command(RequestType.HGetAll, [key])
         )
 
-    def hmget(
-        self, key: TEncodable, fields: List[TEncodable]
-    ) -> List[Optional[bytes]]:
+    def hmget(self, key: TEncodable, fields: List[TEncodable]) -> List[Optional[bytes]]:
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
 
@@ -1053,9 +1022,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.HRandField, [key, str(count)]),
         )
 
-    def hrandfield_withvalues(
-        self, key: TEncodable, count: int
-    ) -> List[List[bytes]]:
+    def hrandfield_withvalues(self, key: TEncodable, count: int) -> List[List[bytes]]:
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
@@ -1131,9 +1098,7 @@ class CoreCommands(Protocol):
             >>> client.lpush("nonexistent_list", ["new_value"])
                 1
         """
-        return cast(
-            int, self._execute_command(RequestType.LPush, [key] + elements)
-        )
+        return cast(int, self._execute_command(RequestType.LPush, [key] + elements))
 
     def lpushx(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
@@ -1155,9 +1120,7 @@ class CoreCommands(Protocol):
             >>> client.lpushx("nonexistent_list", ["new_value"])
                 0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
         """
-        return cast(
-            int, self._execute_command(RequestType.LPushX, [key] + elements)
-        )
+        return cast(int, self._execute_command(RequestType.LPushX, [key] + elements))
 
     def lpop(self, key: TEncodable) -> Optional[bytes]:
         """
@@ -1211,9 +1174,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.LPop, [key, str(count)]),
         )
 
-    def blpop(
-        self, keys: List[TEncodable], timeout: float
-    ) -> Optional[List[bytes]]:
+    def blpop(self, keys: List[TEncodable], timeout: float) -> Optional[List[bytes]]:
         """
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1370,9 +1331,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             List[bytes],
-            self._execute_command(
-                RequestType.LRange, [key, str(start), str(end)]
-            ),
+            self._execute_command(RequestType.LRange, [key, str(start), str(end)]),
         )
 
     def lindex(
@@ -1457,9 +1416,7 @@ class CoreCommands(Protocol):
             >>> client.rpush("nonexistent_list", ["new_value"])
                 1
         """
-        return cast(
-            int, self._execute_command(RequestType.RPush, [key] + elements)
-        )
+        return cast(int, self._execute_command(RequestType.RPush, [key] + elements))
 
     def rpushx(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
@@ -1481,9 +1438,7 @@ class CoreCommands(Protocol):
             >>> client.rpushx("nonexistent_list", ["new_value"])
                 0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
         """
-        return cast(
-            int, self._execute_command(RequestType.RPushX, [key] + elements)
-        )
+        return cast(int, self._execute_command(RequestType.RPushX, [key] + elements))
 
     def rpop(self, key: TEncodable) -> Optional[bytes]:
         """
@@ -1537,9 +1492,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
-    def brpop(
-        self, keys: List[TEncodable], timeout: float
-    ) -> Optional[List[bytes]]:
+    def brpop(self, keys: List[TEncodable], timeout: float) -> Optional[List[bytes]]:
         """
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1776,9 +1729,7 @@ class CoreCommands(Protocol):
             >>> client.smembers("my_set")
                 {b"member1", b"member2", b"member3"}
         """
-        return cast(
-            Set[bytes], self._execute_command(RequestType.SMembers, [key])
-        )
+        return cast(Set[bytes], self._execute_command(RequestType.SMembers, [key]))
 
     def scard(self, key: TEncodable) -> int:
         """
@@ -1822,9 +1773,7 @@ class CoreCommands(Protocol):
             >>> client.spop("non_exiting_key")
                 None
         """
-        return cast(
-            Optional[bytes], self._execute_command(RequestType.SPop, [key])
-        )
+        return cast(Optional[bytes], self._execute_command(RequestType.SPop, [key]))
 
     def spop_count(self, key: TEncodable, count: int) -> Set[bytes]:
         """
@@ -1914,9 +1863,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             bool,
-            self._execute_command(
-                RequestType.SMove, [source, destination, member]
-            ),
+            self._execute_command(RequestType.SMove, [source, destination, member]),
         )
 
     def sunion(self, keys: List[TEncodable]) -> Set[bytes]:
@@ -2059,9 +2006,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.SInterStore, [destination] + keys),
         )
 
-    def sintercard(
-        self, keys: List[TEncodable], limit: Optional[int] = None
-    ) -> int:
+    def sintercard(self, keys: List[TEncodable], limit: Optional[int] = None) -> int:
         """
         Gets the cardinality of the intersection of all the given sets.
         Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the
@@ -2125,9 +2070,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.SDiff, keys),
         )
 
-    def smismember(
-        self, key: TEncodable, members: List[TEncodable]
-    ) -> List[bool]:
+    def smismember(self, key: TEncodable, members: List[TEncodable]) -> List[bool]:
         """
         Checks whether each member is contained in the members of the set stored at `key`.
 
@@ -2649,9 +2592,7 @@ class CoreCommands(Protocol):
             args.append("*")
         args.extend([field for pair in values for field in pair])
 
-        return cast(
-            Optional[bytes], self._execute_command(RequestType.XAdd, args)
-        )
+        return cast(Optional[bytes], self._execute_command(RequestType.XAdd, args))
 
     def xdel(self, key: TEncodable, ids: List[TEncodable]) -> int:
         """
@@ -4328,14 +4269,10 @@ class CoreCommands(Protocol):
         )
         return cast(
             int,
-            self._execute_command(
-                RequestType.ZCount, [key, score_min, score_max]
-            ),
+            self._execute_command(RequestType.ZCount, [key, score_min, score_max]),
         )
 
-    def zincrby(
-        self, key: TEncodable, increment: float, member: TEncodable
-    ) -> float:
+    def zincrby(self, key: TEncodable, increment: float, member: TEncodable) -> float:
         """
         Increments the score of `member` in the sorted set stored at `key` by `increment`.
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
@@ -4362,9 +4299,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             float,
-            self._execute_command(
-                RequestType.ZIncrBy, [key, str(increment), member]
-            ),
+            self._execute_command(RequestType.ZIncrBy, [key, str(increment), member]),
         )
 
     def zpopmax(
@@ -4765,9 +4700,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[List[Union[int, float]]],
-            self._execute_command(
-                RequestType.ZRevRank, [key, member, "WITHSCORE"]
-            ),
+            self._execute_command(RequestType.ZRevRank, [key, member, "WITHSCORE"]),
         )
 
     def zrem(
@@ -5605,9 +5538,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.BZMPop, args),
         )
 
-    def zintercard(
-        self, keys: List[TEncodable], limit: Optional[int] = None
-    ) -> int:
+    def zintercard(self, keys: List[TEncodable], limit: Optional[int] = None) -> int:
         """
         Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
         optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
@@ -5702,9 +5633,7 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.PfCount, keys),
         )
 
-    def pfmerge(
-        self, destination: TEncodable, source_keys: List[TEncodable]
-    ) -> TOK:
+    def pfmerge(self, destination: TEncodable, source_keys: List[TEncodable]) -> TOK:
         """
         Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
         of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
@@ -5731,14 +5660,10 @@ class CoreCommands(Protocol):
         """
         return cast(
             TOK,
-            self._execute_command(
-                RequestType.PfMerge, [destination] + source_keys
-            ),
+            self._execute_command(RequestType.PfMerge, [destination] + source_keys),
         )
 
-    def bitcount(
-        self, key: TEncodable, options: Optional[OffsetOptions] = None
-    ) -> int:
+    def bitcount(self, key: TEncodable, options: Optional[OffsetOptions] = None) -> int:
         """
         Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
         optionally be provided to count the number of bits in a specific string interval.
@@ -5800,9 +5725,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            self._execute_command(
-                RequestType.SetBit, [key, str(offset), str(value)]
-            ),
+            self._execute_command(RequestType.SetBit, [key, str(offset), str(value)]),
         )
 
     def getbit(self, key: TEncodable, offset: int) -> int:

@@ -1,8 +1,7 @@
-from concurrent.futures import ThreadPoolExecutor
 import json
 import random
 import string
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
