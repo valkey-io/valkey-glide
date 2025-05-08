@@ -5,23 +5,19 @@ module for `vector search` commands.
 
 from typing import List, Mapping, Optional, cast
 
-from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+from glide.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
-from glide.async_commands.server_modules.ft_options.ft_constants import (
+from glide.commands.server_modules.ft_options.ft_constants import (
     CommandNames,
     FtCreateKeywords,
 )
-from glide.async_commands.server_modules.ft_options.ft_create_options import (
+from glide.commands.server_modules.ft_options.ft_create_options import (
     Field,
     FtCreateOptions,
 )
-from glide.async_commands.server_modules.ft_options.ft_profile_options import (
-    FtProfileOptions,
-)
-from glide.async_commands.server_modules.ft_options.ft_search_options import (
-    FtSearchOptions,
-)
+from glide.commands.server_modules.ft_options.ft_profile_options import FtProfileOptions
+from glide.commands.server_modules.ft_options.ft_search_options import FtSearchOptions
 from glide.constants import (
     TOK,
     FtAggregateResponse,

@@ -1,10 +1,11 @@
 import json
 import random
 import string
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
-from glide.async_commands.core import InfoSection
+from glide.commands.core_options import InfoSection
 from glide.constants import (
     TClusterResponse,
     TFunctionListResponse,
@@ -13,6 +14,7 @@ from glide.constants import (
 )
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes
+from glide.sync import TGlideClient as TSyncGlideClient
 from packaging import version
 
 T = TypeVar("T")
@@ -80,11 +82,17 @@ def get_random_string(length):
 
 
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
-    # TODO: change to pytest fixture after sync client is implemented
     global version_str
     if not version_str:
         info = parse_info_response(await client.info([InfoSection.SERVER]))
         version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
+    assert version_str is not None, "Server version not found in INFO response"
+    return version.parse(version_str) < version.parse(min_version)
+
+
+def sync_check_if_server_version_lt(client: TSyncGlideClient, min_version: str) -> bool:
+    info = parse_info_response(client.info([InfoSection.SERVER]))
+    version_str = info.get("valkey_version") or info.get("redis_version")
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
@@ -407,3 +415,18 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
         return await client.custom_command(
             ["ACL", "DELUSER", username], route=AllNodes()
         )
+
+
+def run_with_timeout(func, timeout, on_timeout=None):
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except Exception:
+            if on_timeout:
+                on_timeout()
+            raise TimeoutError("Function did not return within timeout")
+    finally:
+        # Shutdown with cancel_futures=True to prevent hanging
+        executor.shutdown(wait=False, cancel_futures=True)

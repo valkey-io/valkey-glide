@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, cast
 
-from glide.async_commands.batch import Batch
-from glide.async_commands.command_args import ObjectType
-from glide.async_commands.core import (
-    CoreCommands,
-    FlushMode,
-    FunctionRestorePolicy,
-    InfoSection,
-)
+from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
+from glide.commands.sync_commands.core import CoreCommands
 from glide.constants import (
     TOK,
     TEncodable,
@@ -21,11 +15,9 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 
-from ..glide import Script
-
 
 class StandaloneCommands(CoreCommands):
-    async def custom_command(self, command_args: List[TEncodable]) -> TResult:
+    def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
@@ -42,9 +34,9 @@ class StandaloneCommands(CoreCommands):
             >>> connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
 
         """
-        return await self._execute_command(RequestType.CustomCommand, command_args)
+        return self._execute_command(RequestType.CustomCommand, command_args)
 
-    async def info(
+    def info(
         self,
         sections: Optional[List[InfoSection]] = None,
     ) -> bytes:
@@ -63,96 +55,9 @@ class StandaloneCommands(CoreCommands):
         args: List[TEncodable] = (
             [section.value for section in sections] if sections else []
         )
-        return cast(bytes, await self._execute_command(RequestType.Info, args))
+        return cast(bytes, self._execute_command(RequestType.Info, args))
 
-    async def exec(
-        self,
-        batch: Batch,
-        raise_on_error: bool,
-        timeout: Optional[int] = None,
-    ) -> Optional[List[TResult]]:
-        """
-        Executes a batch by processing the queued commands.
-
-        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) and
-        [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
-
-        Notes:
-            - Atomic Batches - Transactions: If the transaction fails due to a ``WATCH`` command,
-              ``exec`` will return ``None``.
-
-        Args:
-            batch (Batch): A ``Batch`` containing the commands to execute.
-            raise_on_error (bool): Determines how errors are handled within the batch response.
-                When set to ``True``, the first encountered error in the batch will be raised as a
-                ``RequestError`` exception after all retries and reconnections have been executed.
-                When set to ``False``, errors will be included as part of the batch response array, allowing
-                the caller to process both successful and failed commands together. In this case, error details
-                will be provided as instances of ``RequestError``.
-            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
-                to complete. This duration encompasses sending the request, awaiting a response from the server, and any
-                required reconnections or retries. If the specified timeout is exceeded for the request,
-                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
-
-        Returns:
-            Optional[List[TResult]]: An array of results, where each entry corresponds to a command's execution result.
-                If the batch fails due to a ``WATCH`` command, ``exec`` will return ``None``.
-
-        Example (Atomic Batch - Transaction):
-            >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
-            >>> transaction.set("key", "1")
-            >>> transaction.incr("key")
-            >>> transaction.get("key")
-            >>> result = await client.exec(transaction, raise_on_error=True)
-            >>> print(f"Transaction Batch Result: {result}")
-            # Expected Output: Transaction Batch Result: [OK, 2, b'2']
-
-        Example (Non-Atomic Batch - Pipeline):
-            >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
-            >>> pipeline.set("key1", "value1")
-            >>> pipeline.set("key2", "value2")
-            >>> pipeline.get("key1")
-            >>> pipeline.get("key2")
-            >>> result = await client.exec(pipeline, raise_on_error=True)
-            >>> print(f"Pipeline Batch Result: {result}")
-            # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
-
-        Example (Atomic Batch - Transaction with options):
-            >>> transaction = Batch(is_atomic=True)
-            >>> transaction.set("key", "1")
-            >>> transaction.incr("key")
-            >>> transaction.custom_command(["get", "key"])
-            >>> result = await client.exec(
-            ...     transaction,
-            ...     raise_on_error=False,  # Do not raise an error on failure
-            ...     timeout=1000  # Set a timeout of 1000 milliseconds
-            ... )
-            >>> print(f"Transaction Result: {result}")
-            # Expected Output: Transaction Result: [OK, 2, b'2']
-
-        Example (Non-Atomic Batch - Pipeline with options):
-            >>> pipeline = Batch(is_atomic=False)
-            >>> pipeline.custom_command(["set", "key1", "value1"])
-            >>> pipeline.custom_command(["set", "key2", "value2"])
-            >>> pipeline.custom_command(["get", "key1"])
-            >>> pipeline.custom_command(["get", "key2"])
-            >>> result = await client.exec(
-            ...     pipeline,
-            ...     raise_on_error=False,  # Do not raise an error on failure
-            ...     timeout=1000  # Set a timeout of 1000 milliseconds
-            ... )
-            >>> print(f"Pipeline Result: {result}")
-            # Expected Output: Pipeline Result: [OK, OK, b'value1', b'value2']
-        """
-        commands = batch.commands[:]
-        return await self._execute_batch(
-            commands,
-            is_atomic=batch.is_atomic,
-            raise_on_error=raise_on_error,
-            timeout=timeout,
-        )
-
-    async def select(self, index: int) -> TOK:
+    def select(self, index: int) -> TOK:
         """
         Change the currently selected database.
 
@@ -164,9 +69,9 @@ class StandaloneCommands(CoreCommands):
         Returns:
             A simple OK response.
         """
-        return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
+        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
-    async def config_resetstat(self) -> TOK:
+    def config_resetstat(self) -> TOK:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
 
@@ -175,9 +80,9 @@ class StandaloneCommands(CoreCommands):
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
-        return cast(TOK, await self._execute_command(RequestType.ConfigResetStat, []))
+        return cast(TOK, self._execute_command(RequestType.ConfigResetStat, []))
 
-    async def config_rewrite(self) -> TOK:
+    def config_rewrite(self) -> TOK:
         """
         Rewrite the configuration file with the current configuration.
 
@@ -188,9 +93,9 @@ class StandaloneCommands(CoreCommands):
 
             Otherwise, an error is raised.
         """
-        return cast(TOK, await self._execute_command(RequestType.ConfigRewrite, []))
+        return cast(TOK, self._execute_command(RequestType.ConfigRewrite, []))
 
-    async def client_id(
+    def client_id(
         self,
     ) -> int:
         """
@@ -201,9 +106,9 @@ class StandaloneCommands(CoreCommands):
         Returns:
             int: the id of the client.
         """
-        return cast(int, await self._execute_command(RequestType.ClientId, []))
+        return cast(int, self._execute_command(RequestType.ClientId, []))
 
-    async def ping(self, message: Optional[TEncodable] = None) -> bytes:
+    def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
         Ping the server.
 
@@ -219,15 +124,15 @@ class StandaloneCommands(CoreCommands):
             Otherwise return a copy of `message`.
 
         Examples:
-            >>> await client.ping()
+            >>> client.ping()
                 b"PONG"
-            >>> await client.ping("Hello")
+            >>> client.ping("Hello")
                 b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(bytes, await self._execute_command(RequestType.Ping, argument))
+        return cast(bytes, self._execute_command(RequestType.Ping, argument))
 
-    async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
+    def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
         Starting from server version 7, command supports multiple parameters
@@ -241,17 +146,17 @@ class StandaloneCommands(CoreCommands):
             Dict[bytes, bytes]: A dictionary of values corresponding to the configuration parameters.
 
         Examples:
-            >>> await client.config_get(["timeout"] , RandomNode())
+            >>> client.config_get(["timeout"] , RandomNode())
                 {b'timeout': b'1000'}
-            >>> await client.config_get([b"timeout" , "maxmemory"])
+            >>> client.config_get([b"timeout" , "maxmemory"])
                 {b'timeout': b'1000', b'maxmemory': b'1GB'}
         """
         return cast(
             Dict[bytes, bytes],
-            await self._execute_command(RequestType.ConfigGet, parameters),
+            self._execute_command(RequestType.ConfigGet, parameters),
         )
 
-    async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
+    def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
         Starting from server version 7, command supports multiple parameters.
@@ -274,9 +179,9 @@ class StandaloneCommands(CoreCommands):
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
-        return cast(TOK, await self._execute_command(RequestType.ConfigSet, parameters))
+        return cast(TOK, self._execute_command(RequestType.ConfigSet, parameters))
 
-    async def client_getname(self) -> Optional[bytes]:
+    def client_getname(self) -> Optional[bytes]:
         """
         Get the name of the primary's connection.
 
@@ -288,14 +193,14 @@ class StandaloneCommands(CoreCommands):
             `None` if no name is assigned.
 
         Examples:
-            >>> await client.client_getname()
+            >>> client.client_getname()
                 b'Connection Name'
         """
         return cast(
-            Optional[bytes], await self._execute_command(RequestType.ClientGetName, [])
+            Optional[bytes], self._execute_command(RequestType.ClientGetName, [])
         )
 
-    async def dbsize(self) -> int:
+    def dbsize(self) -> int:
         """
         Returns the number of keys in the currently selected database.
 
@@ -305,12 +210,12 @@ class StandaloneCommands(CoreCommands):
             int: The number of keys in the currently selected database.
 
         Examples:
-            >>> await client.dbsize()
+            >>> client.dbsize()
                 10  # Indicates there are 10 keys in the current database.
         """
-        return cast(int, await self._execute_command(RequestType.DBSize, []))
+        return cast(int, self._execute_command(RequestType.DBSize, []))
 
-    async def echo(self, message: TEncodable) -> bytes:
+    def echo(self, message: TEncodable) -> bytes:
         """
         Echoes the provided `message` back.
 
@@ -323,14 +228,12 @@ class StandaloneCommands(CoreCommands):
             bytes: The provided `message`.
 
         Examples:
-            >>> await client.echo("Valkey GLIDE")
+            >>> client.echo("Valkey GLIDE")
                 b'Valkey GLIDE'
         """
-        return cast(bytes, await self._execute_command(RequestType.Echo, [message]))
+        return cast(bytes, self._execute_command(RequestType.Echo, [message]))
 
-    async def function_load(
-        self, library_code: TEncodable, replace: bool = False
-    ) -> bytes:
+    def function_load(self, library_code: TEncodable, replace: bool = False) -> bytes:
         """
         Loads a library to Valkey.
 
@@ -346,20 +249,20 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> code = "#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) return args[1] end)"
-            >>> await client.function_load(code, True)
+            >>> client.function_load(code, True)
                 b"mylib"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             bytes,
-            await self._execute_command(
+            self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
             ),
         )
 
-    async def function_list(
+    def function_list(
         self, library_name_pattern: Optional[TEncodable] = None, with_code: bool = False
     ) -> TFunctionListResponse:
         """
@@ -376,7 +279,7 @@ class StandaloneCommands(CoreCommands):
             selected libraries and their functions.
 
         Examples:
-            >>> response = await client.function_list("myLib?_backup", True)
+            >>> response = client.function_list("myLib?_backup", True)
                 [{
                     b"library_name": b"myLib5_backup",
                     b"engine": b"LUA",
@@ -398,13 +301,13 @@ class StandaloneCommands(CoreCommands):
             args.append("WITHCODE")
         return cast(
             TFunctionListResponse,
-            await self._execute_command(
+            self._execute_command(
                 RequestType.FunctionList,
                 args,
             ),
         )
 
-    async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+    def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all function libraries.
 
@@ -417,20 +320,20 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> await client.function_flush(FlushMode.SYNC)
+            >>> client.function_flush(FlushMode.SYNC)
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            await self._execute_command(
+            self._execute_command(
                 RequestType.FunctionFlush,
                 [mode.value] if mode else [],
             ),
         )
 
-    async def function_delete(self, library_name: TEncodable) -> TOK:
+    def function_delete(self, library_name: TEncodable) -> TOK:
         """
         Deletes a library and all its functions.
 
@@ -443,20 +346,20 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> await client.function_delete("my_lib")
+            >>> client.function_delete("my_lib")
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            await self._execute_command(
+            self._execute_command(
                 RequestType.FunctionDelete,
                 [library_name],
             ),
         )
 
-    async def function_kill(self) -> TOK:
+    def function_kill(self) -> TOK:
         """
         Kills a function that is currently executing.
         This command only terminates read-only functions.
@@ -469,17 +372,17 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> await client.function_kill()
+            >>> client.function_kill()
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            await self._execute_command(RequestType.FunctionKill, []),
+            self._execute_command(RequestType.FunctionKill, []),
         )
 
-    async def function_stats(self) -> TFunctionStatsFullResponse:
+    def function_stats(self) -> TFunctionStatsFullResponse:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -498,7 +401,7 @@ class StandaloneCommands(CoreCommands):
             See example for more details.
 
         Examples:
-            >>> await client.function_stats()
+            >>> client.function_stats()
                 {b"addr": {                         # Response from the master node
                     b'running_script': {
                         b'name': b'foo',
@@ -526,10 +429,10 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             TFunctionStatsFullResponse,
-            await self._execute_command(RequestType.FunctionStats, []),
+            self._execute_command(RequestType.FunctionStats, []),
         )
 
-    async def function_dump(self) -> bytes:
+    def function_dump(self) -> bytes:
         """
         Returns the serialized payload of all loaded libraries.
 
@@ -539,17 +442,17 @@ class StandaloneCommands(CoreCommands):
             bytes: The serialized payload of all loaded libraries.
 
         Examples:
-            >>> payload = await client.function_dump()
+            >>> payload = client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> await client.function_restore(payload)
+            >>> client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
         Since: Valkey 7.0.0.
         """
-        return cast(bytes, await self._execute_command(RequestType.FunctionDump, []))
+        return cast(bytes, self._execute_command(RequestType.FunctionDump, []))
 
-    async def function_restore(
+    def function_restore(
         self, payload: TEncodable, policy: Optional[FunctionRestorePolicy] = None
     ) -> TOK:
         """
@@ -565,12 +468,12 @@ class StandaloneCommands(CoreCommands):
             TOK: OK.
 
         Examples:
-            >>> payload = await client.function_dump()
+            >>> payload = client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> await client.function_restore(payload)
+            >>> client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
-            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH)
+            >>> client.function_restore(payload, FunctionRestorePolicy.FLUSH)
                 "OK" # The serialized dump response was used to restore the libraries with the specified policy.
 
         Since: Valkey 7.0.0.
@@ -579,9 +482,9 @@ class StandaloneCommands(CoreCommands):
         if policy is not None:
             args.append(policy.value)
 
-        return cast(TOK, await self._execute_command(RequestType.FunctionRestore, args))
+        return cast(TOK, self._execute_command(RequestType.FunctionRestore, args))
 
-    async def time(self) -> List[bytes]:
+    def time(self) -> List[bytes]:
         """
         Returns the server time.
 
@@ -593,15 +496,15 @@ class StandaloneCommands(CoreCommands):
             The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
 
         Examples:
-            >>> await client.time()
+            >>> client.time()
                 [b'1710925775', b'913580']
         """
         return cast(
             List[bytes],
-            await self._execute_command(RequestType.Time, []),
+            self._execute_command(RequestType.Time, []),
         )
 
-    async def lastsave(self) -> int:
+    def lastsave(self) -> int:
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
@@ -611,15 +514,15 @@ class StandaloneCommands(CoreCommands):
             int: The Unix time of the last successful DB save.
 
         Examples:
-            >>> await client.lastsave()
+            >>> client.lastsave()
                 1710925775  # Unix time of the last DB save
         """
         return cast(
             int,
-            await self._execute_command(RequestType.LastSave, []),
+            self._execute_command(RequestType.LastSave, []),
         )
 
-    async def move(self, key: TEncodable, db_index: int) -> bool:
+    def move(self, key: TEncodable, db_index: int) -> bool:
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
@@ -636,38 +539,15 @@ class StandaloneCommands(CoreCommands):
             or does not exist in the source database.
 
         Example:
-            >>> await client.move("some_key", 1)
+            >>> client.move("some_key", 1)
                 True
         """
         return cast(
             bool,
-            await self._execute_command(RequestType.Move, [key, str(db_index)]),
+            self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
-    async def publish(self, message: TEncodable, channel: TEncodable) -> int:
-        """
-        Publish a message on pubsub channel.
-
-        See [valkey.io](https://valkey.io/commands/publish) for more details.
-
-        Args:
-            message (TEncodable): Message to publish
-            channel (TEncodable): Channel to publish the message on.
-
-        Returns:
-            int: Number of subscriptions in primary node that received the message.
-
-            **Note:** this value does not include subscriptions that configured on replicas.
-
-        Examples:
-            >>> await client.publish("Hi all!", "global-channel")
-                1 # This message was posted to 1 subscription which is configured on primary node
-        """
-        return cast(
-            int, await self._execute_command(RequestType.Publish, [channel, message])
-        )
-
-    async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+    def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
@@ -680,7 +560,7 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple OK response.
 
         Examples:
-            >>> await client.flushall(FlushMode.ASYNC)
+            >>> client.flushall(FlushMode.ASYNC)
                 OK  # This command never fails.
         """
         args: List[TEncodable] = []
@@ -689,10 +569,10 @@ class StandaloneCommands(CoreCommands):
 
         return cast(
             TOK,
-            await self._execute_command(RequestType.FlushAll, args),
+            self._execute_command(RequestType.FlushAll, args),
         )
 
-    async def flushdb(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+    def flushdb(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
@@ -705,9 +585,9 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple OK response.
 
         Examples:
-            >>> await client.flushdb()
+            >>> client.flushdb()
                 OK  # The keys of the currently selected database were deleted.
-            >>> await client.flushdb(FlushMode.ASYNC)
+            >>> client.flushdb(FlushMode.ASYNC)
                 OK  # The keys of the currently selected database were deleted asynchronously.
         """
         args: List[TEncodable] = []
@@ -716,10 +596,10 @@ class StandaloneCommands(CoreCommands):
 
         return cast(
             TOK,
-            await self._execute_command(RequestType.FlushDB, args),
+            self._execute_command(RequestType.FlushDB, args),
         )
 
-    async def copy(
+    def copy(
         self,
         source: TEncodable,
         destination: TEncodable,
@@ -746,11 +626,11 @@ class StandaloneCommands(CoreCommands):
             Otherwise, return False.
 
         Examples:
-            >>> await client.set("source", "sheep")
-            >>> await client.copy(b"source", b"destination", 1, False)
+            >>> client.set("source", "sheep")
+            >>> client.copy(b"source", b"destination", 1, False)
                 True # Source was copied
-            >>> await client.select(1)
-            >>> await client.get("destination")
+            >>> client.select(1)
+            >>> client.get("destination")
                 b"sheep"
 
         Since: Valkey version 6.2.0.
@@ -762,10 +642,10 @@ class StandaloneCommands(CoreCommands):
             args.append("REPLACE")
         return cast(
             bool,
-            await self._execute_command(RequestType.Copy, args),
+            self._execute_command(RequestType.Copy, args),
         )
 
-    async def lolwut(
+    def lolwut(
         self,
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
@@ -786,9 +666,9 @@ class StandaloneCommands(CoreCommands):
             bytes: A piece of generative computer art along with the current Valkey version.
 
         Examples:
-            >>> await client.lolwut(6, [40, 20]);
+            >>> client.lolwut(6, [40, 20]);
                 b"Redis ver. 7.2.3" # Indicates the current Valkey version
-            >>> await client.lolwut(5, [30, 5, 5]);
+            >>> client.lolwut(5, [30, 5, 5]);
                 b"Redis ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
@@ -799,10 +679,10 @@ class StandaloneCommands(CoreCommands):
                 args.extend(str(var))
         return cast(
             bytes,
-            await self._execute_command(RequestType.Lolwut, args),
+            self._execute_command(RequestType.Lolwut, args),
         )
 
-    async def random_key(self) -> Optional[bytes]:
+    def random_key(self) -> Optional[bytes]:
         """
         Returns a random existing key name from the currently selected database.
 
@@ -812,15 +692,15 @@ class StandaloneCommands(CoreCommands):
             Optional[bytes]: A random existing key name from the currently selected database.
 
         Examples:
-            >>> await client.random_key()
+            >>> client.random_key()
                 b"random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
         """
         return cast(
             Optional[bytes],
-            await self._execute_command(RequestType.RandomKey, []),
+            self._execute_command(RequestType.RandomKey, []),
         )
 
-    async def wait(
+    def wait(
         self,
         numreplicas: int,
         timeout: int,
@@ -840,193 +720,12 @@ class StandaloneCommands(CoreCommands):
             int: The number of replicas reached by all the writes performed in the context of the current connection.
 
         Examples:
-            >>> await client.set("key", "value");
-            >>> await client.wait(1, 1000);
+            >>> client.set("key", "value");
+            >>> client.wait(1, 1000);
             # return 1 when a replica is reached or 0 if 1000ms is reached.
         """
         args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
             int,
-            await self._execute_command(RequestType.Wait, args),
+            self._execute_command(RequestType.Wait, args),
         )
-
-    async def unwatch(self) -> TOK:
-        """
-        Flushes all the previously watched keys for an atomic batch (Transaction). Executing a transaction will
-        automatically flush all previously watched keys.
-
-        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
-
-        Returns:
-            TOK: A simple "OK" response.
-
-        Examples:
-            >>> await client.watch("sampleKey")
-                'OK'
-            >>> await client.unwatch()
-                'OK'
-        """
-        return cast(
-            TOK,
-            await self._execute_command(RequestType.UnWatch, []),
-        )
-
-    async def scan(
-        self,
-        cursor: TEncodable,
-        match: Optional[TEncodable] = None,
-        count: Optional[int] = None,
-        type: Optional[ObjectType] = None,
-    ) -> List[Union[bytes, List[bytes]]]:
-        """
-        Incrementally iterate over a collection of keys.
-        SCAN is a cursor based iterator. This means that at every call of the command,
-        the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
-        An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
-
-        A full iteration always retrieves all the elements that were present
-        in the collection from the start to the end of a full iteration.
-        Elements that were not constantly present in the collection during a full iteration, may be returned or not.
-
-        See [valkey.io](https://valkey.io/commands/scan) for more details.
-
-        Args:
-            cursor (TResult): The cursor used for iteration. For the first iteration, the cursor should be set to "0".
-
-                - Using a non-zero cursor in the first iteration, or an invalid cursor at any iteration, will lead to
-                  undefined results.
-                - Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
-                  return the same elements multiple times.
-                - If the the db has changed, it may result an undefined behavior.
-
-            match (Optional[TResult]): A pattern to match keys against.
-            count (Optional[int]): The number of keys to return per iteration.
-
-                - The number of keys returned per iteration is not guaranteed to be the same as the count argument.
-                - The argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
-                - The default value is 10.
-
-            type (ObjectType): The type of object to scan for.
-
-        Returns:
-            List[Union[bytes, List[bytes]]]: A List containing the next cursor value and a list of keys,
-            formatted as [cursor, [key1, key2, ...]]
-
-        Examples:
-            >>> result = await client.scan(b'0')
-                print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
-                first_cursor_result = result[0]
-                result = await client.scan(first_cursor_result)
-                print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
-                                        b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
-                result = await client.scan(result[0])
-                print(result) #[b'0', [b'key6', b'key7']]
-            >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
-                print(result) #[b'6', [b'key4', b'key5']]
-            >>> result = await client.scan("0", type=ObjectType.Set)
-                print(result) #[b'362', [b'set1', b'set2', b'set3']]
-        """
-        args = [cursor]
-        if match:
-            args.extend(["MATCH", match])
-        if count:
-            args.extend(["COUNT", str(count)])
-        if type:
-            args.extend(["TYPE", type.value])
-        return cast(
-            List[Union[bytes, List[bytes]]],
-            await self._execute_command(RequestType.Scan, args),
-        )
-
-    async def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
-        """
-        Check existence of scripts in the script cache by their SHA1 digest.
-
-        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
-
-        Args:
-            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
-
-        Returns:
-            List[bool]: A list of boolean values indicating the existence of each script.
-
-        Examples:
-            >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
-                [True, False]
-        """
-        return cast(
-            List[bool], await self._execute_command(RequestType.ScriptExists, sha1s)
-        )
-
-    async def script_flush(self, mode: Optional[FlushMode] = None) -> TOK:
-        """
-        Flush the Lua scripts cache.
-
-        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
-
-        Args:
-            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
-
-        Returns:
-            TOK: A simple `OK` response.
-
-        Examples:
-            >>> await client.script_flush()
-                "OK"
-
-            >>> await client.script_flush(FlushMode.ASYNC)
-                "OK"
-        """
-
-        return cast(
-            TOK,
-            await self._execute_command(
-                RequestType.ScriptFlush, [mode.value] if mode else []
-            ),
-        )
-
-    async def script_kill(self) -> TOK:
-        """
-        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
-
-        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
-
-        Returns:
-            TOK: A simple `OK` response.
-
-        Examples:
-            >>> await client.script_kill()
-                "OK"
-        """
-        return cast(TOK, await self._execute_command(RequestType.ScriptKill, []))
-
-    async def invoke_script(
-        self,
-        script: Script,
-        keys: Optional[List[TEncodable]] = None,
-        args: Optional[List[TEncodable]] = None,
-    ) -> TResult:
-        """
-        Invokes a Lua script with its keys and arguments.
-        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
-        The script loading, argument preparation, and execution will all be handled internally.
-        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
-        After that, it will be invoked using the `EVALSHA` command.
-
-        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
-        for more details.
-
-        Args:
-            script (Script): The Lua script to execute.
-            keys (Optional[List[TEncodable]]): The keys that are used in the script.
-            args (Optional[List[TEncodable]]): The arguments for the script.
-
-        Returns:
-            TResult: a value that depends on the script that was executed.
-
-        Examples:
-            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> await client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
-                [b"foo", b"bar"]
-        """
-        return await self._execute_script(script.get_hash(), keys, args)

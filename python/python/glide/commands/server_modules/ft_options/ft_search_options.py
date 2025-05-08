@@ -2,7 +2,7 @@
 
 from typing import List, Mapping, Optional
 
-from glide.async_commands.server_modules.ft_options.ft_constants import FtSearchKeywords
+from glide.commands.server_modules.ft_options.ft_constants import FtSearchKeywords
 from glide.constants import TEncodable
 
 

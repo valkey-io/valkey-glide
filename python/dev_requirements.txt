@@ -13,3 +13,7 @@ sphinx >= 7.4.7
 sphinx-rtd-theme
 deprecated
 types-Deprecated
+
+# Sync
+cffi
+types-cffi

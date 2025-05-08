@@ -126,6 +126,12 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Build FFI library
+              working-directory: ./python
+              run: |
+                  cd ../ffi
+                  cargo build
+
             - name: Test with pytest
               working-directory: ./python
               run: |
@@ -189,6 +195,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Build FFI library
+              working-directory: ./python
+              run: |
+                  cd ../ffi
+                  cargo build
 
             - name: Test pubsub with pytest
               working-directory: ./python
