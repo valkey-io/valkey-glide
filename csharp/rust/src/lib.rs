@@ -86,7 +86,7 @@ unsafe fn report_error(
     );
     unsafe { failure_callback(callback_index, err_ptr, error_type) };
     // free memory
-    _ = CString::from_raw(err_ptr);
+    _ = unsafe { CString::from_raw(err_ptr) };
 }
 
 /// Panic Guard as per <https://www.reddit.com/r/rust/comments/zg2xcu/comment/izi758v/>
@@ -121,7 +121,7 @@ impl Drop for PanicGuard {
 /// * `success_callback` and `failure_callback` must be valid pointers to the corresponding FFI functions.
 ///   See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client(
     config: *const ConnectionConfig,
     success_callback: SuccessCallback,
@@ -177,7 +177,7 @@ pub unsafe extern "C-unwind" fn create_client(
 ///
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn close_client(client_ptr: *const c_void) {
     assert!(!client_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
@@ -195,7 +195,7 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `cmd_ptr` must not be `null`. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
@@ -273,7 +273,7 @@ pub unsafe extern "C-unwind" fn command(
 /// * `ptr` must not be `null`.
 /// * `ptr` must be able to be safely casted to a valid [`Box<ResponseValue>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[allow(rustdoc::private_intra_doc_links)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_respose(ptr: *mut ResponseValue) {
     unsafe {
         Box::leak(Box::from_raw(ptr)).free_memory();
@@ -312,7 +312,7 @@ impl From<Level> for logger_core::Level {
 ///
 /// * `message` and `log_identifier` must not be `null`.
 /// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn log(
     log_level: Level,
@@ -338,22 +338,19 @@ pub unsafe extern "C" fn log(
 ///
 /// * `file_name` must not be `null`.
 /// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
-    let file_name_as_str;
-    unsafe {
-        file_name_as_str = if file_name.is_null() {
-            None
-        } else {
-            Some(
-                CStr::from_ptr(file_name)
-                    .to_str()
-                    .expect("Can not read string argument."),
-            )
-        };
+    let file_name_as_str = if file_name.is_null() {
+        None
+    } else {
+        Some(
+            unsafe { CStr::from_ptr(file_name) }
+                .to_str()
+                .expect("Can not read string argument."),
+        )
+    };
 
-        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
-        logger_level.into()
-    }
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
+    logger_level.into()
 }

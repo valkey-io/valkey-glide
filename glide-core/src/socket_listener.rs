@@ -4,12 +4,14 @@ use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
-    command, command_request, Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes,
+    Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes, command, command_request,
 };
 use crate::connection_request::ConnectionRequest;
-use crate::errors::{error_message, error_type, RequestErrorType};
+use crate::errors::{RequestErrorType, error_message, error_type};
 use crate::response;
 use crate::response::Response;
+use ClosingReason::*;
+use PipeListeningResult::*;
 use bytes::Bytes;
 use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
@@ -34,14 +36,12 @@ use std::{str, thread};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Sender, channel};
 use tokio::task;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
-use ClosingReason::*;
-use PipeListeningResult::*;
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";

@@ -48,6 +48,7 @@ unsafe fn ptr_to_opt_str(ptr: *const c_char) -> Option<String> {
 
 /// A mirror of [`ConnectionRequest`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct ConnectionConfig {
     pub address_count: usize,
     /// Pointer to an array.
@@ -89,59 +90,60 @@ pub struct ConnectionConfig {
 /// * Dereferenced [`ConnectionConfig`] struct and all nested structs must contain valid pointers.
 ///   See the safety documentation of [`convert_node_addresses`], [`ptr_to_str`] and [`ptr_to_opt_str`].
 pub(crate) unsafe fn create_connection_request(
-    config: *const ConnectionConfig,
+    config_ptr: *const ConnectionConfig,
 ) -> ConnectionRequest {
+    let config = unsafe { *config_ptr };
     ConnectionRequest {
-        read_from: if (*config).has_read_from {
-            Some(match (*config).read_from.strategy {
+        read_from: if config.has_read_from {
+            Some(match config.read_from.strategy {
                 ReadFromStrategy::Primary => coreReadFrom::Primary,
                 ReadFromStrategy::PreferReplica => coreReadFrom::PreferReplica,
                 ReadFromStrategy::AZAffinity => {
-                    coreReadFrom::AZAffinity(unsafe { ptr_to_str((*config).read_from.az) })
+                    coreReadFrom::AZAffinity(unsafe { ptr_to_str(config.read_from.az) })
                 }
                 ReadFromStrategy::AZAffinityReplicasAndPrimary => {
                     coreReadFrom::AZAffinityReplicasAndPrimary(unsafe {
-                        ptr_to_str((*config).read_from.az)
+                        ptr_to_str(config.read_from.az)
                     })
                 }
             })
         } else {
             None
         },
-        client_name: unsafe { ptr_to_opt_str((*config).client_name) },
-        authentication_info: if (*config).has_authentication_info {
+        client_name: unsafe { ptr_to_opt_str(config.client_name) },
+        authentication_info: if config.has_authentication_info {
             Some(AuthenticationInfo {
-                username: unsafe { ptr_to_opt_str((*config).authentication_info.username) },
-                password: unsafe { ptr_to_opt_str((*config).authentication_info.password) },
+                username: unsafe { ptr_to_opt_str(config.authentication_info.username) },
+                password: unsafe { ptr_to_opt_str(config.authentication_info.password) },
             })
         } else {
             None
         },
-        database_id: (*config).database_id.into(),
-        protocol: if (*config).has_protocol {
-            Some((*config).protocol)
+        database_id: config.database_id.into(),
+        protocol: if config.has_protocol {
+            Some(config.protocol)
         } else {
             None
         },
-        tls_mode: if (*config).has_tls {
-            Some((*config).tls_mode)
+        tls_mode: if config.has_tls {
+            Some(config.tls_mode)
         } else {
             None
         },
-        addresses: unsafe { convert_node_addresses((*config).addresses, (*config).address_count) },
-        cluster_mode_enabled: (*config).cluster_mode,
-        request_timeout: if (*config).has_request_timeout {
-            Some((*config).request_timeout)
+        addresses: unsafe { convert_node_addresses(config.addresses, config.address_count) },
+        cluster_mode_enabled: config.cluster_mode,
+        request_timeout: if config.has_request_timeout {
+            Some(config.request_timeout)
         } else {
             None
         },
-        connection_timeout: if (*config).has_connection_timeout {
-            Some((*config).connection_timeout)
+        connection_timeout: if config.has_connection_timeout {
+            Some(config.connection_timeout)
         } else {
             None
         },
-        connection_retry_strategy: if (*config).has_connection_retry_strategy {
-            Some((*config).connection_retry_strategy)
+        connection_retry_strategy: if config.has_connection_retry_strategy {
+            Some(config.connection_retry_strategy)
         } else {
             None
         },
@@ -187,12 +189,14 @@ unsafe fn convert_node_addresses(data: *const *const Address, len: usize) -> Vec
 
 /// A mirror of [`coreReadFrom`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct ReadFrom {
     pub strategy: ReadFromStrategy,
     pub az: *const c_char,
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub enum ReadFromStrategy {
     Primary,
     PreferReplica,
@@ -202,6 +206,7 @@ pub enum ReadFromStrategy {
 
 /// A mirror of [`AuthenticationInfo`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct Credentials {
     /// zero pointer is valid, means no username is given (`None`)
     pub username: *const c_char,
@@ -264,13 +269,14 @@ pub struct RouteInfo {
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
 pub(crate) unsafe fn create_route(
-    route_info: *const RouteInfo,
+    route_ptr: *const RouteInfo,
     cmd: Option<&Cmd>,
 ) -> Option<RoutingInfo> {
-    if route_info.is_null() {
+    if route_ptr.is_null() {
         return None;
     }
-    match (*route_info).route_type {
+    let route = unsafe { *route_ptr };
+    match route.route_type {
         RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
         RouteType::AllNodes => Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
@@ -282,19 +288,19 @@ pub(crate) unsafe fn create_route(
         ))),
         RouteType::SlotId => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
-                (*route_info).slot_id as u16,
-                (&(*route_info).slot_type).into(),
+                route.slot_id as u16,
+                (&route.slot_type).into(),
             )),
         )),
         RouteType::SlotKey => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
-                redis::cluster_topology::get_slot(ptr_to_str((*route_info).slot_key).as_bytes()),
-                (&(*route_info).slot_type).into(),
+                redis::cluster_topology::get_slot(unsafe { ptr_to_str(route.slot_key) }.as_bytes()),
+                (&route.slot_type).into(),
             )),
         )),
         RouteType::ByAddress => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-            host: ptr_to_str((*route_info).hostname),
-            port: (*route_info).port as u16,
+            host: unsafe { ptr_to_str(route.hostname) },
+            port: route.port as u16,
         })),
     }
 }
@@ -489,7 +495,7 @@ impl ResponseValue {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CmdInfo {
     pub request_type: RequestType,
     pub args: *const *const u8,
@@ -505,10 +511,11 @@ pub struct CmdInfo {
 /// * `data` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string pointers.
 /// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
 pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
+    let info = unsafe { *ptr };
     let arg_vec =
-        unsafe { convert_double_pointer_to_vec((*ptr).args, (*ptr).arg_count, (*ptr).args_len) };
+        unsafe { convert_double_pointer_to_vec(info.args, info.arg_count, info.args_len) };
 
-    let Some(mut cmd) = (*ptr).request_type.get_command() else {
+    let Some(mut cmd) = info.request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
     };
     for command_arg in arg_vec {
