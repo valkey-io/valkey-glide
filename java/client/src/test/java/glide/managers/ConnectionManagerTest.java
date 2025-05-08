@@ -341,6 +341,7 @@ public class ConnectionManagerTest {
         GlideClientConfiguration glideClientConfiguration =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(HOST).port(PORT).build())
+                        .useTLS(true)
                         .reconnectStrategy(
                                 BackoffStrategy.builder()
                                         .numOfRetries(10)
@@ -351,6 +352,12 @@ public class ConnectionManagerTest {
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
+                        .addAddresses(
+                                ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                                        .setHost(HOST)
+                                        .setPort(PORT)
+                                        .build())
+                        .setTlsMode(TlsMode.SecureTls)
                         .setConnectionRetryStrategy(
                                 ConnectionRetryStrategy.newBuilder()
                                         .setNumberOfRetries(10)
@@ -378,6 +385,7 @@ public class ConnectionManagerTest {
         GlideClusterClientConfiguration glideClusterClientConfiguration =
                 GlideClusterClientConfiguration.builder()
                         .address(NodeAddress.builder().host(HOST).port(PORT).build())
+                        .useTLS(true)
                         .reconnectStrategy(
                                 BackoffStrategy.builder()
                                         .numOfRetries(10)
@@ -388,6 +396,12 @@ public class ConnectionManagerTest {
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
+                        .addAddresses(
+                                ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                                        .setHost(HOST)
+                                        .setPort(PORT)
+                                        .build())
+                        .setTlsMode(TlsMode.SecureTls)
                         .setClusterModeEnabled(true)
                         .setConnectionRetryStrategy(
                                 ConnectionRetryStrategy.newBuilder()
