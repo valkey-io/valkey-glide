@@ -395,12 +395,10 @@ impl From<Level> for logger_core::Level {
     }
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `message` and `log_identifier` must not be `null`.
-/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
 #[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn log(
@@ -408,41 +406,34 @@ pub unsafe extern "C" fn log(
     log_identifier: *const c_char,
     message: *const c_char,
 ) {
-    unsafe {
-        logger_core::log(
-            log_level.into(),
-            CStr::from_ptr(log_identifier)
-                .to_str()
-                .expect("Can not read log_identifier argument."),
-            CStr::from_ptr(message)
-                .to_str()
-                .expect("Can not read message argument."),
-        );
-    }
+    logger_core::log(
+        log_level.into(),
+        unsafe { CStr::from_ptr(log_identifier) }
+            .to_str()
+            .expect("Can not read log_identifier argument."),
+        unsafe { CStr::from_ptr(message) }
+            .to_str()
+            .expect("Can not read message argument."),
+    );
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `file_name` must not be `null`.
-/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
 #[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
-    let file_name_as_str;
-    unsafe {
-        file_name_as_str = if file_name.is_null() {
-            None
-        } else {
-            Some(
-                CStr::from_ptr(file_name)
-                    .to_str()
-                    .expect("Can not read string argument."),
-            )
-        };
+    let file_name_as_str = if file_name.is_null() {
+        None
+    } else {
+        Some(
+            unsafe { CStr::from_ptr(file_name) }
+                .to_str()
+                .expect("Can not read string argument."),
+        )
+    };
 
-        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
-        logger_level.into()
-    }
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
+    logger_level.into()
 }
