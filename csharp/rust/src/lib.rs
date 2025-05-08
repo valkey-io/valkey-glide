@@ -2,8 +2,8 @@
 
 mod ffi;
 use ffi::{
-    CmdInfo, ConnectionConfig, ResponseValue, RouteInfo, create_cmd, create_connection_request,
-    create_route,
+    BatchInfo, BatchOptionsInfo, CmdInfo, ConnectionConfig, ResponseValue, RouteInfo, create_cmd,
+    create_connection_request, create_pipeline, create_route, get_pipeline_options,
 };
 use glide_core::{
     client::Client as GlideClient,
@@ -185,14 +185,14 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 }
 
 /// Execute a command.
-/// Expects that arguments will be kept valid until the callback is called.
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
 /// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * Pointers to callbacks stored in [`Client`] should remain valid. See the safety documentation of [`SuccessCallback`] and [`FailureCallback`].
-/// * `cmd_ptr` must not be `null`. See the safety documentation of [`create_cmd`].
+/// * `cmd_ptr` must not be `null`.
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]. See the safety documentation of [`create_cmd`].
 /// * `route_info` could be `null`, but if it is not `null`, it must be a valid [`RouteInfo`] pointer. See the safety documentation of [`create_route`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[unsafe(no_mangle)]
@@ -243,21 +243,110 @@ pub unsafe extern "C-unwind" fn command(
         match result {
             Ok(value) => {
                 let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
-                unsafe {
-                    (core.success_callback)(callback_index, ptr);
-                }
+                unsafe { (core.success_callback)(callback_index, ptr) };
             }
-            Err(err) => {
-                let err_str = error_message(&err);
-                unsafe {
-                    report_error(
-                        core.failure_callback,
-                        callback_index,
-                        err_str,
-                        error_type(&err),
-                    );
-                }
+            Err(err) => unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    error_message(&err),
+                    error_type(&err),
+                );
+            },
+        };
+        panic_guard.panicked = false;
+        drop(panic_guard);
+    });
+
+    panic_guard.panicked = false;
+    drop(panic_guard);
+}
+
+/// Execute a batch.
+///
+/// # Safety
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `batch_ptr` must not be `null`.
+/// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
+/// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
+#[allow(rustdoc::private_intra_doc_links)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn batch(
+    client_ptr: *const c_void,
+    callback_index: usize,
+    batch_ptr: *const BatchInfo,
+    raise_on_error: bool,
+    options_ptr: *const BatchOptionsInfo,
+) {
+    let client = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut Client)
+    };
+    let core = client.core.clone();
+
+    let mut panic_guard = PanicGuard {
+        panicked: true,
+        failure_callback: core.failure_callback,
+        callback_index,
+    };
+
+    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+        Ok(pipeline) => pipeline,
+        Err(err) => {
+            unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    err,
+                    RequestErrorType::Unspecified,
+                );
             }
+            return;
+        }
+    };
+
+    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
+
+    client.runtime.spawn(async move {
+        let mut panic_guard = PanicGuard {
+            panicked: true,
+            failure_callback: core.failure_callback,
+            callback_index,
+        };
+
+        let result = if pipeline.is_atomic() {
+            core.client
+                .clone()
+                .send_transaction(&pipeline, routing, timeout, raise_on_error)
+                .await
+        } else {
+            core.client
+                .clone()
+                .send_pipeline(
+                    &pipeline,
+                    routing,
+                    raise_on_error,
+                    timeout,
+                    pipeline_retry_strategy,
+                )
+                .await
+        };
+        match result {
+            Ok(value) => {
+                let ptr = Box::into_raw(Box::new(ResponseValue::from_value(value)));
+                unsafe { (core.success_callback)(callback_index, ptr) };
+            }
+            Err(err) => unsafe {
+                report_error(
+                    core.failure_callback,
+                    callback_index,
+                    error_message(&err),
+                    error_type(&err),
+                );
+            },
         };
         panic_guard.panicked = false;
         drop(panic_guard);
@@ -306,12 +395,10 @@ impl From<Level> for logger_core::Level {
     }
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `message` and `log_identifier` must not be `null`.
-/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// * `message` and `log_identifier` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
 #[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn log(
@@ -319,25 +406,21 @@ pub unsafe extern "C" fn log(
     log_identifier: *const c_char,
     message: *const c_char,
 ) {
-    unsafe {
-        logger_core::log(
-            log_level.into(),
-            CStr::from_ptr(log_identifier)
-                .to_str()
-                .expect("Can not read log_identifier argument."),
-            CStr::from_ptr(message)
-                .to_str()
-                .expect("Can not read message argument."),
-        );
-    }
+    logger_core::log(
+        log_level.into(),
+        unsafe { CStr::from_ptr(log_identifier) }
+            .to_str()
+            .expect("Can not read log_identifier argument."),
+        unsafe { CStr::from_ptr(message) }
+            .to_str()
+            .expect("Can not read message argument."),
+    );
 }
 
-/// Unsafe function because creating string from pointer.
-///
 /// # Safety
 ///
 /// * `file_name` must not be `null`.
-/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+/// * `file_name` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`CStr::from_ptr`].
 #[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {

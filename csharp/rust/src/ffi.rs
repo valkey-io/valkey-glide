@@ -13,7 +13,7 @@ use glide_core::{
     request_type::RequestType,
 };
 use redis::{
-    Cmd, Value,
+    Cmd, Pipeline, PipelineRetryStrategy, Value,
     cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
@@ -85,8 +85,8 @@ pub struct ConnectionConfig {
 ///
 /// # Safety
 ///
-/// * `config` must not be `null`.
-/// * `config` must be a valid pointer to a [`ConnectionConfig`] struct.
+/// * `config_ptr` must not be `null`.
+/// * `config_ptr` must be a valid pointer to a [`ConnectionConfig`] struct.
 /// * Dereferenced [`ConnectionConfig`] struct and all nested structs must contain valid pointers.
 ///   See the safety documentation of [`convert_node_addresses`], [`ptr_to_str`] and [`ptr_to_opt_str`].
 pub(crate) unsafe fn create_connection_request(
@@ -264,8 +264,7 @@ pub struct RouteInfo {
 /// Convert route configuration to a corresponding object.
 ///
 /// # Safety
-///
-/// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
+/// * `route_ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
 pub(crate) unsafe fn create_route(
@@ -495,12 +494,31 @@ impl ResponseValue {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub struct CmdInfo {
     pub request_type: RequestType,
     pub args: *const *const u8,
     pub arg_count: usize,
     pub args_len: *const usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchInfo {
+    pub cmd_count: usize,
+    pub cmds: *const *const CmdInfo,
+    pub is_atomic: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchOptionsInfo {
+    // two params from PipelineRetryStrategy
+    pub retry_server_error: bool,
+    pub retry_connection_error: bool,
+    pub has_timeout: bool,
+    pub timeout: u32,
+    pub route_info: *const RouteInfo,
 }
 
 /// Convert [`CmdInfo`] to a [`Cmd`].
@@ -522,4 +540,57 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
         cmd.arg(command_arg);
     }
     Ok(cmd)
+}
+
+/// Convert [`BatchInfo`] to a [`Pipeline`].
+///
+/// # Safety
+/// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
+/// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
+/// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
+///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+/// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
+/// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
+pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
+    let info = unsafe { *ptr };
+    let cmd_pointers = unsafe { from_raw_parts(info.cmds, info.cmd_count) };
+    let mut pipeline = Pipeline::with_capacity(info.cmd_count);
+    for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
+        match unsafe { create_cmd(*cmd_ptr) } {
+            Ok(cmd) => pipeline.add_command(cmd),
+            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+        };
+    }
+    if info.is_atomic {
+        pipeline.atomic();
+    }
+
+    Ok(pipeline)
+}
+
+/// Convert [`BatchOptionsInfo`] to a tuple of corresponding values.
+///
+/// # Safety
+/// * `ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`BatchOptionsInfo`] struct.
+/// * `route_info` in dereferenced [`BatchOptionsInfo`] struct must contain a [`RouteInfo`] pointer.
+///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
+pub(crate) unsafe fn get_pipeline_options(
+    ptr: *const BatchOptionsInfo,
+) -> (Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy) {
+    if ptr.is_null() {
+        return (None, None, PipelineRetryStrategy::new(false, false));
+    }
+    let info = unsafe { *ptr };
+    let timeout = if info.has_timeout {
+        Some(info.timeout)
+    } else {
+        None
+    };
+    let route = unsafe { create_route(info.route_info, None) };
+
+    (
+        route,
+        timeout,
+        PipelineRetryStrategy::new(info.retry_server_error, info.retry_connection_error),
+    )
 }

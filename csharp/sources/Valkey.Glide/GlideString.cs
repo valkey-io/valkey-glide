@@ -71,6 +71,8 @@ public static class GlideStringExtensions
 /// This class stores data as <see langword="byte[]" /> too, but provides API to represent data
 /// as a <see langword="string" /> if conversion is possible.<br />
 /// A <see cref="GlideString" /> could be implicitly instatiated from a <see langword="string" />.
+/// </summary>
+/// <remarks>
 /// <example>
 /// <code>
 /// GlideString gs1 = "123";
@@ -84,7 +86,7 @@ public static class GlideStringExtensions
 /// }
 /// </code>
 /// </example>
-/// </summary>
+/// </remarks>
 [ImmutableObject(true)]
 public sealed class GlideString : IComparable<GlideString>
 {
@@ -131,6 +133,8 @@ public sealed class GlideString : IComparable<GlideString>
     /// <b>Note:</b> a resulting <see langword="string" /> may be incorrect if original <see cref="GlideString" />
     /// stores a non-UTF8 compatible sequence of bytes. It is <b>highly recommended</b> to call to
     /// <see cref="CanConvertToString()" /> prior to do a conversion.
+    /// </summary>
+    /// <remarks>
     /// <example>
     /// <code>
     /// GlideString gs = new byte[] { 0, 42, 255, 243, 0, 253, 15 };
@@ -140,7 +144,7 @@ public sealed class GlideString : IComparable<GlideString>
     /// }
     /// </code>
     /// </example>
-    /// </summary>
+    /// </remarks>
     /// <returns>A <see langword="string" /> representation of this <see cref="GlideString" />.</returns>
     public string GetString()
     {
