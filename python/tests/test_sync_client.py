@@ -7,10 +7,10 @@ import math
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Union, cast
 
 import pytest
-from glide.commands.batch import Batch, ClusterBatch
+from glide import ClosingError, RequestError
 from glide.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -81,7 +81,6 @@ from glide.routes import (
 )
 from glide.sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
-from glide import ClosingError, RequestError
 from tests.conftest import create_sync_client
 from tests.utils.utils import (
     check_function_list_response,

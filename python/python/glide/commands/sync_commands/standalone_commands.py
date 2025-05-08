@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, cast
 
-from glide.commands.batch import Batch
-from glide.commands.command_args import ObjectType
-from glide.commands.core_options import (
-    FlushMode,
-    FunctionRestorePolicy,
-    InfoSection,
-)
+from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
+from glide.commands.sync_commands.core import CoreCommands
 from glide.constants import (
     TOK,
     TEncodable,
@@ -18,10 +13,7 @@ from glide.constants import (
     TFunctionStatsFullResponse,
     TResult,
 )
-from glide.commands.sync_commands.core import CoreCommands
 from glide.protobuf.command_request_pb2 import RequestType
-
-from ...glide import Script
 
 
 class StandaloneCommands(CoreCommands):
@@ -241,9 +233,7 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(bytes, self._execute_command(RequestType.Echo, [message]))
 
-    def function_load(
-        self, library_code: TEncodable, replace: bool = False
-    ) -> bytes:
+    def function_load(self, library_code: TEncodable, replace: bool = False) -> bytes:
         """
         Loads a library to Valkey.
 
