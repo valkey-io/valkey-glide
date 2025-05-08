@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use std::{
-    ffi::{c_char, CStr},
+    ffi::{CStr, c_char},
     slice::from_raw_parts,
 };
 
@@ -13,11 +13,11 @@ use glide_core::{
     request_type::RequestType,
 };
 use redis::{
+    Cmd, Value,
     cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
     },
-    Cmd, Value,
 };
 
 /// Convert raw C string to a rust string.

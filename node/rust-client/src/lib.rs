@@ -12,8 +12,8 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
-use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::start_socket_listener;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
@@ -21,7 +21,7 @@ use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
-use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;

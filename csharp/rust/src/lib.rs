@@ -2,15 +2,15 @@
 
 mod ffi;
 use ffi::{
-    create_cmd, create_connection_request, create_route, CmdInfo, ConnectionConfig, ResponseValue,
-    RouteInfo,
+    CmdInfo, ConnectionConfig, ResponseValue, RouteInfo, create_cmd, create_connection_request,
+    create_route,
 };
 use glide_core::{
     client::Client as GlideClient,
-    errors::{error_message, error_type, RequestErrorType},
+    errors::{RequestErrorType, error_message, error_type},
 };
 use std::{
-    ffi::{c_char, c_void, CStr, CString},
+    ffi::{CStr, CString, c_char, c_void},
     sync::Arc,
 };
 use tokio::runtime::{Builder, Runtime};
