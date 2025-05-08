@@ -3,14 +3,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import math
+import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
-from glide import ClosingError, RequestError, Script
 from glide.commands.batch import Batch, ClusterBatch
 from glide.commands.bitmap import (
     BitFieldGet,
@@ -31,8 +30,6 @@ from glide.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
-    ExpirySet,
-    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
@@ -72,7 +69,6 @@ from glide.commands.stream import (
 )
 from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
 from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
-from glide.sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
@@ -83,23 +79,24 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from glide.sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
+from glide import ClosingError, RequestError
 from tests.conftest import create_sync_client
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
-    check_if_server_version_lt,
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
-    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
-    is_single_response,
     parse_info_response,
     round_values,
+    run_with_timeout,
+    sync_check_if_server_version_lt,
 )
 
 
@@ -107,12 +104,14 @@ class TestGlideClients:
     @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_register_client_name_and_version(self, glide_sync_client: TGlideClient):
+    def test_sync_register_client_name_and_version(
+        self, glide_sync_client: TGlideClient
+    ):
         info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
-        assert "lib-name=GlidePy" in info_str
-        assert "lib-ver=unknown" in info_str
+        assert "lib-name=GlideFFI" in info_str
+        assert "lib-ver=0.1.0" in info_str
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -131,7 +130,9 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_send_and_receive_non_ascii_unicode(self, glide_sync_client: TGlideClient):
+    def test_sync_send_and_receive_non_ascii_unicode(
+        self, glide_sync_client: TGlideClient
+    ):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
@@ -147,8 +148,8 @@ class TestGlideClients:
     def test_sync_client_handle_concurrent_workload_without_dropping_or_changing_values(
         self, glide_sync_client: TGlideClient, value_size
     ):
-        num_of_concurrent_tasks = 100
-        running_tasks = set()
+        num_of_concurrent_threads = 100
+        running_threads = set()
 
         def exec_command(i):
             range_end = 1 if value_size > 100 else 100
@@ -157,11 +158,15 @@ class TestGlideClients:
                 assert glide_sync_client.set(str(i), value) == OK
                 assert glide_sync_client.get(str(i)) == value.encode()
 
-        for i in range(num_of_concurrent_tasks):
-            task = asyncio.create_task(exec_command(i))
-            running_tasks.add(task)
-            task.add_done_callback(running_tasks.discard)
-        asyncio.gather(*(list(running_tasks)))
+        for i in range(num_of_concurrent_threads):
+            thread = threading.Thread(
+                target=exec_command, args=(i,), name=f"Worker-{i}"
+            )
+            running_threads.add(thread)
+            thread.start()
+
+        for thread in running_threads:
+            thread.join()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -172,9 +177,7 @@ class TestGlideClients:
         password = "TEST_AUTH"
         credentials = ServerCredentials(password)
         try:
-            glide_sync_client.custom_command(
-                ["CONFIG", "SET", "requirepass", password]
-            )
+            glide_sync_client.custom_command(["CONFIG", "SET", "requirepass", password])
 
             with pytest.raises(ClosingError, match="NOAUTH"):
                 # Creation of a new client without password should fail
@@ -283,7 +286,6 @@ class TestGlideClients:
             glide_sync_client.set("foo", "bar")
         assert "the client is closed" in str(e)
 
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_connection_timeout(
@@ -317,7 +319,7 @@ class TestGlideClients:
             request,
             cluster_mode,
             protocol=protocol,
-            request_timeout=20000,  # 20 seconds timeout
+            timeout=20000,  # 20 seconds timeout
         )
 
         def run_debug_sleep():
@@ -332,7 +334,7 @@ class TestGlideClients:
 
         def fail_to_connect_to_client():
             # try to connect with a small timeout connection
-            asyncio.sleep(1)
+            time.sleep(1)
             with pytest.raises(ClosingError) as e:
                 create_sync_client(
                     request,
@@ -347,7 +349,7 @@ class TestGlideClients:
 
         def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
-            asyncio.sleep(1)
+            time.sleep(1)
             timeout_client = create_sync_client(
                 request,
                 cluster_mode,
@@ -361,14 +363,24 @@ class TestGlideClients:
             timeout_client.close()
 
         # Run tests
-        asyncio.gather(run_debug_sleep(), fail_to_connect_to_client())
-        asyncio.gather(run_debug_sleep(), connect_to_client())
+        debug_thread_1 = threading.Thread(target=run_debug_sleep)
+        fail_thread = threading.Thread(target=fail_to_connect_to_client)
+        debug_thread_1.start()
+        fail_thread.start()
+        debug_thread_1.join()
+        fail_thread.join()
+
+        debug_thread_2 = threading.Thread(target=run_debug_sleep)
+        connect_thread = threading.Thread(target=connect_to_client)
+        debug_thread_2.start()
+        connect_thread.start()
+        debug_thread_2.join()
+        connect_thread.join()
 
         # Clean up the main client
         client.close()
 
 
-@pytest.mark.asyncio
 class TestCommands:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -385,7 +397,6 @@ class TestCommands:
         result = cast(Dict[bytes, bytes], glide_sync_client.custom_command(["HELLO"]))
 
         assert int(result[b"proto"]) == 3
-
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -816,7 +827,7 @@ class TestCommands:
             == OK
         )
 
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             previous_timeout = glide_sync_client.config_get(["timeout"])
             previous_cluster_node_timeout = glide_sync_client.config_get(
                 ["cluster-node-timeout"]
@@ -1303,10 +1314,12 @@ class TestCommands:
         def endless_blpop_call():
             glide_sync_client.blpop(["non_existent_key"], 0)
 
-        # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-        # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_blpop_call(), timeout=3)
+        # blpop is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # to avoid having the test block forever
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_blpop_call, timeout=3, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1381,13 +1394,15 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
 
-        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmpop_call():
             glide_sync_client.blmpop([key3], ListDirection.LEFT, 0, 1)
 
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_blmpop_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_blmpop_call, timeout=3, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1416,7 +1431,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_rpush_rpop_wrong_type_raise_error(self, glide_sync_client: TGlideClient):
+    def test_sync_rpush_rpop_wrong_type_raise_error(
+        self, glide_sync_client: TGlideClient
+    ):
         key = get_random_string(10)
         assert glide_sync_client.set(key, "foo") == OK
 
@@ -1476,10 +1493,12 @@ class TestCommands:
         def endless_brpop_call():
             glide_sync_client.brpop(["non_existent_key"], 0)
 
-        # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-        # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_brpop_call(), timeout=3)
+        # brpop is called against a non-existing key with no timeout, but we wrap the call in the `run with timeout` function
+        # to avoid having the test block forever
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_brpop_call, timeout=3, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1538,9 +1557,7 @@ class TestCommands:
 
         # Move from LEFT to RIGHT
         assert (
-            glide_sync_client.lmove(
-                key1, key2, ListDirection.LEFT, ListDirection.RIGHT
-            )
+            glide_sync_client.lmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT)
             == b"2"
         )
         assert glide_sync_client.lrange(key1, 0, -1) == []
@@ -1550,9 +1567,7 @@ class TestCommands:
 
         # Move from RIGHT to LEFT - non-existing destination key
         assert (
-            glide_sync_client.lmove(
-                key2, key1, ListDirection.RIGHT, ListDirection.LEFT
-            )
+            glide_sync_client.lmove(key2, key1, ListDirection.RIGHT, ListDirection.LEFT)
             == b"2"
         )
         assert glide_sync_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
@@ -1687,7 +1702,7 @@ class TestCommands:
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
-        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmove_call():
             glide_sync_client.blmove(
@@ -1698,8 +1713,10 @@ class TestCommands:
                 0,
             )
 
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_blmove_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_blmove_call, timeout=3, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1942,9 +1959,7 @@ class TestCommands:
 
         # overwrite destination when destination is not a set
         assert glide_sync_client.sunionstore(string_key, [key1, key3]) == 7
-        assert glide_sync_client.smembers(
-            string_key
-        ) == convert_string_to_bytes_object(
+        assert glide_sync_client.smembers(string_key) == convert_string_to_bytes_object(
             {
                 "a",
                 "b",
@@ -2151,9 +2166,9 @@ class TestCommands:
 
         # Overwrite a key holding a non-set value
         assert glide_sync_client.sdiffstore(string_key, [key1, key2]) == 2
-        assert glide_sync_client.smembers(
-            string_key
-        ) == convert_string_to_bytes_object({"a", "b"})
+        assert glide_sync_client.smembers(string_key) == convert_string_to_bytes_object(
+            {"a", "b"}
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2330,7 +2345,7 @@ class TestCommands:
         assert glide_sync_client.set(key, "foo") == OK
         assert glide_sync_client.ttl(key) == -1
 
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -1
             assert glide_sync_client.pexpiretime(key) == -1
 
@@ -2339,13 +2354,13 @@ class TestCommands:
 
         # set command clears the timeout.
         assert glide_sync_client.set(key, "bar") == OK
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.pexpire(key, 10000)
         else:
             assert glide_sync_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
         assert glide_sync_client.ttl(key) in range(11)
 
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expire(key, 15)
         else:
             assert glide_sync_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
@@ -2364,7 +2379,7 @@ class TestCommands:
 
         assert glide_sync_client.expireat(key, current_time + 10) == 1
         assert glide_sync_client.ttl(key) in range(11)
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expireat(key, current_time + 50) == 1
         else:
             assert (
@@ -2378,7 +2393,7 @@ class TestCommands:
         # set command clears the timeout.
         assert glide_sync_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert not glide_sync_client.pexpireat(
                 key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
             )
@@ -2392,34 +2407,34 @@ class TestCommands:
         assert glide_sync_client.set(key, "foo") == OK
         assert glide_sync_client.ttl(key) == -1
 
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -1
             assert glide_sync_client.pexpiretime(key) == -1
 
         assert glide_sync_client.expire(key, -10) is True
         assert glide_sync_client.ttl(key) == -2
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -2
             assert glide_sync_client.pexpiretime(key) == -2
 
         assert glide_sync_client.set(key, "foo") == OK
         assert glide_sync_client.pexpire(key, -10000)
         assert glide_sync_client.ttl(key) == -2
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -2
             assert glide_sync_client.pexpiretime(key) == -2
 
         assert glide_sync_client.set(key, "foo") == OK
         assert glide_sync_client.expireat(key, int(time.time()) - 50) == 1
         assert glide_sync_client.ttl(key) == -2
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -2
             assert glide_sync_client.pexpiretime(key) == -2
 
         assert glide_sync_client.set(key, "foo") == OK
         assert glide_sync_client.pexpireat(key, int(time.time() * 1000) - 50000)
         assert glide_sync_client.ttl(key) == -2
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -2
             assert glide_sync_client.pexpiretime(key) == -2
 
@@ -2435,7 +2450,7 @@ class TestCommands:
         assert glide_sync_client.expireat(key, int(time.time()) + 50) == 0
         assert not glide_sync_client.pexpireat(key, int(time.time() * 1000) + 50000)
         assert glide_sync_client.ttl(key) == -2
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.expiretime(key) == -2
             assert glide_sync_client.pexpiretime(key) == -2
 
@@ -3901,10 +3916,12 @@ class TestCommands:
         def endless_bzpopmin_call():
             glide_sync_client.bzpopmin(["non_existent_key"], 0)
 
-        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-        # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
+        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call the `run_with_timeout` function
+        # to avoid having the test block forever
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_bzpopmin_call, timeout=0.5, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3960,10 +3977,12 @@ class TestCommands:
         def endless_bzpopmax_call():
             glide_sync_client.bzpopmax(["non_existent_key"], 0)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-        # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_bzpopmax_call(), timeout=0.5)
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # to avoid having the test block forever
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_bzpopmax_call, timeout=0.5, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4121,9 +4140,7 @@ class TestCommands:
         assert glide_sync_client.zrange("non_existing_key", RangeByIndex(0, 1)) == []
 
         assert (
-            glide_sync_client.zrange_withscores(
-                "non_existing_key", RangeByIndex(0, -1)
-            )
+            glide_sync_client.zrange_withscores("non_existing_key", RangeByIndex(0, -1))
         ) == {}
 
         assert glide_sync_client.set(key, "value") == OK
@@ -4150,8 +4167,7 @@ class TestCommands:
 
         # full range
         assert (
-            glide_sync_client.zrangestore(destination, source, RangeByIndex(0, -1))
-            == 3
+            glide_sync_client.zrangestore(destination, source, RangeByIndex(0, -1)) == 3
         )
         zrange_res = glide_sync_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
@@ -4160,9 +4176,7 @@ class TestCommands:
 
         # range from rank 0 to 1, from highest to lowest score
         assert (
-            glide_sync_client.zrangestore(
-                destination, source, RangeByIndex(0, 1), True
-            )
+            glide_sync_client.zrangestore(destination, source, RangeByIndex(0, 1), True)
             == 2
         )
 
@@ -4412,7 +4426,7 @@ class TestCommands:
         members_scores: Mapping[TEncodable, float] = {"one": 1.5, "two": 2, "three": 3}
         assert glide_sync_client.zadd(key, members_scores) == 3
         assert glide_sync_client.zrank(key, "one") == 0
-        if not check_if_server_version_lt(glide_sync_client, "7.2.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
             assert glide_sync_client.zrank_withscore(key, "one") == [0, 1.5]
             assert glide_sync_client.zrank_withscore(key, "non_existing_field") is None
             assert (
@@ -4445,11 +4459,10 @@ class TestCommands:
             glide_sync_client.zrevrank(non_existing_key, "non_existing_member") is None
         )
 
-        if not check_if_server_version_lt(glide_sync_client, "7.2.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
             assert glide_sync_client.zrevrank_withscore(key, "one") == [2, 1.0]
             assert (
-                glide_sync_client.zrevrank_withscore(key, "non_existing_member")
-                is None
+                glide_sync_client.zrevrank_withscore(key, "non_existing_member") is None
             )
             assert (
                 glide_sync_client.zrevrank_withscore(
@@ -4641,10 +4654,12 @@ class TestCommands:
         def endless_bzmpop_call():
             glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
 
-        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-        # avoid having the test block forever
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_bzmpop_call(), timeout=0.5)
+        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # to avoid having the test block forever
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_bzmpop_call, timeout=0.5, on_timeout=glide_sync_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4857,7 +4872,7 @@ class TestCommands:
     ):
         if isinstance(
             glide_sync_client, GlideClusterClient
-        ) and check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        ) and sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             return pytest.mark.skip(
                 reason="Valkey version required in cluster mode>= 8.0.0"
             )
@@ -4891,7 +4906,7 @@ class TestCommands:
         # SORT_RO Available since: 7.0.0
         skip_sort_ro_test = False
         min_version = "7.0.0"
-        if check_if_server_version_lt(glide_sync_client, min_version):
+        if sync_check_if_server_version_lt(glide_sync_client, min_version):
             skip_sort_ro_test = True
 
         # Test sort with all arguments
@@ -5014,7 +5029,7 @@ class TestCommands:
         # SORT_RO Available since: 7.0.0
         skip_sort_ro_test = False
         min_version = "7.0.0"
-        if check_if_server_version_lt(glide_sync_client, min_version):
+        if sync_check_if_server_version_lt(glide_sync_client, min_version):
             skip_sort_ro_test = True
 
         # Test sort with non-existing key
@@ -5293,15 +5308,11 @@ class TestCommands:
         stream_id3 = "0-3"
 
         assert (
-            glide_sync_client.xadd(
-                key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
-            )
+            glide_sync_client.xadd(key, [("f1", "v1")], StreamAddOptions(id=stream_id1))
             == stream_id1.encode()
         )
         assert (
-            glide_sync_client.xadd(
-                key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
-            )
+            glide_sync_client.xadd(key, [("f2", "v2")], StreamAddOptions(id=stream_id2))
             == stream_id2.encode()
         )
         assert glide_sync_client.xlen(key) == 2
@@ -5324,9 +5335,7 @@ class TestCommands:
         assert glide_sync_client.xrevrange(key, MinId(), MaxId()) == {}
 
         assert (
-            glide_sync_client.xadd(
-                key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
-            )
+            glide_sync_client.xadd(key, [("f3", "v3")], StreamAddOptions(id=stream_id3))
             == stream_id3.encode()
         )
 
@@ -5500,9 +5509,7 @@ class TestCommands:
         )
         # ensure command doesn't time out even if timeout > request timeout
         assert (
-            test_client.xread(
-                {key1: stream_id2}, StreamReadOptions(block_ms=1000)
-            )
+            test_client.xread({key1: stream_id2}, StreamReadOptions(block_ms=1000))
             is None
         )
 
@@ -5511,8 +5518,10 @@ class TestCommands:
 
         # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
         # to avoid the test getting stuck forever.
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_xread_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_xread_call, timeout=3, on_timeout=test_client.close
+            )
 
         # if count is non-positive, it is ignored
         assert glide_sync_client.xread(
@@ -5594,7 +5603,7 @@ class TestCommands:
             glide_sync_client.xgroup_destroy(non_existing_key, group_name1)
 
         # "ENTRIESREAD" option was added in Valkey 7.0.0
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             with pytest.raises(RequestError):
                 glide_sync_client.xgroup_create(
                     key,
@@ -5784,9 +5793,7 @@ class TestCommands:
                 string_key, group_name, consumer_name
             )
         with pytest.raises(RequestError):
-            glide_sync_client.xgroup_del_consumer(
-                string_key, group_name, consumer_name
-            )
+            glide_sync_client.xgroup_del_consumer(string_key, group_name, consumer_name)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5953,8 +5960,10 @@ class TestCommands:
 
         # when xreadgroup is called with a block timeout of 0, it should never timeout, but we wrap the test with a
         # timeout to avoid the test getting stuck forever.
-        with pytest.raises(asyncio.TimeoutError):
-            asyncio.wait_for(endless_xreadgroup_call(), timeout=3)
+        with pytest.raises(TimeoutError):
+            run_with_timeout(
+                endless_xreadgroup_call, timeout=3, on_timeout=test_client.close
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -6012,9 +6021,7 @@ class TestCommands:
         )
 
         # attempting to acknowledge a non-existing key returns 0
-        assert (
-            glide_sync_client.xack(non_existing_key, group_name, [stream_id1_0]) == 0
-        )
+        assert glide_sync_client.xack(non_existing_key, group_name, [stream_id1_0]) == 0
         # attempting to acknowledge a non-existing group returns 0
         assert glide_sync_client.xack(key, "non_existing_group", [stream_id1_0]) == 0
         # attempting to acknowledge a non-existing ID returns 0
@@ -6056,12 +6063,10 @@ class TestCommands:
             == OK
         )
         assert (
-            glide_sync_client.xgroup_create_consumer(key, group_name, consumer1)
-            is True
+            glide_sync_client.xgroup_create_consumer(key, group_name, consumer1) is True
         )
         assert (
-            glide_sync_client.xgroup_create_consumer(key, group_name, consumer2)
-            is True
+            glide_sync_client.xgroup_create_consumer(key, group_name, consumer2) is True
         )
 
         # add two stream entries for consumer1
@@ -6166,9 +6171,7 @@ class TestCommands:
 
         # claiming non exists id
         assert (
-            glide_sync_client.xclaim(
-                key, group_name, consumer1, 0, ["1526569498055-0"]
-            )
+            glide_sync_client.xclaim(key, group_name, consumer1, 0, ["1526569498055-0"])
             == {}
         )
 
@@ -6247,7 +6250,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_xpending_edge_cases_and_failures(self, glide_sync_client: TGlideClient):
+    def test_sync_xpending_edge_cases_and_failures(
+        self, glide_sync_client: TGlideClient
+    ):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -6304,9 +6309,7 @@ class TestCommands:
             stream_id1_1.encode(),
             [[consumer.encode(), b"2"]],
         ]
-        result = glide_sync_client.xpending_range(
-            key, group_name, MinId(), MaxId(), 10
-        )
+        result = glide_sync_client.xpending_range(key, group_name, MinId(), MaxId(), 10)
         assert len(result[0]) > 0
 
         # returns empty if + before -
@@ -6368,8 +6371,7 @@ class TestCommands:
             == []
         )
         assert (
-            glide_sync_client.xpending_range(key, group_name, MinId(), MaxId(), 0)
-            == []
+            glide_sync_client.xpending_range(key, group_name, MinId(), MaxId(), 0) == []
         )
 
         # non-positive min-idle-time values are allowed
@@ -6457,9 +6459,7 @@ class TestCommands:
             glide_sync_client.xclaim_just_id(key, group_name, consumer, 1, ["invalid"])
 
         # claim with empty stream entry IDs returns no results
-        empty_claim = glide_sync_client.xclaim_just_id(
-            key, group_name, consumer, 1, []
-        )
+        empty_claim = glide_sync_client.xclaim_just_id(key, group_name, consumer, 1, [])
         assert len(empty_claim) == 0
 
         claim_options = StreamClaimOptions(idle=1)
@@ -6522,7 +6522,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_xautoclaim(self, glide_sync_client: TGlideClient, protocol):
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             version7_or_above = False
         else:
             version7_or_above = True
@@ -6627,7 +6627,7 @@ class TestCommands:
     def test_sync_xautoclaim_edge_cases_and_failures(
         self, glide_sync_client: TGlideClient, protocol
     ):
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             version7_or_above = False
         else:
             version7_or_above = True
@@ -6795,7 +6795,7 @@ class TestCommands:
         assert consumer1_info.get(b"name") == consumer1.encode()
         assert consumer1_info.get(b"pending") == 1
         assert cast(int, consumer1_info.get(b"idle")) > 0
-        if not check_if_server_version_lt(glide_sync_client, "7.2.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
             assert (
                 cast(int, consumer1_info.get(b"inactive"))
                 > 0  # "inactive" was added in Valkey 7.2.0
@@ -6833,7 +6833,7 @@ class TestCommands:
         assert group1_info.get(b"consumers") == 2
         assert group1_info.get(b"pending") == 3
         assert group1_info.get(b"last-delivered-id") == stream_id1_2.encode()
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert (
                 group1_info.get(b"entries-read")
                 == 3  # we have read stream entries 1-0, 1-1, and 1-2
@@ -6854,7 +6854,7 @@ class TestCommands:
         assert group1_info.get(b"pending") == 3
         assert group1_info.get(b"last-delivered-id") == stream_id1_1.encode()
         # entries-read and lag were added to the result in 7.0.0
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert (
                 group1_info.get(b"entries-read")
                 is None  # gets set to None when we change the last delivered ID
@@ -6864,7 +6864,7 @@ class TestCommands:
                 is None  # gets set to None when we change the last delivered ID
             )
 
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             # verify xgroup_set_id with entries_read effects the returned value from xinfo_groups
             assert (
                 glide_sync_client.xgroup_set_id(
@@ -7094,7 +7094,7 @@ class TestCommands:
 
         # reset the last delivered ID for the consumer group to "1-1"
         # ENTRIESREAD is only supported in Valkey version 7.0.0 and above
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert glide_sync_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
         else:
             assert (
@@ -7227,7 +7227,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.bitcount(set_key, OffsetOptions(1, 1))
 
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             # exception thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
                 glide_sync_client.bitcount(
@@ -7269,7 +7269,7 @@ class TestCommands:
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
 
-        if check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             # exception thrown optional end was implemented after 8.0.0
             with pytest.raises(RequestError):
                 glide_sync_client.bitcount(
@@ -7364,7 +7364,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.bitpos(set_key, 1, OffsetOptions(1, -1))
 
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             # error thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
                 glide_sync_client.bitpos(
@@ -7457,9 +7457,7 @@ class TestCommands:
         )
         assert glide_sync_client.get(destination) is None
         assert (
-            glide_sync_client.bitop(
-                BitwiseOperation.OR, destination, non_existing_keys
-            )
+            glide_sync_client.bitop(BitwiseOperation.OR, destination, non_existing_keys)
             == 0
         )
         assert glide_sync_client.get(destination) is None
@@ -7716,7 +7714,7 @@ class TestCommands:
         assert glide_sync_client.object_encoding(string_key) == "embstr".encode()
 
         assert glide_sync_client.lpush(list_key, ["1"]) == 1
-        if check_if_server_version_lt(glide_sync_client, "7.2.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
             assert glide_sync_client.object_encoding(list_key) == "quicklist".encode()
         else:
             assert glide_sync_client.object_encoding(list_key) == "listpack".encode()
@@ -7730,7 +7728,7 @@ class TestCommands:
         assert glide_sync_client.object_encoding(intset_key) == "intset".encode()
 
         assert glide_sync_client.sadd(set_listpack_key, ["foo"]) == 1
-        if check_if_server_version_lt(glide_sync_client, "7.2.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.2.0"):
             assert (
                 glide_sync_client.object_encoding(set_listpack_key)
                 == "hashtable".encode()
@@ -7750,7 +7748,7 @@ class TestCommands:
         )
 
         assert glide_sync_client.hset(hash_listpack_key, {"1": "2"}) == 1
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert (
                 glide_sync_client.object_encoding(hash_listpack_key)
                 == "ziplist".encode()
@@ -7767,7 +7765,7 @@ class TestCommands:
         assert glide_sync_client.object_encoding(skiplist_key) == "skiplist".encode()
 
         assert glide_sync_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
-        if check_if_server_version_lt(glide_sync_client, "7.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
             assert (
                 glide_sync_client.object_encoding(zset_listpack_key)
                 == "ziplist".encode()
@@ -7841,9 +7839,7 @@ class TestCommands:
         assert glide_sync_client.function_load(code) == lib_name.encode()
 
         assert glide_sync_client.fcall(func_name, arguments=["one", "two"]) == b"one"
-        assert (
-            glide_sync_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
-        )
+        assert glide_sync_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
 
         # verify with FUNCTION LIST
         check_function_list_response(
@@ -8027,9 +8023,7 @@ class TestCommands:
         )
 
         no_args_response = glide_sync_client.function_list()
-        wildcard_pattern_response = glide_sync_client.function_list(
-            "*".encode(), False
-        )
+        wildcard_pattern_response = glide_sync_client.function_list("*".encode(), False)
         assert len(no_args_response) == original_functions_count + 1
         assert len(wildcard_pattern_response) == original_functions_count + 1
         check_function_list_response(
@@ -8347,9 +8341,7 @@ class TestCommands:
             {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
             False,
         )
-        assert (
-            glide_sync_client.function_load(code, True) == (lib_name + "_2").encode()
-        )
+        assert glide_sync_client.function_load(code, True) == (lib_name + "_2").encode()
 
         response = glide_sync_client.function_stats()
         for node_response in response.values():
@@ -8392,7 +8384,7 @@ class TestCommands:
 
         def wait_and_function_stats():
             # it can take a few seconds for FCALL to register as running
-            asyncio.sleep(3)
+            time.sleep(3)
             result = test_client2.function_stats()
             running_scripts = False
             for res in result.values():
@@ -8410,10 +8402,14 @@ class TestCommands:
 
             assert running_scripts
 
-        asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_stats(),
-        )
+        thread1 = threading.Thread(target=endless_fcall_route_call)
+        thread2 = threading.Thread(target=wait_and_function_stats)
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
 
         test_client.close()
         test_client2.close()
@@ -8514,7 +8510,7 @@ class TestCommands:
 
         def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            asyncio.sleep(3)
+            time.sleep(3)
             timeout = 0
             while timeout <= 5:
                 # keep trying to kill until we get an "OK"
@@ -8527,12 +8523,16 @@ class TestCommands:
                     # a RequestError may occur if the function is not yet running
                     # sleep and try again
                     timeout += 0.5
-                    asyncio.sleep(0.5)
+                    time.sleep(0.5)
 
-        asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_kill(),
-        )
+        thread1 = threading.Thread(target=endless_fcall_route_call)
+        thread2 = threading.Thread(target=wait_and_function_kill)
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -8566,7 +8566,7 @@ class TestCommands:
 
         def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            asyncio.sleep(3)
+            time.sleep(3)
             timeout = 0
             foundUnkillable = False
             while timeout <= 5:
@@ -8578,14 +8578,19 @@ class TestCommands:
                         foundUnkillable = True
                         break
                 timeout += 0.5
-                asyncio.sleep(0.5)
+                time.sleep(0.5)
             # expect an unkillable error
             assert foundUnkillable
 
-        asyncio.gather(
-            endless_fcall_route_call(),
-            wait_and_function_kill(),
-        )
+        thread1 = threading.Thread(target=endless_fcall_route_call)
+        thread2 = threading.Thread(target=wait_and_function_kill)
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
+
         test_client.close()
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -8604,31 +8609,13 @@ class TestCommands:
         assert glide_sync_client.function_load(code, False, route) == lib_name.encode()
 
         assert (
-            glide_sync_client.fcall(func_name, keys=keys, arguments=[])
-            == key1.encode()
+            glide_sync_client.fcall(func_name, keys=keys, arguments=[]) == key1.encode()
         )
 
         assert (
             glide_sync_client.fcall_ro(func_name, keys=keys, arguments=[])
             == key1.encode()
         )
-
-        batch = ClusterBatch(is_atomic=True)
-
-        batch.fcall(func_name, keys=keys, arguments=[])
-        batch.fcall_ro(func_name, keys=keys, arguments=[])
-
-        # # check response from a routed batch request
-        # result = glide_sync_client.exec(batch, raise_on_error=True, route=route)
-        # assert result is not None
-        # assert result[0] == key1.encode()
-        # assert result[1] == key1.encode()
-
-        # # if no route given, GLIDE should detect it automatically
-        # result = glide_sync_client.exec(batch, raise_on_error=True)
-        # assert result is not None
-        # assert result[0] == key1.encode()
-        # assert result[1] == key1.encode()
 
         assert glide_sync_client.function_flush(FlushMode.SYNC, route) is OK
 
@@ -8682,7 +8669,9 @@ class TestCommands:
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_function_dump_restore_standalone(self, glide_sync_client: GlideClient):
+    def test_sync_function_dump_restore_standalone(
+        self, glide_sync_client: GlideClient
+    ):
         assert glide_sync_client.function_flush(FlushMode.SYNC) is OK
 
         # Dump an empty lib
@@ -8898,7 +8887,7 @@ class TestCommands:
         assert glide_sync_client.dbsize() > 0
         assert glide_sync_client.flushall() == OK
         assert glide_sync_client.flushall(FlushMode.ASYNC) == OK
-        if not check_if_server_version_lt(glide_sync_client, min_version):
+        if not sync_check_if_server_version_lt(glide_sync_client, min_version):
             assert glide_sync_client.flushall(FlushMode.SYNC) == OK
         assert glide_sync_client.dbsize() == 0
 
@@ -8906,7 +8895,7 @@ class TestCommands:
             glide_sync_client.set(key, value)
             assert glide_sync_client.flushall(route=AllPrimaries()) == OK
             assert glide_sync_client.flushall(FlushMode.ASYNC, AllPrimaries()) == OK
-            if not check_if_server_version_lt(glide_sync_client, min_version):
+            if not sync_check_if_server_version_lt(glide_sync_client, min_version):
                 assert glide_sync_client.flushall(FlushMode.SYNC, AllPrimaries()) == OK
             assert glide_sync_client.dbsize() == 0
 
@@ -8939,7 +8928,7 @@ class TestCommands:
         assert glide_sync_client.dbsize() == 0
 
         # verify flush SYNC
-        if not check_if_server_version_lt(glide_sync_client, min_version):
+        if not sync_check_if_server_version_lt(glide_sync_client, min_version):
             glide_sync_client.set(key2, value)
             assert glide_sync_client.dbsize() > 0
             assert glide_sync_client.flushdb(FlushMode.SYNC) == OK
@@ -9138,7 +9127,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_cluster_client_random_key(self, glide_sync_client: GlideClusterClient):
+    def test_sync_cluster_client_random_key(
+        self, glide_sync_client: GlideClusterClient
+    ):
         key = get_random_string(10)
 
         # setup: delete all keys
@@ -9457,81 +9448,93 @@ class TestMultiKeyCommandCrossSlot:
     def test_sync_multi_key_command_returns_cross_slot_error(
         self, glide_sync_client: GlideClusterClient
     ):
-        promises: List[Any] = [
-            glide_sync_client.blpop(["abc", "zxy", "lkn"], 0.1),
-            glide_sync_client.brpop(["abc", "zxy", "lkn"], 0.1),
-            glide_sync_client.rename("abc", "zxy"),
-            glide_sync_client.zdiffstore("abc", ["zxy", "lkn"]),
-            glide_sync_client.zdiff(["abc", "zxy", "lkn"]),
-            glide_sync_client.zdiff_withscores(["abc", "zxy", "lkn"]),
-            glide_sync_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
-            glide_sync_client.zinterstore(
+        sync_commands: List[Any] = [
+            lambda: glide_sync_client.blpop(["abc", "zxy", "lkn"], 0.1),
+            lambda: glide_sync_client.brpop(["abc", "zxy", "lkn"], 0.1),
+            lambda: glide_sync_client.rename("abc", "zxy"),
+            lambda: glide_sync_client.zdiffstore("abc", ["zxy", "lkn"]),
+            lambda: glide_sync_client.zdiff(["abc", "zxy", "lkn"]),
+            lambda: glide_sync_client.zdiff_withscores(["abc", "zxy", "lkn"]),
+            lambda: glide_sync_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+            lambda: glide_sync_client.zinterstore(
                 "{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])
             ),
-            glide_sync_client.zunionstore(
+            lambda: glide_sync_client.zunionstore(
                 "{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])
             ),
-            glide_sync_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
-            glide_sync_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
-            glide_sync_client.smove("abc", "def", "_"),
-            glide_sync_client.sunionstore("abc", ["zxy", "lkn"]),
-            glide_sync_client.sinter(["abc", "zxy", "lkn"]),
-            glide_sync_client.sinterstore("abc", ["zxy", "lkn"]),
-            glide_sync_client.sdiff(["abc", "zxy", "lkn"]),
-            glide_sync_client.sdiffstore("abc", ["def", "ghi"]),
-            glide_sync_client.renamenx("abc", "def"),
-            glide_sync_client.pfcount(["def", "ghi"]),
-            glide_sync_client.pfmerge("abc", ["def", "ghi"]),
-            glide_sync_client.zinter(["def", "ghi"]),
-            glide_sync_client.zinter_withscores(
+            lambda: glide_sync_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
+            lambda: glide_sync_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+            lambda: glide_sync_client.smove("abc", "def", "_"),
+            lambda: glide_sync_client.sunionstore("abc", ["zxy", "lkn"]),
+            lambda: glide_sync_client.sinter(["abc", "zxy", "lkn"]),
+            lambda: glide_sync_client.sinterstore("abc", ["zxy", "lkn"]),
+            lambda: glide_sync_client.sdiff(["abc", "zxy", "lkn"]),
+            lambda: glide_sync_client.sdiffstore("abc", ["def", "ghi"]),
+            lambda: glide_sync_client.renamenx("abc", "def"),
+            lambda: glide_sync_client.pfcount(["def", "ghi"]),
+            lambda: glide_sync_client.pfmerge("abc", ["def", "ghi"]),
+            lambda: glide_sync_client.zinter(["def", "ghi"]),
+            lambda: glide_sync_client.zinter_withscores(
                 cast(Union[List[TEncodable]], ["def", "ghi"])
             ),
-            glide_sync_client.zunion(["def", "ghi"]),
-            glide_sync_client.zunion_withscores(cast(List[TEncodable], ["def", "ghi"])),
-            glide_sync_client.sort_store("abc", "zxy"),
-            glide_sync_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
-            glide_sync_client.blmove(
+            lambda: glide_sync_client.zunion(["def", "ghi"]),
+            lambda: glide_sync_client.zunion_withscores(
+                cast(List[TEncodable], ["def", "ghi"])
+            ),
+            lambda: glide_sync_client.sort_store("abc", "zxy"),
+            lambda: glide_sync_client.lmove(
+                "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT
+            ),
+            lambda: glide_sync_client.blmove(
                 "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
             ),
-            glide_sync_client.msetnx({"abc": "abc", "zxy": "zyx"}),
-            glide_sync_client.sunion(["def", "ghi"]),
-            glide_sync_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
-            glide_sync_client.xread({"abc": "0-0", "zxy": "0-0"}),
+            lambda: glide_sync_client.msetnx({"abc": "abc", "zxy": "zyx"}),
+            lambda: glide_sync_client.sunion(["def", "ghi"]),
+            lambda: glide_sync_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
+            lambda: glide_sync_client.xread({"abc": "0-0", "zxy": "0-0"}),
         ]
 
-        if not check_if_server_version_lt(glide_sync_client, "6.2.0"):
-            promises.extend(
+        if not sync_check_if_server_version_lt(glide_sync_client, "6.2.0"):
+            sync_commands.extend(
                 [
-                    glide_sync_client.geosearchstore(
+                    lambda: glide_sync_client.geosearchstore(
                         "abc",
                         "zxy",
                         GeospatialData(15, 37),
                         GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
                     ),
-                    glide_sync_client.copy("abc", "zxy", replace=True),
+                    lambda: glide_sync_client.copy("abc", "zxy", replace=True),
                 ]
             )
 
-        if not check_if_server_version_lt(glide_sync_client, "7.0.0"):
-            promises.extend(
+        if not sync_check_if_server_version_lt(glide_sync_client, "7.0.0"):
+            sync_commands.extend(
                 [
-                    glide_sync_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
-                    glide_sync_client.zintercard(["abc", "def"]),
-                    glide_sync_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
-                    glide_sync_client.sintercard(["def", "ghi"]),
-                    glide_sync_client.lmpop(["def", "ghi"], ListDirection.LEFT),
-                    glide_sync_client.blmpop(["def", "ghi"], ListDirection.LEFT, 1),
-                    glide_sync_client.lcs("abc", "def"),
-                    glide_sync_client.lcs_len("abc", "def"),
-                    glide_sync_client.lcs_idx("abc", "def"),
-                    glide_sync_client.fcall("func", ["abc", "zxy", "lkn"], []),
-                    glide_sync_client.fcall_ro("func", ["abc", "zxy", "lkn"], []),
+                    lambda: glide_sync_client.bzmpop(
+                        ["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1
+                    ),
+                    lambda: glide_sync_client.zintercard(["abc", "def"]),
+                    lambda: glide_sync_client.zmpop(
+                        ["abc", "zxy", "lkn"], ScoreFilter.MAX
+                    ),
+                    lambda: glide_sync_client.sintercard(["def", "ghi"]),
+                    lambda: glide_sync_client.lmpop(["def", "ghi"], ListDirection.LEFT),
+                    lambda: glide_sync_client.blmpop(
+                        ["def", "ghi"], ListDirection.LEFT, 1
+                    ),
+                    lambda: glide_sync_client.lcs("abc", "def"),
+                    lambda: glide_sync_client.lcs_len("abc", "def"),
+                    lambda: glide_sync_client.lcs_idx("abc", "def"),
+                    lambda: glide_sync_client.fcall("func", ["abc", "zxy", "lkn"], []),
+                    lambda: glide_sync_client.fcall_ro(
+                        "func", ["abc", "zxy", "lkn"], []
+                    ),
                 ]
             )
 
-        for promise in promises:
+        for command in sync_commands:
             with pytest.raises(RequestError) as e:
-                promise
+                command()
             assert "crossslot" in str(e).lower()
 
         # TODO bz*, zunion, sdiff and others - all rest multi-key commands except ones tested below
@@ -9551,111 +9554,6 @@ class TestMultiKeyCommandCrossSlot:
         glide_sync_client.watch(["abc", "zxy", "lkn"])
 
 
-class TestCommandsUnitTests:
-    def test_sync_expiry_cmd_args(self):
-        exp_sec = ExpirySet(ExpiryType.SEC, 5)
-        assert exp_sec.get_cmd_args() == ["EX", "5"]
-
-        exp_sec_timedelta = ExpirySet(ExpiryType.SEC, timedelta(seconds=5))
-        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
-
-        exp_millsec = ExpirySet(ExpiryType.MILLSEC, 5)
-        assert exp_millsec.get_cmd_args() == ["PX", "5"]
-
-        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_unix_sec = ExpirySet(ExpiryType.UNIX_SEC, 1682575739)
-        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
-
-        exp_unix_sec_datetime = ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
-
-        exp_unix_millisec = ExpirySet(ExpiryType.UNIX_MILLSEC, 1682586559964)
-        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
-
-        exp_unix_millisec_datetime = ExpirySet(
-            ExpiryType.UNIX_MILLSEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
-
-    def test_sync_get_expiry_cmd_args(self):
-        exp_sec = ExpiryGetEx(ExpiryTypeGetEx.SEC, 5)
-        assert exp_sec.get_cmd_args() == ["EX", "5"]
-
-        exp_sec_timedelta = ExpiryGetEx(ExpiryTypeGetEx.SEC, timedelta(seconds=5))
-        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
-
-        exp_millsec = ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 5)
-        assert exp_millsec.get_cmd_args() == ["PX", "5"]
-
-        exp_millsec_timedelta = ExpiryGetEx(
-            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
-        )
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_millsec_timedelta = ExpiryGetEx(
-            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
-        )
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_unix_sec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_SEC, 1682575739)
-        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
-
-        exp_unix_sec_datetime = ExpiryGetEx(
-            ExpiryTypeGetEx.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
-
-        exp_unix_millisec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_MILLSEC, 1682586559964)
-        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
-
-        exp_unix_millisec_datetime = ExpiryGetEx(
-            ExpiryTypeGetEx.UNIX_MILLSEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
-
-        exp_persist = ExpiryGetEx(
-            ExpiryTypeGetEx.PERSIST,
-            None,
-        )
-        assert exp_persist.get_cmd_args() == ["PERSIST"]
-
-    def test_sync_expiry_raises_on_value_error(self):
-        with pytest.raises(ValueError):
-            ExpirySet(ExpiryType.SEC, 5.5)
-
-    def test_sync_expiry_equality(self):
-        assert ExpirySet(ExpiryType.SEC, 2) == ExpirySet(ExpiryType.SEC, 2)
-        assert ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        ) == ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-
-        assert not ExpirySet(ExpiryType.SEC, 1) == 1
-
-    def test_sync_is_single_response(self):
-        assert is_single_response("This is a string value", "")
-        assert is_single_response(["value", "value"], [""])
-        assert not is_single_response(
-            [["value", ["value"]], ["value", ["valued"]]], [""]
-        )
-        assert is_single_response(None, None)
-
-
-@pytest.mark.asyncio
 class TestClusterRoutes:
     def cluster_route_custom_command_multi_nodes(
         self,
@@ -9707,9 +9605,7 @@ class TestClusterRoutes:
     def test_sync_cluster_route_custom_command_all_primaries(
         self, glide_sync_client: GlideClusterClient
     ):
-        self.cluster_route_custom_command_multi_nodes(
-            glide_sync_client, AllPrimaries()
-        )
+        self.cluster_route_custom_command_multi_nodes(glide_sync_client, AllPrimaries())
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9846,7 +9742,7 @@ class TestClusterRoutes:
         assert glide_sync_client.flushdb(FlushMode.ASYNC, AllPrimaries()) == OK
         assert glide_sync_client.dbsize() == 0
 
-        if not check_if_server_version_lt(glide_sync_client, min_version):
+        if not sync_check_if_server_version_lt(glide_sync_client, min_version):
             glide_sync_client.set(key, value)
             assert glide_sync_client.dbsize() > 0
             assert glide_sync_client.flushdb(FlushMode.SYNC, AllPrimaries()) == OK
@@ -9872,7 +9768,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             result = glide_sync_client.sscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -9985,7 +9881,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             result = glide_sync_client.zscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -10061,7 +9957,7 @@ class TestClusterRoutes:
         assert len(result[result_collection_index]) >= 0
 
         # Test no_scores option
-        if not check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             result = glide_sync_client.zscan(key1, initial_cursor, no_scores=True)
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
@@ -10111,7 +10007,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             result = glide_sync_client.hscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -10188,7 +10084,7 @@ class TestClusterRoutes:
         assert len(result[result_collection_index]) >= 0
 
         # Test no_values option
-        if not check_if_server_version_lt(glide_sync_client, "8.0.0"):
+        if not sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
             result = glide_sync_client.hscan(key1, initial_cursor, no_values=True)
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
@@ -10208,64 +10104,3 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             glide_sync_client.hscan(key2, initial_cursor, count=-1)
-
-
-def script_kill_tests(
-    glide_sync_client: TGlideClient, test_client: TGlideClient, route: Optional[Route] = None
-):
-    """
-    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
-    respective tests with different test matrices.
-    """
-    # Verify that script_kill raises an error when no script is running
-    with pytest.raises(RequestError) as e:
-        glide_sync_client.script_kill()
-    assert "No scripts in execution right now" in str(e)
-
-    # Create a long-running script
-    long_script = Script(create_long_running_lua_script(10))
-
-    def run_long_script():
-        with pytest.raises(RequestError) as e:
-            if route is not None:
-                test_client.invoke_script_route(long_script, route=route)
-            else:
-                test_client.invoke_script(long_script)
-        assert "Script killed by user" in str(e)
-
-    def wait_and_kill_script():
-        asyncio.sleep(3)  # Give some time for the script to start
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
-            try:
-                if route is not None:
-                    result = cast(GlideClusterClient, glide_sync_client).script_kill(
-                        route=route
-                    )
-                else:
-                    result = glide_sync_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
-            except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.5
-                asyncio.sleep(0.5)
-
-    # Run the long script and kill it
-    asyncio.gather(
-        run_long_script(),
-        wait_and_kill_script(),
-    )
-
-    # Verify that script_kill raises an error when no script is running
-    with pytest.raises(RequestError) as e:
-        if route is not None:
-            cast(GlideClusterClient, glide_sync_client).script_kill(route=route)
-        else:
-            glide_sync_client.script_kill()
-    assert "No scripts in execution right now" in str(e)
-
-    test_client.close()
