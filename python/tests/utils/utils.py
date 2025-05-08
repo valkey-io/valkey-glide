@@ -1,6 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 import random
 import string
+import threading
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
@@ -414,3 +416,18 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
         return await client.custom_command(
             ["ACL", "DELUSER", username], route=AllNodes()
         )
+
+
+def run_with_timeout(func, timeout, on_timeout=None):
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except Exception:
+            if on_timeout:
+                on_timeout()
+            raise TimeoutError("Function did not return within timeout")
+    finally:
+        # Shutdown with cancel_futures=True to prevent hanging
+        executor.shutdown(wait=False, cancel_futures=True)
