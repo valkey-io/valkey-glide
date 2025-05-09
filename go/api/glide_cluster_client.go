@@ -61,7 +61,7 @@ type GlideClusterClient struct {
 //	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
 //	      using the specified username and password.
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
-func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
+func NewGlideClusterClient(ctx context.Context, config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

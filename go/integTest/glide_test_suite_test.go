@@ -156,7 +156,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 			WithUseTLS(suite.tls).
 			WithRequestTimeout(5000)
 
-		client, err := api.NewGlideClient(clientConfig)
+		client, err := api.NewGlideClient(context.TODO(), clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
 			info, _ := client.InfoWithOptions(context.TODO(), options.InfoOptions{Sections: []options.Section{options.Server}})
@@ -175,7 +175,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
 
-	client, err := api.NewGlideClusterClient(clientConfig)
+	client, err := api.NewGlideClusterClient(context.TODO(), clientConfig)
 	if err == nil && client != nil {
 		defer client.Close()
 
@@ -293,7 +293,7 @@ func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
 }
 
 func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) api.GlideClientCommands {
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -315,7 +315,7 @@ func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientComman
 }
 
 func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfiguration) api.GlideClusterClientCommands {
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -333,7 +333,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
 			api.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
-	return api.NewGlideClient(clientConfig)
+	return api.NewGlideClient(context.TODO(), clientConfig)
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
@@ -343,7 +343,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 		WithAdvancedConfiguration(
 			api.NewAdvancedGlideClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
 		WithRequestTimeout(requestTimeout)
-	return api.NewGlideClusterClient(clientConfig)
+	return api.NewGlideClusterClient(context.TODO(), clientConfig)
 }
 
 func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {

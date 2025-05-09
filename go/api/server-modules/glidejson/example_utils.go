@@ -14,7 +14,7 @@ func getExampleGlideClient() *api.GlideClient {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(new(api.NodeAddress)) // use default address
 
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.TODO(), config)
 	if err != nil {
 		fmt.Println("error connecting to database: ", err)
 	}
@@ -32,7 +32,7 @@ func getExampleGlideClusterClient() *api.GlideClusterClient {
 		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7001}).
 		WithRequestTimeout(5000)
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.TODO(), config)
 	if err != nil {
 		fmt.Println("error connecting to database: ", err)
 	}

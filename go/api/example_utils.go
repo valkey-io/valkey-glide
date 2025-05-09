@@ -60,7 +60,7 @@ func getExampleGlideClient() *GlideClient {
 	config := NewGlideClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
-	client, err := NewGlideClient(config)
+	client, err := NewGlideClient(context.TODO(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -85,7 +85,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 		WithAddress(&clusterAddresses[0]).
 		WithRequestTimeout(5000)
 
-	client, err := NewGlideClusterClient(cConfig)
+	client, err := NewGlideClusterClient(context.TODO(), cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -116,7 +116,7 @@ func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPatt
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
-	client, err := NewGlideClient(config)
+	client, err := NewGlideClient(context.TODO(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -144,7 +144,7 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
-	client, err := NewGlideClusterClient(ccConfig)
+	client, err := NewGlideClusterClient(context.TODO(), ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}

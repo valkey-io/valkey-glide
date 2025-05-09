@@ -17,7 +17,7 @@ import (
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -31,7 +31,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 		config.WithAddress(&host)
 	}
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -43,7 +43,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 	config := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -54,7 +54,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&api.NodeAddress{Host: "invalid-host"})
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.TODO(), config)
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)

@@ -58,7 +58,7 @@ type GlideClient struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
-func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
+func NewGlideClient(ctx context.Context, config *GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

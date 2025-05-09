@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
@@ -15,7 +17,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := api.NewGlideClusterClientConfiguration().
 			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClusterClient(config)
+		glideClient, err := api.NewGlideClusterClient(context.TODO(), config)
 		if err != nil {
 			return err
 		}
@@ -26,7 +28,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := api.NewGlideClientConfiguration().
 			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClient(config)
+		glideClient, err := api.NewGlideClient(context.TODO(), config)
 		if err != nil {
 			return err
 		}
