@@ -1,4 +1,4 @@
-.PHONY: all java java-test python python-test node node-test check-redis-server go go-test
+.PHONY: all java java-test python python-test node node-test check-valkey-server go go-test
 
 BLUE=\033[34m
 YELLOW=\033[33m
@@ -22,7 +22,7 @@ java-lint:
 	@echo "$(GREEN)Running spotlessApply$(RESET)"
 	@cd java && ./gradlew :spotlessApply
 
-java-test: check-redis-server
+java-test: check-valkey-server
 	@echo "$(GREEN)Running integration tests$(RESET)"
 	@cd java && ./gradlew :integTest:test
 
@@ -37,7 +37,7 @@ python-lint:
 	@echo "$(GREEN)Running linters via dev.py$(RESET)"
 	@cd python && python3 dev.py lint
 
-python-test: check-redis-server
+python-test: check-valkey-server
 	@echo "$(GREEN)Running Python tests$(RESET)"
 	@cd python && python3 dev.py test
 
@@ -54,7 +54,7 @@ node: .build/node_deps
 	@cd node/rust-client && npm i
 	@mkdir -p .build/ && touch .build/node_deps
 
-node-test: .build/node_deps check-redis-server
+node-test: .build/node_deps check-valkey-server
 	@echo "$(GREEN)Running tests for NodeJS$(RESET)"
 	@cd node && npm run build
 	cd node && npm test
@@ -85,8 +85,8 @@ go-lint: .build/go_deps
 ##
 ## Common targets
 ##
-check-redis-server:
-	which redis-server
+check-valkey-server:
+	which valkey-server || which redis-server
 
 clean:
 	rm -fr .build/
