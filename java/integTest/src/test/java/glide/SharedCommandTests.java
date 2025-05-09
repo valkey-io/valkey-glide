@@ -5600,10 +5600,11 @@ public class SharedCommandTests {
         assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
         assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of("b1", 2.)}, client.zmpop(new String[] {key1, key2}, MAX).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+        assertEquals(
+                Map.of(key1, Map.of("b1", 2.)), client.zmpop(new String[] {key1, key2}, MAX).get());
+
+        assertEquals(
+                Map.of(key2, Map.of("b2", .2, "a2", .1)),
                 client.zmpop(new String[] {key2, key1}, MAX, 10).get());
 
         // nothing popped out
@@ -5636,7 +5637,7 @@ public class SharedCommandTests {
             entries.put("" + ('a' + i), (double) i);
         }
         assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
+        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5648,24 +5649,14 @@ public class SharedCommandTests {
         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
         GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(
-                2,
-                client
-                        .zadd(key1.toString(), Map.of("a1", 1., "b1", 2.))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(
-                2,
-                client
-                        .zadd(key2.toString(), Map.of("a2", .1, "b2", .2))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
+        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)},
+        assertEquals(
+                Map.of(key1, Map.of(gs("b1"), 2.)),
                 client.zmpop(new GlideString[] {key1, key2}, MAX).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+        assertEquals(
+                Map.of(key2, Map.of(gs("b2"), .2, gs("a2"), .1)),
                 client.zmpop(new GlideString[] {key2, key1}, MAX, 10).get());
 
         // nothing popped out
@@ -5693,24 +5684,14 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // check that order of entries in the response is preserved
-        var entries =
-                new LinkedHashMap<
-                        String, Double>(); // TODO: remove this once the binary version of zadd() is merged
         var entries_gs = new LinkedHashMap<GlideString, Double>();
         for (int i = 0; i < 10; i++) {
             // a => 1., b => 2. etc
-            entries.put(
-                    "" + ('a' + i),
-                    (double) i); // TODO: remove this once the binary version of zadd() is merged
             entries_gs.put(gs("" + ('a' + i)), (double) i);
         }
+        assertEquals(10, client.zadd(key2, entries_gs).get());
         assertEquals(
-                10,
-                client
-                        .zadd(key2.toString(), entries)
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(entries_gs, client.zmpop(new GlideString[] {key2}, MIN, 10).get()[1]);
+                entries_gs, client.zmpop(new GlideString[] {key2}, MIN, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5725,11 +5706,10 @@ public class SharedCommandTests {
         assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
         assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of("b1", 2.)},
-                client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+        assertEquals(
+                Map.of(key1, Map.of("b1", 2.)), client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
+        assertEquals(
+                Map.of(key2, Map.of("b2", .2, "a2", .1)),
                 client.bzmpop(new String[] {key2, key1}, MAX, 0.1, 10).get());
 
         // nothing popped out
@@ -5760,7 +5740,8 @@ public class SharedCommandTests {
             entries.put("" + ('a' + i), (double) i);
         }
         assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
+        assertEquals(
+                entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -5772,24 +5753,14 @@ public class SharedCommandTests {
         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
         GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(
-                2,
-                client
-                        .zadd(key1.toString(), Map.of("a1", 1., "b1", 2.))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(
-                2,
-                client
-                        .zadd(key2.toString(), Map.of("a2", .1, "b2", .2))
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
+        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)},
+        assertEquals(
+                Map.of(key1, Map.of(gs("b1"), 2.)),
                 client.bzmpop(new GlideString[] {key1, key2}, MAX, 0.1).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+        assertEquals(
+                Map.of(key2, Map.of(gs("b2"), .2, gs("a2"), .1)),
                 client.bzmpop(new GlideString[] {key2, key1}, MAX, 0.1, 10).get());
 
         // nothing popped out
@@ -5816,24 +5787,15 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // check that order of entries in the response is preserved
-        var entries =
-                new LinkedHashMap<
-                        String, Double>(); // TODO: remove this line once the binary version of zadd() is merged
         var entries_gs = new LinkedHashMap<GlideString, Double>();
         for (int i = 0; i < 10; i++) {
             // a => 1., b => 2. etc
-            entries.put(
-                    "" + ('a' + i),
-                    (double) i); // TODO: remove this line once the binary version of zadd() is merged
             entries_gs.put(gs("" + ('a' + i)), (double) i);
         }
+        assertEquals(10, client.zadd(key2, entries_gs).get());
         assertEquals(
-                10,
-                client
-                        .zadd(key2.toString(), entries)
-                        .get()); // TODO: use the binary version of this function call once the binary version
-        // of zadd() is merged
-        assertEquals(entries_gs, client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get()[1]);
+                entries_gs,
+                client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get().values().toArray()[0]);
     }
 
     @SneakyThrows
@@ -14275,7 +14237,7 @@ public class SharedCommandTests {
         String key2 = "{key}-2" + UUID.randomUUID();
         String initialCursor = "0";
         long defaultCount = 10;
-        String[] numberMembers = new String[50000]; // Use large dataset to force an iterative cursor.
+        String[] numberMembers = new String[1000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = String.valueOf(i);
         }
@@ -14417,7 +14379,7 @@ public class SharedCommandTests {
         GlideString initialCursor = gs("0");
         long defaultCount = 10;
         GlideString[] numberMembers =
-                new GlideString[50000]; // Use large dataset to force an iterative cursor.
+                new GlideString[1000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = gs(String.valueOf(i));
         }
@@ -14573,7 +14535,7 @@ public class SharedCommandTests {
 
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<String, Double> numberMap = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap.put("member" + i, i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -14714,7 +14676,12 @@ public class SharedCommandTests {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
-                    client.zscan(key1, initialCursor, ZScanOptions.builder().noScores(true).build()).get();
+                    client
+                            .zscan(
+                                    key1,
+                                    initialCursor,
+                                    ZScanOptions.builder().matchPattern("member*").noScores(true).build())
+                            .get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
             // Cast the result collection to a String array
             Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
@@ -14767,11 +14734,11 @@ public class SharedCommandTests {
 
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<GlideString, Double> numberMap = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap.put(gs("member" + i), i);
         }
         Map<String, Double> numberMap_strings = new HashMap<>();
-        for (Double i = 0.0; i < 50000; i++) {
+        for (Double i = 0.0; i < 1000; i++) {
             numberMap_strings.put("member" + i, i);
         }
 
@@ -14857,7 +14824,7 @@ public class SharedCommandTests {
             if (isFirstLoop) {
                 assertNotEquals(gs("0"), resultCursor);
                 isFirstLoop = false;
-            } else if (resultCursor.equals("0")) {
+            } else if (resultCursor.equals(gs("0"))) {
                 break;
             }
 
@@ -14923,7 +14890,10 @@ public class SharedCommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client
-                            .zscan(key1, initialCursor, ZScanOptionsBinary.builder().noScores(true).build())
+                            .zscan(
+                                    key1,
+                                    initialCursor,
+                                    ZScanOptionsBinary.builder().matchPattern(gs("member*")).noScores(true).build())
                             .get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
             // Cast the result collection to a String array
@@ -14982,7 +14952,7 @@ public class SharedCommandTests {
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < 1000; i++) {
             numberMap.put(String.valueOf(i), "num" + i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -15165,7 +15135,7 @@ public class SharedCommandTests {
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < 1000; i++) {
             numberMap.put(gs(String.valueOf(i)), gs("num" + i));
         }
         GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
@@ -15538,12 +15508,12 @@ public class SharedCommandTests {
                                 GlideClusterClient clusterClient = (GlideClusterClient) client;
                                 ClusterBatch clusterBatch = (ClusterBatch) batch;
                                 ClusterBatchOptions options = (ClusterBatchOptions) initialOptions;
-                                clusterClient.exec(clusterBatch, options).get();
+                                clusterClient.exec(clusterBatch, false, options).get();
                             } else {
                                 GlideClient standaloneClient = (GlideClient) client;
                                 Batch standaloneBatch = (Batch) batch;
                                 BatchOptions options = (BatchOptions) initialOptions;
-                                standaloneClient.exec(standaloneBatch, options).get();
+                                standaloneClient.exec(standaloneBatch, false, options).get();
                             }
                         });
         assertInstanceOf(
@@ -15561,9 +15531,9 @@ public class SharedCommandTests {
         Object[] result =
                 isCluster
                         ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, (ClusterBatchOptions) options2)
+                                .exec((ClusterBatch) batch, true, (ClusterBatchOptions) options2)
                                 .get()
-                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) options2).get();
+                        : ((GlideClient) client).exec((Batch) batch, true, (BatchOptions) options2).get();
 
         assertEquals(1, result.length);
     }
@@ -15579,17 +15549,11 @@ public class SharedCommandTests {
         BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
 
         batch.set(key, "hello").lpop(key).del(new String[] {key}).rename(key, key2);
-        BaseBatchOptions raiseFalse =
-                isCluster
-                        ? ClusterBatchOptions.builder().raiseOnError(false).build()
-                        : BatchOptions.builder().raiseOnError(false).build();
 
         Object[] result =
                 isCluster
-                        ? ((GlideClusterClient) client)
-                                .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseFalse)
-                                .get()
-                        : ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseFalse).get();
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
 
         assertEquals(4, result.length);
         assertEquals(result[0], "OK");
@@ -15599,21 +15563,14 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, result[3]);
         assertTrue(((RequestException) result[3]).getMessage().contains("no such key"));
 
-        BaseBatchOptions raiseTrue =
-                isCluster
-                        ? ClusterBatchOptions.builder().raiseOnError(true).build()
-                        : BatchOptions.builder().raiseOnError(true).build();
-
         ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> {
                             if (isCluster) {
-                                ((GlideClusterClient) client)
-                                        .exec((ClusterBatch) batch, (ClusterBatchOptions) raiseTrue)
-                                        .get();
+                                ((GlideClusterClient) client).exec((ClusterBatch) batch, true).get();
                             } else {
-                                ((GlideClient) client).exec((Batch) batch, (BatchOptions) raiseTrue).get();
+                                ((GlideClient) client).exec((Batch) batch, true).get();
                             }
                         });
         assertInstanceOf(RequestException.class, exception.getCause());

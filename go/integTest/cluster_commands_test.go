@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -32,6 +34,38 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	assert.Nil(suite.T(), err)
 	// ECHO is routed to a single random node
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandDbSize() {
+	client := suite.defaultClusterClient()
+	// DBSIZE result is always a single number regardless of route
+	result, err := client.CustomCommand([]string{"dbsize"})
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+
+	result, err = client.CustomCommandWithRoute([]string{"dbsize"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.GreaterOrEqual(suite.T(), result.SingleValue().(int64), int64(0))
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandConfigGet() {
+	client := suite.defaultClusterClient()
+
+	// CONFIG GET returns a map, but with a single node route it is handled as a single value
+	result, err := client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.RandomRoute)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.SingleValue().(map[string]any)), 0)
+
+	result, err = client.CustomCommandWithRoute([]string{"CONFIG", "GET", "*file"}, config.AllPrimaries)
+	assert.NoError(suite.T(), err)
+	assert.Greater(suite.T(), len(result.MultiValue()), 0)
+	for _, val := range result.MultiValue() {
+		assert.Greater(suite.T(), len(val.(map[string]any)), 0)
+	}
 }
 
 func (suite *GlideTestSuite) TestInfoCluster() {
@@ -1489,6 +1523,26 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 		}
 	}
 
+	// Test FunctionList with WithCode and query for all libraries
+	query := api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err := client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.True(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	lib := functionList.SingleValue()[0]
+	assert.Equal(t, libName, lib.Name)
+	assert.Equal(t, "LUA", lib.Engine)
+	assert.Contains(t, lib.Code, libName)
+
+	assert.Len(t, lib.Functions, 1)
+	funcInfo := lib.Functions[0]
+	assert.Equal(t, funcName, funcInfo.Name)
+	assert.Empty(t, funcInfo.Description)
+	assert.Contains(t, funcInfo.Flags, "no-writes")
+
 	// load new lib and delete it with single node route - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
 	result, err = client.FunctionLoadWithRoute(anotherLib, true, route)
@@ -1542,6 +1596,26 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 		for _, value := range functionResult.MultiValue() {
 			assert.Equal(t, "one", value)
 		}
+	}
+
+	// Test FunctionList with WithCode and query for all libraries
+	functionList, err = client.FunctionListWithRoute(query, route)
+	assert.NoError(t, err)
+	assert.False(t, functionList.IsSingleValue())
+
+	// Check results from each node
+	for _, libs := range functionList.MultiValue() {
+		assert.Len(t, libs, 1)
+		libInfo := libs[0]
+		assert.Equal(t, libName, libInfo.Name)
+		assert.Equal(t, "LUA", libInfo.Engine)
+		assert.Contains(t, libInfo.Code, libName)
+
+		assert.Len(t, libInfo.Functions, 1)
+		funcInfo := libInfo.Functions[0]
+		assert.Equal(t, funcName, funcInfo.Name)
+		assert.Empty(t, funcInfo.Description)
+		assert.Contains(t, funcInfo.Flags, "no-writes")
 	}
 
 	// load new lib and delete it with all primaries route - first lib remains loaded
@@ -1821,4 +1895,248 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].LibraryCount)
 	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// Flush before setup
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing loaded, nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKillNoWrite(false)
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKillNoWrite(true)
+}
+
+func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	libName := "functionKill_no_write"
+	funcName := "deadlock"
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, true)
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Flush all functions with route
+	var result string
+	var err error
+	if withRoute {
+		result, err = client.FunctionFlushSyncWithRoute(route)
+	} else {
+		result, err = client.FunctionFlushSync()
+	}
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	if withRoute {
+		_, err = client.FunctionKillWithRoute(route)
+	} else {
+		_, err = client.FunctionKill()
+	}
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	if withRoute {
+		result, err = client.FunctionLoadWithRoute(code, true, route)
+	} else {
+		result, err = client.FunctionLoad(code, true)
+	}
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testClient := suite.clusterClient(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	checkInterval := 100 * time.Millisecond
+	if withRoute {
+		checkInterval = 500 * time.Millisecond
+	}
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(checkInterval)
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				if withRoute {
+					result, err = client.FunctionKillWithRoute(route)
+				} else {
+					result, err = client.FunctionKill()
+				}
+				if err == nil {
+					// successful kill
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function - blocking until killed and return a script kill error
+	if withRoute {
+		_, err = testClient.FCallWithRoute(funcName, route)
+	} else {
+		_, err = testClient.FCall(funcName)
+	}
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+
+	// Wait for function kill to return not busy
+	notBusyTimeout := time.After(2 * time.Second)
+	notBusyTicker := time.NewTicker(100 * time.Millisecond)
+	defer notBusyTicker.Stop()
+
+	for {
+		select {
+		case <-notBusyTimeout:
+			suite.T().Fatal("Timed out waiting for function to be not busy")
+			return
+		case <-notBusyTicker.C:
+			if withRoute {
+				_, err = client.FunctionKillWithRoute(route)
+			} else {
+				_, err = client.FunctionKill()
+			}
+			if err != nil && strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				return
+			}
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClusterClient()
+	libName := "functionKill_key_based_write_function"
+	funcName := "deadlock_write_function_with_key_based_route"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, false)
+
+	// Create route using the key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Flush all functions with route
+	result, err := client.FunctionFlushSyncWithRoute(route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKillWithRoute(route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoadWithRoute(code, true, route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testClient := suite.clusterClient(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when unkillable error is found
+	unkillable := make(chan bool)
+
+	// Start a goroutine to attempt killing the function
+	go func() {
+		defer close(unkillable)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(500 * time.Millisecond) // 500ms interval
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				unkillable <- false
+				return
+			case <-killTicker.C:
+				_, err = client.FunctionKillWithRoute(route)
+				// Look for unkillable error
+				if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+					unkillable <- true
+					return
+				}
+			}
+		}
+	}()
+
+	// Call the function with the key - this will block until completion
+	testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	// Function completed as expected
+
+	// Wait for unkillable confirmation
+	foundUnkillable := <-unkillable
+	assert.True(suite.T(), foundUnkillable, "Function should be unkillable")
 }

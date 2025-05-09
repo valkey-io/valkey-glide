@@ -1,20 +1,23 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use std::{
-    ffi::{c_char, c_void, CStr},
+    ffi::{CStr, c_char},
     slice::from_raw_parts,
 };
 
-use glide_core::client::{
-    AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
-    ReadFrom as coreReadFrom, TlsMode,
+use glide_core::{
+    client::{
+        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
+        ReadFrom as coreReadFrom, TlsMode,
+    },
+    request_type::RequestType,
 };
 use redis::{
+    Cmd, Pipeline, PipelineRetryStrategy, Value,
     cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
     },
-    Cmd, Value,
 };
 
 /// Convert raw C string to a rust string.
@@ -45,6 +48,7 @@ unsafe fn ptr_to_opt_str(ptr: *const c_char) -> Option<String> {
 
 /// A mirror of [`ConnectionRequest`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct ConnectionConfig {
     pub address_count: usize,
     /// Pointer to an array.
@@ -81,64 +85,65 @@ pub struct ConnectionConfig {
 ///
 /// # Safety
 ///
-/// * `config` must not be `null`.
-/// * `config` must be a valid pointer to a [`ConnectionConfig`] struct.
+/// * `config_ptr` must not be `null`.
+/// * `config_ptr` must be a valid pointer to a [`ConnectionConfig`] struct.
 /// * Dereferenced [`ConnectionConfig`] struct and all nested structs must contain valid pointers.
 ///   See the safety documentation of [`convert_node_addresses`], [`ptr_to_str`] and [`ptr_to_opt_str`].
 pub(crate) unsafe fn create_connection_request(
-    config: *const ConnectionConfig,
+    config_ptr: *const ConnectionConfig,
 ) -> ConnectionRequest {
+    let config = unsafe { *config_ptr };
     ConnectionRequest {
-        read_from: if (*config).has_read_from {
-            Some(match (*config).read_from.strategy {
+        read_from: if config.has_read_from {
+            Some(match config.read_from.strategy {
                 ReadFromStrategy::Primary => coreReadFrom::Primary,
                 ReadFromStrategy::PreferReplica => coreReadFrom::PreferReplica,
                 ReadFromStrategy::AZAffinity => {
-                    coreReadFrom::AZAffinity(unsafe { ptr_to_str((*config).read_from.az) })
+                    coreReadFrom::AZAffinity(unsafe { ptr_to_str(config.read_from.az) })
                 }
                 ReadFromStrategy::AZAffinityReplicasAndPrimary => {
                     coreReadFrom::AZAffinityReplicasAndPrimary(unsafe {
-                        ptr_to_str((*config).read_from.az)
+                        ptr_to_str(config.read_from.az)
                     })
                 }
             })
         } else {
             None
         },
-        client_name: unsafe { ptr_to_opt_str((*config).client_name) },
-        authentication_info: if (*config).has_authentication_info {
+        client_name: unsafe { ptr_to_opt_str(config.client_name) },
+        authentication_info: if config.has_authentication_info {
             Some(AuthenticationInfo {
-                username: unsafe { ptr_to_opt_str((*config).authentication_info.username) },
-                password: unsafe { ptr_to_opt_str((*config).authentication_info.password) },
+                username: unsafe { ptr_to_opt_str(config.authentication_info.username) },
+                password: unsafe { ptr_to_opt_str(config.authentication_info.password) },
             })
         } else {
             None
         },
-        database_id: (*config).database_id.into(),
-        protocol: if (*config).has_protocol {
-            Some((*config).protocol)
+        database_id: config.database_id.into(),
+        protocol: if config.has_protocol {
+            Some(config.protocol)
         } else {
             None
         },
-        tls_mode: if (*config).has_tls {
-            Some((*config).tls_mode)
+        tls_mode: if config.has_tls {
+            Some(config.tls_mode)
         } else {
             None
         },
-        addresses: unsafe { convert_node_addresses((*config).addresses, (*config).address_count) },
-        cluster_mode_enabled: (*config).cluster_mode,
-        request_timeout: if (*config).has_request_timeout {
-            Some((*config).request_timeout)
+        addresses: unsafe { convert_node_addresses(config.addresses, config.address_count) },
+        cluster_mode_enabled: config.cluster_mode,
+        request_timeout: if config.has_request_timeout {
+            Some(config.request_timeout)
         } else {
             None
         },
-        connection_timeout: if (*config).has_connection_timeout {
-            Some((*config).connection_timeout)
+        connection_timeout: if config.has_connection_timeout {
+            Some(config.connection_timeout)
         } else {
             None
         },
-        connection_retry_strategy: if (*config).has_connection_retry_strategy {
-            Some((*config).connection_retry_strategy)
+        connection_retry_strategy: if config.has_connection_retry_strategy {
+            Some(config.connection_retry_strategy)
         } else {
             None
         },
@@ -184,12 +189,14 @@ unsafe fn convert_node_addresses(data: *const *const Address, len: usize) -> Vec
 
 /// A mirror of [`coreReadFrom`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct ReadFrom {
     pub strategy: ReadFromStrategy,
     pub az: *const c_char,
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub enum ReadFromStrategy {
     Primary,
     PreferReplica,
@@ -199,6 +206,7 @@ pub enum ReadFromStrategy {
 
 /// A mirror of [`AuthenticationInfo`] adopted for FFI.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct Credentials {
     /// zero pointer is valid, means no username is given (`None`)
     pub username: *const c_char,
@@ -256,39 +264,42 @@ pub struct RouteInfo {
 /// Convert route configuration to a corresponding object.
 ///
 /// # Safety
-///
-/// * `route_info` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
+/// * `route_ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
 /// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
 ///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
-pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Option<RoutingInfo> {
-    if route_info.is_null() {
+pub(crate) unsafe fn create_route(
+    route_ptr: *const RouteInfo,
+    cmd: Option<&Cmd>,
+) -> Option<RoutingInfo> {
+    if route_ptr.is_null() {
         return None;
     }
-    match (*route_info).route_type {
+    let route = unsafe { *route_ptr };
+    match route.route_type {
         RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
         RouteType::AllNodes => Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
-            ResponsePolicy::for_command(&cmd.command().unwrap()),
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
         ))),
         RouteType::AllPrimaries => Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllMasters,
-            ResponsePolicy::for_command(&cmd.command().unwrap()),
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
         ))),
         RouteType::SlotId => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
-                (*route_info).slot_id as u16,
-                (&(*route_info).slot_type).into(),
+                route.slot_id as u16,
+                (&route.slot_type).into(),
             )),
         )),
         RouteType::SlotKey => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
-                redis::cluster_topology::get_slot(ptr_to_str((*route_info).slot_key).as_bytes()),
-                (&(*route_info).slot_type).into(),
+                redis::cluster_topology::get_slot(unsafe { ptr_to_str(route.slot_key) }.as_bytes()),
+                (&route.slot_type).into(),
             )),
         )),
         RouteType::ByAddress => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-            host: ptr_to_str((*route_info).hostname),
-            port: (*route_info).port as u16,
+            host: unsafe { ptr_to_str(route.hostname) },
+            port: route.port as u16,
         })),
     }
 }
@@ -304,15 +315,15 @@ pub(crate) unsafe fn create_route(route_info: *const RouteInfo, cmd: &Cmd) -> Op
 ///   See the safety documentation of [`from_raw_parts`].
 /// * The caller is responsible of freeing the allocated memory.
 pub(crate) unsafe fn convert_double_pointer_to_vec<'a>(
-    data: *const *const c_void,
-    len: u32,
-    data_len: *const u32,
+    data: *const *const u8,
+    len: usize,
+    data_len: *const usize,
 ) -> Vec<&'a [u8]> {
-    let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
-    let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
-    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
+    let string_ptrs = unsafe { from_raw_parts(data, len) };
+    let string_lengths = unsafe { from_raw_parts(data_len, len) };
+    let mut result = Vec::with_capacity(string_ptrs.len());
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
-        let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
+        let slice = unsafe { from_raw_parts(str_ptr, string_lengths[i]) };
         result.push(slice);
     }
     result
@@ -340,6 +351,7 @@ pub enum ValueType {
     Set = 7,
     BulkString = 8,
     OK = 9,
+    Error = 10,
 }
 
 /// Represents FFI-safe variant of [`Value`].
@@ -375,7 +387,7 @@ impl ResponseValue {
                 size: 0,
             },
             Value::BulkString(text) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(text.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(text);
                 ResponseValue {
                     typ: ValueType::BulkString,
                     val: vec_ptr as i64,
@@ -385,7 +397,7 @@ impl ResponseValue {
             Value::Array(values) => {
                 let vec: Vec<ResponseValue> =
                     values.into_iter().map(ResponseValue::from_value).collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Array,
                     val: vec_ptr as i64,
@@ -395,7 +407,7 @@ impl ResponseValue {
             Value::Set(values) => {
                 let vec: Vec<ResponseValue> =
                     values.into_iter().map(ResponseValue::from_value).collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Set,
                     val: vec_ptr as i64,
@@ -413,7 +425,7 @@ impl ResponseValue {
                         vec![ResponseValue::from_value(k), ResponseValue::from_value(v)]
                     })
                     .collect();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec.clone());
+                let (vec_ptr, len) = convert_vec_to_pointer(vec);
                 ResponseValue {
                     typ: ValueType::Map,
                     val: vec_ptr as i64,
@@ -431,9 +443,18 @@ impl ResponseValue {
                 size: 0,
             },
             Value::VerbatimString { format: _, text } | Value::SimpleString(text) => {
-                let (vec_ptr, len) = convert_vec_to_pointer(text.clone().into_bytes());
+                let (vec_ptr, len) = convert_vec_to_pointer(text.into_bytes());
                 ResponseValue {
                     typ: ValueType::String,
+                    val: vec_ptr as i64,
+                    size: len as u32,
+                }
+            }
+            Value::ServerError(err) => {
+                let (vec_ptr, len) =
+                    convert_vec_to_pointer(err.details().unwrap().as_bytes().to_vec());
+                ResponseValue {
+                    typ: ValueType::Error,
                     val: vec_ptr as i64,
                     size: len as u32,
                 }
@@ -462,7 +483,7 @@ impl ResponseValue {
                     unsafe { val.free_memory() };
                 }
             }
-            ValueType::String | ValueType::BulkString => {
+            ValueType::String | ValueType::BulkString | ValueType::Error => {
                 let _ = unsafe {
                     Vec::from_raw_parts(self.val as *mut u8, self.size as usize, self.size as usize)
                 };
@@ -470,4 +491,106 @@ impl ResponseValue {
             _ => (),
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct CmdInfo {
+    pub request_type: RequestType,
+    pub args: *const *const u8,
+    pub arg_count: usize,
+    pub args_len: *const usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchInfo {
+    pub cmd_count: usize,
+    pub cmds: *const *const CmdInfo,
+    pub is_atomic: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchOptionsInfo {
+    // two params from PipelineRetryStrategy
+    pub retry_server_error: bool,
+    pub retry_connection_error: bool,
+    pub has_timeout: bool,
+    pub timeout: u32,
+    pub route_info: *const RouteInfo,
+}
+
+/// Convert [`CmdInfo`] to a [`Cmd`].
+///
+/// # Safety
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]
+/// * `args` and `args_len` in a referred [`CmdInfo`] structure must not be `null`.
+/// * `data` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string pointers.
+/// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
+pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
+    let info = unsafe { *ptr };
+    let arg_vec =
+        unsafe { convert_double_pointer_to_vec(info.args, info.arg_count, info.args_len) };
+
+    let Some(mut cmd) = info.request_type.get_command() else {
+        return Err("Couldn't fetch command type".into());
+    };
+    for command_arg in arg_vec {
+        cmd.arg(command_arg);
+    }
+    Ok(cmd)
+}
+
+/// Convert [`BatchInfo`] to a [`Pipeline`].
+///
+/// # Safety
+/// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
+/// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
+/// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
+///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+/// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
+/// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
+pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
+    let info = unsafe { *ptr };
+    let cmd_pointers = unsafe { from_raw_parts(info.cmds, info.cmd_count) };
+    let mut pipeline = Pipeline::with_capacity(info.cmd_count);
+    for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
+        match unsafe { create_cmd(*cmd_ptr) } {
+            Ok(cmd) => pipeline.add_command(cmd),
+            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+        };
+    }
+    if info.is_atomic {
+        pipeline.atomic();
+    }
+
+    Ok(pipeline)
+}
+
+/// Convert [`BatchOptionsInfo`] to a tuple of corresponding values.
+///
+/// # Safety
+/// * `ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`BatchOptionsInfo`] struct.
+/// * `route_info` in dereferenced [`BatchOptionsInfo`] struct must contain a [`RouteInfo`] pointer.
+///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
+pub(crate) unsafe fn get_pipeline_options(
+    ptr: *const BatchOptionsInfo,
+) -> (Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy) {
+    if ptr.is_null() {
+        return (None, None, PipelineRetryStrategy::new(false, false));
+    }
+    let info = unsafe { *ptr };
+    let timeout = if info.has_timeout {
+        Some(info.timeout)
+    } else {
+        None
+    };
+    let route = unsafe { create_route(info.route_info, None) };
+
+    (
+        route,
+        timeout,
+        PipelineRetryStrategy::new(info.retry_server_error, info.retry_connection_error),
+    )
 }

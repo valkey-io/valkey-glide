@@ -94,22 +94,13 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            # As per https://github.com/actions/setup-dotnet/issues/608, it is nice to have (but mandatory for mac runners)
-            - name: Create global.json
-              run: |
-                  cat << EOF > global.json
-                  {
-                     "sdk": {
-                         "rollForward": "latestFeature",
-                         "version": "${{ matrix.dotnet }}.0"
-                     }
-                  }
-                  EOF
-
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: ${{ matrix.dotnet }}
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
               env:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
@@ -120,13 +111,6 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
-
-            # Older dotnet fails if sees a references to a newer one
-            - name: Patch project files
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.host.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  find {benchmarks,csharp} -name '*.csproj' | xargs \
-                      sed -i $SED_FOR_MACOS "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - uses: actions/cache@v4
               with:
@@ -141,6 +125,7 @@ jobs:
               run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ contains(matrix.host.RUNNER, 'ubuntu') }}
               with:
                   language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
 
@@ -199,7 +184,10 @@ jobs:
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: ${{ matrix.dotnet }}
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -208,12 +196,6 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
-
-            # Older dotnet fails if sees a references to a newer one
-            - name: Patch project files
-              run: |
-                  find {benchmarks,csharp} -name '*.csproj' | xargs \
-                      sed -i "s|<TargetFrameworks>.*</TargetFrameworks>|<TargetFrameworks>net${{ matrix.dotnet }}</TargetFrameworks>|g"
 
             - uses: actions/cache@v4
               with:
@@ -248,8 +230,16 @@ jobs:
                   cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
+
             - name: Format
               working-directory: csharp
               run: |
                   dotnet format --verify-no-changes --verbosity diagnostic
-                  dotnet build --configuration Lint
+                  dotnet build --configuration Lint --framework net6.0

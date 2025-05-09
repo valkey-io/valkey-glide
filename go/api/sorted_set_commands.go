@@ -47,7 +47,17 @@ type SortedSetCommands interface {
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
+	BZPopMax(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+
+	ZMPop(keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
+
+	ZMPopWithOptions(
+		keys []string,
+		scoreFilter options.ScoreFilter,
+		opts options.ZPopOptions,
+	) (Result[KeyWithArrayOfMembersAndScores], error)
+
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
 
 	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 
@@ -75,7 +85,7 @@ type SortedSetCommands interface {
 
 	ZDiff(keys []string) ([]string, error)
 
-	ZDiffWithScores(keys []string) (map[string]float64, error)
+	ZDiffWithScores(keys []string) ([]MemberAndScore, error)
 
 	ZRandMember(key string) (Result[string], error)
 
@@ -89,7 +99,7 @@ type SortedSetCommands interface {
 
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) (map[string]float64, error)
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]MemberAndScore, error)
 
 	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
@@ -101,7 +111,7 @@ type SortedSetCommands interface {
 
 	ZUnion(keys options.KeyArray) ([]string, error)
 
-	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) (map[string]float64, error)
+	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]MemberAndScore, error)
 
 	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 

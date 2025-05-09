@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::errors::error_message;
 use glide_core::Telemetry;
 use redis::GlideConnectionOptions;
 
@@ -25,7 +26,6 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;
-use std::str;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -277,11 +277,13 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
         }
-        Value::ServerError(_) => Err(Error::new(
-            // TODO: add ServerError support
-            Status::GenericFailure,
-            "ServerError is not supported",
-        )),
+        Value::ServerError(error) => {
+            let err_msg = error_message(&error.into());
+            let err = Error::new(Status::Ok, err_msg);
+            let mut js_error = js_env.create_error(err)?;
+            js_error.set_named_property("name", "RequestError")?;
+            Ok(js_error.into_unknown())
+        }
     }
 }
 

@@ -466,11 +466,11 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(false), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch);
+        CompletableFuture<Object[]> response = service.exec(batch, false);
         Object[] payload = response.get();
 
         // verify
@@ -485,17 +485,18 @@ public class GlideClientTest {
         // setup
         Object[] value = new Object[] {"PONG", "PONG"};
         Batch batch = new Batch(isAtomic).ping().ping();
-        BatchOptions options = BatchOptions.builder().raiseOnError(true).timeout(1000).build();
+        BatchOptions options = BatchOptions.builder().timeout(1000).build();
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+        when(commandManager.<Object[]>submitNewBatch(
+                        eq(batch), eq(false), eq(Optional.of(options)), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch, options);
+        CompletableFuture<Object[]> response = service.exec(batch, false, options);
         Object[] payload = response.get();
 
         // verify
@@ -4633,22 +4634,22 @@ public class GlideClientTest {
         String[] keys = new String[] {"key1", "key2"};
         ScoreFilter modifier = MAX;
         String[] arguments = {"2", "key1", "key2", "MAX"};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<String, Object> value = Map.of("key1", "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(ZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.zmpop(keys, modifier);
-        Object[] payload = response.get();
+        CompletableFuture<Map<String, Object>> response = service.zmpop(keys, modifier);
+        Map<String, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4658,22 +4659,22 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         ScoreFilter modifier = MAX;
         GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX")};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(eq(ZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.zmpop(keys, modifier);
-        Object[] payload = response.get();
+        CompletableFuture<Map<GlideString, Object>> response = service.zmpop(keys, modifier);
+        Map<GlideString, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4684,22 +4685,22 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"2", "key1", "key2", "MAX", "COUNT", "42"};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<String, Object> value = Map.of("key1", "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(ZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.zmpop(keys, modifier, count);
-        Object[] payload = response.get();
+        CompletableFuture<Map<String, Object>> response = service.zmpop(keys, modifier, count);
+        Map<String, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4710,22 +4711,22 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(eq(ZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.zmpop(keys, modifier, count);
-        Object[] payload = response.get();
+        CompletableFuture<Map<GlideString, Object>> response = service.zmpop(keys, modifier, count);
+        Map<GlideString, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4736,22 +4737,22 @@ public class GlideClientTest {
         String[] keys = new String[] {"key1", "key2"};
         ScoreFilter modifier = MAX;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX"};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<String, Object> value = Map.of("key1", "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout);
-        Object[] payload = response.get();
+        CompletableFuture<Map<String, Object>> response = service.bzmpop(keys, modifier, timeout);
+        Map<String, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4762,22 +4763,23 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         ScoreFilter modifier = MAX;
         GlideString[] arguments = {gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX")};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout);
-        Object[] payload = response.get();
+        CompletableFuture<Map<GlideString, Object>> response = service.bzmpop(keys, modifier, timeout);
+        Map<GlideString, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4789,22 +4791,23 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX", "COUNT", "42"};
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<String, Object> value = Map.of("key1", "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout, count);
-        Object[] payload = response.get();
+        CompletableFuture<Map<String, Object>> response =
+                service.bzmpop(keys, modifier, timeout, count);
+        Map<String, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -4818,22 +4821,24 @@ public class GlideClientTest {
         GlideString[] arguments = {
             gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")
         };
-        Object[] value = new Object[] {"key1", "elem"};
+        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout, count);
-        Object[] payload = response.get();
+        CompletableFuture<Map<GlideString, Object>> response =
+                service.bzmpop(keys, modifier, timeout, count);
+        Map<GlideString, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertArrayEquals(value, payload);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

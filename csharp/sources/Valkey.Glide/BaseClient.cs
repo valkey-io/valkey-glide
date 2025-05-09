@@ -1,13 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Buffers;
 using System.Runtime.InteropServices;
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
+using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
+using static Valkey.Glide.Errors;
+using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Internals.ResponseHandler;
+using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
@@ -43,97 +46,113 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #endregion public methods
 
     #region protected methods
-    protected BaseClient(BaseClientConfiguration config)
+    protected static async Task<T> CreateClient<T>(BaseClientConfiguration config, Func<T> ctor) where T : BaseClient
+    {
+        T client = ctor();
+
+        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._successCallbackDelegate);
+        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(client._failureCallbackDelegate);
+
+        using FFI.ConnectionConfig request = config.Request.ToFfi();
+        Message message = client._messageContainer.GetMessageForCall();
+        CreateClientFfi(request.ToPtr(), successCallbackPointer, failureCallbackPointer);
+        client._clientPointer = await message; // This will throw an error thru failure callback if any
+        return client._clientPointer != IntPtr.Zero
+            ? client
+            : throw new ConnectionException("Failed creating a client");
+    }
+
+    protected BaseClient()
     {
         _successCallbackDelegate = SuccessCallback;
-        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
         _failureCallbackDelegate = FailureCallback;
-        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
-        nint configPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(ConnectionRequest)));
-        Marshal.StructureToPtr(config.ToRequest(), configPtr, false);
-        _clientPointer = CreateClientFfi(configPtr, successCallbackPointer, failureCallbackPointer);
-        Marshal.FreeHGlobal(configPtr);
-        if (_clientPointer == IntPtr.Zero)
-        {
-            throw new Exception("Failed creating a client");
-        }
+        _messageContainer = new(this);
     }
 
-    protected delegate T ResponseHandler<T>(IntPtr response);
+    protected internal delegate T ResponseHandler<T>(IntPtr response);
 
-    protected async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
+    internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
     {
-        // 1. Allocate memory for arguments and marshal them
-        IntPtr[] args = _arrayPool.Rent(arguments.Length);
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            args[i] = Marshal.AllocHGlobal(arguments[i].Length);
-            Marshal.Copy(arguments[i].Bytes, 0, args[i], arguments[i].Length);
-        }
+        // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
+        using Cmd cmd = new(requestType, arguments);
 
-        // 2. Pin it
-        // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
-        GCHandle pinnedArgs = GCHandle.Alloc(args, GCHandleType.Pinned);
-        IntPtr argsPointer = pinnedArgs.AddrOfPinnedObject();
+        // 2. Allocate memory for route
+        using FFI.Route? ffiRoute = route?.ToFfi();
 
-        // 3. Allocate memory for arguments' lenghts and pin it too
-        int[] lengths = ArrayPool<int>.Shared.Rent(arguments.Length);
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            lengths[i] = arguments[i].Length;
-        }
-        GCHandle pinnedLengths = GCHandle.Alloc(lengths, GCHandleType.Pinned);
-        IntPtr lengthsPointer = pinnedLengths.AddrOfPinnedObject();
-
-        // 4. Allocate memory for route
-        IntPtr routePtr = IntPtr.Zero;
-        if (route is not null)
-        {
-            routePtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(RouteInfo)));
-            Marshal.StructureToPtr(route.ToFfi(), routePtr, false);
-        }
-
-        // 5. Sumbit request to the rust part
+        // 3. Sumbit request to the rust part
         Message message = _messageContainer.GetMessageForCall();
-        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, argsPointer, (uint)arguments.Length, lengthsPointer, routePtr);
-        // All data must be copied in sync manner, so we
+        CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
 
-        // 6. Free memories allocated
-        if (route is not null)
-        {
-            Marshal.FreeHGlobal(routePtr);
-        }
-
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            Marshal.FreeHGlobal(args[i]);
-        }
-        pinnedArgs.Free();
-        _arrayPool.Return(args);
-        pinnedLengths.Free();
-        ArrayPool<int>.Shared.Return(lengths);
-
-        // 7. Get a response and Handle it
+        // 4. Get a response and Handle it
         return responseHandler(await message);
+
+        // All memory allocated is auto-freed by `using` operator
     }
 
-    protected static string HandleOk(IntPtr response)
-        => HandleServerResponse<GlideString, string>(response, false, gs => gs.GetString());
+    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
+    {
+        // 1. Allocate memory for batch, which allocates all nested Cmds
+        using FFI.Batch ffiBatch = batch.ToFFI();
 
-    protected static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
+        // 2. Allocate memory for options
+        using FFI.BatchOptions? ffiOptions = options?.ToFfi();
+
+        // 3. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall();
+        BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), raiseOnError, ffiOptions?.ToPtr() ?? IntPtr.Zero);
+
+        // 4. Get a response and Handle it
+        return HandleServerResponse<object?[]?>(await message, true);
+
+        // All memory allocated is auto-freed by `using` operator
+    }
+
+    protected internal static string HandleOk(IntPtr response)
+        => HandleServerResponse<string>(response, false);
+
+    protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
 
+    protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route? route = null)
+        => HandleServerResponse<object, ClusterValue<object?>>(response, true, data
+            => (data is string str && str == "OK") || route is SingleNodeRoute || data is not Dictionary<GlideString, object?>
+                ? ClusterValue<object?>.OfSingleValue(data)
+                : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
+
     /// <summary>
-    /// Process and convert server response.
+    /// Process and convert a server response that may be a multi-node response.
+    /// </summary>
+    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
+    /// <typeparam name="T">Command's return type.</typeparam>
+    /// <param name="response"></param>
+    /// <param name="isNullable"></param>
+    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    protected static ClusterValue<T> HandleClusterValueResponse<R, T>(IntPtr response, bool isNullable, Route route, Func<R, T> converter) where T : class?
+        => HandleServerResponse<object, ClusterValue<T>>(response, isNullable, data => route is SingleNodeRoute
+            ? ClusterValue<T>.OfSingleValue(converter((R)data))
+            : ClusterValue<T>.OfMultiValue(((Dictionary<GlideString, object>)data).ConvertValues(converter)));
+
+    /// <summary>
+    /// Process and convert a cluster multi-node response.
+    /// </summary>
+    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
+    /// <typeparam name="T">Command's return type.</typeparam>
+    /// <param name="response"></param>
+    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    protected static Dictionary<string, T> HandleMultiNodeResponse<R, T>(IntPtr response, Func<R, T> converter) where T : class?
+        => HandleServerResponse<Dictionary<GlideString, object>, Dictionary<string, T>>(response, false, dict => dict.DownCastKeys().ConvertValues(converter));
+
+    /// <summary>
+    /// Process and convert a server response.
     /// </summary>
     /// <typeparam name="R">GLIDE's return type.</typeparam>
     /// <typeparam name="T">Command's return type.</typeparam>
     /// <param name="response"></param>
     /// <param name="isNullable"></param>
-    /// <param name="converter">Optional converted to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
+    /// <param name="converter">Optional function to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    protected static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
+    protected internal static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
     {
         try
         {
@@ -146,11 +165,11 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
                     return null;
 #pragma warning restore CS8603 // Possible null reference return.
                 }
-                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).Name}");
+                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).GetRealTypeName()}");
             }
             return value is R
                 ? converter((value as R)!)
-                : throw new Exception($"Unexpected return type from Glide: got {value?.GetType().Name} expected {typeof(T).Name}");
+                : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
         }
         finally
         {
@@ -164,9 +183,12 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() => _messageContainer.GetMessage((int)index).SetResult(ptr));
 
-    private void FailureCallback(ulong index) =>
+    private void FailureCallback(ulong index, IntPtr strPtr, RequestErrorType errType)
+    {
+        string str = Marshal.PtrToStringAnsi(strPtr)!;
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
-        Task.Run(() => _messageContainer.GetMessage((int)index).SetException(new Exception("Operation failed")));
+        _ = Task.Run(() => _messageContainer.GetMessage((int)index).SetException(Create(errType, str)));
+    }
 
     ~BaseClient() => Dispose();
     #endregion private methods
@@ -183,8 +205,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     /// Raw pointer to the underlying native client.
     private IntPtr _clientPointer;
-    private readonly MessageContainer _messageContainer = new();
-    private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
+    private readonly MessageContainer _messageContainer;
     private readonly object _lock = new();
 
     #endregion private fields
@@ -192,32 +213,22 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     #region FFI function declarations
 
     private delegate void SuccessAction(ulong index, IntPtr ptr);
-    private delegate void FailureAction(ulong index);
+    private delegate void FailureAction(ulong index, IntPtr strPtr, RequestErrorType err);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount, IntPtr argLengths, IntPtr routeInfo);
+    private static extern void CommandFfi(IntPtr client, ulong index, IntPtr cmdInfo, IntPtr routeInfo);
+
+    [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "batch")]
+    private static extern void BatchFfi(IntPtr client, ulong index, IntPtr batch, [MarshalAs(UnmanagedType.U1)] bool raiseOnError, IntPtr opts);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "free_respose")]
     private static extern void FreeResponse(IntPtr response);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
-    private static extern IntPtr CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
+    private static extern void CreateClientFfi(IntPtr config, IntPtr successCallback, IntPtr failureCallback);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);
-
-    #endregion
-
-    #region RequestType
-
-    // TODO: generate this with a bindings generator
-    protected enum RequestType
-    {
-        InvalidRequest = 0,
-        CustomCommand = 1,
-        Get = 1504,
-        Set = 1517,
-    }
 
     #endregion
 }

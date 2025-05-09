@@ -107,7 +107,6 @@ jobs:
               working-directory: ./python
               run: |
                   python -m pip install --upgrade pip
-                  pip install mypy-protobuf
 
             - uses: actions/cache@v4
               with:
@@ -130,27 +129,12 @@ jobs:
             - name: Test with pytest
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  pip install -r dev_requirements.txt
-                  cd python/tests/
-                  pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
-
-            - name: Type check with mypy
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
-              working-directory: ./python
-              run: |
-                  # The type check should run inside the virtual env to get
-                  # all installed dependencies and build files
-                  source .env/bin/activate
-                  pip install mypy types-protobuf
-                  # Install the benchmark requirements
-                  pip install -r ../benchmarks/python/requirements.txt
-                  python -m mypy ..
 
             - name: Upload test reports
               if: always()
@@ -159,7 +143,7 @@ jobs:
               with:
                   name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
-                      python/python/tests/pytest_report.html
+                      python/tests/pytest_report.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -211,7 +195,6 @@ jobs:
               run: |
                   source .env/bin/activate
                   pip install -r dev_requirements.txt
-                  cd python/tests/
                   pytest -v --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
@@ -221,7 +204,7 @@ jobs:
               with:
                   name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
-                      python/python/tests/pytest_report.html
+                      python/tests/pytest_report.html
 
     lint:
         runs-on: ubuntu-latest
@@ -239,28 +222,13 @@ jobs:
               if: always()
               uses: threeal/pipx-install-action@latest
               with:
-                  packages: flake8 isort black
+                  packages: flake8 isort black mypy
 
-            - name: Lint python with isort
+            - name: Lint python
               if: always()
               working-directory: ./python
               run: |
-                  isort . --profile black --check --diff
-
-            - name: Lint python with flake8
-              if: always()
-              working-directory: ./python
-              run: |
-                  # stop the build if there are Python syntax errors or undefined names
-                  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
-                  # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-                  flake8 . --count --max-complexity=12 --max-line-length=127 --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
-
-            - name: Lint python with black
-              if: always()
-              working-directory: ./python
-              run: |
-                  black --check --diff .
+                  python3 dev.py lint --check
 
     docs-test:
         runs-on: ubuntu-latest
@@ -273,6 +241,7 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install sphinx sphinx-rtd-theme
+                  pip install -r dev_requirements.txt
 
             - name: Build docs
               working-directory: ./python/docs
@@ -344,7 +313,6 @@ jobs:
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  cd python/tests/
                   pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
@@ -354,7 +322,7 @@ jobs:
               with:
                   name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
-                      python/python/tests/pytest_report.html
+                      python/tests/pytest_report.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -393,9 +361,7 @@ jobs:
             - name: Test with pytest
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  cd python/tests/
-                  pytest -v --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -404,4 +370,4 @@ jobs:
               with:
                   name: modules-test-report
                   path: |
-                      python/python/tests/pytest_report.html
+                      python/tests/pytest_report.html

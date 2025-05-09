@@ -4,6 +4,9 @@
     "editor.codeActionsOnSave": {
         "source.organizeImports": "always"
     },
+    "rust-analyzer.procMacro.ignored": {
+        "napi-derive": ["napi"]
+    },
     "editor.formatOnSave": true,
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
@@ -13,7 +16,7 @@
         "python/Cargo.toml",
         "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",
-        "csharp/lib/Cargo.toml",
+        "csharp/rust/Cargo.toml",
         "glide-core/redis-rs/Cargo.toml",
         "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml",
@@ -61,5 +64,10 @@
     "rust-analyzer.cargo.features": "all",
     "dotnet.defaultSolution": "csharp/csharp.sln",
     "java.compile.nullAnalysis.mode": "automatic",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "files.associations": {
+        "**/frontmatter.json": "jsonc",
+        "**/.frontmatter/config/*.json": "jsonc",
+        "iosfwd": "cpp"
+    }
 }

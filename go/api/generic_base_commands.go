@@ -50,9 +50,9 @@ type GenericBaseCommands interface {
 
 	Persist(key string) (bool, error)
 
-	Restore(key string, ttl int64, value string) (Result[string], error)
+	Restore(key string, ttl int64, value string) (string, error)
 
-	RestoreWithOptions(key string, ttl int64, value string, option options.RestoreOptions) (Result[string], error)
+	RestoreWithOptions(key string, ttl int64, value string, option options.RestoreOptions) (string, error)
 
 	ObjectEncoding(key string) (Result[string], error)
 
@@ -82,7 +82,7 @@ type GenericBaseCommands interface {
 
 	CopyWithOptions(source string, destination string, option options.CopyOptions) (bool, error)
 
-	UpdateConnectionPassword(password string, immediateAuth bool) (Result[string], error)
+	UpdateConnectionPassword(password string, immediateAuth bool) (string, error)
 
-	ResetConnectionPassword() (Result[string], error)
+	ResetConnectionPassword() (string, error)
 }

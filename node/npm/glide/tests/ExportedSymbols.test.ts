@@ -12,11 +12,14 @@ const skippedListForExports: string[] = [
     "ClusterScanOptions",
     "GlideMultiJson",
     "BaseClient",
+    "BaseBatch",
+    "BaseBatchOptions",
     "convertFieldsAndValuesToHashDataType",
     "parseInfoResponse",
     "command_request",
     "connection_request",
     "response",
+    "WritePromiseOptions",
 ];
 
 const glideRsKeyWords: string[] = [

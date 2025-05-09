@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.batch import ClusterBatch
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -11,7 +12,6 @@ from glide.async_commands.core import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide.async_commands.transaction import ClusterTransaction
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -86,29 +86,139 @@ class ClusterCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: ClusterTransaction,
+        batch: ClusterBatch,
+        raise_on_error: bool,
         route: Optional[TSingleNodeRoute] = None,
+        timeout: Optional[int] = None,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
     ) -> Optional[List[TResult]]:
         """
-        Execute a transaction by processing the queued commands.
+        Executes a batch by processing the queued commands.
 
-        See [valkey.io](https://valkey.io/docs/topics/transactions/) for details on Transactions.
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) for details.
+        See [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        #### Routing Behavior:
+
+        - If a `route` is specified:
+            - The entire batch is sent to the specified node.
+
+        - If no `route` is specified:
+            - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+              If no key is found, the request is sent to a random node.
+            - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+              key's slot. If no key is present, routing follows the command's default request policy.
+              Multi-node commands are automatically split and dispatched to the appropriate nodes.
+
+        #### Behavior notes:
+
+        - Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+          If keys span different slots, the transaction will fail. If the transaction fails due to a
+          `WATCH` command, `exec` will return `None`.
+
+        #### Retry and Redirection:
+
+        - If a redirection error occurs:
+            - Atomic batches (Transactions): The entire transaction will be redirected.
+            - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+
+        - Retries for failures will be handled according to the `retry_server_error` and
+          `retry_connection_error` parameters.
 
         Args:
-            transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
-            route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner
-                of the first key found in the transaction. If no key is found, the command will be sent to a random node.
-                If `route` is provided, the client will route the command to the nodes defined by `route`.
+            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
+            raise_on_error (bool): Determines how errors are handled within the batch response. When set to
+                `True`, the first encountered error in the batch will be raised as a `RequestError`
+                exception after all retries and reconnections have been executed. When set to `False`,
+                errors will be included as part of the batch response array, allowing the caller to process both
+                successful and failed commands together. In this case, error details will be provided as
+                instances of `RequestError`.
+            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
+                will send the batch to the specified node defined by `route`.
+
+                If a redirection error occurs:
+                - For Atomic Batches (Transactions), the entire transaction will be redirected.
+                - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+                will be redirected.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries.
+
+                If the specified timeout is exceeded, a timeout error will be raised. If not explicitly set,
+                the client's default request timeout will be used.
+            retry_server_error (bool): If `True`, retriable server errors (e.g., `TRYAGAIN`) will trigger a retry.
+                Warning: Retrying server errors may cause commands targeting the same slot to execute out of order.
+                Note: Currently supported only for non-atomic batches. Recommended to increase timeout when enabled.
+            retry_connection_error (bool): If `True`, connection failures will trigger a retry. Warning:
+                Retrying connection errors may lead to duplicate executions, as it is unclear which commands have
+                already been processed. Note: Currently supported only for non-atomic batches. Recommended to increase
+                timeout when enabled.
 
         Returns:
-            Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be `None`.
+            Optional[List[TResult]]: A list of results corresponding to the execution of each command in the batch.
+                If a command returns a value, it will be included in the list. If a command doesn't return a value,
+                the list entry will be `None`. If the batch failed due to a `WATCH` command, `exec` will return
+                `None`.
 
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+        Examples:
+            # Example 1: Atomic Batch (Transaction)
+            >>> atomic_batch = ClusterBatch(is_atomic=True)  # Atomic (Transaction)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(atomic_batch, false)
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Expected Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 2: Non-Atomic Batch (Pipeline)
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, false)
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+
+            # Example 3: Atomic batch with options
+            >>> atomic_batch = ClusterBatch(is_atomic=True)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(
+            ...     atomic_batch,
+            ...     timeout=1000,  # Set a timeout of 1000 milliseconds
+            ...     raise_on_error=False  # Do not raise an error on failure
+            ... )
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 4: Non-atomic batch with retry options
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(
+            ...     non_atomic_batch,
+            ...     raise_on_error=False,
+            ...     retry_server_error=True,
+            ...     retry_connection_error=False
+            ... )
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
         """
-        commands = transaction.commands[:]
-        return await self._execute_transaction(commands, route)
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            batch.is_atomic,
+            raise_on_error,
+            retry_server_error,
+            retry_connection_error,
+            route,
+            timeout,
+        )
 
     async def config_resetstat(
         self,
