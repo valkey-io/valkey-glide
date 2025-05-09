@@ -5,7 +5,7 @@ use glide_core::{
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
-use redis::{cmd, Value};
+use redis::{Value, cmd};
 use tokio::runtime::Builder;
 
 fn create_connection_request() -> ConnectionRequest {

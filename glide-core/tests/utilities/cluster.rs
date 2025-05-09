@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use super::{create_connection_request, ClusterMode, TestConfiguration};
-use futures::future::{join_all, BoxFuture};
+use super::{ClusterMode, TestConfiguration, create_connection_request};
 use futures::FutureExt;
+use futures::future::{BoxFuture, join_all};
 use glide_core::client::Client;
 use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};

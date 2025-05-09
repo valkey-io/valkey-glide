@@ -10,8 +10,8 @@ use std::net::TcpListener;
 use std::net::TcpStream as StdTcpStream;
 use std::str::from_utf8;
 use std::sync::{
-    atomic::{AtomicU16, Ordering},
     Arc,
+    atomic::{AtomicU16, Ordering},
 };
 use tokio::sync::mpsc::UnboundedSender;
 

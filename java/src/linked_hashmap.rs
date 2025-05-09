@@ -1,5 +1,5 @@
 use crate::errors;
-use jni::{objects::JObject, JNIEnv};
+use jni::{JNIEnv, objects::JObject};
 
 const LINKED_HASHMAP: &str = "java/util/LinkedHashMap";
 const LINKED_HASHMAP_PUT_SIG: &str = "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
