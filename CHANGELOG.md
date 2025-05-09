@@ -77,6 +77,8 @@
 * Go: Fix response handler for other sorted set with scores commands to return an ordered result ([#3712](https://github.com/valkey-io/valkey-glide/pull/3712))
 * Java: Change `BZMPOP` and `ZMPOP` to return `Map<String, Object>` and `Map<GlideString, Object>` instead of `Object[]` ([#3733](https://github.com/valkey-io/valkey-glide/pull/3733))
 
+* Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
+
 #### Fixes
 
 * Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))

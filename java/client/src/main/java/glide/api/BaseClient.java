@@ -360,11 +360,8 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
-            ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
-            if (threadPoolResource == null) {
-                threadPoolResource =
-                        ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
-            }
+            ThreadPoolResource threadPoolResource =
+                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             MessageHandler messageHandler = buildMessageHandler(config);
             ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
