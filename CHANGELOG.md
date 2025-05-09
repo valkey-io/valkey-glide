@@ -80,6 +80,7 @@
 #### Fixes
 
 * Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
+* Java: Bump `netty` version ([#3804](https://github.com/valkey-io/valkey-glide/pull/3804))
 
 #### Operational Enhancements
 
