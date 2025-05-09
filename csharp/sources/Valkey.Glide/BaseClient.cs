@@ -102,7 +102,8 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), raiseOnError, ffiOptions?.ToPtr() ?? IntPtr.Zero);
 
         // 4. Get a response and Handle it
-        return HandleServerResponse<object?[]?>(await message, true);
+        object?[]? value = HandleServerResponse<object?[]?>(await message, true);
+        return batch.ConvertResponse(value);
 
         // All memory allocated is auto-freed by `using` operator
     }
@@ -165,7 +166,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
                     return null;
 #pragma warning restore CS8603 // Possible null reference return.
                 }
-                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).GetRealTypeName()}");
+                throw new RequestException($"Unexpected return type from Glide: got null expected {typeof(T).GetRealTypeName()}");
             }
             return value is R
                 ? converter((value as R)!)
