@@ -939,7 +939,8 @@ public interface ListBaseCommands {
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
@@ -962,7 +963,8 @@ public interface ListBaseCommands {
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush(gs("testKey"), new GlideString[] {gs("one"), gs("two"), gs("three")}).get();
@@ -983,7 +985,8 @@ public interface ListBaseCommands {
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
@@ -1003,7 +1006,8 @@ public interface ListBaseCommands {
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush(gs("testKey"), new GlideString[] {gs("one"), gs("two"), gs("three")}).get();
