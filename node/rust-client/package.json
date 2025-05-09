@@ -25,18 +25,20 @@
         "access": "public"
     },
     "scripts": {
-        "build:dev": "napi build --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:benchmark": "napi build --release --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release:gnu": "napi build --release --strip --omit=dev --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release:musl": "napi build --release --strip --omit=dev --platform --zig --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release:mac": "napi build --release --strip --omit=dev --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:dev": "napi build --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:benchmark": "napi build --release --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release:gnu": "napi build --release --strip --omit=dev --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release:musl": "napi build --release --strip --omit=dev --platform --zig --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release:mac": "napi build --release --strip --omit=dev --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "postbuild:copy-node": "cp glide-rs.*.node ../build-ts/",
         "artifacts": "napi artifacts",
         "prepublishOnly": "napi prepublish -t npm",
         "version": "napi version",
         "format": "npm run format:prettier && npm run format:rs",
         "format:prettier": "prettier . -w",
         "format:rs": "cargo fmt",
-        "globals": "npm install --global @napi-rs/cli prettier"
+        "globals": "npm install --global @napi-rs/cli prettier",
+        "check:build-output": "ls -lh ../build-ts/ && file ../build-ts/*.node"
     },
     "devDependencies": {
         "@napi-rs/cli": "2",

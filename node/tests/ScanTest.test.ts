@@ -3,6 +3,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClusterScanCursor,
     Decoder,
@@ -12,8 +13,7 @@ import {
     GlideString,
     ObjectType,
     ProtocolVersion,
-} from "./build-ts";
-import { ValkeyCluster } from "../../utils/TestUtils.js";
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,

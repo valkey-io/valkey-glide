@@ -21,7 +21,7 @@ import {
 import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient";
-import { command_request } from "./ProtobufMessage";
+import { command_request } from "../build-ts/ProtobufMessage";
 
 import RequestType = command_request.RequestType;
 

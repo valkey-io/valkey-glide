@@ -58,7 +58,7 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-} from "./build-ts";
+} from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,

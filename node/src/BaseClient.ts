@@ -1,17 +1,8 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    getStatistics,
-    valueFromSplitPointer,
-} from "./native";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -250,10 +241,19 @@ import {
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    getStatistics,
+    valueFromSplitPointer,
+} from "./native";
+import {
     command_request,
     connection_request,
     response,
-} from "./ProtobufMessage";
+} from "../build-ts/ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;

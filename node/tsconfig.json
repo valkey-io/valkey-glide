@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2021",
     "module": "CommonJS",
-    "lib": ["ES2020"],
+    "lib": ["ES2021"],
     "rootDir": "./src",
     "outDir": "./build-ts",
     "declaration": true,
@@ -23,7 +23,7 @@
     "transpileOnly": true,
     "compilerOptions": {
       "module": "CommonJS",
-      "target": "ES2020",
+      "target": "ES2021",
       "esModuleInterop": true
     },
     "esm": true

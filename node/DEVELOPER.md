@@ -23,29 +23,40 @@ The Node.js wrapper consists of:
 
 ## Build Modes
 
-- **Fast Dev Build:**  
-  Quickly compiles without optimization. Best for testing and development.  
-  Command:  
+- **Fast Dev Build:**
+  Quickly compiles without optimization. Best for testing and development.
+  Command:
 
   ```bash
   npm run build
   ```
 
-- **Benchmark Build:**  
-  Compiles unoptimized but installs like a release build.  
-  Command:  
+- **Benchmark Build:**
+  Compiles optimized build, but install like dev build.
+  Command:
 
   ```bash
   npm run build:benchmark
   ```
 
-- **Release Build:**  
-  Fully optimized, stripped, and cross-compiled (glibc 2.17/musl support via Zig).  
-  Command:  
+- **Release Build:**
+  Fully optimized, stripped, and cross-compiled (glibc 2.17/musl support via Zig).
+  Command:
 
   ```bash
   npm run build:release
   ```
+
+### Build Process Details
+
+The build process consists of multiple steps:
+
+1. `clean:build` - Removes previous build artifacts
+2. `build-protobuf` - Generates optimized protobuf code (43% smaller than default)
+3. `build:rust-client` - Builds the native Rust client binding
+4. `build:ts` - Compiles TypeScript code
+
+For more details about the protobuf optimization, see [PROTOBUF_OPTIMIZATION.md](docs/PROTOBUF_OPTIMIZATION.md).
 
 ## Prerequisites
 
