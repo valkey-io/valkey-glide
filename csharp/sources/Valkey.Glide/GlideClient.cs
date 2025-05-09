@@ -1,4 +1,4 @@
-// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
@@ -75,4 +75,45 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     public async Task<string> Info(InfoOptions.Section[] sections)
         => await Command(RequestType.Info, sections.ToGlideStrings(), resp
             => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
+        => await Command(RequestType.CustomCommand, args, resp => HandleServerResponse<object?>(resp, true));
+
+    public async Task<long> Del(params GlideString[] keys)
+    {
+        var args = new GlideString[keys.Length + 1];
+        args[0] = "DEL";
+        Array.Copy(keys, 0, args, 1, keys.Length);
+
+        return await Command(
+            RequestType.CustomCommand,
+            args,
+            resp => HandleServerResponse<long>(resp, false)
+        );
+    }
+
+    public async Task<long> Copy(GlideString source, GlideString destination, int? destinationDb = null, bool replace = false)
+    {
+        var args = new List<GlideString>
+        {
+            "COPY",
+            source,
+            destination
+        };
+
+        if (destinationDb.HasValue)
+        {
+            args.Add("DB");
+            args.Add(destinationDb.Value.ToString());
+        }
+
+        if (replace)
+        {
+            args.Add("REPLACE");
+        }
+
+        return await Command(
+            RequestType.CustomCommand,
+            args.ToArray(),
+            resp => HandleServerResponse<long>(resp, false)
+        );
+    }
 }
