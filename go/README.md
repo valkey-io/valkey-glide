@@ -26,6 +26,7 @@ Linux:
 macOS:
 
 - macOS 14.7 (Apple silicon/aarch_64)
+- macOS 13.7 (x86_64/amd64)
 
 ## GO supported versions
 
