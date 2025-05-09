@@ -69,17 +69,24 @@ public class RequestRoutingConfiguration {
      * If {@link SlotType#REPLICA} is used, the request will be routed to a replica, even if the
      * strategy is {@link ReadFrom#PRIMARY}.
      */
-    @RequiredArgsConstructor
     @Getter
     public static class SlotIdRoute implements SingleNodeRoute {
-        /**
-         * Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
-         * Unless the slot is known, it's better to route using {@link SlotType#PRIMARY}.
-         */
         private final int slotId;
 
-        /** Defines type of the node being addressed. */
         private final SlotType slotType;
+
+        /**
+         * Create a route using a slot ID and a slot type.
+         *
+         * @param slotId Slot number. There are 16384 slots in a Valkey cluster, and each shard manages
+         *     a slot range. Unless the slot is known, it's better to route using {@link
+         *     SlotType#PRIMARY}.
+         * @param slotType Defines the type of the node being addressed.
+         */
+        public SlotIdRoute(int slotId, SlotType slotType) {
+            this.slotId = slotId;
+            this.slotType = slotType;
+        }
     }
 
     /**
@@ -87,14 +94,22 @@ public class RequestRoutingConfiguration {
      * If {@link SlotType#REPLICA} is used, the request will be routed to a replica, even if the
      * strategy is {@link ReadFrom#PRIMARY}.
      */
-    @RequiredArgsConstructor
     @Getter
     public static class SlotKeyRoute implements SingleNodeRoute {
-        /** The request will be sent to nodes managing this key. */
         private final String slotKey;
 
-        /** Defines type of the node being addressed. */
         private final SlotType slotType;
+
+        /**
+         * Create a route using a slot key and a slot type.
+         *
+         * @param slotKey The request will be sent to nodes managing this key.
+         * @param slotType Defines the type of the node being addressed.
+         */
+        public SlotKeyRoute(String slotKey, SlotType slotType) {
+            this.slotKey = slotKey;
+            this.slotType = slotType;
+        }
     }
 
     /** Routes a request to a node by its address. */
