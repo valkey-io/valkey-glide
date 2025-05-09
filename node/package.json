@@ -18,8 +18,8 @@
     },
     "files": [
         "build-ts/**",
-        "types/**",
-        "dist/**"
+        "README.md",
+        "LICENSE"
     ],
     "type": "commonjs",
     "repository": {
@@ -102,16 +102,18 @@
     "engines": {
         "node": ">=16"
     },
-    "//": [
-        "The fields below have been commented out and are only necessary for publishing the package."
-    ],
-    "///cpu": [
-        "${node_arch}"
-    ],
-    "///os": [
-        "${node_os}"
-    ],
-    "///name": "${scope}${pkg_name}",
-    "///version": "${package_version}",
-    "//libc": "${libc}"
+    "napi": {
+        "name": "valkey-glide",
+        "triples": {
+            "defaults": false,
+            "targets": [
+                "x86_64-apple-darwin",
+                "aarch64-apple-darwin",
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "x86_64-unknown-linux-musl",
+                "aarch64-unknown-linux-musl"
+            ]
+        }
+    }
 }
