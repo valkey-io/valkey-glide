@@ -143,7 +143,7 @@ npm test-minimum
 To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
 
 ```bash
-npm run test-dbg -- --testNamePattern="transaction"
+npm run test-dbg -- --testNamePattern="batch"
 ```
 
 IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.

@@ -76,7 +76,7 @@ class BaseBatch:
             If ``True``, the batch will be executed as an atomic transaction.
             If ``False``, the batch will be executed as a non-atomic pipeline.
 
-    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelines/) for details.
+    See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     """
 
@@ -5324,26 +5324,30 @@ class Batch(BaseBatch):
             the batch will be executed as an atomic transaction. If ``False``,
             the batch will be executed as a non-atomic pipeline.
 
-    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelining/) for details.
+    See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     Note for Standalone Mode (Cluster Mode Disabled):
         Standalone Batches are executed on the primary node.
 
-    Example (Atomic Batch - Transaction):
+    Examples:
+        ### Atomic Batch - Transaction:
         >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
         >>> transaction.set("key", "value")
         >>> transaction.get("key")
-        >>> result = await client.exec(transaction)
-        >>> assert result == [OK, b"value"]
+        >>> result = await client.exec(transaction, false)
+        >>> print(result)
+        [OK, b"value"]
 
-    Example (Non-Atomic Batch - Pipeline):
+        #### Non-Atomic Batch - Pipeline:
         >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
         >>> pipeline.set("key1", "value1")
         >>> pipeline.set("key2", "value2")
         >>> pipeline.get("key1")
         >>> pipeline.get("key2")
-        >>> result = await client.exec(pipeline)
-        >>> assert result == [OK, OK, b"value1", b"value2"]
+        >>> result = await client.exec(pipeline, false)
+        >>> print(result)
+        [OK, OK, b"value1", b"value2"]
+
     """
 
     # TODO: add SLAVEOF and all SENTINEL commands
@@ -5448,23 +5452,26 @@ class ClusterBatch(BaseBatch):
             the batch will be executed as an atomic transaction. If ``False``,
             the batch will be executed as a non-atomic pipeline.
 
-    See [Transactions](https://valkey.io/topics/transactions/) and [Pipelines](https://valkey.io/topics/pipelining/) for details.
+    See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
-    Example (Atomic Batch - Transaction) in a Cluster:
+    Examples:
+        ### Atomic Batch - Transaction in a Cluster:
         >>> transaction = ClusterBatch(is_atomic=True)  # Atomic (Transaction)
         >>> transaction.set("key", "value")
         >>> transaction.get("key")
-        >>> result = await client.exec(transaction)
-        >>> assert result == [OK, b"value"]
+        >>> result = await client.exec(transaction, false)
+        >>> print(result)
+        [OK, b"value"]
 
-    Example (Non-Atomic Batch - Pipeline) in a Cluster:
+        ### Non-Atomic Batch - Pipeline in a Cluster:
         >>> pipeline = ClusterBatch(is_atomic=False)  # Non-Atomic (Pipeline)
         >>> pipeline.set("key1", "value1")
         >>> pipeline.set("key2", "value2")
         >>> pipeline.get("key1")
         >>> pipeline.get("key2")
-        >>> result = await client.exec(pipeline)
-        >>> assert result == [OK, OK, b"value1", b"value2"]
+        >>> result = await client.exec(pipeline, false)
+        >>> print(result)
+        [OK, OK, b"value1", b"value2"]
 
     """
 
