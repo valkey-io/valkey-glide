@@ -442,8 +442,9 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 //
 // Parameters:
 //
-//		password - The new password to update the connection with.
-//		immediateAuth - immediateAuth A boolean flag. If true, the client will
+//	ctx - The context for controlling the command execution.
+//	password - The new password to update the connection with.
+//	immediateAuth - immediateAuth A boolean flag. If true, the client will
 //	    authenticate immediately with the new password against all connections, Using AUTH
 //	    command. If password supplied is an empty string, the client will not perform auth and a warning
 //	    will be returned. The default is `false`.
@@ -468,6 +469,10 @@ func (client *baseClient) UpdateConnectionPassword(ctx context.Context, password
 // This method updates the client's internal password configuration and does not perform
 // password rotation on the server side.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
@@ -481,6 +486,7 @@ func (client *baseClient) ResetConnectionPassword(ctx context.Context) (string, 
 //
 // Parameters:
 //
+//	ctx   - The context for controlling the command execution.
 //	key   - The key to store.
 //	value - The value to store with the given key.
 //
@@ -507,6 +513,7 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 //
 // Parameters:
 //
+//	ctx     - The context for controlling the command execution.
 //	key     - The key to store.
 //	value   - The value to store with the given key.
 //	options - The [api.SetOptions].
@@ -545,6 +552,7 @@ func (client *baseClient) SetWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to be retrieved from the database.
 //
 // Return value:
@@ -568,6 +576,7 @@ func (client *baseClient) Get(ctx context.Context, key string) (Result[string], 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to be retrieved from the database.
 //
 // Return value:
@@ -590,6 +599,7 @@ func (client *baseClient) GetEx(ctx context.Context, key string) (Result[string]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to be retrieved from the database.
 //	options - The [options.GetExOptions].
 //
@@ -629,6 +639,7 @@ func (client *baseClient) GetExWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keyValueMap - A key-value map consisting of keys and their respective values to set.
 //
 // Return value:
@@ -659,6 +670,7 @@ func (client *baseClient) MSet(ctx context.Context, keyValueMap map[string]strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keyValueMap - A key-value map consisting of keys and their respective values to set.
 //
 // Return value:
@@ -688,6 +700,7 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - A list of keys to retrieve values for.
 //
 // Return value:
@@ -711,6 +724,7 @@ func (client *baseClient) MGet(ctx context.Context, keys []string) ([]Result[str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to increment its value.
 //
 // Return value:
@@ -733,6 +747,7 @@ func (client *baseClient) Incr(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key to increment its value.
 //	amount - The amount to increment.
 //
@@ -758,6 +773,7 @@ func (client *baseClient) IncrBy(ctx context.Context, key string, amount int64) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key to increment its value.
 //	amount - The amount to increment.
 //
@@ -784,6 +800,7 @@ func (client *baseClient) IncrByFloat(ctx context.Context, key string, amount fl
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to decrement its value.
 //
 // Return value:
@@ -806,6 +823,7 @@ func (client *baseClient) Decr(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key to decrement its value.
 //	amount - The amount to decrement.
 //
@@ -829,6 +847,7 @@ func (client *baseClient) DecrBy(ctx context.Context, key string, amount int64) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to check its length.
 //
 // Return value:
@@ -855,6 +874,7 @@ func (client *baseClient) Strlen(ctx context.Context, key string) (int64, error)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key of the string to update.
 //	offset - The position in the string where value should be written.
 //	value  - The string written with offset.
@@ -882,6 +902,7 @@ func (client *baseClient) SetRange(ctx context.Context, key string, offset int, 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the string.
 //	start - The starting offset.
 //	end   - The ending offset.
@@ -907,6 +928,7 @@ func (client *baseClient) GetRange(ctx context.Context, key string, start int, e
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the string.
 //	value - The value to append.
 //
@@ -941,6 +963,7 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key1 - The key that stores the first string.
 //	key2 - The key that stores the second string.
 //
@@ -971,6 +994,7 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key1 - The key that stores the first string.
 //	key2 - The key that stores the second string.
 //
@@ -1000,6 +1024,7 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key1 - The key that stores the first string.
 //	key2 - The key that stores the second string.
 //	opts - The [LCSIdxOptions] type.
@@ -1035,6 +1060,7 @@ func (client *baseClient) LCSWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to get and delete.
 //
 // Return value:
@@ -1062,6 +1088,7 @@ func (client *baseClient) GetDel(ctx context.Context, key string) (Result[string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the hash.
 //	field - The field in the hash stored at key to retrieve from the database.
 //
@@ -1086,6 +1113,7 @@ func (client *baseClient) HGet(ctx context.Context, key string, field string) (R
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //
 // Return value:
@@ -1108,6 +1136,7 @@ func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]s
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key of the hash.
 //	fields - The fields in the hash stored at key to retrieve from the database.
 //
@@ -1138,6 +1167,7 @@ func (client *baseClient) HMGet(ctx context.Context, key string, fields []string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key of the hash.
 //	values - A map of field-value pairs to set in the hash.
 //
@@ -1163,6 +1193,7 @@ func (client *baseClient) HSet(ctx context.Context, key string, values map[strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the hash.
 //	field - The field to set.
 //	value - The value to set.
@@ -1190,6 +1221,7 @@ func (client *baseClient) HSetNX(ctx context.Context, key string, field string, 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key of the hash.
 //	fields - The fields to remove from the hash stored at key.
 //
@@ -1213,6 +1245,7 @@ func (client *baseClient) HDel(ctx context.Context, key string, fields []string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //
 // Return value:
@@ -1236,6 +1269,7 @@ func (client *baseClient) HLen(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //
 // Return value:
@@ -1258,6 +1292,7 @@ func (client *baseClient) HVals(ctx context.Context, key string) ([]string, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the hash.
 //	field - The field to check in the hash stored at key.
 //
@@ -1282,6 +1317,7 @@ func (client *baseClient) HExists(ctx context.Context, key string, field string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //
 // Return value:
@@ -1305,6 +1341,7 @@ func (client *baseClient) HKeys(ctx context.Context, key string) ([]string, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the hash.
 //	field - The field to get the string length of its value.
 //
@@ -1330,6 +1367,7 @@ func (client *baseClient) HStrLen(ctx context.Context, key string, field string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	field - The field in the hash stored at `key` to increment its value.
 //	increment - The amount to increment.
@@ -1356,6 +1394,7 @@ func (client *baseClient) HIncrBy(ctx context.Context, key string, field string,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	field - The field in the hash stored at `key` to increment its value.
 //	increment - The amount to increment.
@@ -1381,6 +1420,7 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
 //
@@ -1408,6 +1448,7 @@ func (client *baseClient) HScan(ctx context.Context, key string, cursor string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
 //	options - The [options.HashScanOptions].
@@ -1449,6 +1490,7 @@ func (client *baseClient) HScanWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //
 // Return value:
@@ -1475,6 +1517,7 @@ func (client *baseClient) HRandField(ctx context.Context, key string) (Result[st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
 //	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
@@ -1504,6 +1547,7 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
 //	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
@@ -1531,6 +1575,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the head of the list stored at key.
 //
@@ -1555,6 +1600,7 @@ func (client *baseClient) LPush(ctx context.Context, key string, elements []stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list.
 //
 // Return value:
@@ -1578,6 +1624,7 @@ func (client *baseClient) LPop(ctx context.Context, key string) (Result[string],
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the list.
 //	count - The count of the elements to pop from the list.
 //
@@ -1603,6 +1650,7 @@ func (client *baseClient) LPopCount(ctx context.Context, key string, count int64
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The name of the list.
 //	element - The value to search for within the list.
 //
@@ -1628,6 +1676,7 @@ func (client *baseClient) LPos(ctx context.Context, key string, element string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The name of the list.
 //	element - The value to search for within the list.
 //	options - The LPos options.
@@ -1661,6 +1710,7 @@ func (client *baseClient) LPosWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The name of the list.
 //	element - The value to search for within the list.
 //	count   - The number of matches wanted.
@@ -1686,6 +1736,7 @@ func (client *baseClient) LPosCount(ctx context.Context, key string, element str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The name of the list.
 //	element - The value to search for within the list.
 //	count   - The number of matches wanted.
@@ -1726,6 +1777,7 @@ func (client *baseClient) LPosCountWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the tail of the list stored at key.
 //
@@ -1749,6 +1801,7 @@ func (client *baseClient) RPush(ctx context.Context, key string, elements []stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key where members will be added to its set.
 //	members - A list of members to add to the set stored at key.
 //
@@ -1772,6 +1825,7 @@ func (client *baseClient) SAdd(ctx context.Context, key string, members []string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key from which members will be removed.
 //	members - A list of members to remove from the set stored at key.
 //
@@ -1797,6 +1851,7 @@ func (client *baseClient) SRem(ctx context.Context, key string, members []string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination set.
 //	keys - The keys from which to retrieve the set members.
 //
@@ -1820,6 +1875,7 @@ func (client *baseClient) SUnionStore(ctx context.Context, destination string, k
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key from which to retrieve the set members.
 //
 // Return value:
@@ -1843,6 +1899,7 @@ func (client *baseClient) SMembers(ctx context.Context, key string) (map[string]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key from which to retrieve the number of set members.
 //
 // Return value:
@@ -1865,6 +1922,7 @@ func (client *baseClient) SCard(ctx context.Context, key string) (int64, error) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key    - The key of the set.
 //	member - The member to check for existence in the set.
 //
@@ -1891,6 +1949,7 @@ func (client *baseClient) SIsMember(ctx context.Context, key string, member stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sets to diff.
 //
 // Return value:
@@ -1917,6 +1976,7 @@ func (client *baseClient) SDiff(ctx context.Context, keys []string) (map[string]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination set.
 //	keys        - The keys of the sets to diff.
 //
@@ -1942,6 +2002,7 @@ func (client *baseClient) SDiffStore(ctx context.Context, destination string, ke
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sets to intersect.
 //
 // Return value:
@@ -1967,6 +2028,7 @@ func (client *baseClient) SInter(ctx context.Context, keys []string) (map[string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination set.
 //	keys - The keys from which to retrieve the set members.
 //
@@ -1996,6 +2058,7 @@ func (client *baseClient) SInterStore(ctx context.Context, destination string, k
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sets to intersect.
 //
 // Return value:
@@ -2024,6 +2087,7 @@ func (client *baseClient) SInterCard(ctx context.Context, keys []string) (int64,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys  - The keys of the sets to intersect.
 //	limit - The limit for the intersection cardinality value.
 //
@@ -2055,6 +2119,7 @@ func (client *baseClient) SInterCardLimit(ctx context.Context, keys []string, li
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key from which to retrieve the set member.
 //
 // Return value:
@@ -2078,6 +2143,7 @@ func (client *baseClient) SRandMember(ctx context.Context, key string) (Result[s
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //
 // Return value:
@@ -2101,6 +2167,7 @@ func (client *baseClient) SPop(ctx context.Context, key string) (Result[string],
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //
 // Return value:
@@ -2125,6 +2192,7 @@ func (client *baseClient) SMIsMember(ctx context.Context, key string, members []
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sets.
 //
 // Return value:
@@ -2150,6 +2218,7 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
 //	         A value of `"0"` indicates the start of the search.
@@ -2178,6 +2247,7 @@ func (client *baseClient) SScan(ctx context.Context, key string, cursor string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
 //	         A value of `"0"` indicates the start of the search.
@@ -2218,6 +2288,7 @@ func (client *baseClient) SScanWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	source - The key of the set to remove the element from.
 //	destination - The key of the set to add the element to.
 //	member - The set element to move.
@@ -2244,6 +2315,7 @@ func (client *baseClient) SMove(ctx context.Context, source string, destination 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the list.
 //	start - The starting point of the range.
 //	end   - The end of the range.
@@ -2274,6 +2346,7 @@ func (client *baseClient) LRange(ctx context.Context, key string, start int64, e
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the list.
 //	index - The index of the element in the list to retrieve.
 //
@@ -2301,6 +2374,7 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the list.
 //	start - The starting point of the range.
 //	end   - The end of the range.
@@ -2329,6 +2403,7 @@ func (client *baseClient) LTrim(ctx context.Context, key string, start int64, en
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list.
 //
 // Return value:
@@ -2356,6 +2431,7 @@ func (client *baseClient) LLen(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key of the list.
 //	count   - The count of the occurrences of elements equal to element to remove.
 //	element - The element to remove from the list.
@@ -2382,6 +2458,7 @@ func (client *baseClient) LRem(ctx context.Context, key string, count int64, ele
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list.
 //
 // Return value:
@@ -2405,6 +2482,7 @@ func (client *baseClient) RPop(ctx context.Context, key string) (Result[string],
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the list.
 //	count - The count of the elements to pop from the list.
 //
@@ -2429,6 +2507,7 @@ func (client *baseClient) RPopCount(ctx context.Context, key string, count int64
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key            - The key of the list.
 //	insertPosition - The relative position to insert into - either options.Before or options.After the pivot.
 //	pivot          - An element of the list.
@@ -2476,6 +2555,7 @@ func (client *baseClient) LInsert(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
 //	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
@@ -2508,6 +2588,7 @@ func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
 //	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
@@ -2535,6 +2616,7 @@ func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the tail of the list stored at key.
 //
@@ -2559,6 +2641,7 @@ func (client *baseClient) RPushX(ctx context.Context, key string, elements []str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the head of the list stored at key.
 //
@@ -2586,6 +2669,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //
@@ -2632,6 +2716,7 @@ func (client *baseClient) LMPop(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
@@ -2685,6 +2770,7 @@ func (client *baseClient) LMPopCount(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
@@ -2740,6 +2826,7 @@ func (client *baseClient) BLMPop(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
@@ -2793,6 +2880,7 @@ func (client *baseClient) BLMPopCount(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key of the list.
 //	index   - The index of the element in the list to be set.
 //	element - The element to be set.
@@ -2818,6 +2906,7 @@ func (client *baseClient) LSet(ctx context.Context, key string, index int64, ele
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
@@ -2869,6 +2958,7 @@ func (client *baseClient) LMove(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
@@ -2923,6 +3013,7 @@ func (client *baseClient) BLMove(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - One or more keys to delete.
 //
 // Return value:
@@ -2952,6 +3043,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - One or more keys to check if they exist.
 //
 // Return value:
@@ -2976,6 +3068,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to expire.
 //	seconds - Time in seconds for the key to expire
 //
@@ -3002,6 +3095,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to expire.
 //
 // seconds - Time in seconds for the key to expire.
@@ -3041,6 +3135,7 @@ func (client *baseClient) ExpireWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to expire.
 //	unixTimestampInSeconds - Absolute Unix timestamp
 //
@@ -3070,6 +3165,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to expire.
 //
 // unixTimestampInSeconds - Absolute Unix timestamp.
@@ -3108,6 +3204,7 @@ func (client *baseClient) ExpireAtWithOptions(
 
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
 //	milliseconds - The timeout in milliseconds.
 //
@@ -3132,6 +3229,7 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
 //	milliseconds - The timeout in milliseconds.
 //	option - The option to set expiry, see [options.ExpireCondition].
@@ -3169,6 +3267,7 @@ func (client *baseClient) PExpireWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
 //	unixMilliseconds - The timeout in an absolute Unix timestamp.
 //
@@ -3195,6 +3294,7 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
 //	unixMilliseconds - The timeout in an absolute Unix timestamp.
 //	option - The option to set expiry, see [options.ExpireCondition].
@@ -3230,6 +3330,7 @@ func (client *baseClient) PExpireAtWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to determine the expiration value of.
 //
 // Return value:
@@ -3252,6 +3353,7 @@ func (client *baseClient) ExpireTime(ctx context.Context, key string) (int64, er
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to determine the expiration value of.
 //
 // Return value:
@@ -3273,6 +3375,7 @@ func (client *baseClient) PExpireTime(ctx context.Context, key string) (int64, e
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to return its timeout.
 //
 // Return value:
@@ -3294,6 +3397,7 @@ func (client *baseClient) TTL(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to return its timeout.
 //
 // Return value:
@@ -3318,6 +3422,7 @@ func (client *baseClient) PTTL(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the HyperLogLog data structure to add elements into.
 //	elements - An array of members to add to the HyperLogLog stored at key.
 //
@@ -3350,6 +3455,7 @@ func (client *baseClient) PfAdd(ctx context.Context, key string, elements []stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The keys of the HyperLogLog data structures to be analyzed.
 //
 // Return value:
@@ -3377,6 +3483,7 @@ func (client *baseClient) PfCount(ctx context.Context, keys []string) (int64, er
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination HyperLogLog where the merged data sets will be stored.
 //	sourceKeys - An array of sourceKeys of the HyperLogLog structures to be merged.
 //
@@ -3408,6 +3515,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - One or more keys to unlink.
 //
 // Return value:
@@ -3429,6 +3537,7 @@ func (client *baseClient) Unlink(ctx context.Context, keys []string) (int64, err
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - string
 //
 // Return value:
@@ -3457,6 +3566,7 @@ func (client *baseClient) Type(ctx context.Context, key string) (string, error) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys to update last access time.
 //
 // Return value:
@@ -3483,6 +3593,7 @@ func (client *baseClient) Touch(ctx context.Context, keys []string) (int64, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to rename.
 //	newKey - The new name of the key.
 //
@@ -3507,6 +3618,7 @@ func (client *baseClient) Rename(ctx context.Context, key string, newKey string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to rename.
 //	newKey - The new name of the key.
 //
@@ -3529,6 +3641,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the stream.
 //	values   - Field-value pairs to be added to the entry.
 //
@@ -3547,6 +3660,7 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values [][]strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key      - The key of the stream.
 //	values   - Field-value pairs to be added to the entry.
 //	options  - Stream add options.
@@ -3596,6 +3710,7 @@ func (client *baseClient) XAddWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keysAndIds - A map of keys and entry IDs to read from.
 //
 // Return value:
@@ -3618,6 +3733,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keysAndIds - A map of keys and entry IDs to read from.
 //	opts - Options detailing how to read the stream.
 //
@@ -3655,6 +3771,7 @@ func (client *baseClient) XReadWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	group - The consumer group name.
 //	consumer - The group consumer.
 //	keysAndIds - A map of keys and entry IDs to read from.
@@ -3684,6 +3801,7 @@ func (client *baseClient) XReadGroup(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	group - The consumer group name.
 //	consumer - The group consumer.
 //	keysAndIds - A map of keys and entry IDs to read from.
@@ -3745,6 +3863,7 @@ func createStreamCommandArgs(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	membersScoreMap - A map of members to their scores.
 //
@@ -3775,6 +3894,7 @@ func (client *baseClient) ZAdd(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	membersScoreMap - A map of members to their scores.
 //	opts - The options for the command. See [ZAddOptions] for details.
@@ -3826,6 +3946,7 @@ func (client *baseClient) zAddIncrBase(ctx context.Context, key string, opts *op
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	member - The member to add to.
 //	increment - The increment to add to the member's score.
@@ -3855,6 +3976,7 @@ func (client *baseClient) ZAddIncr(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	member - The member to add to.
 //	increment - The increment to add to the member's score.
@@ -3890,6 +4012,7 @@ func (client *baseClient) ZAddIncrWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	increment - The score increment.
 //	member - A member of the sorted set.
@@ -3915,6 +4038,7 @@ func (client *baseClient) ZIncrBy(ctx context.Context, key string, increment flo
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //
 // Return value:
@@ -3939,6 +4063,7 @@ func (client *baseClient) ZPopMin(ctx context.Context, key string) (map[string]f
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	options - Pop options, see [options.ZPopOptions].
 //
@@ -3972,6 +4097,7 @@ func (client *baseClient) ZPopMinWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //
 // Return value:
@@ -3996,6 +4122,7 @@ func (client *baseClient) ZPopMax(ctx context.Context, key string) (map[string]f
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	count - The number of members to remove.
 //
@@ -4029,6 +4156,7 @@ func (client *baseClient) ZPopMaxWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	members - The members to remove.
 //
@@ -4052,6 +4180,7 @@ func (client *baseClient) ZRem(ctx context.Context, key string, members []string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //
 // Return value:
@@ -4083,6 +4212,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
 //	timeout - The number of seconds to wait for a blocking operation to complete. A value of
 //	  `0` will block indefinitely.
@@ -4124,6 +4254,7 @@ func (client *baseClient) BZPopMin(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
@@ -4185,6 +4316,7 @@ func (client *baseClient) BZMPop(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
@@ -4248,6 +4380,7 @@ func (client *baseClient) BZMPopWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
 //	  - For range queries by index (rank), use [RangeByIndex].
@@ -4283,6 +4416,7 @@ func (client *baseClient) ZRange(ctx context.Context, key string, rangeQuery opt
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
 //	  - For range queries by index (rank), use [RangeByIndex].
@@ -4335,6 +4469,7 @@ func (client *baseClient) ZRangeWithScores(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key for the destination sorted set.
 //	key - The key of the source sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
@@ -4374,6 +4509,7 @@ func (client *baseClient) ZRangeStore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to remove the existing timeout on.
 //
 // Return value:
@@ -4395,6 +4531,7 @@ func (client *baseClient) Persist(ctx context.Context, key string) (bool, error)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	 key - The key of the set.
 //	 rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
 //	 	`max` contains the maximum score to count up to. Can be positive/negative infinity, or
@@ -4425,6 +4562,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member - The member to get the rank of.
 //
@@ -4450,6 +4588,7 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member - The member to get the rank of.
 //
@@ -4480,6 +4619,7 @@ func (client *baseClient) ZRankWithScore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member - The member to get the rank of.
 //
@@ -4507,6 +4647,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member - The member to get the rank of.
 //
@@ -4535,6 +4676,7 @@ func (client *baseClient) ZRevRankWithScore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key of the stream.
 //	options - Stream trim options
 //
@@ -4561,6 +4703,7 @@ func (client *baseClient) XTrim(ctx context.Context, key string, options options
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //
 // Return value:
@@ -4586,6 +4729,7 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The group consumer.
@@ -4625,6 +4769,7 @@ func (client *baseClient) XAutoClaim(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The group consumer.
@@ -4676,6 +4821,7 @@ func (client *baseClient) XAutoClaimWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The group consumer.
@@ -4715,6 +4861,7 @@ func (client *baseClient) XAutoClaimJustId(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The group consumer.
@@ -4763,6 +4910,7 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	ids - An array of entry ids.
 //
@@ -4786,6 +4934,7 @@ func (client *baseClient) XDel(ctx context.Context, key string, ids []string) (i
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member - The member whose score is to be retrieved.
 //
@@ -4809,6 +4958,7 @@ func (client *baseClient) ZScore(ctx context.Context, key string, member string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
 //	         A value of `"0"` indicates the start of the search.
@@ -4836,6 +4986,7 @@ func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
 //	options - The options for the command. See [options.ZScanOptions] for details.
@@ -4873,6 +5024,7 @@ func (client *baseClient) ZScanWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //
@@ -4903,6 +5055,7 @@ func (client *baseClient) XPending(ctx context.Context, key string, group string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	opts - The options for the command. See [options.XPendingOptions] for details.
@@ -4939,6 +5092,7 @@ func (client *baseClient) XPendingWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The newly created consumer group name.
 //	id - Stream entry ID that specifies the last delivered entry in the stream from the new
@@ -4959,6 +5113,7 @@ func (client *baseClient) XGroupCreate(ctx context.Context, key string, group st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The newly created consumer group name.
 //	id - Stream entry ID that specifies the last delivered entry in the stream from the new
@@ -4991,6 +5146,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to create.
 //	ttl - The expiry time (in milliseconds). If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
@@ -5009,6 +5165,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, va
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to create.
 //	ttl - The expiry time (in milliseconds). If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
@@ -5040,6 +5197,7 @@ func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, tt
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	The key to serialize.
 //
 // Return value:
@@ -5064,6 +5222,7 @@ func (client *baseClient) Dump(ctx context.Context, key string) (Result[string],
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	The key of the object to get the internal encoding of.
 //
 // Return value:
@@ -5085,6 +5244,7 @@ func (client *baseClient) ObjectEncoding(ctx context.Context, key string) (Resul
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	message - The provided message.
 //
 // Return value:
@@ -5106,6 +5266,7 @@ func (client *baseClient) Echo(ctx context.Context, message string) (Result[stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name to delete.
 //
@@ -5128,6 +5289,7 @@ func (client *baseClient) XGroupDestroy(ctx context.Context, key string, group s
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
@@ -5147,6 +5309,7 @@ func (client *baseClient) XGroupSetId(ctx context.Context, key string, group str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	id - The stream entry ID that should be set as the last delivered ID for the consumer group.
@@ -5180,6 +5343,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the minimum and maximum bound of the lexicographical range.
 //
@@ -5209,6 +5373,7 @@ func (client *baseClient) ZRemRangeByLex(ctx context.Context, key string, rangeQ
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	start - The start rank.
 //	stop - The stop rank.
@@ -5238,6 +5403,7 @@ func (client *baseClient) ZRemRangeByRank(ctx context.Context, key string, start
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the minimum and maximum bound of the score range.
 //	  can be an implementation of [options.RangeByScore].
@@ -5267,6 +5433,7 @@ func (client *baseClient) ZRemRangeByScore(ctx context.Context, key string, rang
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //
 // Return value:
@@ -5289,6 +5456,7 @@ func (client *baseClient) ZRandMember(ctx context.Context, key string) (Result[s
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	count - The number of field names to return.
 //	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
@@ -5313,6 +5481,7 @@ func (client *baseClient) ZRandMemberWithCount(ctx context.Context, key string, 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	count - The number of field names to return.
 //	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
@@ -5347,6 +5516,7 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key     - The key of the sorted set.
 //	members - A list of members in the sorted set.
 //
@@ -5368,6 +5538,7 @@ func (client *baseClient) ZMScore(ctx context.Context, key string, members []str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the object to get the logarithmic access frequency counter of.
 //
 // Return value:
@@ -5388,6 +5559,7 @@ func (client *baseClient) ObjectFreq(ctx context.Context, key string) (Result[in
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the object to get the logarithmic access frequency counter of.
 //
 // Return value:
@@ -5407,6 +5579,7 @@ func (client *baseClient) ObjectIdleTime(ctx context.Context, key string) (Resul
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the object to get the reference count of.
 //
 // Return value:
@@ -5430,6 +5603,7 @@ func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (Resul
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //
 // Return value:
@@ -5463,6 +5637,7 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]Result[string
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //	sortOptions - The SortOptions type.
 //
@@ -5494,6 +5669,7 @@ func (client *baseClient) SortWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //
 // Return value:
@@ -5527,6 +5703,7 @@ func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]Resul
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //	sortOptions - The SortOptions type.
 //
@@ -5569,6 +5746,7 @@ func (client *baseClient) SortReadOnlyWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //	destination - The key where the sorted result will be stored.
 //
@@ -5605,6 +5783,7 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the list, set, or sorted set to be sorted.
 //	destination - The key where the sorted result will be stored.
 //
@@ -5639,6 +5818,7 @@ func (client *baseClient) SortStoreWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The newly created consumer.
@@ -5667,6 +5847,7 @@ func (client *baseClient) XGroupCreateConsumer(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //	group - The consumer group name.
 //	consumer - The consumer to delete.
@@ -5697,6 +5878,7 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	group - he consumer group name.
 //	ids   - Stream entry IDs to acknowledge and purge messages.
@@ -5723,6 +5905,7 @@ func (client *baseClient) XAck(ctx context.Context, key string, group string, id
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the string.
 //	offset - The index of the bit to be set.
 //	value - The bit value to set at offset The value must be `0` or `1`.
@@ -5746,6 +5929,7 @@ func (client *baseClient) SetBit(ctx context.Context, key string, offset int64, 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the string.
 //	offset - The index of the bit to return.
 //
@@ -5769,6 +5953,7 @@ func (client *baseClient) GetBit(ctx context.Context, key string, offset int64) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	numberOfReplicas - The number of replicas to reach.
 //	timeout - The timeout value specified in milliseconds. A value of `0` will
 //	block indefinitely.
@@ -5794,6 +5979,7 @@ func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, time
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key for the string to count the set bits of.
 //
 // Return value:
@@ -5818,6 +6004,7 @@ func (client *baseClient) BitCount(ctx context.Context, key string) (int64, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	bitwiseOperation - The bitwise operation to perform.
 //	destination      - The key that will store the resulting string.
 //	keys             - The list of keys to perform the bitwise operation on.
@@ -5856,6 +6043,7 @@ func (client *baseClient) BitOp(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key for the string to count the set bits of.
 //	options - The offset options - see [options.BitOffsetOptions].
 //
@@ -5884,6 +6072,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
@@ -5913,6 +6102,7 @@ func (client *baseClient) XClaim(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
@@ -5955,6 +6145,7 @@ func (client *baseClient) XClaimWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
@@ -5985,6 +6176,7 @@ func (client *baseClient) XClaimJustId(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
@@ -6024,6 +6216,7 @@ func (client *baseClient) XClaimJustIdWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the string.
 //	bit - The bit value to match. The value must be 0 or 1.
 //
@@ -6045,6 +6238,7 @@ func (client *baseClient) BitPos(ctx context.Context, key string, bit int64) (in
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the string.
 //	bit - The bit value to match. The value must be 0 or 1.
 //	bitposOptions  - The [BitPosOptions] type.
@@ -6082,6 +6276,7 @@ func (client *baseClient) BitPosWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	source - The key to the source value.
 //	destination - The key where the value should be copied to.
 //
@@ -6108,6 +6303,7 @@ func (client *baseClient) Copy(ctx context.Context, source string, destination s
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	source - The key to the source value.
 //	destination - The key where the value should be copied to.
 //	copyOptions - Set copy options with replace and DB destination-db
@@ -6142,6 +6338,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	start - The start position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
@@ -6171,6 +6368,7 @@ func (client *baseClient) XRange(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	start - The start position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
@@ -6213,6 +6411,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	start - The start position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
@@ -6243,6 +6442,7 @@ func (client *baseClient) XRevRange(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	start - The start position.
 //	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
@@ -6285,6 +6485,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //
 // Return value:
@@ -6306,6 +6507,7 @@ func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[stri
 //
 // Parameters:
 //
+//	ctx  - The context for controlling the command execution.
 //	key  - The key of the stream.
 //	opts - Stream info options.
 //
@@ -6341,6 +6543,7 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //
 // Parameters:
 //
+//	ctx   - The context for controlling the command execution.
 //	key   - The key of the stream.
 //	group - The consumer group name.
 //
@@ -6364,6 +6567,7 @@ func (client *baseClient) XInfoConsumers(ctx context.Context, key string, group 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the stream.
 //
 // Return value:
@@ -6387,6 +6591,7 @@ func (client *baseClient) XInfoGroups(ctx context.Context, key string) ([]XInfoG
 //
 // Parameters:
 //
+//	ctx          - The context for controlling the command execution.
 //	key          -  The key of the string.
 //	subCommands  -  The subCommands to be performed on the binary value of the string at
 //	                key, which could be any of the following:
@@ -6439,6 +6644,7 @@ func (client *baseClient) BitField(
 //
 // Parameters:
 //
+//	ctx          - The context for controlling the command execution.
 //	key          -  The key of the string.
 //	subCommands  -  The read-only subCommands to be performed on the binary value
 //	                of the string at key, which could be:
@@ -6476,6 +6682,12 @@ func (client *baseClient) BitFieldRO(
 
 // Returns the server time.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The current server time as a String array with two elements:
@@ -6502,6 +6714,7 @@ func (client *baseClient) Time(ctx context.Context) ([]string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets, see - [options.KeyArray].
 //
 // Return value:
@@ -6532,6 +6745,7 @@ func (client *baseClient) ZInter(ctx context.Context, keys options.KeyArray) ([]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                     - Use `options.NewKeyArray()` for keys only.
 //	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
@@ -6578,6 +6792,7 @@ func (client *baseClient) ZInterWithScores(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The destination key for the result.
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                   - Use `options.NewKeyArray()` for keys only.
@@ -6608,6 +6823,7 @@ func (client *baseClient) ZInterStore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The destination key for the result.
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                     - Use `options.NewKeyArray()` for keys only.
@@ -6657,6 +6873,7 @@ func (client *baseClient) ZInterStoreWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys -  The keys of the sorted sets.
 //
 // Return value:
@@ -6683,6 +6900,7 @@ func (client *baseClient) ZDiff(ctx context.Context, keys []string) ([]string, e
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys -  The keys of the sorted sets.
 //
 // Return value:
@@ -6716,6 +6934,7 @@ func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key for the resulting sorted set.
 //	keys        - The keys of the sorted sets to compare.
 //
@@ -6748,6 +6967,7 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
 //
 // Return Value:
@@ -6780,6 +7000,7 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keysOrWeightedKeys - The keys of the sorted sets with possible formats:
 //	 - Use `KeyArray` for keys only.
 //	 - Use `WeightedKeys` for weighted keys with score multipliers.
@@ -6826,6 +7047,7 @@ func (client *baseClient) ZUnionWithScores(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination sorted set.
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                   - Use `options.NewKeyArray()` for keys only.
@@ -6858,6 +7080,7 @@ func (client *baseClient) ZUnionStore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destination - The key of the destination sorted set.
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
 //	                   - Use `options.NewKeyArray()` for keys only.
@@ -6902,6 +7125,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
 //
 // Return value:
@@ -6921,6 +7145,7 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
 //	options - The options for the ZInterCard command, see - [options.ZInterCardOptions].
 //
@@ -6957,6 +7182,7 @@ func (client *baseClient) ZInterCardWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	rangeQuery - The range query to apply to the sorted set.
 //
@@ -6975,17 +7201,18 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 	return handleIntResponse(result)
 }
 
-//	Blocks the connection until it pops and returns a member-score pair
-//	with the highest score from the first non-empty sorted set.
-//
-// See [valkey.io] for details.
+// Blocks the connection until it pops and returns a member-score pair
+// with the highest score from the first non-empty sorted set.
 //
 // Note :
 //
 // When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
 //	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
 //
@@ -7011,13 +7238,14 @@ func (client *baseClient) BZPopMax(
 	return handleKeyWithMemberAndScoreResponse(result)
 }
 
-// ZMPopWithOptions Removes and returns up to `count` members from the first non-empty sorted set
+// Removes and returns up to `count` members from the first non-empty sorted set
 // among the provided `keys`, based on the specified `scoreFilter` criteria.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - A list of keys representing sorted sets to check for elements.
 //	scoreFilter - Specifies whether to pop members with the lowest (`options.MIN`)
 //	 or highest (`options.MAX`) scores.
@@ -7064,6 +7292,7 @@ func (client *baseClient) ZMPopWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
 //	scoreFilter - Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
 //
@@ -7105,6 +7334,7 @@ func (client *baseClient) ZMPop(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
 //	  The command will report an error when index coordinates are out of the specified range.
@@ -7136,6 +7366,7 @@ func (client *baseClient) GeoAdd(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	membersToGeospatialData - A map of member names to their corresponding positions. See [options.GeospatialData].
 //	  The command will report an error when index coordinates are out of the specified range.
@@ -7173,6 +7404,7 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key -  The key of the sorted set.
 //	members - The array of members whose GeoHash strings are to be retrieved.
 //
@@ -7201,6 +7433,7 @@ func (client *baseClient) GeoHash(ctx context.Context, key string, members []str
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	members - The members of the sorted set.
 //
@@ -7227,6 +7460,7 @@ func (client *baseClient) GeoPos(ctx context.Context, key string, members []stri
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member1 - The name of the first member.
 //	member2 - The name of the second member.
@@ -7256,6 +7490,7 @@ func (client *baseClient) GeoDist(ctx context.Context, key string, member1 strin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	member1 - The name of the first member.
 //	member2 - The name of the second member.
@@ -7295,6 +7530,7 @@ func (client *baseClient) GeoDistWithUnit(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
@@ -7363,6 +7599,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
@@ -7420,6 +7657,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
@@ -7468,6 +7706,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
 //		- `MemberOrigin` to use the position of the given existing member in the sorted
@@ -7512,6 +7751,7 @@ func (client *baseClient) GeoSearch(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
@@ -7582,6 +7822,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
@@ -7630,6 +7871,7 @@ func (client *baseClient) GeoSearchStore(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
@@ -7680,6 +7922,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
@@ -7725,6 +7968,7 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libraryCode - The source code that implements the library.
 //	replace - Whether the given library should overwrite a library with the same name if it
 //	already exists.
@@ -7753,7 +7997,11 @@ func (client *baseClient) FunctionLoad(ctx context.Context, libraryCode string, 
 //
 //	Valkey 7.0 and above.
 //
-// See [valkey.io] for more details.
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -7776,6 +8024,10 @@ func (client *baseClient) FunctionFlush(ctx context.Context) (string, error) {
 //
 // See [valkey.io] for more details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`OK`
@@ -7796,6 +8048,10 @@ func (client *baseClient) FunctionFlushSync(ctx context.Context) (string, error)
 //	Valkey 7.0 and above.
 //
 // See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -7822,6 +8078,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //
 // Return value:
@@ -7848,6 +8105,7 @@ func (client *baseClient) FCall(ctx context.Context, function string) (any, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //
 // Return value:
@@ -7875,6 +8133,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	keys - An `array` of keys accessed by the function. To ensure the correct
 //	   execution of functions, both in standalone and clustered deployments, all names of keys
@@ -7915,6 +8174,7 @@ func (client *baseClient) FCallWithKeysAndArgs(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	keys - An `array` of keys accessed by the function. To ensure the correct
 //	   execution of functions, both in standalone and clustered deployments, all names of keys
@@ -7949,6 +8209,10 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	An array of active channel names.
@@ -7977,6 +8241,7 @@ func (client *baseClient) PubSubChannels(ctx context.Context) ([]string, error) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pattern - The pattern to match channel names against.
 //
 // Return value:
@@ -8004,6 +8269,10 @@ func (client *baseClient) PubSubChannelsWithPattern(ctx context.Context, pattern
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The number of patterns that are subscribed to by clients.
@@ -8030,6 +8299,7 @@ func (client *baseClient) PubSubNumPat(ctx context.Context) (int64, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channels - The channel names to get subscriber counts for.
 //
 // Return value:
@@ -8060,6 +8330,10 @@ func (client *baseClient) PubSubNumSub(ctx context.Context, channels ...string) 
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`OK` if function is terminated. Otherwise, throws an error.
@@ -8083,6 +8357,7 @@ func (client *baseClient) FunctionKill(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	query - The query to use to filter the functions and libraries.
 //
 // Return value:

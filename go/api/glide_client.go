@@ -40,6 +40,7 @@ type GlideClient struct {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	config - The configuration options for the client, including server addresses, authentication credentials,
 //	    TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
 //
@@ -81,6 +82,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - Arguments for the custom command including the command name.
 //
 // Return value:
@@ -104,6 +106,7 @@ func (client *GlideClient) CustomCommand(ctx context.Context, args []string) (in
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters - A map consisting of configuration parameters and their respective values to set.
 //
 // Return value:
@@ -127,6 +130,7 @@ func (client *GlideClient) ConfigSet(ctx context.Context, parameters map[string]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - A slice of configuration parameter names to retrieve values for.
 //
 // Return value:
@@ -144,8 +148,11 @@ func (client *GlideClient) ConfigGet(ctx context.Context, args []string) (map[st
 
 // Select changes the currently selected database.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	index - The index of the database to select.
 //
 // Return value:
@@ -166,6 +173,10 @@ func (client *GlideClient) Select(ctx context.Context, index int64) (string, err
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A string with the information for the default sections.
@@ -181,6 +192,7 @@ func (client *GlideClient) Info(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - Additional command parameters, see [InfoOptions] for more details.
 //
 // Return value:
@@ -203,6 +215,12 @@ func (client *GlideClient) InfoWithOptions(ctx context.Context, options options.
 
 // Returns the number of keys in the currently selected database.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The number of keys in the currently selected database.
@@ -219,8 +237,11 @@ func (client *GlideClient) DBSize(ctx context.Context) (int64, error) {
 // Echo the provided message back.
 // The command will be routed a random node.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	message - The provided message.
 //
 // Return value:
@@ -238,6 +259,12 @@ func (client *GlideClient) Echo(ctx context.Context, message string) (Result[str
 
 // Pings the server.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	Returns "PONG".
@@ -249,8 +276,11 @@ func (client *GlideClient) Ping(ctx context.Context) (string, error) {
 
 // Pings the server.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pingOptions - The PingOptions type.
 //
 // Return value:
@@ -274,6 +304,10 @@ func (client *GlideClient) PingWithOptions(ctx context.Context, pingOptions opti
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
@@ -293,6 +327,7 @@ func (client *GlideClient) FlushAll(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
 //
 // Return value:
@@ -311,6 +346,10 @@ func (client *GlideClient) FlushAllWithOptions(ctx context.Context, mode options
 // Deletes all the keys of the currently selected database.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -331,6 +370,7 @@ func (client *GlideClient) FlushDB(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
 //
 // Return value:
@@ -348,6 +388,12 @@ func (client *GlideClient) FlushDBWithOptions(ctx context.Context, mode options.
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
@@ -363,8 +409,11 @@ func (client *GlideClient) Lolwut(ctx context.Context) (string, error) {
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - The [LolwutOptions] type.
 //
 // Return value:
@@ -386,6 +435,12 @@ func (client *baseClient) LolwutWithOptions(ctx context.Context, opts options.Lo
 
 // Gets the current connection id.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The id of the client.
@@ -400,6 +455,12 @@ func (client *GlideClient) ClientId(ctx context.Context) (int64, error) {
 }
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -416,6 +477,12 @@ func (client *GlideClient) LastSave(ctx context.Context) (int64, error) {
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	OK to confirm that the statistics were successfully reset.
@@ -430,6 +497,12 @@ func (client *GlideClient) ConfigResetStat(ctx context.Context) (string, error) 
 }
 
 // Gets the name of the current connection.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -446,8 +519,11 @@ func (client *GlideClient) ClientGetName(ctx context.Context) (string, error) {
 
 // Set the name of the current connection.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //
 // Return value:
@@ -465,8 +541,11 @@ func (client *GlideClient) ClientSetName(ctx context.Context, connectionName str
 
 // Move key from the currently selected database to the database specified by dbIndex.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to move.
 //	dbIndex -  The index of the database to move key to.
 //
@@ -486,8 +565,11 @@ func (client *GlideClient) Move(ctx context.Context, key string, dbIndex int64) 
 
 // Iterates incrementally over a database for matching keys.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The cursor that points to the next iteration of results. A value of 0
 //			 indicates the start of the search.
 //
@@ -508,8 +590,11 @@ func (client *GlideClient) Scan(ctx context.Context, cursor int64) (string, []st
 
 // Iterates incrementally over a database for matching keys.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	 cursor - The cursor that points to the next iteration of results. A value of 0
 //				 indicates the start of the search.
 //	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
@@ -539,6 +624,12 @@ func (client *GlideClient) ScanWithOptions(
 
 // Rewrites the configuration file with the current configuration.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
@@ -553,6 +644,12 @@ func (client *GlideClient) ConfigRewrite(ctx context.Context) (string, error) {
 }
 
 // Returns a random existing key name from the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -577,6 +674,10 @@ func (client *GlideClient) RandomKey(ctx context.Context) (Result[string], error
 //	Valkey 7.0 and above.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -604,6 +705,7 @@ func (client *GlideClient) FunctionStats(ctx context.Context) (map[string]Functi
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //
 // Return value:
@@ -628,6 +730,7 @@ func (client *GlideClient) FunctionDelete(ctx context.Context, libName string) (
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channel - The channel to publish the message to.
 //	message - The message to publish.
 //

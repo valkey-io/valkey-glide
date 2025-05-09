@@ -42,6 +42,7 @@ type GlideClusterClient struct {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	config - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings,
 //	   periodic checks, and Pub/Sub subscriptions.
 //
@@ -86,6 +87,7 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - Arguments for the custom command including the command name.
 //
 // Return value:
@@ -111,6 +113,10 @@ func (client *GlideClusterClient) CustomCommand(ctx context.Context, args []stri
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
@@ -133,6 +139,7 @@ func (client *GlideClusterClient) Info(ctx context.Context) (map[string]string, 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - Additional command parameters, see [ClusterInfoOptions] for more details.
 //
 // Return value:
@@ -187,6 +194,7 @@ func (client *GlideClusterClient) InfoWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args  - Arguments for the custom command including the command name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -217,6 +225,12 @@ func (client *GlideClusterClient) CustomCommandWithRoute(ctx context.Context,
 // Pings the server.
 // The command will be routed to all primary nodes.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	Returns "PONG".
@@ -235,6 +249,7 @@ func (client *GlideClusterClient) Ping(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pingOptions - The [ClusterPingOptions] type.
 //
 // Return value:
@@ -280,6 +295,7 @@ func (client *GlideClusterClient) PingWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - The [RouteOption] type.
 //
 // Return value:
@@ -301,8 +317,11 @@ func (client *GlideClusterClient) TimeWithOptions(
 
 // Returns the number of keys in the database.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - The [RouteOption] type.
 //
 // Return value:
@@ -323,6 +342,10 @@ func (client *GlideClusterClient) DBSizeWithOptions(ctx context.Context, opts op
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
@@ -342,6 +365,7 @@ func (client *GlideClusterClient) FlushAll(ctx context.Context) (string, error) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
@@ -372,6 +396,10 @@ func (client *GlideClusterClient) FlushAllWithOptions(
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
@@ -391,6 +419,7 @@ func (client *GlideClusterClient) FlushDB(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
@@ -421,6 +450,7 @@ func (client *GlideClusterClient) FlushDBWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	echoOptions - The [ClusterEchoOptions] type.
 //
 // Return value:
@@ -538,6 +568,7 @@ func (client *GlideClusterClient) clusterScan(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
 //	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
 //
@@ -575,6 +606,7 @@ func (client *GlideClusterClient) Scan(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
 //	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
 //	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
@@ -599,6 +631,12 @@ func (client *GlideClusterClient) ScanWithOptions(ctx context.Context,
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
@@ -616,6 +654,7 @@ func (client *GlideClusterClient) Lolwut(ctx context.Context) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	lolwutOptions - The [LolwutOptions] type.
 //
 // Return value:
@@ -667,6 +706,12 @@ func (client *GlideClusterClient) LolwutWithOptions(
 
 // Gets the current connection id.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The id of the client.
@@ -688,6 +733,7 @@ func (client *GlideClusterClient) ClientId(ctx context.Context) (ClusterValue[in
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -722,6 +768,12 @@ func (client *GlideClusterClient) ClientIdWithOptions(
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
 // The command is routed to a random node by default, which is safe for read-only commands.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	UNIX TIME of the last DB save executed with success.
@@ -743,6 +795,7 @@ func (client *GlideClusterClient) LastSave(ctx context.Context) (ClusterValue[in
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -774,7 +827,13 @@ func (client *GlideClusterClient) LastSaveWithOptions(
 	return createClusterSingleValue[int64](data), nil
 }
 
-// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -791,8 +850,11 @@ func (client *GlideClusterClient) ConfigResetStat(ctx context.Context) (string, 
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -815,6 +877,7 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(ctx context.Context
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //
 // Return value:
@@ -837,6 +900,7 @@ func (client *GlideClusterClient) ConfigSet(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -862,6 +926,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  An array of configuration parameter names to retrieve values for.
 //
 // Return value:
@@ -888,6 +953,7 @@ func (client *GlideClusterClient) ConfigGet(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters - An array of configuration parameter names to retrieve values for.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	       command to the nodes defined by route.
@@ -922,6 +988,7 @@ func (client *GlideClusterClient) ConfigGetWithOptions(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //
 // Return value:
@@ -945,6 +1012,7 @@ func (client *GlideClusterClient) ClientSetName(ctx context.Context, connectionN
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -979,6 +1047,12 @@ func (client *GlideClusterClient) ClientSetNameWithOptions(ctx context.Context,
 
 // Gets the name of the current connection.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
@@ -998,8 +1072,11 @@ func (client *GlideClusterClient) ClientGetName(ctx context.Context) (ClusterVal
 
 // Gets the name of the current connection.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1034,6 +1111,12 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(
 // Rewrites the configuration file with the current configuration.
 // The command will be routed a random node.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
@@ -1051,6 +1134,7 @@ func (client *GlideClusterClient) ConfigRewrite(ctx context.Context) (string, er
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1069,6 +1153,12 @@ func (client *GlideClusterClient) ConfigRewriteWithOptions(ctx context.Context, 
 
 // Returns a random key.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A random key from the database.
@@ -1086,6 +1176,7 @@ func (client *GlideClusterClient) RandomKey(ctx context.Context) (Result[string]
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	 opts - specifies the routing configuration for the command.
 //
 //		 The client will route the command to the nodes defined by route,
@@ -1114,6 +1205,7 @@ func (client *GlideClusterClient) RandomKeyWithRoute(ctx context.Context, opts o
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libraryCode - The source code that implements the library.
 //	replace - Whether the given library should overwrite a library with the same name if it
 //	already exists.
@@ -1152,6 +1244,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1178,6 +1271,7 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(ctx context.Context, ro
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1204,6 +1298,7 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(ctx context.Context
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1231,6 +1326,7 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(ctx context.Contex
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1279,6 +1375,7 @@ func (client *GlideClusterClient) FCallWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1327,6 +1424,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithRoute(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //
@@ -1353,6 +1451,7 @@ func (client *GlideClusterClient) FCallWithArgs(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
@@ -1403,6 +1502,7 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
@@ -1454,6 +1554,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(ctx context.Con
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //
@@ -1479,6 +1580,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(
 //	Valkey 7.0 and above.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
@@ -1516,6 +1621,7 @@ func (client *GlideClusterClient) FunctionStats(ctx context.Context) (
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	       command to the nodes defined by route. If no route is specified, the command
 //	       will be routed to all nodes.
@@ -1560,6 +1666,7 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //
 // Return value:
@@ -1581,6 +1688,7 @@ func (client *GlideClusterClient) FunctionDelete(ctx context.Context, libName st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	    command to the nodes defined by `route`.
@@ -1614,6 +1722,7 @@ func (client *GlideClusterClient) FunctionDeleteWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1645,6 +1754,7 @@ func (client *GlideClusterClient) FunctionKillWithRoute(ctx context.Context, rou
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	query - The query to use to filter the functions and libraries.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1687,6 +1797,7 @@ func (client *GlideClusterClient) FunctionListWithRoute(ctx context.Context,
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channel - The channel to publish the message to.
 //	message - The message to publish.
 //	sharded - Whether the channel is sharded.
@@ -1721,6 +1832,10 @@ func (client *GlideClusterClient) Publish(ctx context.Context, channel string, m
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A list of shard channels.
@@ -1745,6 +1860,7 @@ func (client *GlideClusterClient) PubSubShardChannels(ctx context.Context) ([]st
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pattern - A glob-style pattern to match active shard channels.
 //
 // Return value:
@@ -1771,6 +1887,7 @@ func (client *GlideClusterClient) PubSubShardChannelsWithPattern(ctx context.Con
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channels - The channel to get the number of subscribers for.
 //
 // Return value:
