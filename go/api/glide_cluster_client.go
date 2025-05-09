@@ -491,6 +491,7 @@ func (client *GlideClusterClient) EchoWithOptions(
 
 // Helper function to perform the cluster scan.
 func (client *GlideClusterClient) clusterScan(
+	ctx context.Context,
 	cursor *options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
@@ -577,10 +578,11 @@ func (client *GlideClusterClient) clusterScan(
 //	The ID of the next cursor and a list of keys found for this cursor ID.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *GlideClusterClient) Scan(ctx context.Context,
+func (client *GlideClusterClient) Scan(
+	ctx context.Context,
 	cursor options.ClusterScanCursor,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(&cursor, *options.NewClusterScanOptions())
+	response, err := client.clusterScan(ctx, &cursor, *options.NewClusterScanOptions())
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
@@ -616,11 +618,12 @@ func (client *GlideClusterClient) Scan(ctx context.Context,
 //	The ID of the next cursor and a list of keys found for this cursor ID.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *GlideClusterClient) ScanWithOptions(ctx context.Context,
+func (client *GlideClusterClient) ScanWithOptions(
+	ctx context.Context,
 	cursor options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(&cursor, opts)
+	response, err := client.clusterScan(ctx, &cursor, opts)
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
