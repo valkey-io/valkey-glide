@@ -241,5 +241,15 @@ jobs:
             - name: Format
               working-directory: csharp
               run: |
-                  dotnet format --verify-no-changes --verbosity diagnostic
-                  dotnet build --configuration Lint --framework net6.0
+                  dotnet format --verify-no-changes --verbosity diagnostic --exclude assets
+
+            - name: Build Lint (/sources)
+              working-directory: csharp/sources
+              run: |
+                  dotnet build Valkey.Glide --configuration Lint --framework net6.0 --nologo
+
+            - name: Build Lint (/tests)
+              working-directory: csharp/tests
+              run: |
+                  dotnet build Valkey.Glide.IntegrationTests --configuration Lint --framework net6.0 --nologo
+                  dotnet build Valkey.Glide.UnitTests --configuration Lint --framework net6.0 --nologo
