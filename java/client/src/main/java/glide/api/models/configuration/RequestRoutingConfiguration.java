@@ -100,20 +100,19 @@ public class RequestRoutingConfiguration {
     /** Routes a request to a node by its address. */
     @Getter
     public static class ByAddressRoute implements SingleNodeRoute {
-        /**
-         * The endpoint of the node. If <code>port</code> is not provided, should be in the <code>
-         * "address:port"</code> format, where <code>address</code> is the preferred endpoint as shown
-         * in the output of the <code>CLUSTER SLOTS</code> command.
-         */
         private final String host;
 
-        /**
-         * The port to access the node. If port is not provided, <code>host</code> is assumed to be in
-         * the format <code>"address:port"</code>.
-         */
         private final int port;
 
-        /** Create a route using hostname/address and port. */
+        /**
+         * Create a route using hostname/address and port.
+         *
+         * @param host The endpoint of the node. If <code>port</code> is not provided, should be in the
+         *     <code>"address:port"</code> format, where <code>address</code> is the preferred endpoint
+         *     as shown in the output of the <code>CLUSTER SLOTS</code> command.
+         * @param port The port to access the node. If port is not provided, <code>host</code> is
+         *     assumed to be in the format <code>"address:port"</code>.
+         */
         public ByAddressRoute(@NonNull String host, int port) {
             this.host = host;
             this.port = port;
