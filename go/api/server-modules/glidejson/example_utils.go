@@ -2,6 +2,7 @@
 package glidejson
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/api"
@@ -18,7 +19,7 @@ func getExampleGlideClient() *api.GlideClient {
 		fmt.Println("error connecting to database: ", err)
 	}
 
-	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	_, err = client.FlushAll(context.TODO())
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -36,7 +37,7 @@ func getExampleGlideClusterClient() *api.GlideClusterClient {
 		fmt.Println("error connecting to database: ", err)
 	}
 
-	_, err = client.CustomCommand([]string{"FLUSHALL"}) // todo: replace with client.FlushAll() when implemented
+	_, err = client.FlushAll(context.TODO())
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}

@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -158,7 +159,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
-			info, _ := client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{options.Server}})
+			info, _ := client.InfoWithOptions(context.TODO(), options.InfoOptions{Sections: []options.Section{options.Server}})
 			return extractServerVersion(suite, info)
 		}
 	}
@@ -179,6 +180,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		defer client.Close()
 
 		info, _ := client.InfoWithOptions(
+			context.TODO(),
 			options.ClusterInfoOptions{
 				InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 				RouteOption: &options.RouteOption{Route: config.RandomRoute},

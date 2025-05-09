@@ -6,6 +6,8 @@ package api
 import "C"
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/utils"
 )
@@ -86,8 +88,8 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //	The returned value for the custom command.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
-	res, err := client.executeCommand(C.CustomCommand, args)
+func (client *GlideClient) CustomCommand(ctx context.Context, args []string) (interface{}, error) {
+	res, err := client.executeCommand(ctx, C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +111,8 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
-	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+func (client *GlideClient) ConfigSet(ctx context.Context, parameters map[string]string) (string, error) {
+	result, err := client.executeCommand(ctx, C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -132,8 +134,8 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //	A map of api.Result[string] corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
-	res, err := client.executeCommand(C.ConfigGet, args)
+func (client *GlideClient) ConfigGet(ctx context.Context, args []string) (map[string]string, error) {
+	res, err := client.executeCommand(ctx, C.ConfigGet, args)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +153,8 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //	A simple `"OK"` response.
 //
 // [valkey.io]: https://valkey.io/commands/select/
-func (client *GlideClient) Select(index int64) (string, error) {
-	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
+func (client *GlideClient) Select(ctx context.Context, index int64) (string, error) {
+	result, err := client.executeCommand(ctx, C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -169,8 +171,8 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //	A string with the information for the default sections.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClient) Info() (string, error) {
-	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
+func (client *GlideClient) Info(ctx context.Context) (string, error) {
+	return client.InfoWithOptions(ctx, options.InfoOptions{Sections: []options.Section{}})
 }
 
 // Gets information and statistics about the server.
@@ -186,12 +188,12 @@ func (client *GlideClient) Info() (string, error) {
 //	A string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
+func (client *GlideClient) InfoWithOptions(ctx context.Context, options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Info, optionArgs)
+	result, err := client.executeCommand(ctx, C.Info, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -206,8 +208,8 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 //	The number of keys in the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *GlideClient) DBSize() (int64, error) {
-	result, err := client.executeCommand(C.DBSize, []string{})
+func (client *GlideClient) DBSize(ctx context.Context) (int64, error) {
+	result, err := client.executeCommand(ctx, C.DBSize, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -226,8 +228,8 @@ func (client *GlideClient) DBSize() (int64, error) {
 //	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
+func (client *GlideClient) Echo(ctx context.Context, message string) (Result[string], error) {
+	result, err := client.executeCommand(ctx, C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -241,8 +243,8 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 //	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *GlideClient) Ping() (string, error) {
-	return client.PingWithOptions(options.PingOptions{})
+func (client *GlideClient) Ping(ctx context.Context) (string, error) {
+	return client.PingWithOptions(ctx, options.PingOptions{})
 }
 
 // Pings the server.
@@ -256,12 +258,12 @@ func (client *GlideClient) Ping() (string, error) {
 //	Returns the copy of message.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
+func (client *GlideClient) PingWithOptions(ctx context.Context, pingOptions options.PingOptions) (string, error) {
 	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Ping, optionArgs)
+	result, err := client.executeCommand(ctx, C.Ping, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -277,8 +279,8 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *GlideClient) FlushAll() (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{})
+func (client *GlideClient) FlushAll(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushAll, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -298,8 +300,8 @@ func (client *GlideClient) FlushAll() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+func (client *GlideClient) FlushAllWithOptions(ctx context.Context, mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushAll, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -315,8 +317,8 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *GlideClient) FlushDB() (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{})
+func (client *GlideClient) FlushDB(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushDB, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -336,8 +338,8 @@ func (client *GlideClient) FlushDB() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+func (client *GlideClient) FlushDBWithOptions(ctx context.Context, mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushDB, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -351,8 +353,8 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *GlideClient) Lolwut() (string, error) {
-	result, err := client.executeCommand(C.Lolwut, []string{})
+func (client *GlideClient) Lolwut(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Lolwut, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -370,12 +372,12 @@ func (client *GlideClient) Lolwut() (string, error) {
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
+func (client *baseClient) LolwutWithOptions(ctx context.Context, opts options.LolwutOptions) (string, error) {
 	commandArgs, err := opts.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	result, err := client.executeCommand(ctx, C.Lolwut, commandArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -389,8 +391,8 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClient) ClientId() (int64, error) {
-	result, err := client.executeCommand(C.ClientId, []string{})
+func (client *GlideClient) ClientId(ctx context.Context) (int64, error) {
+	result, err := client.executeCommand(ctx, C.ClientId, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -404,8 +406,8 @@ func (client *GlideClient) ClientId() (int64, error) {
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *GlideClient) LastSave() (int64, error) {
-	response, err := client.executeCommand(C.LastSave, []string{})
+func (client *GlideClient) LastSave(ctx context.Context) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LastSave, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -419,8 +421,8 @@ func (client *GlideClient) LastSave() (int64, error) {
 //	OK to confirm that the statistics were successfully reset.
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
-func (client *GlideClient) ConfigResetStat() (string, error) {
-	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+func (client *GlideClient) ConfigResetStat(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigResetStat, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -434,8 +436,8 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *GlideClient) ClientGetName() (string, error) {
-	result, err := client.executeCommand(C.ClientGetName, []string{})
+func (client *GlideClient) ClientGetName(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -453,8 +455,8 @@ func (client *GlideClient) ClientGetName() (string, error) {
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
-	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+func (client *GlideClient) ClientSetName(ctx context.Context, connectionName string) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -473,8 +475,8 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 //	Returns "OK".
 //
 // [valkey.io]: https://valkey.io/commands/move/
-func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
-	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+func (client *GlideClient) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -496,8 +498,8 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
-	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+func (client *GlideClient) Scan(ctx context.Context, cursor int64) (string, []string, error) {
+	res, err := client.executeCommand(ctx, C.Scan, []string{utils.IntToString(cursor)})
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
@@ -519,12 +521,16 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+func (client *GlideClient) ScanWithOptions(
+	ctx context.Context,
+	cursor int64,
+	scanOptions options.ScanOptions,
+) (string, []string, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
-	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executeCommand(ctx, C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
@@ -538,8 +544,8 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
-func (client *GlideClient) ConfigRewrite() (string, error) {
-	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+func (client *GlideClient) ConfigRewrite(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigRewrite, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -553,8 +559,8 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClient) RandomKey() (Result[string], error) {
-	result, err := client.executeCommand(C.RandomKey, []string{})
+func (client *GlideClient) RandomKey(ctx context.Context) (Result[string], error) {
+	result, err := client.executeCommand(ctx, C.RandomKey, []string{})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -580,8 +586,8 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 //	engines - Information about available engines and their stats.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
-func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
-	response, err := client.executeCommand(C.FunctionStats, []string{})
+func (client *GlideClient) FunctionStats(ctx context.Context) (map[string]FunctionStatsResult, error) {
+	response, err := client.executeCommand(ctx, C.FunctionStats, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -605,8 +611,8 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
-func (client *GlideClient) FunctionDelete(libName string) (string, error) {
-	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
+func (client *GlideClient) FunctionDelete(ctx context.Context, libName string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDelete, []string{libName})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -630,9 +636,9 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 //	The number of clients that received the message.
 //
 // [valkey.io]: https://valkey.io/commands/publish
-func (client *GlideClient) Publish(channel string, message string) (int64, error) {
+func (client *GlideClient) Publish(ctx context.Context, channel string, message string) (int64, error) {
 	args := []string{channel, message}
-	result, err := client.executeCommand(C.Publish, args)
+	result, err := client.executeCommand(ctx, C.Publish, args)
 	if err != nil {
 		return 0, err
 	}

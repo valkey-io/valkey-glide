@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 func ExampleGlideClient_Select() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Select(2)
+	result, err := client.Select(context.TODO(), 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -24,9 +25,9 @@ func ExampleGlideClient_Select() {
 }
 
 func ExampleGlideClient_ConfigGet() {
-	var client *GlideClient = getExampleGlideClient()                          // example helper function
-	client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"}) // example configuration
-	result, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	var client *GlideClient = getExampleGlideClient()                                          // example helper function
+	client.ConfigSet(context.TODO(), map[string]string{"timeout": "1000", "maxmemory": "1GB"}) // example configuration
+	result, err := client.ConfigGet(context.TODO(), []string{"timeout", "maxmemory"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -37,8 +38,11 @@ func ExampleGlideClient_ConfigGet() {
 }
 
 func ExampleGlideClient_ConfigSet() {
-	var client *GlideClient = getExampleGlideClient()                                         // example helper function
-	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"}) // example configuration
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	result, err := client.ConfigSet(
+		context.TODO(),
+		map[string]string{"timeout": "1000", "maxmemory": "1GB"},
+	) // example configuration
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -51,8 +55,8 @@ func ExampleGlideClient_ConfigSet() {
 func ExampleGlideClient_DBSize() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	// Assume flushed client, so no keys are currently stored
-	client.Set("key", "val")
-	result, err := client.DBSize()
+	client.Set(context.TODO(), "key", "val")
+	result, err := client.DBSize(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -66,7 +70,7 @@ func ExampleGlideClient_Time() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	timeMargin := int64(5)
 	clientTime := time.Now().Unix()
-	result, err := client.Time()
+	result, err := client.Time(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -81,7 +85,7 @@ func ExampleGlideClusterClient_Time() {
 	timeMargin := int64(5)
 	clientTime := time.Now().Unix()
 
-	result, err := client.Time()
+	result, err := client.Time(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -94,7 +98,7 @@ func ExampleGlideClusterClient_Time() {
 func ExampleGlideClient_Info() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	response, err := client.Info()
+	response, err := client.Info(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -107,7 +111,7 @@ func ExampleGlideClient_InfoWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
-	response, err := client.InfoWithOptions(opts)
+	response, err := client.InfoWithOptions(context.TODO(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -119,7 +123,7 @@ func ExampleGlideClient_InfoWithOptions() {
 func ExampleGlideClient_FlushAll() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.FlushAll()
+	result, err := client.FlushAll(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -131,7 +135,7 @@ func ExampleGlideClient_FlushAll() {
 func ExampleGlideClient_FlushAllWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.FlushAllWithOptions(options.ASYNC)
+	result, err := client.FlushAllWithOptions(context.TODO(), options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -143,7 +147,7 @@ func ExampleGlideClient_FlushAllWithOptions() {
 func ExampleGlideClient_FlushDB() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.FlushDB()
+	result, err := client.FlushDB(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -155,7 +159,7 @@ func ExampleGlideClient_FlushDB() {
 func ExampleGlideClient_FlushDBWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.FlushDBWithOptions(options.SYNC)
+	result, err := client.FlushDBWithOptions(context.TODO(), options.SYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -167,7 +171,7 @@ func ExampleGlideClient_FlushDBWithOptions() {
 func ExampleGlideClient_Lolwut() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.Lolwut()
+	result, err := client.Lolwut(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {
@@ -182,7 +186,7 @@ func ExampleGlideClient_LolwutWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	// Test with only version
 	opts := options.NewLolwutOptions(6)
-	result, err := client.LolwutWithOptions(*opts)
+	result, err := client.LolwutWithOptions(context.TODO(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {
@@ -191,7 +195,7 @@ func ExampleGlideClient_LolwutWithOptions() {
 
 	// Test with version and arguments
 	opts = options.NewLolwutOptions(6).SetArgs([]int{10, 20})
-	result, err = client.LolwutWithOptions(*opts)
+	result, err = client.LolwutWithOptions(context.TODO(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {
@@ -206,8 +210,8 @@ func ExampleGlideClient_LolwutWithOptions() {
 func ExampleGlideClient_LastSave() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := "key-" + uuid.NewString()
-	client.Set(key, "hello")
-	response, err := client.LastSave()
+	client.Set(context.TODO(), key, "hello")
+	response, err := client.LastSave(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -218,7 +222,7 @@ func ExampleGlideClient_LastSave() {
 
 func ExampleGlideClient_ConfigResetStat() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	response, err := client.ConfigResetStat()
+	response, err := client.ConfigResetStat(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -232,7 +236,7 @@ func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
 	var resultRewrite string
-	response, err := client.InfoWithOptions(opts)
+	response, err := client.InfoWithOptions(context.TODO(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -245,7 +249,7 @@ func ExampleGlideClient_ConfigRewrite() {
 		}
 	}
 	if len(configFile) > 0 {
-		response, err = client.ConfigRewrite()
+		response, err = client.ConfigRewrite(context.TODO())
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}

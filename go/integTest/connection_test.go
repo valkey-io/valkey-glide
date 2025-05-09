@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -73,12 +74,16 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			if clusterClient, ok := client.(api.GlideClusterClientCommands); ok {
-				_, err := clusterClient.CustomCommandWithRoute([]string{"DEBUG", "sleep", "7"}, config.AllNodes)
+				_, err := clusterClient.CustomCommandWithRoute(
+					context.TODO(),
+					[]string{"DEBUG", "sleep", "7"},
+					config.AllNodes,
+				)
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
 			} else if glideClient, ok := client.(api.GlideClientCommands); ok {
-				_, err := glideClient.CustomCommand([]string{"DEBUG", "sleep", "7"})
+				_, err := glideClient.CustomCommand(context.TODO(), []string{"DEBUG", "sleep", "7"})
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
@@ -121,7 +126,7 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {
 				defer timeoutClient.Close()
-				result, err := timeoutClient.Set("key", "value")
+				result, err := timeoutClient.Set(context.TODO(), "key", "value")
 				assert.NoError(suite.T(), err)
 				assert.Equal(suite.T(), "OK", result)
 			}
