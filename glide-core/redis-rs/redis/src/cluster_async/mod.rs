@@ -1446,7 +1446,8 @@ where
                 .conn_lock
                 .read()
                 .expect(MUTEX_READ_ERR)
-                .remove_node(&address);
+                .remove_node(&address)
+                .map(Arc::new); // Wrap in Arc if Some
 
             if !check_existing_conn {
                 node_option = None;
@@ -1524,11 +1525,13 @@ where
                             "Succeeded to refresh connection for node {}.",
                             address_clone_for_task
                         );
+                        // Use node directly - we've already modified the function signature to return ClusterNode instead of Arc<ClusterNode>
+                        let node_unwrapped = node;
                         inner_clone
                             .conn_lock
                             .read()
                             .expect(MUTEX_READ_ERR)
-                            .replace_or_add_connection_for_address(&address_clone_for_task, node);
+                            .replace_or_add_connection_for_address(&address_clone_for_task, node_unwrapped);
                     }
                     Err(err) => {
                         warn!(
@@ -1985,7 +1988,7 @@ where
                             .expect(MUTEX_READ_ERR)
                             .node_for_address(addr.as_str())
                         {
-                            addrs_and_conns.push((addr, Some(node)));
+                            addrs_and_conns.push((addr, Some(Arc::new(node))));
                             return addrs_and_conns;
                         }
                         // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
@@ -2003,7 +2006,8 @@ where
                                         .conn_lock
                                         .read()
                                         .expect(MUTEX_READ_ERR)
-                                        .node_for_address(&addr.to_string())
+                            .node_for_address(&addr.to_string())
+                            .map(Arc::new)
                                 })
                             })
                             .unwrap_or(None);
