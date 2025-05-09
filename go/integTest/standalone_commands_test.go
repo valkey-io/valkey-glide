@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -19,7 +20,7 @@ import (
 
 func (suite *GlideTestSuite) TestCustomCommandInfo() {
 	client := suite.defaultClient()
-	result, err := client.CustomCommand([]string{"INFO"})
+	result, err := client.CustomCommand(context.TODO(), []string{"INFO"})
 
 	assert.Nil(suite.T(), err)
 	assert.IsType(suite.T(), "", result)
@@ -29,7 +30,7 @@ func (suite *GlideTestSuite) TestCustomCommandInfo() {
 
 func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 	client := suite.defaultClient()
-	result, err := client.CustomCommand([]string{"PING"})
+	result, err := client.CustomCommand(context.TODO(), []string{"PING"})
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "PONG", result.(string))
@@ -42,7 +43,7 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 		WithClientName(clientName)
 	client := suite.client(config)
 
-	result, err := client.CustomCommand([]string{"CLIENT", "INFO"})
+	result, err := client.CustomCommand(context.TODO(), []string{"CLIENT", "INFO"})
 
 	assert.Nil(suite.T(), err)
 	assert.IsType(suite.T(), "", result)
@@ -53,7 +54,7 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
-	result, err := client.CustomCommand([]string{"GET", key})
+	result, err := client.CustomCommand(context.TODO(), []string{"GET", key})
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), nil, result)
@@ -62,8 +63,8 @@ func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
 func (suite *GlideTestSuite) TestCustomCommandDel_LongResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
-	suite.verifyOK(client.Set(key, "value"))
-	result, err := client.CustomCommand([]string{"DEL", key})
+	suite.verifyOK(client.Set(context.TODO(), key, "value"))
+	result, err := client.CustomCommand(context.TODO(), []string{"DEL", key})
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), result.(int64))
@@ -74,11 +75,11 @@ func (suite *GlideTestSuite) TestCustomCommandHExists_BoolResponse() {
 	fields := map[string]string{"field1": "value1"}
 	key := uuid.New().String()
 
-	res1, err := client.HSet(key, fields)
+	res1, err := client.HSet(context.TODO(), key, fields)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), res1)
 
-	result, err := client.CustomCommand([]string{"HEXISTS", key, "field1"})
+	result, err := client.CustomCommand(context.TODO(), []string{"HEXISTS", key, "field1"})
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), true, result.(bool))
@@ -88,7 +89,7 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
 
-	result, err := client.CustomCommand([]string{"INCRBYFLOAT", key, fmt.Sprintf("%f", 0.1)})
+	result, err := client.CustomCommand(context.TODO(), []string{"INCRBYFLOAT", key, fmt.Sprintf("%f", 0.1)})
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), float64(0.1), result.(float64))
@@ -106,15 +107,15 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	key3 := uuid.New().String()
 	oldValue := uuid.New().String()
 	value := uuid.New().String()
-	suite.verifyOK(client.Set(key1, oldValue))
+	suite.verifyOK(client.Set(context.TODO(), key1, oldValue))
 	keyValueMap := map[string]string{
 		key1: value,
 		key2: value,
 	}
-	suite.verifyOK(client.MSet(keyValueMap))
+	suite.verifyOK(client.MSet(context.TODO(), keyValueMap))
 	keys := []string{key1, key2, key3}
 	values := []interface{}{value, value, nil}
-	result, err := client.CustomCommand(append([]string{"MGET"}, keys...))
+	result, err := client.CustomCommand(context.TODO(), append([]string{"MGET"}, keys...))
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), values, result.([]interface{}))
@@ -127,9 +128,9 @@ func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
-	suite.verifyOK(client.ConfigSet(configMap))
+	suite.verifyOK(client.ConfigSet(context.TODO(), configMap))
 
-	result2, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
+	result2, err := client.CustomCommand(context.TODO(), []string{"CONFIG", "GET", "timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
 }
@@ -139,18 +140,18 @@ func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
 	key := uuid.NewString()
 	members := []string{"member1", "member2", "member3"}
 
-	res1, err := client.SAdd(key, members)
+	res1, err := client.SAdd(context.TODO(), key, members)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), res1)
 
-	result2, err := client.CustomCommand([]string{"SMEMBERS", key})
+	result2, err := client.CustomCommand(context.TODO(), []string{"SMEMBERS", key})
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), map[string]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
 	client := suite.defaultClient()
-	result, err := client.CustomCommand([]string{"pewpew"})
+	result, err := client.CustomCommand(context.TODO(), []string{"pewpew"})
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
@@ -159,7 +160,7 @@ func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidArgs() {
 	client := suite.defaultClient()
-	result, err := client.CustomCommand([]string{"ping", "pang", "pong"})
+	result, err := client.CustomCommand(context.TODO(), []string{"ping", "pang", "pong"})
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
@@ -170,7 +171,7 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 	client := suite.defaultClient()
 	client.Close()
 
-	result, err := client.CustomCommand([]string{"ping"})
+	result, err := client.CustomCommand(context.TODO(), []string{"ping"})
 
 	assert.Nil(suite.T(), result)
 	assert.NotNil(suite.T(), err)
@@ -185,9 +186,9 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 	}
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
-	suite.verifyOK(client.ConfigSet(configMap))
+	suite.verifyOK(client.ConfigSet(context.TODO(), configMap))
 
-	result2, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	result2, err := client.ConfigGet(context.TODO(), []string{"timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), resultConfigMap, result2)
 }
@@ -197,11 +198,11 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_noArgs() {
 
 	configMap := map[string]string{}
 
-	_, err := client.ConfigSet(configMap)
+	_, err := client.ConfigSet(context.TODO(), configMap)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
-	result2, err := client.ConfigGet([]string{})
+	result2, err := client.ConfigGet(context.TODO(), []string{})
 	assert.Nil(suite.T(), result2)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -212,11 +213,11 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 
 	configMap := map[string]string{"time": "1000"}
 
-	_, err := client.ConfigSet(configMap)
+	_, err := client.ConfigSet(context.TODO(), configMap)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
-	result2, err := client.ConfigGet([]string{"time"})
+	result2, err := client.ConfigGet(context.TODO(), []string{"time"})
 	assert.Equal(suite.T(), map[string]string{}, result2)
 	assert.Nil(suite.T(), err)
 }
@@ -224,13 +225,13 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 func (suite *GlideTestSuite) TestSelect_WithValidIndex() {
 	client := suite.defaultClient()
 	index := int64(1)
-	suite.verifyOK(client.Select(index))
+	suite.verifyOK(client.Select(context.TODO(), index))
 
 	key := uuid.New().String()
 	value := uuid.New().String()
-	suite.verifyOK(client.Set(key, value))
+	suite.verifyOK(client.Set(context.TODO(), key, value))
 
-	res, err := client.Get(key)
+	res, err := client.Get(context.TODO(), key)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), value, res.Value())
 }
@@ -238,11 +239,11 @@ func (suite *GlideTestSuite) TestSelect_WithValidIndex() {
 func (suite *GlideTestSuite) TestSelect_InvalidIndex_OutOfBounds() {
 	client := suite.defaultClient()
 
-	result, err := client.Select(-1)
+	result, err := client.Select(context.TODO(), -1)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 
-	result, err = client.Select(1000)
+	result, err = client.Select(context.TODO(), 1000)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 }
@@ -252,25 +253,25 @@ func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
 
 	key1 := uuid.New().String()
 	value1 := uuid.New().String()
-	suite.verifyOK(client.Select(0))
-	suite.verifyOK(client.Set(key1, value1))
+	suite.verifyOK(client.Select(context.TODO(), 0))
+	suite.verifyOK(client.Set(context.TODO(), key1, value1))
 
 	key2 := uuid.New().String()
 	value2 := uuid.New().String()
-	suite.verifyOK(client.Select(1))
-	suite.verifyOK(client.Set(key2, value2))
+	suite.verifyOK(client.Select(context.TODO(), 1))
+	suite.verifyOK(client.Set(context.TODO(), key2, value2))
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "", result.Value())
 
-	suite.verifyOK(client.Select(0))
-	result, err = client.Get(key2)
+	suite.verifyOK(client.Select(context.TODO(), 0))
+	result, err = client.Get(context.TODO(), key2)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "", result.Value())
 
-	suite.verifyOK(client.Select(1))
-	result, err = client.Get(key2)
+	suite.verifyOK(client.Select(context.TODO(), 1))
+	result, err = client.Get(context.TODO(), key2)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), value2, result.Value())
 }
@@ -281,18 +282,18 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	key := uuid.New().String()
-	client.LPush(key, []string{"item1", "item2", "item3"})
+	client.LPush(context.TODO(), key, []string{"item1", "item2", "item3"})
 
-	client.Set("weight_item1", "3")
-	client.Set("weight_item2", "1")
-	client.Set("weight_item3", "2")
+	client.Set(context.TODO(), "weight_item1", "3")
+	client.Set(context.TODO(), "weight_item2", "1")
+	client.Set(context.TODO(), "weight_item3", "2")
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
 		SetOrderBy(options.ASC).
 		SetIsAlpha(false)
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.TODO(), key, *options)
 
 	assert.Nil(suite.T(), err)
 	resultList := []api.Result[string]{
@@ -309,11 +310,11 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	key := uuid.New().String()
-	client.LPush(key, []string{"item1", "item2", "item3"})
+	client.LPush(context.TODO(), key, []string{"item1", "item2", "item3"})
 
-	client.Set("object_item1", "Object_1")
-	client.Set("object_item2", "Object_2")
-	client.Set("object_item3", "Object_3")
+	client.Set(context.TODO(), "object_item1", "Object_1")
+	client.Set(context.TODO(), "object_item2", "Object_2")
+	client.Set(context.TODO(), "object_item3", "Object_3")
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
@@ -321,7 +322,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		SetIsAlpha(false).
 		AddGetPattern("object_*")
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.TODO(), key, *options)
 
 	assert.Nil(suite.T(), err)
 
@@ -340,15 +341,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		suite.T().Skip("This feature is added in version 7")
 	}
 	key := uuid.New().String()
-	client.LPush(key, []string{"item1", "item2", "item3"})
+	client.LPush(context.TODO(), key, []string{"item1", "item2", "item3"})
 
-	client.Set("weight_item1", "10")
-	client.Set("weight_item2", "5")
-	client.Set("weight_item3", "15")
+	client.Set(context.TODO(), "weight_item1", "10")
+	client.Set(context.TODO(), "weight_item2", "5")
+	client.Set(context.TODO(), "weight_item3", "15")
 
-	client.Set("object_item1", "Object 1")
-	client.Set("object_item2", "Object 2")
-	client.Set("object_item3", "Object 3")
+	client.Set(context.TODO(), "object_item1", "Object 1")
+	client.Set(context.TODO(), "object_item2", "Object 2")
+	client.Set(context.TODO(), "object_item3", "Object 3")
 
 	options := options.NewSortOptions().
 		SetOrderBy(options.ASC).
@@ -357,7 +358,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		AddGetPattern("object_*").
 		AddGetPattern("#")
 
-	sortResult, err := client.SortReadOnlyWithOptions(key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.TODO(), key, *options)
 
 	assert.Nil(suite.T(), err)
 
@@ -372,15 +373,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 
 	assert.Equal(suite.T(), resultList, sortResult)
 
-	objectItem2, err := client.Get("object_item2")
+	objectItem2, err := client.Get(context.TODO(), "object_item2")
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "Object 2", objectItem2.Value())
 
-	objectItem1, err := client.Get("object_item1")
+	objectItem1, err := client.Get(context.TODO(), "object_item1")
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "Object 1", objectItem1.Value())
 
-	objectItem3, err := client.Get("object_item3")
+	objectItem3, err := client.Get(context.TODO(), "object_item3")
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "Object 3", objectItem3.Value())
 
@@ -408,7 +409,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	t := suite.T()
 
 	// info without options
-	info, err := client.Info()
+	info, err := client.Info(context.TODO())
 	assert.NoError(t, err)
 	for _, section := range DEFAULT_INFO_SECTIONS {
 		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
@@ -419,7 +420,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, options.Memory)
 	}
-	info, err = client.InfoWithOptions(options.InfoOptions{Sections: sections})
+	info, err = client.InfoWithOptions(context.TODO(), options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
@@ -428,7 +429,7 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 
 func (suite *GlideTestSuite) TestDBSize() {
 	client := suite.defaultClient()
-	result, err := client.DBSize()
+	result, err := client.DBSize(context.TODO())
 	assert.Nil(suite.T(), err)
 	assert.Greater(suite.T(), result, int64(0))
 }
@@ -436,7 +437,7 @@ func (suite *GlideTestSuite) TestDBSize() {
 func (suite *GlideTestSuite) TestPing_NoArgument() {
 	client := suite.defaultClient()
 
-	result, err := client.Ping()
+	result, err := client.Ping(context.TODO())
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "PONG", result)
 }
@@ -446,7 +447,7 @@ func (suite *GlideTestSuite) TestEcho() {
 	// Test 1: Check if Echo command return the message
 	value := "Hello world"
 	t := suite.T()
-	resultEcho, err := client.Echo(value)
+	resultEcho, err := client.Echo(context.TODO(), value)
 	assert.Nil(t, err)
 	assert.Equal(t, value, resultEcho.Value())
 }
@@ -455,7 +456,7 @@ func (suite *GlideTestSuite) TestPing_ClosedClient() {
 	client := suite.defaultClient()
 	client.Close()
 
-	result, err := client.Ping()
+	result, err := client.Ping(context.TODO())
 
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
@@ -468,7 +469,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_WithMessage() {
 		Message: "hello",
 	}
 
-	result, err := client.PingWithOptions(options)
+	result, err := client.PingWithOptions(context.TODO(), options)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "hello", result)
 }
@@ -481,7 +482,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
 		Message: "hello",
 	}
 
-	result, err := client.PingWithOptions(options)
+	result, err := client.PingWithOptions(context.TODO(), options)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
@@ -489,7 +490,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
 
 func (suite *GlideTestSuite) TestTime_Success() {
 	client := suite.defaultClient()
-	results, err := client.Time()
+	results, err := client.Time(context.TODO())
 
 	assert.Nil(suite.T(), err)
 	assert.Len(suite.T(), results, 2)
@@ -511,7 +512,7 @@ func (suite *GlideTestSuite) TestTime_Error() {
 	// Disconnect the client or simulate an error condition
 	client.Close()
 
-	results, err := client.Time()
+	results, err := client.Time(context.TODO())
 
 	assert.NotNil(suite.T(), err)
 	assert.Nil(suite.T(), results)
@@ -523,20 +524,20 @@ func (suite *GlideTestSuite) TestFlushAll() {
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
-	_, err := client.Set(key1, "value1")
+	_, err := client.Set(context.TODO(), key1, "value1")
 	assert.Nil(suite.T(), err)
-	_, err = client.Set(key2, "value2")
+	_, err = client.Set(context.TODO(), key2, "value2")
 	assert.Nil(suite.T(), err)
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "value1", result.Value())
 
-	response, err := client.FlushAll()
+	response, err := client.FlushAll(context.TODO())
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	result, err = client.Get(key1)
+	result, err = client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())
 }
@@ -546,20 +547,20 @@ func (suite *GlideTestSuite) TestFlushAll_Sync() {
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
-	_, err := client.Set(key1, "value1")
+	_, err := client.Set(context.TODO(), key1, "value1")
 	assert.Nil(suite.T(), err)
-	_, err = client.Set(key2, "value2")
+	_, err = client.Set(context.TODO(), key2, "value2")
 	assert.Nil(suite.T(), err)
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "value1", result.Value())
 
-	response, err := client.FlushAllWithOptions(options.SYNC)
+	response, err := client.FlushAllWithOptions(context.TODO(), options.SYNC)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	result, err = client.Get(key1)
+	result, err = client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())
 }
@@ -569,16 +570,16 @@ func (suite *GlideTestSuite) TestFlushAll_Async() {
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
-	_, err := client.Set(key1, "value1")
+	_, err := client.Set(context.TODO(), key1, "value1")
 	assert.Nil(suite.T(), err)
-	_, err = client.Set(key2, "value2")
+	_, err = client.Set(context.TODO(), key2, "value2")
 	assert.Nil(suite.T(), err)
 
-	response, err := client.FlushAllWithOptions(options.ASYNC)
+	response, err := client.FlushAllWithOptions(context.TODO(), options.ASYNC)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())
 }
@@ -587,7 +588,7 @@ func (suite *GlideTestSuite) TestFlushAll_ClosedClient() {
 	client := suite.defaultClient()
 	client.Close()
 
-	response, err := client.FlushAllWithOptions(options.SYNC)
+	response, err := client.FlushAllWithOptions(context.TODO(), options.SYNC)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", response)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
@@ -597,18 +598,18 @@ func (suite *GlideTestSuite) TestFlushAll_MultipleFlush() {
 	client := suite.defaultClient()
 	key1 := uuid.New().String()
 
-	response, err := client.FlushAllWithOptions(options.SYNC)
+	response, err := client.FlushAllWithOptions(context.TODO(), options.SYNC)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	_, err = client.Set(key1, "value1")
+	_, err = client.Set(context.TODO(), key1, "value1")
 	assert.Nil(suite.T(), err)
 
-	response, err = client.FlushAllWithOptions(options.ASYNC)
+	response, err = client.FlushAllWithOptions(context.TODO(), options.ASYNC)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())
 }
@@ -618,20 +619,20 @@ func (suite *GlideTestSuite) TestFlushDB() {
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
-	_, err := client.Set(key1, "value1")
+	_, err := client.Set(context.TODO(), key1, "value1")
 	assert.Nil(suite.T(), err)
-	_, err = client.Set(key2, "value2")
+	_, err = client.Set(context.TODO(), key2, "value2")
 	assert.Nil(suite.T(), err)
 
-	result, err := client.Get(key1)
+	result, err := client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "value1", result.Value())
 
-	response, err := client.FlushDB()
+	response, err := client.FlushDB(context.TODO())
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), "OK", response)
 
-	result, err = client.Get(key1)
+	result, err = client.Get(context.TODO(), key1)
 	assert.Nil(suite.T(), err)
 	assert.Empty(suite.T(), result.Value())
 }
@@ -640,14 +641,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_SYNC() {
 	client := suite.defaultClient()
 
 	key := uuid.New().String()
-	_, err := client.Set(key, "value1")
+	_, err := client.Set(context.TODO(), key, "value1")
 	assert.NoError(suite.T(), err)
 
-	result, err := client.FlushDBWithOptions(options.SYNC)
+	result, err := client.FlushDBWithOptions(context.TODO(), options.SYNC)
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
-	val, err := client.Get(key)
+	val, err := client.Get(context.TODO(), key)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), val.Value())
 }
@@ -656,14 +657,14 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_ASYNC() {
 	client := suite.defaultClient()
 
 	key := uuid.New().String()
-	_, err := client.Set(key, "value1")
+	_, err := client.Set(context.TODO(), key, "value1")
 	assert.NoError(suite.T(), err)
 
-	result, err := client.FlushDBWithOptions(options.ASYNC)
+	result, err := client.FlushDBWithOptions(context.TODO(), options.ASYNC)
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
-	val, err := client.Get(key)
+	val, err := client.Get(context.TODO(), key)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), val.Value())
 }
@@ -674,20 +675,20 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_MultipleKeys() {
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
 
-	_, err := client.Set(key1, "value1")
+	_, err := client.Set(context.TODO(), key1, "value1")
 	assert.NoError(suite.T(), err)
-	_, err = client.Set(key2, "value2")
+	_, err = client.Set(context.TODO(), key2, "value2")
 	assert.NoError(suite.T(), err)
 
-	result, err := client.FlushDBWithOptions(options.SYNC)
+	result, err := client.FlushDBWithOptions(context.TODO(), options.SYNC)
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), result)
 
-	val1, err := client.Get(key1)
+	val1, err := client.Get(context.TODO(), key1)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), val1.Value())
 
-	val2, err := client.Get(key2)
+	val2, err := client.Get(context.TODO(), key2)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), val2.Value())
 }
@@ -697,7 +698,7 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_ClosedClient() {
 
 	client.Close()
 
-	result, err := client.FlushDBWithOptions(options.SYNC)
+	result, err := client.FlushDBWithOptions(context.TODO(), options.SYNC)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 	assert.IsType(suite.T(), &errors.ClosingError{}, err)
@@ -709,12 +710,12 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordAuthNonValidPass() {
 	defer testClient.Close()
 
 	// Test empty password
-	_, err := testClient.UpdateConnectionPassword("", true)
+	_, err := testClient.UpdateConnectionPassword(context.TODO(), "", true)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	// Test with no password parameter
-	_, err = testClient.UpdateConnectionPassword("", true)
+	_, err = testClient.UpdateConnectionPassword(context.TODO(), "", true)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
@@ -725,12 +726,12 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_NoServerAuth() {
 	defer testClient.Close()
 
 	// Validate that we can use the client
-	_, err := testClient.Info()
+	_, err := testClient.Info(context.TODO())
 	assert.Nil(suite.T(), err)
 
 	// Test immediate re-authentication fails when no server password is set
 	pwd := uuid.NewString()
-	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	_, err = testClient.UpdateConnectionPassword(context.TODO(), pwd, true)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
@@ -748,11 +749,11 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_LongPassword() {
 	}
 
 	// Validate that we can use the client
-	_, err := testClient.Info()
+	_, err := testClient.Info(context.TODO())
 	assert.NoError(suite.T(), err)
 
 	// Test replacing connection password with a long password string
-	_, err = testClient.UpdateConnectionPassword(string(pwd), false)
+	_, err = testClient.UpdateConnectionPassword(context.TODO(), string(pwd), false)
 	assert.NoError(suite.T(), err)
 }
 
@@ -769,31 +770,31 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 	notThePwd := uuid.NewString()
 
 	// Validate that we can use the client
-	_, err := testClient.Info()
+	_, err := testClient.Info(context.TODO())
 	assert.Nil(suite.T(), err)
 
 	// Set the password to something else
-	_, err = adminClient.ConfigSet(map[string]string{"requirepass": notThePwd})
+	_, err = adminClient.ConfigSet(context.TODO(), map[string]string{"requirepass": notThePwd})
 	assert.Nil(suite.T(), err)
 
 	// Test that re-authentication fails when using wrong password
-	_, err = testClient.UpdateConnectionPassword(pwd, true)
+	_, err = testClient.UpdateConnectionPassword(context.TODO(), pwd, true)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 	// But using correct password returns OK
-	_, err = testClient.UpdateConnectionPassword(notThePwd, true)
+	_, err = testClient.UpdateConnectionPassword(context.TODO(), notThePwd, true)
 	assert.NoError(suite.T(), err)
 
 	// Cleanup: Reset password
-	_, err = adminClient.ConfigSet(map[string]string{"requirepass": ""})
+	_, err = adminClient.ConfigSet(context.TODO(), map[string]string{"requirepass": ""})
 	assert.NoError(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 	client := suite.defaultClient()
 	options := options.NewLolwutOptions(8)
-	res, err := client.LolwutWithOptions(*options)
+	res, err := client.LolwutWithOptions(context.TODO(), *options)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
@@ -801,7 +802,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 	client := suite.defaultClient()
 	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
-	res, err := client.LolwutWithOptions(*opts)
+	res, err := client.LolwutWithOptions(context.TODO(), *opts)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
@@ -809,14 +810,14 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 	client := suite.defaultClient()
 	opts := options.NewLolwutOptions(6).SetArgs([]int{})
-	res, err := client.LolwutWithOptions(*opts)
+	res, err := client.LolwutWithOptions(context.TODO(), *opts)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
 
 func (suite *GlideTestSuite) TestClientId() {
 	client := suite.defaultClient()
-	result, err := client.ClientId()
+	result, err := client.ClientId(context.TODO())
 	assert.Nil(suite.T(), err)
 	assert.Greater(suite.T(), result, int64(0))
 }
@@ -824,22 +825,22 @@ func (suite *GlideTestSuite) TestClientId() {
 func (suite *GlideTestSuite) TestLastSave() {
 	client := suite.defaultClient()
 	t := suite.T()
-	result, err := client.LastSave()
+	result, err := client.LastSave(context.TODO())
 	assert.Nil(t, err)
 	assert.Greater(t, result, int64(0))
 }
 
 func (suite *GlideTestSuite) TestConfigResetStat() {
 	client := suite.defaultClient()
-	suite.verifyOK(client.ConfigResetStat())
+	suite.verifyOK(client.ConfigResetStat(context.TODO()))
 }
 
 func (suite *GlideTestSuite) TestClientGetSetName() {
 	client := suite.defaultClient()
 	t := suite.T()
 
-	suite.verifyOK(client.ClientSetName("ConnectionName"))
-	result, err := client.ClientGetName()
+	suite.verifyOK(client.ClientSetName(context.TODO(), "ConnectionName"))
+	result, err := client.ClientGetName(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, result, "ConnectionName")
 }
@@ -848,8 +849,8 @@ func (suite *GlideTestSuite) TestMove() {
 	client := suite.defaultClient()
 	t := suite.T()
 	key := uuid.New().String()
-	suite.verifyOK(client.Set(key, "hello"))
-	result, err := client.Move(key, 2)
+	suite.verifyOK(client.Set(context.TODO(), key, "hello"))
+	result, err := client.Move(context.TODO(), key, 2)
 	assert.Nil(t, err)
 	assert.True(suite.T(), result)
 }
@@ -858,8 +859,8 @@ func (suite *GlideTestSuite) TestScan() {
 	client := suite.defaultClient()
 	t := suite.T()
 	key := uuid.New().String()
-	suite.verifyOK(client.Set(key, "Hello"))
-	resCursor, resCollection, err := client.Scan(0)
+	suite.verifyOK(client.Set(context.TODO(), key, "Hello"))
+	resCursor, resCollection, err := client.Scan(context.TODO(), 0)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
@@ -871,16 +872,16 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 
 	// Test TestScanWithOption SetCount
 	key := uuid.New().String()
-	suite.verifyOK(client.Set(key, "Hello"))
+	suite.verifyOK(client.Set(context.TODO(), key, "Hello"))
 	opts := options.NewScanOptions().SetCount(10)
-	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	resCursor, resCollection, err := client.ScanWithOptions(context.TODO(), 0, *opts)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 
 	// Test TestScanWithOption SetType
 	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
-	resCursor, resCollection, err = client.ScanWithOptions(0, *opts)
+	resCursor, resCollection, err = client.ScanWithOptions(context.TODO(), 0, *opts)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
@@ -890,7 +891,7 @@ func (suite *GlideTestSuite) TestConfigRewrite() {
 	client := suite.defaultClient()
 	t := suite.T()
 	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
-	response, err := client.InfoWithOptions(opts)
+	response, err := client.InfoWithOptions(context.TODO(), opts)
 	assert.NoError(t, err)
 	lines := strings.Split(response, "\n")
 	var configFile string
@@ -901,7 +902,7 @@ func (suite *GlideTestSuite) TestConfigRewrite() {
 		}
 	}
 	if len(configFile) > 0 {
-		suite.verifyOK(client.ConfigRewrite())
+		suite.verifyOK(client.ConfigRewrite(context.TODO()))
 	}
 }
 
@@ -909,7 +910,7 @@ func (suite *GlideTestSuite) TestRandomKey() {
 	client := suite.defaultClient()
 	// Test 1: Check if the command return random key
 	t := suite.T()
-	result, err := client.RandomKey()
+	result, err := client.RandomKey(context.TODO())
 	assert.Nil(t, err)
 	assert.NotNil(t, result)
 }
@@ -922,7 +923,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	client := suite.defaultClient()
 
 	// Flush all functions with SYNC option
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
@@ -933,17 +934,17 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 		funcName: "return args[1]",
 	}
 	code := GenerateLuaLibCode(libName, functions, true)
-	result, err = client.FunctionLoad(code, false)
+	result, err = client.FunctionLoad(context.TODO(), code, false)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
 	// Test FCALL
-	functionResult, err := client.FCallWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	functionResult, err := client.FCallWithKeysAndArgs(context.TODO(), funcName, []string{}, []string{"one", "two"})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
 
 	// Test FCALL_RO
-	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
+	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(context.TODO(), funcName, []string{}, []string{"one", "two"})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
 
@@ -952,7 +953,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 		LibraryName: libName,
 		WithCode:    false,
 	}
-	functionList, err := client.FunctionList(query)
+	functionList, err := client.FunctionList(context.TODO(), query)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), functionList, 1)
 
@@ -972,7 +973,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	query = api.FunctionListQuery{
 		WithCode: true,
 	}
-	functionList, err = client.FunctionList(query)
+	functionList, err = client.FunctionList(context.TODO(), query)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), functionList, 1)
 
@@ -984,16 +985,16 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 
 	// load new lib and delete it - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
-	result, err = client.FunctionLoad(anotherLib, true)
+	result, err = client.FunctionLoad(context.TODO(), anotherLib, true)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "anotherLib", result)
 
-	deleteResult, err := client.FunctionDelete("anotherLib")
+	deleteResult, err := client.FunctionDelete(context.TODO(), "anotherLib")
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", deleteResult)
 
 	// delete missing lib returns a error
-	_, err = client.FunctionDelete("anotherLib")
+	_, err = client.FunctionDelete(context.TODO(), "anotherLib")
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
@@ -1005,7 +1006,7 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 	client := suite.defaultClient()
 
 	// Flush all functions with SYNC option
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
@@ -1016,12 +1017,12 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		funcName: "return args[1]",
 	}
 	code := GenerateLuaLibCode(libName, functions, false)
-	result, err = client.FunctionLoad(code, true)
+	result, err = client.FunctionLoad(context.TODO(), code, true)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
 	// Check stats after loading first function
-	stats, err := client.FunctionStats()
+	stats, err := client.FunctionStats(context.TODO())
 	assert.NoError(suite.T(), err)
 	for _, nodeStats := range stats {
 		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
@@ -1037,12 +1038,12 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 		funcName + "_3": "return 42",
 	}
 	code2 := GenerateLuaLibCode(libName2, functions2, false)
-	result, err = client.FunctionLoad(code2, true)
+	result, err = client.FunctionLoad(context.TODO(), code2, true)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName2, result)
 
 	// Check stats after loading second function
-	stats, err = client.FunctionStats()
+	stats, err = client.FunctionStats(context.TODO())
 	assert.NoError(suite.T(), err)
 	for _, nodeStats := range stats {
 		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
@@ -1052,12 +1053,12 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 	}
 
 	// Flush all functions
-	result, err = client.FunctionFlushSync()
+	result, err = client.FunctionFlushSync(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
 	// Check stats after flushing
-	stats, err = client.FunctionStats()
+	stats, err = client.FunctionStats(context.TODO())
 	assert.NoError(suite.T(), err)
 	for _, nodeStats := range stats {
 		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
@@ -1075,12 +1076,12 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 	client := suite.defaultClient()
 
 	// Flush all functions
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
 	// Nothing to kill
-	_, err = client.FunctionKill()
+	_, err = client.FunctionKill(context.TODO())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
@@ -1097,17 +1098,17 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, readOnly)
 
 	// Flush all functions
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
 	// Nothing to kill
-	_, err = client.FunctionKill()
+	_, err = client.FunctionKill(context.TODO())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Load the lib
-	result, err = client.FunctionLoad(code, true)
+	result, err = client.FunctionLoad(context.TODO(), code, true)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
@@ -1132,12 +1133,12 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 				return
 			case <-killTicker.C:
 				if readOnly {
-					result, err = client.FunctionKill()
+					result, err = client.FunctionKill(context.TODO())
 					if err == nil {
 						return
 					}
 				} else {
-					result, err = client.FunctionKill()
+					result, err = client.FunctionKill(context.TODO())
 					if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
 						return
 					}
@@ -1148,7 +1149,7 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 	}()
 
 	// Call the function - this should block until killed and return a script kill error
-	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	_, err = testClient.FCallWithKeysAndArgs(context.TODO(), funcName, []string{key}, []string{})
 	if readOnly {
 		assert.Error(suite.T(), err)
 		assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))

@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Hash" group of commands for standalone and cluster clients.
 //
@@ -10,39 +14,39 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#hash
 type HashCommands interface {
-	HGet(key string, field string) (Result[string], error)
+	HGet(ctx context.Context, key string, field string) (Result[string], error)
 
-	HGetAll(key string) (map[string]string, error)
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
 
-	HMGet(key string, fields []string) ([]Result[string], error)
+	HMGet(ctx context.Context, key string, fields []string) ([]Result[string], error)
 
-	HSet(key string, values map[string]string) (int64, error)
+	HSet(ctx context.Context, key string, values map[string]string) (int64, error)
 
-	HSetNX(key string, field string, value string) (bool, error)
+	HSetNX(ctx context.Context, key string, field string, value string) (bool, error)
 
-	HDel(key string, fields []string) (int64, error)
+	HDel(ctx context.Context, key string, fields []string) (int64, error)
 
-	HLen(key string) (int64, error)
+	HLen(ctx context.Context, key string) (int64, error)
 
-	HVals(key string) ([]string, error)
+	HVals(ctx context.Context, key string) ([]string, error)
 
-	HExists(key string, field string) (bool, error)
+	HExists(ctx context.Context, key string, field string) (bool, error)
 
-	HKeys(key string) ([]string, error)
+	HKeys(ctx context.Context, key string) ([]string, error)
 
-	HStrLen(key string, field string) (int64, error)
+	HStrLen(ctx context.Context, key string, field string) (int64, error)
 
-	HIncrBy(key string, field string, increment int64) (int64, error)
+	HIncrBy(ctx context.Context, key string, field string, increment int64) (int64, error)
 
-	HIncrByFloat(key string, field string, increment float64) (float64, error)
+	HIncrByFloat(ctx context.Context, key string, field string, increment float64) (float64, error)
 
-	HScan(key string, cursor string) (string, []string, error)
+	HScan(ctx context.Context, key string, cursor string) (string, []string, error)
 
-	HRandField(key string) (Result[string], error)
+	HRandField(ctx context.Context, key string) (Result[string], error)
 
-	HRandFieldWithCount(key string, count int64) ([]string, error)
+	HRandFieldWithCount(ctx context.Context, key string, count int64) ([]string, error)
 
-	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
+	HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error)
 
-	HScanWithOptions(key string, cursor string, options options.HashScanOptions) (string, []string, error)
+	HScanWithOptions(ctx context.Context, key string, cursor string, options options.HashScanOptions) (string, []string, error)
 }

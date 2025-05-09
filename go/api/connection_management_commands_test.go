@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -11,7 +12,7 @@ import (
 
 func ExampleGlideClient_Ping() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Ping()
+	result, err := client.Ping(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -23,7 +24,7 @@ func ExampleGlideClient_Ping() {
 func ExampleGlideClient_PingWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	options := options.PingOptions{Message: "hello"}
-	result, err := client.PingWithOptions(options)
+	result, err := client.PingWithOptions(context.TODO(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -34,7 +35,7 @@ func ExampleGlideClient_PingWithOptions() {
 
 func ExampleGlideClient_Echo() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Echo("Hello World")
+	result, err := client.Echo(context.TODO(), "Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -45,7 +46,7 @@ func ExampleGlideClient_Echo() {
 
 func ExampleGlideClient_ClientId() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.ClientId()
+	result, err := client.ClientId(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -57,7 +58,7 @@ func ExampleGlideClient_ClientId() {
 
 func ExampleGlideClient_ClientSetName() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.ClientSetName("ConnectionName")
+	result, err := client.ClientSetName(context.TODO(), "ConnectionName")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -69,8 +70,8 @@ func ExampleGlideClient_ClientSetName() {
 func ExampleGlideClient_ClientGetName() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
-	client.ClientSetName(connectionName)
-	result, err := client.ClientGetName()
+	client.ClientSetName(context.TODO(), connectionName)
+	result, err := client.ClientGetName(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -2,6 +2,8 @@
 
 package api
 
+import "context"
+
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // or cluster client.
 //
@@ -9,23 +11,23 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/?group=scripting
 type ScriptingAndFunctionBaseCommands interface {
-	FunctionLoad(libraryCode string, replace bool) (string, error)
+	FunctionLoad(ctx context.Context, libraryCode string, replace bool) (string, error)
 
-	FunctionFlush() (string, error)
+	FunctionFlush(ctx context.Context) (string, error)
 
-	FunctionFlushSync() (string, error)
+	FunctionFlushSync(ctx context.Context) (string, error)
 
-	FunctionFlushAsync() (string, error)
+	FunctionFlushAsync(ctx context.Context) (string, error)
 
-	FCall(function string) (any, error)
+	FCall(ctx context.Context, function string) (any, error)
 
-	FCallReadOnly(function string) (any, error)
+	FCallReadOnly(ctx context.Context, function string) (any, error)
 
-	FCallWithKeysAndArgs(function string, keys []string, args []string) (any, error)
+	FCallWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
 
-	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
+	FCallReadOnlyWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
 
-	FunctionKill() (string, error)
+	FunctionKill(ctx context.Context) (string, error)
 
-	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
+	FunctionList(ctx context.Context, query FunctionListQuery) ([]LibraryInfo, error)
 }

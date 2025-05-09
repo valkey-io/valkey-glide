@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 
 func ExampleGlideClient_CustomCommand() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.CustomCommand([]string{"ping"})
+	result, err := client.CustomCommand(context.TODO(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -24,11 +25,11 @@ func ExampleGlideClient_CustomCommand() {
 func ExampleGlideClient_Move() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := uuid.New().String()
-	_, err := client.Set(key, "hello")
+	_, err := client.Set(context.TODO(), key, "hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	result, err := client.Move(key, 2)
+	result, err := client.Move(context.TODO(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -39,9 +40,9 @@ func ExampleGlideClient_Move() {
 
 func ExampleGlideClient_Scan() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.CustomCommand([]string{"FLUSHALL"})
-	client.Set("key1", "hello")
-	resCursor, resCollection, err := client.Scan(0)
+	client.CustomCommand(context.TODO(), []string{"FLUSHALL"})
+	client.Set(context.TODO(), "key1", "hello")
+	resCursor, resCollection, err := client.Scan(context.TODO(), 0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -56,9 +57,9 @@ func ExampleGlideClient_Scan() {
 func ExampleGlideClient_ScanWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.NewScanOptions().SetCount(10).SetType(options.ObjectTypeList)
-	client.CustomCommand([]string{"FLUSHALL"})
-	client.LPush("key1", []string{"1", "3", "2", "4"})
-	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	client.CustomCommand(context.TODO(), []string{"FLUSHALL"})
+	client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
+	resCursor, resCollection, err := client.ScanWithOptions(context.TODO(), 0, *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -73,8 +74,8 @@ func ExampleGlideClient_ScanWithOptions() {
 func ExampleGlideClient_RandomKey() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	key := uuid.New().String()
-	client.Set(key, "Hello")
-	result, err := client.RandomKey()
+	client.Set(context.TODO(), key, "Hello")
+	result, err := client.RandomKey(context.TODO())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
