@@ -6022,7 +6022,7 @@ func (client *baseClient) CopyWithOptions(
 // Return value:
 //
 //	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
@@ -6051,7 +6051,8 @@ func (client *baseClient) XRange(
 // Return value:
 //
 //	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(

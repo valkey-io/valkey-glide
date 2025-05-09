@@ -5379,15 +5379,21 @@ class TestCommands:
             == stream_id3.encode()
         )
 
-        # get the newest entry
-        result = await glide_client.xrange(
-            key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
-        )
-        assert convert_bytes_to_string_object(result) == {stream_id3: [["f3", "v3"]]}
-        result = await glide_client.xrevrange(
-            key, ExclusiveIdBound.from_timestamp(5), ExclusiveIdBound(stream_id2), 1
-        )
-        assert convert_bytes_to_string_object(result) == {stream_id3: [["f3", "v3"]]}
+        # Exclusive ranges are added in 6.2.0
+        if not (await check_if_server_version_lt(glide_client, "6.2.0")):
+            # get the newest entry
+            result = await glide_client.xrange(
+                key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
+            )
+            assert convert_bytes_to_string_object(result) == {
+                stream_id3: [["f3", "v3"]]
+            }
+            result = await glide_client.xrevrange(
+                key, ExclusiveIdBound.from_timestamp(5), ExclusiveIdBound(stream_id2), 1
+            )
+            assert convert_bytes_to_string_object(result) == {
+                stream_id3: [["f3", "v3"]]
+            }
 
         # xrange/xrevrange against an emptied stream
         assert await glide_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
