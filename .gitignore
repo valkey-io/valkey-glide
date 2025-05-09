@@ -72,3 +72,4 @@ cpp/include/glide/glide_base.h
 cpp/src/connection_request.pb.cc
 
 **/.claude/settings.local.json
+copilot-instructions.md
