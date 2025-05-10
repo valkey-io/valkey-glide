@@ -9,12 +9,31 @@ mod standalone_client_tests {
 
     use super::*;
     use glide_core::{
-        client::{ConnectionError, StandaloneClient},
-        connection_request::ReadFrom,
+        client::{Client as GlideClient, ConnectionError, StandaloneClient},
+        connection_request::{ProtocolVersion, ReadFrom},
     };
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
     use utilities::*;
+
+    async fn get_connected_clients(client: &mut GlideClient) -> usize {
+        let mut cmd = redis::Cmd::new();
+        cmd.arg("CLIENT").arg("LIST");
+        let result: Value = client
+            .send_command(&cmd, None)
+            .await
+            .expect("CLIENT LIST failed");
+        match result {
+            Value::BulkString(bytes) => {
+                let s = String::from_utf8_lossy(&bytes);
+                s.lines().count()
+            }
+            _ => panic!(
+                "CLIENT LIST did not return a bulk string, got: {:?}",
+                result
+            ),
+        }
+    }
 
     #[rstest]
     #[serial_test::serial]
@@ -452,6 +471,111 @@ mod standalone_client_tests {
             })
             .await;
             assert!(client_info.contains("db=4"));
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    fn test_lazy_connection_establishes_on_first_command(
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async move {
+            const USE_TLS: bool = false; // Hardcode to false
+
+            // Always use the shared non-TLS server
+            let server_address = utilities::get_shared_server_address(USE_TLS);
+
+            // Base configuration for clients targeting the shared server
+            let base_client_config = utilities::TestConfiguration {
+                use_tls: USE_TLS,
+                protocol,
+                shared_server: true, // Always using shared server
+                cluster_mode: ClusterMode::Disabled,
+                ..Default::default()
+            };
+
+            // 1. Create and connect the monitoring client
+            let monitoring_client_config = base_client_config.clone();
+            // lazy_connect is false by default for monitoring_client_config
+
+            let mut monitoring_client_request = utilities::create_connection_request(
+                &[server_address.clone()],
+                &monitoring_client_config,
+            );
+            monitoring_client_request.cluster_mode_enabled = false; // Ensure standalone
+                                                                    // No need to set tls_mode explicitly, create_connection_request handles it based on USE_TLS
+
+            let mut monitoring_client = GlideClient::new(monitoring_client_request.into(), None)
+                .await
+                .expect("Failed to create monitoring client");
+
+            let clients_before_lazy_init = get_connected_clients(&mut monitoring_client).await;
+            logger_core::log_info(
+                "Test",
+                format!("Clients before lazy client init (protocol={protocol:?}): {clients_before_lazy_init}"),
+            );
+
+            // 2. Create the ConnectionRequest for the lazy client
+            let mut lazy_client_config = base_client_config.clone();
+            lazy_client_config.lazy_connect = true; // Set lazy_connect to true
+
+            let mut lazy_client_connection_request = utilities::create_connection_request(
+                &[server_address.clone()],
+                &lazy_client_config,
+            );
+            lazy_client_connection_request.cluster_mode_enabled = false; // Ensure standalone
+                                                                         // No need to set tls_mode explicitly
+
+            // 3. Create the "lazy" glide_core::client::Client
+            let (push_sender, _push_receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut lazy_client =
+                GlideClient::new(lazy_client_connection_request.into(), Some(push_sender))
+                    .await
+                    .expect("Failed to create lazy client");
+
+            // 4. Assert that no new connection was made yet by the lazy client
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await; // Brief pause
+            let clients_after_lazy_init = get_connected_clients(&mut monitoring_client).await;
+            logger_core::log_info(
+                "Test",
+                format!("Clients after lazy client init (protocol={protocol:?}): {clients_after_lazy_init}"),
+            );
+            assert_eq!(
+                clients_after_lazy_init, clients_before_lazy_init,
+                "Lazy client should not connect before the first command. protocol={:?}",
+                protocol
+            );
+
+            // 5. Send the first command using the lazy client
+            logger_core::log_info(
+                "Test",
+                format!("Sending first command to lazy client (PING) (protocol={protocol:?})"),
+            );
+            let ping_response = lazy_client.send_command(&redis::cmd("PING"), None).await;
+            assert!(
+                ping_response.is_ok(),
+                "PING command failed: {:?}. protocol={:?}",
+                ping_response.err(),
+                protocol
+            );
+            assert_eq!(
+                ping_response.unwrap(),
+                redis::Value::SimpleString("PONG".to_string())
+            );
+
+            // 6. Assert that a new connection was made by the lazy client
+            let clients_after_first_command = get_connected_clients(&mut monitoring_client).await;
+            logger_core::log_info(
+                "Test",
+                format!("Clients after first command (protocol={protocol:?}): {clients_after_first_command}"),
+            );
+            assert_eq!(
+                clients_after_first_command,
+                clients_before_lazy_init + 1,
+                "Lazy client should connect after the first command. protocol={:?}",
+                protocol
+            );
         });
     }
 }
