@@ -121,6 +121,9 @@ jobs:
               run: |
                   cd node
                   npm install
+                  cd rust-client
+                  npm install
+                  cd ../
                   npm run build
 
             # Run tests

@@ -132,17 +132,6 @@ jobs:
                   folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.build.OS }}
-                  named_os: ${{ matrix.build.NAMED_OS }}
-                  arch: ${{ matrix.build.ARCH }}
-                  target: ${{ matrix.build.TARGET }}
-                  npm_scope: ${{ vars.NPM_SCOPE }}
-                  publish: "true"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
             - name: Set platform identifier for artifact name
               shell: bash
               run: |
@@ -225,6 +214,7 @@ jobs:
     publish-platform-packages:
         name: Publish platform-specific NPM packages
         needs: [organize-artifacts]
+        if: github.action == 'workflow_dispatch' || github.event_name == 'push'
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -327,6 +317,7 @@ jobs:
     publish-base-to-npm:
         name: Publish the base TypeScript package
         needs: publish-platform-packages
+        if: github.action == 'workflow_dispatch' || github.event_name == 'push'
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -468,8 +459,8 @@ jobs:
             - name: Install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
-                  sudo apt-get update
-                  sudo apt-get install python3
+                  sudo apt update
+                  sudo apt install python3
 
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
