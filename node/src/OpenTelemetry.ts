@@ -12,7 +12,7 @@
  *       - `http://` or `https://` for HTTP/HTTPS
  *       - `grpc://` for gRPC
  *       - `file://` for local file export (see below)
- *     - **requestsPercentage**: (optional) The percentage of requests to sample and create a span for, used to measure command duration. Must be between 0 and 100. Defaults to 1 if not specified.
+ *     - **samplePercentage**: (optional) The percentage of requests to sample and create a span for, used to measure command duration. Must be between 0 and 100. Defaults to 1 if not specified.
  *   - **metrics**: (optional) Configure metrics exporting.
  *     - **endpoint**: The collector endpoint for metrics. Same protocol rules as above.
  *   - **flushIntervalMs**: (optional) Interval in milliseconds for flushing data to the collector. Must be a positive integer. Defaults to 5000ms if not specified.
@@ -27,7 +27,7 @@
  *
  * #### Validation Rules
  * - `flushIntervalMs` must be a positive integer.
- * - `requestsPercentage` must be between 0 and 100.
+ * - `samplePercentage` must be between 0 and 100.
  * - File exporter paths must start with `file://` and have an existing parent directory.
  * - Invalid configuration will throw an error synchronously when calling `OpenTelemetry.init()`.
  */
@@ -47,7 +47,7 @@ export class OpenTelemetry {
      * OpenTelemetry.init({
      *   traces: {
      *     endpoint: "http://localhost:4318/v1/traces",
-     *     requestsPercentage: 10, // Optional, defaults to 1
+     *     samplePercentage: 10, // Optional, defaults to 1
      *   },
      *   metrics: {
      *     endpoint: "http://localhost:4318/v1/metrics",
@@ -62,6 +62,12 @@ export class OpenTelemetry {
     public static init(openTelemetryConfig: OpenTelemetryConfig) {
         if (!this._instance) {
             this.internalInit(openTelemetryConfig);
+            Logger.log(
+                "info",
+                "GlideOpenTelemetry",
+                "OpenTelemetry initialized with config: " +
+                    JSON.stringify(openTelemetryConfig),
+            );
             return;
         }
 

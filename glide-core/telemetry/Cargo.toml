@@ -15,6 +15,7 @@ tokio = { version = "1", features = ["macros", "time"] }
 thiserror = "1"
 url = "2"
 async-trait = "0.1"
+serial_test = "2" 
 
 opentelemetry = { version = "0.27", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics", "rt-tokio-current-thread"] }

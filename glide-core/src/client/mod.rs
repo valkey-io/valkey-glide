@@ -137,13 +137,11 @@ async fn run_with_timeout<T>(
             Ok(result) => result,
             Err(_) => {
                 // Record timeout error metric if telemetry is initialized
-                if GlideOpenTelemetry::is_initialized() {
-                    if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                        log_error(
-                            "OpenTelemetry:timeout_error",
-                            format!("Failed to record timeout error: {}", e),
-                        );
-                    }
+                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                    log_error(
+                        "OpenTelemetry:timeout_error",
+                        format!("Failed to record timeout error: {}", e),
+                    );
                 }
                 Err(io::Error::from(io::ErrorKind::TimedOut).into())
             }

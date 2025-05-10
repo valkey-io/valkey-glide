@@ -64,25 +64,52 @@ struct AsyncClient {
     runtime: Runtime,
 }
 
-#[napi(object)]
-#[derive(Clone)]
-pub struct OpenTelemetryTracesConfig {
-    pub endpoint: Option<String>,
-    pub requests_percentage: Option<u32>,
-}
-
-#[napi(object)]
-#[derive(Clone)]
-pub struct OpenTelemetryMetricsConfig {
-    pub endpoint: Option<String>,
-}
-
+/// Configuration for OpenTelemetry integration in the Node.js client.
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+/// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+/// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+///
+/// At least one of traces or metrics must be provided.
 #[napi(object)]
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
+    /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
     pub traces: Option<OpenTelemetryTracesConfig>,
+    /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
     pub metrics: Option<OpenTelemetryMetricsConfig>,
+    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
     pub flush_interval_ms: Option<i64>,
+}
+
+/// Configuration for exporting OpenTelemetry traces.
+///
+/// - `endpoint`: The endpoint to which trace data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+#[napi(object)]
+#[derive(Clone)]
+pub struct OpenTelemetryTracesConfig {
+    /// The endpoint to which trace data will be exported.
+    pub endpoint: String,
+    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+    pub sample_percentage: Option<u32>,
+}
+
+/// Configuration for exporting OpenTelemetry metrics.
+///
+/// - `endpoint`: The endpoint to which metrics data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+#[napi(object)]
+#[derive(Clone)]
+pub struct OpenTelemetryMetricsConfig {
+    /// The endpoint to which metrics data will be exported.
+    pub endpoint: String,
 }
 
 fn to_js_error(err: impl std::error::Error) -> Error {
@@ -171,29 +198,33 @@ fn ensure_tokio_runtime() -> &'static Runtime {
 
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
+    // At least one of traces or metrics must be provided
+    if open_telemetry_config.traces.is_none() && open_telemetry_config.metrics.is_none() {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration."
+                .to_owned(),
+        ));
+    }
+
     let mut config = GlideOpenTelemetryConfigBuilder::default();
     // initilaize open telemetry traces exporter
     if let Some(traces) = open_telemetry_config.traces {
-        if let Some(endpoint_str) = traces.endpoint {
-            config = config.with_trace_exporter(Some(
-                GlideOpenTelemetrySignalsExporter::from_str(&endpoint_str)
-                    .map_err(ConnectionError::IoError)
-                    .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
-            ));
-        }
-        if let Some(requests_percentage) = traces.requests_percentage {
-            config = config.with_trace_requests_precentage(requests_percentage);
-        }
+        config = config.with_trace_exporter(
+            GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
+                .map_err(ConnectionError::IoError)
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+            traces.sample_percentage,
+        );
     }
 
+    // initialize open telemetry metrics exporter
     if let Some(metrics) = open_telemetry_config.metrics {
-        if let Some(endpoint_str) = metrics.endpoint {
-            config = config.with_metrics_exporter(Some(
-                GlideOpenTelemetrySignalsExporter::from_str(&endpoint_str)
-                    .map_err(ConnectionError::IoError)
-                    .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
-            ));
-        }
+        config = config.with_metrics_exporter(
+            GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
+                .map_err(ConnectionError::IoError)
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+        );
     }
 
     let flush_interval_ms = open_telemetry_config
@@ -203,7 +234,10 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
     if flush_interval_ms <= 0 {
         return Err(napi::Error::new(
             Status::Unknown,
-            "InvalidInput: flushIntervalMs must be a positive integer".to_owned(),
+            format!(
+                "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+                flush_interval_ms
+            ),
         ));
     }
 

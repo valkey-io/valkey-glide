@@ -98,6 +98,10 @@ async function wrongOpenTelemetryConfig() {
 
     // negative flush interval
     openTelemetryConfig = {
+        traces: {
+            endpoint: VALID_FILE_ENDPOINT_TRACES,
+            samplePercentage: 1,
+        },
         flushIntervalMs: -400,
     };
     expect(() => OpenTelemetry.init(openTelemetryConfig)).toThrow(
@@ -108,11 +112,11 @@ async function wrongOpenTelemetryConfig() {
     openTelemetryConfig = {
         traces: {
             endpoint: VALID_FILE_ENDPOINT_TRACES,
-            requestsPercentage: -400,
+            samplePercentage: -400,
         },
     };
     expect(() => OpenTelemetry.init(openTelemetryConfig)).toThrow(
-        /Trace requests precentage must be between 0 and 100/i,
+        /Trace sample percentage must be between 0 and 100/i,
     );
 
     // wrong traces file path
@@ -144,6 +148,12 @@ async function wrongOpenTelemetryConfig() {
     expect(() => OpenTelemetry.init(openTelemetryConfig)).toThrow(
         /The directory does not exist or is not a directory/i,
     );
+
+    // Traces and metrics are not provided
+    openTelemetryConfig = {};
+    expect(() => OpenTelemetry.init(openTelemetryConfig)).toThrow(
+        /At least one of traces or metrics must be provided for OpenTelemetry configuration./i,
+    );
 }
 
 //cluster tests
@@ -170,7 +180,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         const openTelemetryConfig: OpenTelemetryConfig = {
             traces: {
                 endpoint: VALID_FILE_ENDPOINT_TRACES,
-                requestsPercentage: 1,
+                samplePercentage: 1,
             },
             metrics: {
                 endpoint: VALID_ENDPOINT_METRICS,
@@ -238,7 +248,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const openTelemetryConfig: OpenTelemetryConfig = {
                 traces: {
                     endpoint: "wrong.endpoint",
-                    requestsPercentage: 1,
+                    samplePercentage: 1,
                 },
             };
             // the init will not throw error regarding the wrong endpoint because the init can be called once per process

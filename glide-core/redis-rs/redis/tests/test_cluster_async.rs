@@ -127,12 +127,13 @@ mod cluster_async {
     async fn test_async_open_telemetry_config() {
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(Some(
+            .with_trace_exporter(
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-            ))
-            .with_metrics_exporter(Some(
+                Some(100),
+            )
+            .with_metrics_exporter(
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-            ))
+            )
             .build();
         let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
         assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
@@ -153,17 +154,20 @@ mod cluster_async {
     async fn test_async_open_telemetry_interval_config() {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(exporter.clone())
-            .build();
-        assert_eq!(GlideOpenTelemetry::get_span_interval(glide_ot_config), 400);
-        // check the default interval
-        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_trace_exporter(exporter)
+            .with_flush_interval(Duration::from_millis(400))
+            .with_trace_exporter(exporter.clone(), Some(100))
             .build();
         assert_eq!(
-            GlideOpenTelemetry::get_span_interval(glide_ot_config.clone()),
-            5000
+            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config),
+            Duration::from_millis(400)
+        );
+        // check the default interval
+        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
+            .with_trace_exporter(exporter, Some(100))
+            .build();
+        assert_eq!(
+            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config.clone()),
+            Duration::from_millis(5000)
         );
 
         let cluster = TestClusterContext::new(3, 0);
