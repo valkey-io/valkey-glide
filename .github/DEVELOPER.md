@@ -142,3 +142,44 @@ We use dynamic matrices for our CI/CD workflows, which are created using the `cr
 -   `language-version-matrix-output`: The generated language version matrix.
 
 This dynamic matrix generation allows for flexible and efficient CI/CD workflows, adapting the test configurations based on the type of change and the specific language being tested.
+
+### Node.js CD Workflow Structure
+
+The Node.js CD workflow (`npm-cd.yml`) uses a multi-stage approach to build and publish platform-specific native modules and a TypeScript package:
+
+#### 1. Platform Matrix Generation (`load-platform-matrix`)
+- Filters entries from `build-matrix.json` that include "npm" in their `PACKAGE_MANAGERS` field
+- Creates a platform matrix for building native modules
+
+#### 2. Native Binary Building (`build-binaries`)
+- Runs on multiple platforms defined by the matrix
+- Sets up environment-specific configurations (GNU vs musl)
+- Builds native modules with NAPI-RS
+- Uploads native binary artifacts with unique platform identifiers
+
+#### 3. Artifact Organization (`organize-artifacts`)
+- Downloads all platform-specific binary artifacts
+- Uses NAPI-RS CLI to organize artifacts into platform-specific directories
+- Organizes artifacts under `node/npm/` directory for publishing
+
+#### 4. Platform Package Publishing (`publish-platform-packages`)
+- Publishes each platform-specific package
+- Sets version and tag (latest/next) based on release version
+- Handles errors gracefully, allowing for idempotent publishing
+- Skips already published packages
+
+#### 5. Base TypeScript Package (`publish-base-to-npm`)
+- Creates and configures the main TypeScript-only package
+- Copies required files from build outputs
+- Runs `napi prepublish` to add platform-specific optional dependencies
+- Publishes the main package with proper version and tag
+
+#### 6. Release Testing (`test-release`)
+- Tests the published packages on each supported platform
+- Verifies packages work correctly in real-world scenarios
+- Deprecates packages on test failure
+
+#### Special Considerations
+- ARM64 musl builds require special handling as GitHub's checkout action doesn't work in Docker on ARM runners
+- The `setup-musl-on-linux` action handles repository setup for these environments
+- Version handling synchronizes all packages to the same version

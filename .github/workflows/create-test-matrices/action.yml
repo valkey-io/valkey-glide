@@ -1,24 +1,27 @@
+name: "Create Test Matrices"
+description: "Creates test matrices for language, engine, and host combinations based on run conditions"
+
 inputs:
     language-name:
         description: "Language name"
         required: true
-        type: choice
-        options:
-            - rust
-            - java
-            - node
-            - python
-            - go
-            - C#
+        # type: choice
+        # options:
+        # - rust
+        # - java
+        # - node
+        # - python
+        # - go
+        # - C#
     run-full-matrix:
         description: "Run the full matrix"
         required: true
-        type: boolean
+        # type: boolean
     containers:
         description: "Run in containers"
         required: true
-        default: false
-        type: boolean
+        default: "false"
+        # type: boolean
 
 outputs:
     engine-matrix-output:

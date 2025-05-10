@@ -6,10 +6,10 @@ This document describes how to set up your development environment to build and 
 
 - `valkey-glide/`: The polyglot root directory.
 - `valkey-glide/node/`: Contains the Node.js binding (TypeScript + Rust napi-rs).
-  - `src/`: TypeScript source code.
-  - `tests/`: Jest tests.
-  - `rust-client/`: napi-rs Rust crate (binds to `glide-core`).
-  - `scripts/`: Build helpers (e.g., `build-release.sh`).
+    - `src/`: TypeScript source code.
+    - `tests/`: Jest tests.
+    - `rust-client/`: napi-rs Rust crate (binds to `glide-core`).
+    - `scripts/`: Build helpers (e.g., `build-release.sh`).
 - `valkey-glide/glide-core/`: The core Rust logic, shared across all language bindings.
 - `.github/`: CI/CD workflows and composite actions.
 
@@ -27,25 +27,25 @@ The Node.js wrapper consists of:
   Quickly compiles without optimization. Best for testing and development.
   Command:
 
-  ```bash
-  npm run build
-  ```
+    ```bash
+    npm run build
+    ```
 
 - **Benchmark Build:**
   Compiles optimized build, but install like dev build.
   Command:
 
-  ```bash
-  npm run build:benchmark
-  ```
+    ```bash
+    npm run build:benchmark
+    ```
 
 - **Release Build:**
   Fully optimized, stripped, and cross-compiled (glibc 2.17/musl support via Zig).
   Command:
 
-  ```bash
-  npm run build:release
-  ```
+    ```bash
+    npm run build:release
+    ```
 
 ### Build Process Details
 
@@ -103,6 +103,7 @@ brew install zig
 ```
 
 Ensure `zig` is available in your PATH:
+
 ```bash
 zig version
 ```
@@ -127,23 +128,24 @@ nvm use --lts
     ```
 
 2. Build:
+
     - Fast dev build:
 
-      ```bash
-      npm run build
-      ```
+        ```bash
+        npm run build
+        ```
 
     - Benchmark build:
 
-      ```bash
-      npm run build:benchmark
-      ```
+        ```bash
+        npm run build:benchmark
+        ```
 
     - Release build:
 
-      ```bash
-      npm run build:release
-      ```
+        ```bash
+        npm run build:release
+        ```
 
 3. Run tests:
 
@@ -162,36 +164,36 @@ nvm use --lts
 
 - Lint your TypeScript code using ESLint:
 
-  ```bash
-  npm run lint
-  ```
+    ```bash
+    npm run lint
+    ```
 
 - Automatically fix linting issues:
 
-  ```bash
-  npm run lint:fix
-  ```
+    ```bash
+    npm run lint:fix
+    ```
 
 - Format code with Prettier:
 
-  ```bash
-  npm run format
-  ```
+    ```bash
+    npm run format
+    ```
 
 ### Rust
 
 - Run Clippy linter:
 
-  ```bash
-  cd rust-client
-  cargo clippy --all-features --all-targets -- -D warnings
-  ```
+    ```bash
+    cd rust-client
+    cargo clippy --all-features --all-targets -- -D warnings
+    ```
 
 - Format Rust code:
 
-  ```bash
-  cargo fmt
-  ```
+    ```bash
+    cargo fmt
+    ```
 
 ## Testing
 
@@ -226,13 +228,17 @@ Example:
 
 ```typescript
 import { GlideClient } from ".";
-const client = await GlideClient.createClient({ addresses: [{ host: "localhost", port: 6379 }] });
+const client = await GlideClient.createClient({
+    addresses: [{ host: "localhost", port: 6379 }],
+});
 await client.ping();
 ```
 
 ```typescript
 import { GlideClusterClient } from ".";
-const cluster = await GlideClusterClient.createClient({ addresses: [{ host: "localhost", port: 7000 }] });
+const cluster = await GlideClusterClient.createClient({
+    addresses: [{ host: "localhost", port: 7000 }],
+});
 await cluster.ping();
 ```
 

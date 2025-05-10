@@ -1,33 +1,33 @@
 {
-  "compilerOptions": {
-    "target": "ES2021",
-    "module": "CommonJS",
-    "lib": ["ES2021"],
-    "rootDir": "./src",
-    "outDir": "./build-ts",
-    "declaration": true,
-    "sourceMap": true,
-    "inlineSourceMap": false,
-    "esModuleInterop": true,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "noFallthroughCasesInSwitch": true,
-    "pretty": true,
-    "skipLibCheck": true
-  },
-  "ts-node": {
-    "transpileOnly": true,
     "compilerOptions": {
-      "module": "CommonJS",
-      "target": "ES2021",
-      "esModuleInterop": true
+        "target": "ES2021",
+        "module": "CommonJS",
+        "lib": ["ES2021"],
+        "rootDir": "./src",
+        "outDir": "./build-ts",
+        "declaration": true,
+        "sourceMap": true,
+        "inlineSourceMap": false,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true,
+        "allowJs": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "noFallthroughCasesInSwitch": true,
+        "pretty": true,
+        "skipLibCheck": true
     },
-    "esm": true
-  },
-  "include": ["src/**/*", "src/index.ts", "types/**/*.d.ts"],
-  "exclude": ["node_modules", "build-ts"]
+    "ts-node": {
+        "transpileOnly": true,
+        "compilerOptions": {
+            "module": "CommonJS",
+            "target": "ES2021",
+            "esModuleInterop": true
+        },
+        "esm": true
+    },
+    "include": ["src/**/*", "src/index.ts", "types/**/*.d.ts"],
+    "exclude": ["node_modules", "build-ts"]
 }

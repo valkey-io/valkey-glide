@@ -29,10 +29,10 @@ This optimization reduces:
 
 ### Size Comparison
 
-| Metric | Full Build | Optimized Build | Reduction |
-|--------|------------|-----------------|-----------|
-| File size | 409K | 233K | 43% |
-| Lines of code | 9,733 | 5,265 | 46% |
+| Metric        | Full Build | Optimized Build | Reduction |
+| ------------- | ---------- | --------------- | --------- |
+| File size     | 409K       | 233K            | 43%       |
+| Lines of code | 9,733      | 5,265           | 46%       |
 
 ### Important Note
 

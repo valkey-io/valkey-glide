@@ -76,10 +76,12 @@ let nativeBinding;
 // Determine which package to load based on platform/architecture
 const packageName = determinePackageName(platform, arch);
 try {
-  // Load the platform-specific package
-  nativeBinding = require(packageName);
+    // Load the platform-specific package
+    nativeBinding = require(packageName);
 } catch (e) {
-  throw new Error(`Failed to load native binding for ${platform}-${arch}: ${e.message}`);
+    throw new Error(
+        `Failed to load native binding for ${platform}-${arch}: ${e.message}`,
+    );
 }
 
 // Export all native functions
@@ -92,27 +94,27 @@ module.exports = nativeBinding;
 
 ```json
 {
-  "name": "@valkey/valkey-glide",
-  "version": "1.0.0",
-  "main": "build-ts/index.js",
-  "types": "build-ts/index.d.ts",
-  "peerDependencies": {
-    "@valkey/valkey-glide-linux-x64-gnu": "^1.0.0",
-    "@valkey/valkey-glide-linux-arm64-gnu": "^1.0.0",
-    "@valkey/valkey-glide-darwin-x64": "^1.0.0",
-    "@valkey/valkey-glide-darwin-arm64": "^1.0.0"
-    // Additional platforms as needed
-  },
-  "peerDependenciesMeta": {
-    "@valkey/valkey-glide-linux-x64-gnu": {
-      "optional": true
+    "name": "@valkey/valkey-glide",
+    "version": "1.0.0",
+    "main": "build-ts/index.js",
+    "types": "build-ts/index.d.ts",
+    "peerDependencies": {
+        "@valkey/valkey-glide-linux-x64-gnu": "^1.0.0",
+        "@valkey/valkey-glide-linux-arm64-gnu": "^1.0.0",
+        "@valkey/valkey-glide-darwin-x64": "^1.0.0",
+        "@valkey/valkey-glide-darwin-arm64": "^1.0.0"
+        // Additional platforms as needed
     },
-    // Mark all platform packages as optional
-  },
-  "dependencies": {
-    "long": "5",
-    "protobufjs-minimal": "6.11.5"
-  }
+    "peerDependenciesMeta": {
+        "@valkey/valkey-glide-linux-x64-gnu": {
+            "optional": true
+        }
+        // Mark all platform packages as optional
+    },
+    "dependencies": {
+        "long": "5",
+        "protobufjs-minimal": "6.11.5"
+    }
 }
 ```
 
@@ -120,13 +122,13 @@ module.exports = nativeBinding;
 
 ```json
 {
-  "name": "@valkey/valkey-glide-linux-x64-gnu",
-  "version": "1.0.0",
-  "main": "native.js",
-  "types": "native.d.ts",
-  "os": ["linux"],
-  "cpu": ["x64"],
-  "libc": ["glibc"]
+    "name": "@valkey/valkey-glide-linux-x64-gnu",
+    "version": "1.0.0",
+    "main": "native.js",
+    "types": "native.d.ts",
+    "os": ["linux"],
+    "cpu": ["x64"],
+    "libc": ["glibc"]
 }
 ```
 

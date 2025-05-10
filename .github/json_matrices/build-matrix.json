@@ -35,12 +35,7 @@
         "BUILD_RUNNER": "macos-14",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": [
-            "pypi",
-            "npm",
-            "maven",
-            "pkg_go_dev"
-        ],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
         "languages": []
     },
     {
@@ -53,7 +48,7 @@
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": ["npm"],
-        "languages": ["node"]
+        "languages": []
     },
     {
         "OS": "ubuntu",

@@ -1,11 +1,19 @@
 {
-  "name": "@valkey/valkey-glide-darwin-arm64",
-  "version": "$RELEASE_VERSION",
-  "description": "Native bindings for @valkey/valkey-glide on darwin-arm64",
-  "main": "native.js",
-  "types": "native.d.ts",
-  "files": ["native.js", "native.d.ts", "*.node"],
-  "os": ["darwin"],
-  "cpu": ["arm64"],
-  "license": "Apache-2.0"
+    "name": "@valkey/valkey-glide-darwin-arm64",
+    "version": "$RELEASE_VERSION",
+    "description": "Native bindings for @valkey/valkey-glide on darwin-arm64",
+    "main": "native.js",
+    "types": "native.d.ts",
+    "files": [
+        "native.js",
+        "native.d.ts",
+        "*.node"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "license": "Apache-2.0"
 }

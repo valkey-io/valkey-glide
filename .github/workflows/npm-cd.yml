@@ -7,7 +7,6 @@ on:
         paths:
             - .github/workflows/npm-cd.yml
             - .github/workflows/build-node-wrapper/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/install-rust-and-protoc/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-engine/action.yml
@@ -35,23 +34,6 @@ permissions:
     id-token: write
 
 jobs:
-    start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-
-            - name: Start self hosted EC2 runner
-              uses: ./.github/workflows/start-self-hosted-runner
-              with:
-                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                  aws-region: ${{ secrets.AWS_REGION }}
-                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
     load-platform-matrix:
         runs-on: ubuntu-latest
         outputs:
@@ -64,23 +46,17 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  # Filter entries with npm in PACKAGE_MANAGERS
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
-                      | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
-                          end
-                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
-    publish-binaries:
-        needs: [start-self-hosted-runner, load-platform-matrix]
+    build-binaries:
+        needs: load-platform-matrix
         if: github.repository_owner == 'valkey-io'
-        name: Publish packages to NPM
-        runs-on: ${{ matrix.build.RUNNER }}
+        name: Build native binaries
+        runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.BUILD_RUNNER || matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
             options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
@@ -142,7 +118,7 @@ jobs:
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
-            - name: Setup node for publishing
+            - name: Setup node for building
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               working-directory: ./node
               run: |
@@ -167,6 +143,117 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Set platform identifier for artifact name
+              shell: bash
+              run: |
+                  # Create a unique platform identifier for the artifact
+                  MUSL_FLAG=`if [[ "${{ matrix.build.TARGET }}" =~ .*"musl".* ]]; then echo "-musl"; else echo ""; fi`
+                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
+                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+
+            - name: Upload node binaries artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: node-binaries-${{ env.PLATFORM_ID }}
+                  path: |
+                      node/rust-client/glide-rs.*.node
+                      node/src/native.js
+                      node/src/native.d.ts
+                  if-no-files-found: error
+
+    organize-artifacts:
+        needs: [build-binaries, load-platform-matrix]
+        name: Organize artifacts for publishing
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
+            - name: Install napi-rs CLI
+              shell: bash
+              run: |
+                  npm install -g @napi-rs/cli
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: node-binaries-*
+                  path: ./artifacts
+
+            - name: List downloaded artifacts
+              shell: bash
+              run: |
+                  find ./artifacts -type f -name "*.node" | sort
+
+            - name: Organize artifacts with napi-rs
+              shell: bash
+              run: |
+                  # Create artifacts directory
+                  mkdir -p ./organized-artifacts
+
+                  # Copy the .node files to platform-specific directories
+                  # The napi artifacts command will organize them under npm/ directory
+                  napi artifacts --dir ./artifacts --npm-dir ./node/npm
+
+                  # Check the organized files
+                  find ./node/npm -type f | sort
+
+            - name: Upload organized artifacts for reference
+              uses: actions/upload-artifact@v4
+              with:
+                  name: organized-node-artifacts
+                  path: ./node/npm
+
+    publish-platform-packages:
+        name: Publish platform-specific NPM packages
+        needs: [organize-artifacts]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -180,42 +267,66 @@ jobs:
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
 
-            - name: Check that the release version dont have typo init
+            - name: Check that the release version don't have typo in it
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
                   echo "The release version "${RELEASE_VERSION}" contains a typo, please fix it"
                   echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                   exit 1
 
-            - name: Publish to NPM
+            - name: Download organized artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: organized-node-artifacts
+                  path: ./node/npm
+
+            - name: Publish platform-specific packages
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
               shell: bash
               working-directory: ./node
               run: |
-                  npm pkg fix
-                  set +e  # Disable immediate exit on non-zero exit codes
+                  # Set npm auth token
+                  npm config set registry https://registry.npmjs.org/
+                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                  npm config set scope ${{ vars.NPM_SCOPE }}
 
-                  # Redirect stderr to stdout, filter out notices and warnings
-                  { npm_publish_err=$(npm publish --tag "${NPM_TAG}" --access public --loglevel=error 2>&1 1>&3- | grep -Ev "notice|ExperimentalWarning|WARN") ;} 3>&1
-                  publish_exit_code=$?
+                  # Find all platform package directories and publish them
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
 
-                  # Re-enable immediate exit
-                  set -e
+                    echo "Publishing package in ${pkg_dir}..."
+                    cd "${pkg_dir}"
 
-                  if [[ $publish_exit_code -eq 0 ]]; then
-                    echo "Package published successfully."
-                  elif echo "$npm_publish_err" | grep -q "You cannot publish over the previously published versions"; then
-                    echo "Skipping publishing, package already published."
-                  elif [[ ! -z "$npm_publish_err" ]]; then
-                    echo "Failed to publish with error: $npm_publish_err"
-                  exit 1
-                  fi
+                    # Replace version placeholder
+                    sed -i "s/\$RELEASE_VERSION/${RELEASE_VERSION}/g" package.json
+
+                    set +e  # Disable immediate exit on non-zero exit codes
+
+                    # Publish the package
+                    npm_publish_err=$(npm publish --tag "${NPM_TAG}" --access public --loglevel=error 2>&1 || true)
+                    publish_exit_code=$?
+
+                    # Re-enable immediate exit
+                    set -e
+
+                    if [[ $publish_exit_code -eq 0 ]]; then
+                      echo "Package published successfully."
+                    elif echo "$npm_publish_err" | grep -q "You cannot publish over the previously published versions"; then
+                      echo "Skipping publishing, package already published."
+                    else
+                      echo "Failed to publish with error: $npm_publish_err"
+                      exit 1
+                    fi
+                  done
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
     publish-base-to-npm:
-        name: Publish the base NPM package
-        needs: publish-binaries
+        name: Publish the base TypeScript package
+        needs: publish-platform-packages
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -231,38 +342,73 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
 
-            - name: Create package.json file
+            - name: Set the release version
               shell: bash
-              working-directory: ./node/npm/glide
               run: |
-                  export pkg_name=valkey-glide
-
-                  echo "The workflow is: ${{env.EVENT_NAME}}"
-                  if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                     R_VERSION=${GITHUB_REF:11}
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
-                  export package_version=${R_VERSION}
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
+            - name: Create directory for TypeScript package
+              shell: bash
+              run: |
+                  mkdir -p ./node/npm/glide
+
+            - name: Copy package.json and other files to npm/glide
+              shell: bash
+              run: |
+                  # Copy the main package.json
+                  cp ./node/package.json ./node/npm/glide/
+
+                  # Copy the source files
+                  mkdir -p ./node/npm/glide/build-ts
+                  cp -r ./node/build-ts/* ./node/npm/glide/build-ts/
+
+                  # Copy the README
+                  cp ./node/README.md ./node/npm/glide/
+
+                  # Create index.ts loader
+                  cat > ./node/npm/glide/index.ts << 'EOL'
+                  /**
+                   * This is the entry point for the TypeScript-only package.
+                   * It imports the main package and re-exports everything.
+                   */
+                  import * as glide from './build-ts/index';
+                  export = glide;
+                  EOL
+
+            - name: Prepare package.json with napi prepublish
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Install napi-rs CLI
+                  npm install -g @napi-rs/cli
+
+                  # Update version in package.json
+                  jq ".version = \"${RELEASE_VERSION}\"" package.json > package.json.tmp && mv package.json.tmp package.json
+
+                  # Run napi prepublish to add optionalDependencies for platform packages
+                  napi prepublish
+
+                  # Check the result
                   cat package.json
+
+                  # Set scope variable
+                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+
                   # Fix index.ts based on the scope variable
                   sed -i "s|@scope/|${scope}|g" index.ts
               env:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
-
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ubuntu
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -282,11 +428,16 @@ jobs:
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  # Copy the main README file
-                  cp ../../README.md .
+                  # Install dependencies
                   npm install
-                  npm run build
-                  npm publish --access public --tag ${{ env.NPM_TAG }}
+
+                  # Run the build if needed
+                  if [[ -f "package.json" && -n "$(jq -r '.scripts.build // ""' package.json)" ]]; then
+                    npm run build
+                  fi
+
+                  # Publish the package
+                  npm publish --access public --tag ${{ env.NPM_TAG }} --ignore-scripts
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
@@ -294,7 +445,7 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
         name: Test the release
         needs: [publish-base-to-npm, load-platform-matrix]
-        runs-on: ${{ matrix.build.RUNNER }}
+        runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
             options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
@@ -307,14 +458,14 @@ jobs:
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            - name: install redis and git for alpine
+            - name: Install redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
                   apk add git redis
                   node -v
 
-            - name: install Python for ubuntu
+            - name: Install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                   sudo apt-get update
@@ -358,6 +509,22 @@ jobs:
                   npm install -g typescript
                   npx tsc -p ./tsconfig.json
 
+            - name: Set the release version
+              shell: bash
+              run: |
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -391,9 +558,9 @@ jobs:
               run: |
                   # Detect OS and install jq
                   if [[ "${OSTYPE}" == "darwin"* ]]; then
-                      brew install jq || true  
+                      brew install jq || true
                   elif command -v apk > /dev/null; then
-                      apk add --no-cache jq    
+                      apk add --no-cache jq
                   else
                       sudo apt-get update && sudo apt-get install -y jq
                   fi
@@ -424,12 +591,3 @@ jobs:
                       echo "Deprecating ${package_name}@${RELEASE_VERSION}"
                       npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated" --force || true
                   done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ always() }} && ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              shell: bash
-              run: |
-                  git reset --hard
-                  git clean -xdf
