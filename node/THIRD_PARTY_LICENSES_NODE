@@ -2129,7 +2129,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: backtrace:0.3.74
+Package: backtrace:0.3.75
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3122,7 +3122,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: chrono:0.4.40
+Package: chrono:0.4.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -10096,7 +10096,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hashbrown:0.15.2
+Package: hashbrown:0.15.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19025,7 +19025,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: redox_syscall:0.5.11
+Package: redox_syscall:0.5.12
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20942,7 +20942,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.11.0
+Package: rustls-pki-types:1.12.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26459,7 +26459,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.44.2
+Package: tokio:1.45.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35694,7 +35694,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: mingo:6.6.0
+Package: mingo:6.6.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35998,7 +35998,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobufjs:7.5.0
+Package: protobufjs:7.5.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36457,7 +36457,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:22.15.3
+Package: @types:node:22.15.17
 
 The following copyrights and licenses were found in the source code of this package:
 
