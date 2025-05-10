@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! redis-rs is a Rust implementation of a Redis client library.  It exposes
 //! a general purpose interface to Redis and also provides specific helpers for
 //! commonly used functionality.

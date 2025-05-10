@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! This module provides the functionality to refresh and calculate the cluster topology for Redis Cluster.
 
 use crate::cluster::get_connection_addr;

@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! This module extends the library to support Redis Cluster.
 //!
 //! Note that this module does not currently provide pubsub

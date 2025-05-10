@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use super::{AsyncStream, RedisResult, RedisRuntime, SocketAddr};
 use async_trait::async_trait;
 #[allow(unused_imports)] // fixes "Duration" unused when built with non-default feature set
