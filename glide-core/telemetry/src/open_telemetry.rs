@@ -1,3 +1,4 @@
+use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
 use opentelemetry::{global, trace::Tracer};
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
@@ -43,6 +45,9 @@ pub enum GlideOTELError {
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
 pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 5000;
+
+/// Default trace sampling percentage for sending OpenTelemetry data to the collector.
+pub const DEFAULT_TRACE_SAMPLE_PERCENTAGE: u32 = 1;
 
 /// Default filename for the file exporter.
 pub const DEFAULT_SIGNAL_FILENAME: &str = "signals.json";
@@ -358,54 +363,94 @@ impl GlideSpan {
 #[derive(Clone, Debug)]
 pub struct GlideOpenTelemetryConfig {
     /// Default delay interval between two consecutive exports.
-    flush_interval_ms: std::time::Duration,
-    /// Determines the protocol between the collector and GLIDE for traces
-    trace_exporter: GlideOpenTelemetrySignalsExporter,
-    /// Determines the protocol between the collector and GLIDE for metrics
-    metrics_exporter: GlideOpenTelemetrySignalsExporter,
+    flush_interval_ms: Duration,
+    traces: Option<GlideOpenTelemetryTracesConfig>,
+    metrics: Option<GlideOpenTelemetryMetricsConfig>,
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct GlideOpenTelemetryConfigBuilder {
-    flush_interval_ms: std::time::Duration,
+pub struct GlideOpenTelemetryTracesConfig {
+    /// Specifies how the exporter sends telemetry data to the collector, and holds the endpoint information.
     trace_exporter: GlideOpenTelemetrySignalsExporter,
+    /// The percentage of requests to sample and create a span for, used to measure command duration.
+    trace_sample_percentage: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct GlideOpenTelemetryMetricsConfig {
+    /// Specifies how the exporter sends telemetry data to the collector, and holds the endpoint information.
     metrics_exporter: GlideOpenTelemetrySignalsExporter,
+}
+
+/// Builder for configuring OpenTelemetry in GLIDE
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported.
+/// - `flush_interval_ms`: Sets the interval between consecutive exports of telemetry data.
+/// - `traces_config`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics_config`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+///
+/// If both `traces_config` and `metrics_config` are `None`, no telemetry data will be exported.
+#[derive(Clone, Debug)]
+pub struct GlideOpenTelemetryConfigBuilder {
+    /// The interval between consecutive exports of telemetry data.
+    flush_interval_ms: Duration,
+    /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+    traces_config: Option<GlideOpenTelemetryTracesConfig>,
+    /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+    metrics_config: Option<GlideOpenTelemetryMetricsConfig>,
 }
 
 impl Default for GlideOpenTelemetryConfigBuilder {
     fn default() -> Self {
         GlideOpenTelemetryConfigBuilder {
-            flush_interval_ms: std::time::Duration::from_millis(
-                DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64,
-            ),
-            trace_exporter: GlideOpenTelemetrySignalsExporter::File(std::env::temp_dir()),
-            metrics_exporter: GlideOpenTelemetrySignalsExporter::File(std::env::temp_dir()),
+            flush_interval_ms: Duration::from_millis(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64),
+            traces_config: None,
+            metrics_config: None,
         }
     }
 }
 
 impl GlideOpenTelemetryConfigBuilder {
-    pub fn with_flush_interval(mut self, duration: std::time::Duration) -> Self {
+    /// Configure the flush interval in milliseconds
+    ///
+    /// - `duration`: The duration between consecutive exports of telemetry data.
+    pub fn with_flush_interval(mut self, duration: Duration) -> Self {
         self.flush_interval_ms = duration;
         self
     }
 
-    pub fn with_trace_exporter(mut self, protocol: GlideOpenTelemetrySignalsExporter) -> Self {
-        self.trace_exporter = protocol;
+    /// Configure the trace exporter
+    ///
+    /// - `exporter`: The exporter endpoint to use for trace data.
+    /// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration.
+    ///   If `None`, the default value of `DEFAULT_TRACE_SAMPLE_PERCENTAGE` will be used.
+    pub fn with_trace_exporter(
+        mut self,
+        exporter: GlideOpenTelemetrySignalsExporter,
+        sample_percentage: Option<u32>,
+    ) -> Self {
+        self.traces_config = Some(GlideOpenTelemetryTracesConfig {
+            trace_exporter: exporter,
+            trace_sample_percentage: sample_percentage.unwrap_or(DEFAULT_TRACE_SAMPLE_PERCENTAGE),
+        });
         self
     }
 
-    pub fn with_metrics_exporter(mut self, protocol: GlideOpenTelemetrySignalsExporter) -> Self {
-        self.metrics_exporter = protocol;
+    /// Configure the metrics exporter
+    ///
+    /// - `exporter`: The exporter endpoint to use for metrics data.
+    pub fn with_metrics_exporter(mut self, exporter: GlideOpenTelemetrySignalsExporter) -> Self {
+        self.metrics_config = Some(GlideOpenTelemetryMetricsConfig {
+            metrics_exporter: exporter,
+        });
         self
     }
 
     pub fn build(self) -> GlideOpenTelemetryConfig {
         GlideOpenTelemetryConfig {
             flush_interval_ms: self.flush_interval_ms,
-            trace_exporter: self.trace_exporter,
-            metrics_exporter: self.metrics_exporter,
+            traces: self.traces_config,
+            metrics: self.metrics_config,
         }
     }
 }
@@ -424,8 +469,8 @@ pub struct GlideOpenTelemetry {}
 
 static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
 
-/// Static mutex to track initialization state
-static OTEL_INITIALIZED: Mutex<bool> = Mutex::new(false);
+/// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
+static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
@@ -434,33 +479,59 @@ impl GlideOpenTelemetry {
     /// This method should be called once for the given **process**
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
     pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
-        // Check if already initialized
-        let mut initialized = OTEL_INITIALIZED.lock().map_err(|_| {
-            GlideOTELError::Other("Failed to acquire initialization lock".to_string())
+        OTEL.get_or_try_init(|| {
+            Self::validate_config(config.clone())?;
+
+            if let Some(traces_config) = config.traces.as_ref() {
+                Self::initialise_trace_exporter(
+                    config.flush_interval_ms,
+                    &traces_config.trace_exporter,
+                )?;
+            }
+
+            if let Some(metrics_config) = config.metrics.as_ref() {
+                Self::initialise_metrics_exporter(
+                    config.flush_interval_ms,
+                    &metrics_config.metrics_exporter,
+                )?;
+                Self::init_metrics()?;
+            }
+
+            Ok::<RwLock<GlideOpenTelemetry>, GlideOTELError>(RwLock::new(GlideOpenTelemetry {}))
         })?;
 
-        if *initialized {
-            return Ok(());
+        Ok(())
+    }
+
+    /// Validate the configuration
+    ///
+    /// - `config`: The OpenTelemetry configuration to validate.
+    ///
+    /// Returns an error if the configuration is invalid:
+    /// - `flush_interval_ms` cannot be zero
+    /// - `trace_sample_percentage` must be between 0 and 100
+    fn validate_config(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
+        // Validate flush_interval_ms
+        if config.flush_interval_ms.is_zero() {
+            return Err(GlideOTELError::Other(
+                "InvalidInput: flushIntervalMs cannot be zero".to_string(),
+            ));
         }
 
-        // Initialize trace exporter
-        Self::initialise_trace_exporter(config.flush_interval_ms, &config.trace_exporter)?;
-
-        // Initialize metrics exporter
-        Self::initialise_metrics_exporter(config.flush_interval_ms, &config.metrics_exporter)?;
-
-        // Initialize metrics
-        Self::init_metrics()?;
-
-        // Mark as initialized
-        *initialized = true;
-
+        // Validate trace_sample_percentage
+        if let Some(traces_config) = config.traces.as_ref() {
+            if traces_config.trace_sample_percentage > 100 {
+                return Err(GlideOTELError::Other(
+                    "Trace sample percentage must be between 0 and 100".into(),
+                ));
+            }
+        }
         Ok(())
     }
 
     /// Initialize the trace exporter based on the configuration
     fn initialise_trace_exporter(
-        flush_interval_ms: std::time::Duration,
+        flush_interval_ms: Duration,
         trace_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
         let batch_config = opentelemetry_sdk::trace::BatchConfigBuilder::default()
@@ -503,7 +574,7 @@ impl GlideOpenTelemetry {
 
     /// Initialize the metrics exporter based on the configuration
     fn initialise_metrics_exporter(
-        flush_interval_ms: std::time::Duration,
+        flush_interval_ms: Duration,
         metrics_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
         let metrics_exporter = match metrics_exporter {
@@ -568,22 +639,27 @@ impl GlideOpenTelemetry {
     }
 
     /// Record a timeout error
+    ///
+    /// If OpenTelemetry is not initialized, this method will do nothing.
     pub fn record_timeout_error() -> Result<(), GlideOTELError> {
-        TIMEOUT_COUNTER
-            .lock()
-            .map_err(|_| GlideOTELError::ReadLockError)?
-            .as_mut()
-            .ok_or_else(|| {
-                GlideOTELError::Other(
-                    "OpenTelemetry error: Timeout counter not initialized".to_string(),
-                )
-            })?
-            .add(1, &[]);
+        if GlideOpenTelemetry::is_initialized() {
+            TIMEOUT_COUNTER
+                .lock()
+                .map_err(|_| GlideOTELError::ReadLockError)?
+                .as_mut()
+                .ok_or_else(|| {
+                    GlideOTELError::Other(
+                        "OpenTelemetry error: Timeout counter not initialized".to_string(),
+                    )
+                })?
+                .add(1, &[]);
+        }
         Ok(())
     }
 
-    pub fn get_span_interval(config: GlideOpenTelemetryConfig) -> u64 {
-        config.flush_interval_ms.as_millis() as u64
+    /// Get the flush interval milliseconds
+    pub fn get_flush_interval_ms(config: GlideOpenTelemetryConfig) -> Duration {
+        config.flush_interval_ms
     }
 
     /// Create new span
@@ -595,20 +671,55 @@ impl GlideOpenTelemetry {
     pub fn shutdown() {
         global::shutdown_tracer_provider();
     }
+
+    /// Check if OpenTelemetry is initialized
+    pub fn is_initialized() -> bool {
+        OTEL.get().is_some()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::panic;
+    use std::sync::OnceLock;
+    use tokio::runtime::Runtime;
+    use tokio::time::sleep;
+
     const SPANS_JSON: &str = "/tmp/spans.json";
     const METRICS_JSON: &str = "/tmp/metrics.json";
+
+    fn shared_runtime() -> &'static Runtime {
+        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+        RUNTIME.get_or_init(|| Runtime::new().expect("Failed to create runtime"))
+    }
 
     fn string_property_to_u64(json: &serde_json::Value, prop: &str) -> u64 {
         let s = json[prop].to_string().replace('"', "");
         s.parse::<u64>().unwrap()
     }
 
+    async fn init_otel() -> Result<(), GlideOTELError> {
+        let config = GlideOpenTelemetryConfigBuilder::default()
+            .with_flush_interval(Duration::from_millis(2000))
+            .with_trace_exporter(
+                GlideOpenTelemetrySignalsExporter::File(PathBuf::from(SPANS_JSON)),
+                Some(100),
+            )
+            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
+                METRICS_JSON,
+            )))
+            .build();
+        if let Err(e) = GlideOpenTelemetry::initialise(config) {
+            panic!("Failed to initialize OpenTelemetry: {}", e);
+        }
+        Ok(())
+    }
+
     async fn create_test_spans() {
+        // Clear the file
+        let _ = std::fs::remove_file(SPANS_JSON);
+
         let span = GlideOpenTelemetry::new_span("Root_Span_1");
         span.add_event("Event1");
         span.set_status(GlideSpanStatus::Ok);
@@ -616,11 +727,11 @@ mod tests {
         let child1 = span.add_span("Network_Span").unwrap();
 
         // Simulate some work
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         child1.end();
 
         // Simulate that the parent span is still doing some work
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         span.end();
 
         let span = GlideOpenTelemetry::new_span("Root_Span_2");
@@ -629,35 +740,26 @@ mod tests {
         span.set_status(GlideSpanStatus::Ok);
         drop(span); // writes the span
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(2100)).await;
     }
 
     #[test]
     fn test_span_json_exporter() {
-        let _ = std::fs::remove_file(SPANS_JSON);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    METRICS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+
+            init_otel().await.unwrap();
             create_test_spans().await;
 
-            // Read the file content
             let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
-            let lines: Vec<&str> = file_content.split('\n').collect();
-            assert_eq!(lines.len(), 4);
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+            assert_eq!(lines.len(), 4, "file content: {file_content:?}");
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
             assert_eq!(span_json["name"], "Network_Span");
             let network_span_id = span_json["span_id"].to_string();
             let network_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -666,7 +768,7 @@ mod tests {
             // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
             assert!(network_span_end_time - network_span_start_time >= 100_000);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_1");
             assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
             let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -681,85 +783,44 @@ mod tests {
             let child_span_id = span_json["links"][0]["span_id"].to_string();
             assert_eq!(child_span_id, network_span_id);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[3]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_2");
+            assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
         });
     }
 
-    // #[test]
-    // fn test_span_http_exporter() {
-    //     let runtime = tokio::runtime::Builder::new_current_thread()
-    //         .enable_all()
-    //         .build()
-    //         .unwrap();
-    //     runtime.block_on(async {
-    //         let config = GlideOpenTelemetryConfigBuilder::default()
-    //             .with_flush_interval(std::time::Duration::from_millis(100))
-    //             .with_trace_exporter(GlideOpenTelemetrySignalsExporter::Http(
-    //                 "http://test.com".to_string(),
-    //             ))
-    //             .build();
-    //         let _ = GlideOpenTelemetry::initialise(config);
-    //         create_test_spans().await;
-    //     });
-    // }
-
-    // #[test]
-    // fn test_span_grpc_exporter() {
-    //     let runtime = tokio::runtime::Builder::new_current_thread()
-    //         .enable_all()
-    //         .build()
-    //         .unwrap();
-    //     runtime.block_on(async {
-    //         let config = GlideOpenTelemetryConfigBuilder::default()
-    //             .with_flush_interval(std::time::Duration::from_millis(100))
-    //             .with_trace_exporter(GlideOpenTelemetrySignalsExporter::Grpc(
-    //                 "grpc://test.com".to_string(),
-    //             ))
-    //             .build();
-    //         let _ = GlideOpenTelemetry::initialise(config);
-    //         create_test_spans().await;
-    //     });
-    // }
-
     #[test]
     fn test_span_reference_count() {
-        let span = GlideOpenTelemetry::new_span("Root_Span_1");
-        span.add_reference();
-        assert_eq!(span.get_reference_count(), 2);
-        drop(span);
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            let span = GlideOpenTelemetry::new_span("Root_Span_1");
+            span.add_reference();
+            assert_eq!(span.get_reference_count(), 2);
+            drop(span);
+        });
     }
 
     #[test]
     fn test_record_timeout_error() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(100))
-                .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    METRICS_JSON,
-                )))
-                .with_trace_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                    SPANS_JSON,
-                )))
-                .build();
-            let _ = GlideOpenTelemetry::initialise(config);
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            sleep(Duration::from_millis(2100)).await;
             GlideOpenTelemetry::record_timeout_error().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
 
             // Add a sleep to wait for the metrics to be flushed
-            tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            sleep(Duration::from_millis(2100)).await;
 
             let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-            let lines: Vec<&str> = file_content.split('\n').collect();
-
-            assert_eq!(lines.len(), 4);
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(
@@ -770,7 +831,8 @@ mod tests {
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 1
             );
-            let metric_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 3

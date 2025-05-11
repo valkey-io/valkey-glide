@@ -2,7 +2,10 @@
 
 use glide_core::Telemetry;
 use glide_core::errors::error_message;
-use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
+use glide_core::{
+    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
+    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
+};
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -14,6 +17,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
+use glide_core::client::ConnectionError;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
@@ -26,7 +30,9 @@ use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;
+use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -57,6 +63,54 @@ struct AsyncClient {
     #[allow(dead_code)]
     connection: MultiplexedConnection,
     runtime: Runtime,
+}
+
+/// Configuration for OpenTelemetry integration in the Node.js client.
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+/// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+/// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+///
+/// At least one of traces or metrics must be provided.
+#[napi(object)]
+#[derive(Clone)]
+pub struct OpenTelemetryConfig {
+    /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+    pub traces: Option<OpenTelemetryTracesConfig>,
+    /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+    pub metrics: Option<OpenTelemetryMetricsConfig>,
+    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
+    pub flush_interval_ms: Option<i64>,
+}
+
+/// Configuration for exporting OpenTelemetry traces.
+///
+/// - `endpoint`: The endpoint to which trace data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+#[napi(object)]
+#[derive(Clone)]
+pub struct OpenTelemetryTracesConfig {
+    /// The endpoint to which trace data will be exported.
+    pub endpoint: String,
+    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+    pub sample_percentage: Option<u32>,
+}
+
+/// Configuration for exporting OpenTelemetry metrics.
+///
+/// - `endpoint`: The endpoint to which metrics data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+#[napi(object)]
+#[derive(Clone)]
+pub struct OpenTelemetryMetricsConfig {
+    /// The endpoint to which metrics data will be exported.
+    pub endpoint: String,
 }
 
 fn to_js_error(err: impl std::error::Error) -> Error {
@@ -136,6 +190,77 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     });
 
     Ok(promise)
+}
+
+fn ensure_tokio_runtime() -> &'static Runtime {
+    static TOKIO: OnceLock<Runtime> = OnceLock::new();
+    TOKIO.get_or_init(|| Runtime::new().expect("Failed to create Tokio runtime"))
+}
+
+#[napi(js_name = "InitOpenTelemetry")]
+pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
+    // At least one of traces or metrics must be provided
+    if open_telemetry_config.traces.is_none() && open_telemetry_config.metrics.is_none() {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration."
+                .to_owned(),
+        ));
+    }
+
+    let mut config = GlideOpenTelemetryConfigBuilder::default();
+    // initilaize open telemetry traces exporter
+    if let Some(traces) = open_telemetry_config.traces {
+        config = config.with_trace_exporter(
+            GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
+                .map_err(ConnectionError::IoError)
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+            traces.sample_percentage,
+        );
+    }
+
+    // initialize open telemetry metrics exporter
+    if let Some(metrics) = open_telemetry_config.metrics {
+        config = config.with_metrics_exporter(
+            GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
+                .map_err(ConnectionError::IoError)
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+        );
+    }
+
+    let flush_interval_ms = open_telemetry_config
+        .flush_interval_ms
+        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64);
+
+    if flush_interval_ms <= 0 {
+        return Err(napi::Error::new(
+            Status::Unknown,
+            format!(
+                "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+                flush_interval_ms
+            ),
+        ));
+    }
+
+    config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    // Initialize OpenTelemetry synchronously
+    ensure_tokio_runtime().block_on(async {
+        if let Err(e) = GlideOpenTelemetry::initialise(config.build()) {
+            log(
+                Level::Error,
+                "OpenTelemetry".to_string(),
+                format!("Failed to initialize OpenTelemetry: {}", e),
+            );
+            return Err(napi::Error::new(
+                Status::Unknown,
+                format!("Failed to initialize OpenTelemetry: {}", e),
+            ));
+        }
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 impl From<logger_core::Level> for Level {
