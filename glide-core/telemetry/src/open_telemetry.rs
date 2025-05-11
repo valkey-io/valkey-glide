@@ -701,7 +701,7 @@ mod tests {
 
     async fn init_otel() -> Result<(), GlideOTELError> {
         let config = GlideOpenTelemetryConfigBuilder::default()
-            .with_flush_interval(Duration::from_millis(100))
+            .with_flush_interval(Duration::from_millis(2000))
             .with_trace_exporter(
                 GlideOpenTelemetrySignalsExporter::File(PathBuf::from(SPANS_JSON)),
                 Some(100),
@@ -740,7 +740,7 @@ mod tests {
         span.set_status(GlideSpanStatus::Ok);
         drop(span); // writes the span
 
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(2100)).await;
     }
 
     #[test]
@@ -809,12 +809,12 @@ mod tests {
             let _ = std::fs::remove_file(METRICS_JSON);
             init_otel().await.unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
-            sleep(Duration::from_millis(500)).await;
+            sleep(Duration::from_millis(2100)).await;
             GlideOpenTelemetry::record_timeout_error().unwrap();
             GlideOpenTelemetry::record_timeout_error().unwrap();
 
             // Add a sleep to wait for the metrics to be flushed
-            sleep(Duration::from_millis(500)).await;
+            sleep(Duration::from_millis(2100)).await;
 
             let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
             let lines: Vec<&str> = file_content

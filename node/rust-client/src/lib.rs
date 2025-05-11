@@ -79,7 +79,7 @@ pub struct OpenTelemetryConfig {
     pub traces: Option<OpenTelemetryTracesConfig>,
     /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
     pub metrics: Option<OpenTelemetryMetricsConfig>,
-    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
     pub flush_interval_ms: Option<i64>,
 }
 
