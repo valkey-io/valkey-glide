@@ -165,6 +165,12 @@ jobs:
                   folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "25.1"
+                  repo-token: ${{ inputs.github-token }}
+
             # Install Zig for cross-compilation
             - uses: mlugg/setup-zig@v2
               with:
@@ -323,7 +329,9 @@ jobs:
                     sed -i "s/\$RELEASE_VERSION/${RELEASE_VERSION}/g" package.json
 
                     set +e  # Disable immediate exit on non-zero exit codes
-
+                    # Copy readme and license files
+                    cp ../README.md ./README.md
+                    cp ../LICENSE ./LICENSE
                     # Publish the package
                     npm_publish_err=$(npm publish --tag "${NPM_TAG}" --access public --loglevel=error 2>&1 || true)
                     publish_exit_code=$?
