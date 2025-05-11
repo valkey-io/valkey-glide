@@ -158,6 +158,16 @@ source .env/bin/activate
 pytest -v
 ```
 
+### Running with different async backends
+
+Python GLIDE supports both trio and asyncio. Pass the `--async-backend` flag to `pytest` with either `trio`, `asyncio` or `uvloop` to run tests on the specified async backend. You can pass multiple async backends to run tests on all of them.
+
+Example:
+```bash
+source .env/bin/activate
+pytest -v --async-backend=trio --async-backend=asyncio
+```
+
 # Protobuf
 ---
 During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
