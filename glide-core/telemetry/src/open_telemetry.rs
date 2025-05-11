@@ -681,49 +681,17 @@ impl GlideOpenTelemetry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::FutureExt;
     use std::panic;
+    use std::sync::OnceLock;
+    use tokio::runtime::Runtime;
     use tokio::time::sleep;
 
     const SPANS_JSON: &str = "/tmp/spans.json";
     const METRICS_JSON: &str = "/tmp/metrics.json";
 
-    async fn run_test<F, Fut>(name: &str, test_fn: F) -> bool
-    where
-        F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = ()>,
-    {
-        println!("Running {}", name);
-        let result = panic::AssertUnwindSafe(test_fn()).catch_unwind().await;
-
-        if result.is_err() {
-            eprintln!("❌ {} failed", name);
-        } else {
-            println!("✅ {} passed", name);
-        }
-
-        result.is_ok()
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_otel_all_in_one() {
-        init_otel().await.expect("Failed to init OpenTelemetry");
-
-        let mut failed = false;
-
-        if !run_test("test_record_timeout_error", test_record_timeout_error).await {
-            failed = true;
-        }
-        if !run_test("test_span_reference_count", test_span_reference_count).await {
-            failed = true;
-        }
-        if !run_test("test_span_json_exporter", test_span_json_exporter).await {
-            failed = true;
-        }
-
-        if failed {
-            panic!("One or more subtests failed");
-        }
+    fn shared_runtime() -> &'static Runtime {
+        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+        RUNTIME.get_or_init(|| Runtime::new().expect("Failed to create runtime"))
     }
 
     fn string_property_to_u64(json: &serde_json::Value, prop: &str) -> u64 {
@@ -775,87 +743,100 @@ mod tests {
         sleep(Duration::from_secs(1)).await;
     }
 
-    async fn test_span_json_exporter() {
-        let _ = std::fs::remove_file(SPANS_JSON);
+    #[test]
+    fn test_span_json_exporter() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
 
-        init_otel().await.unwrap();
-        create_test_spans().await;
+            init_otel().await.unwrap();
+            create_test_spans().await;
 
-        let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-        assert_eq!(lines.len(), 4);
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+            assert_eq!(lines.len(), 4, "file content: {file_content:?}");
 
-        let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
-        assert_eq!(span_json["name"], "Network_Span");
-        let network_span_id = span_json["span_id"].to_string();
-        let network_span_start_time = string_property_to_u64(&span_json, "start_time");
-        let network_span_end_time = string_property_to_u64(&span_json, "end_time");
+            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            assert_eq!(span_json["name"], "Network_Span");
+            let network_span_id = span_json["span_id"].to_string();
+            let network_span_start_time = string_property_to_u64(&span_json, "start_time");
+            let network_span_end_time = string_property_to_u64(&span_json, "end_time");
 
-        // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
-        assert!(network_span_end_time - network_span_start_time >= 100_000);
+            // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
+            assert!(network_span_end_time - network_span_start_time >= 100_000);
 
-        let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
-        assert_eq!(span_json["name"], "Root_Span_1");
-        assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
-        let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
-        let root_1_span_end_time = string_property_to_u64(&span_json, "end_time");
+            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            assert_eq!(span_json["name"], "Root_Span_1");
+            assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
+            let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
+            let root_1_span_end_time = string_property_to_u64(&span_json, "end_time");
 
-        // The network span started *after* its parent
-        assert!(network_span_start_time >= root_1_span_start_time);
+            // The network span started *after* its parent
+            assert!(network_span_start_time >= root_1_span_start_time);
 
-        // The parent span ends *after* the child span (by at least 100ms)
-        assert!(root_1_span_end_time - network_span_end_time >= 100_000);
+            // The parent span ends *after* the child span (by at least 100ms)
+            assert!(root_1_span_end_time - network_span_end_time >= 100_000);
 
-        let child_span_id = span_json["links"][0]["span_id"].to_string();
-        assert_eq!(child_span_id, network_span_id);
+            let child_span_id = span_json["links"][0]["span_id"].to_string();
+            assert_eq!(child_span_id, network_span_id);
 
-        let span_json: serde_json::Value = serde_json::from_str(lines[3]).unwrap();
-        assert_eq!(span_json["name"], "Root_Span_2");
-        assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
+            let span_json: serde_json::Value = serde_json::from_str(lines[3]).unwrap();
+            assert_eq!(span_json["name"], "Root_Span_2");
+            assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
+        });
     }
 
-    async fn test_span_reference_count() {
-        let _ = std::fs::remove_file(SPANS_JSON);
-        init_otel().await.unwrap();
-        let span = GlideOpenTelemetry::new_span("Root_Span_1");
-        span.add_reference();
-        assert_eq!(span.get_reference_count(), 2);
-        drop(span);
+    #[test]
+    fn test_span_reference_count() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            let span = GlideOpenTelemetry::new_span("Root_Span_1");
+            span.add_reference();
+            assert_eq!(span.get_reference_count(), 2);
+            drop(span);
+        });
     }
 
-    async fn test_record_timeout_error() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        GlideOpenTelemetry::record_timeout_error().unwrap();
-        sleep(Duration::from_millis(500)).await;
-        GlideOpenTelemetry::record_timeout_error().unwrap();
-        GlideOpenTelemetry::record_timeout_error().unwrap();
+    #[test]
+    fn test_record_timeout_error() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            GlideOpenTelemetry::record_timeout_error().unwrap();
+            sleep(Duration::from_millis(500)).await;
+            GlideOpenTelemetry::record_timeout_error().unwrap();
+            GlideOpenTelemetry::record_timeout_error().unwrap();
 
-        // Add a sleep to wait for the metrics to be flushed
-        sleep(Duration::from_millis(500)).await;
+            // Add a sleep to wait for the metrics to be flushed
+            sleep(Duration::from_millis(500)).await;
 
-        let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
-        let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        assert_eq!(
-            metric_json["scope_metrics"][0]["metrics"][0]["name"],
-            "glide.timeout_errors"
-        );
-        assert_eq!(
-            metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-            1
-        );
-        let metric_json: serde_json::Value = serde_json::from_str(lines[lines.len() - 1]).unwrap();
-        assert_eq!(
-            metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-            3
-        );
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.timeout_errors"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                1
+            );
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                3
+            );
+        });
     }
 }

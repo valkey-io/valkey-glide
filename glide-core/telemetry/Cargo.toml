@@ -21,3 +21,6 @@ opentelemetry = { version = "0.27", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics", "rt-tokio-current-thread"] }
 opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client", "metrics", "tonic"] }
 once_cell = "1.18"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
