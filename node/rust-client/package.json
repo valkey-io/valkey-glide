@@ -42,7 +42,7 @@
     },
     "devDependencies": {
         "@napi-rs/cli": "2",
-        "lint-staged": "15",
+        "lint-staged": "16",
         "prettier": "3"
     },
     "lint-staged": {

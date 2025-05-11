@@ -34,6 +34,37 @@ permissions:
     id-token: write
 
 jobs:
+    determine-version:
+        name: Determine Release Version and NPM Tag
+        runs-on: ubuntu-latest
+        outputs:
+            release_version: ${{ steps.set-version.outputs.release_version }}
+            npm_tag: ${{ steps.set-version.outputs.npm_tag }}
+        steps:
+            - name: Set version and tag
+              id: set-version
+              shell: bash
+              run: |
+                  R_VERSION=""
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    R_VERSION="0.0.0-pr" # Placeholder for PRs, adjust if needed
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                    R_VERSION="${{ github.event.inputs.version }}"
+                  else
+                    R_VERSION="${GITHUB_REF#refs/tags/v}"
+                  fi
+                  echo "release_version=${R_VERSION}" >> $GITHUB_OUTPUT
+
+                  N_TAG="latest"
+                  if [[ "${R_VERSION}" == *"rc"* ]]; then
+                    N_TAG="next"
+                  fi
+                  echo "npm_tag=${N_TAG}" >> $GITHUB_OUTPUT
+
+                  # Also set to GITHUB_ENV for immediate use if any step in this job needed it
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${N_TAG}" >> $GITHUB_ENV
+
     load-platform-matrix:
         runs-on: ubuntu-latest
         outputs:
@@ -53,8 +84,7 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     build-binaries:
-        needs: load-platform-matrix
-        if: github.repository_owner == 'valkey-io'
+        needs: [load-platform-matrix, determine-version]
         name: Build native binaries
         runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.BUILD_RUNNER || matrix.build.RUNNER }}
         container:
@@ -65,10 +95,6 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
             # For MUSL on X64 we need to install git since we use the checkout action
             - name: Install git for musl
               if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
@@ -80,7 +106,6 @@ jobs:
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
               with:
-                  submodules: "true"
                   fetch-depth: 0
 
             - name: Setup for musl
@@ -91,21 +116,31 @@ jobs:
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
 
-            - name: Set the release version
+            - name: Setup environment variables
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    echo "${{env.EVENT_NAME}}"
-                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  # Set RELEASE_VERSION and NPM_TAG from the determine-version job outputs
+                  echo "RELEASE_VERSION=${{ needs.determine-version.outputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
+
+                  # Determine if the target is musl and set PLATFORM_ID (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    MUSL_FLAG="-musl"
                   else
-                    R_VERSION=${GITHUB_REF:11}
+                    MUSL_FLAG=""
                   fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
+                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+
+                  # Determine build type (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"apple-darwin"* ]]; then
+                    BUILD_TYPE="mac"
+                  elif [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    BUILD_TYPE="musl"
+                  else
+                    BUILD_TYPE="gnu"
+                  fi
+                  echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_ENV
 
             - name: Setup node
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
@@ -132,13 +167,43 @@ jobs:
                   folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
-            - name: Set platform identifier for artifact name
+            # Install Zig for cross-compilation
+            - name: Install Zig
+              uses: korandoru/setup-zig@v1
+              with:
+                  zig-version: latest
+
+            # Build native modules using appropriate script based on platform
+            - name: Build native modules
               shell: bash
+              working-directory: ./node/rust-client
+              env:
+                  TARGET: ${{ matrix.build.TARGET }}
               run: |
-                  # Create a unique platform identifier for the artifact
-                  MUSL_FLAG=`if [[ "${{ matrix.build.TARGET }}" =~ .*"musl".* ]]; then echo "-musl"; else echo ""; fi`
-                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
-                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+                  # Install build dependencies
+                  npm install
+
+                  # Select appropriate build script based on platform
+                  if [[ "$TARGET" == *"apple-darwin"* ]]; then
+                    echo "Building for macOS ($TARGET)..."
+                    npm run build:release:mac
+                    
+                    # For macOS, if we're on ARM, also build for x86_64
+                    if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
+                      echo "Building universal binary for macOS..."
+                      CARGO_BUILD_TARGET=x86_64-apple-darwin npm run build:release:mac
+                    fi
+                    
+                  elif [[ "$TARGET" == *"-musl"* ]]; then
+                    echo "Building for musl ($TARGET)..."
+                    npm run build:release:musl
+                  else
+                    echo "Building for gnu ($TARGET)..."
+                    npm run build:release:gnu
+                  fi
+
+                  # Verify the build output
+                  ls -la *.node
 
             - name: Upload node binaries artifact
               uses: actions/upload-artifact@v4
@@ -151,7 +216,7 @@ jobs:
                   if-no-files-found: error
 
     organize-artifacts:
-        needs: [build-binaries, load-platform-matrix]
+        needs: [build-binaries, load-platform-matrix, determine-version]
         name: Organize artifacts for publishing
         runs-on: ubuntu-latest
         steps:
@@ -160,21 +225,11 @@ jobs:
               with:
                   submodules: "true"
 
-            - name: Set the release version
+            - name: Set versioning environment variables from determine-version job
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    echo "${{env.EVENT_NAME}}"
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  echo "RELEASE_VERSION=${{ needs.determine-version.outputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
 
             - name: Install napi-rs CLI
               shell: bash
@@ -213,8 +268,8 @@ jobs:
 
     publish-platform-packages:
         name: Publish platform-specific NPM packages
-        needs: [organize-artifacts]
-        if: github.action == 'workflow_dispatch' || github.event_name == 'push'
+        needs: [organize-artifacts, determine-version]
+        if: github.event_name == 'push' || github.event.inputs.publish == true
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -228,34 +283,11 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
 
-            - name: Set the release version
+            - name: Set versioning environment variables from determine-version job
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    echo "${{env.EVENT_NAME}}"
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
-
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate: ${RELEASE_VERSION}"
-                    export npm_tag="next"
-                  else
-                    echo "This is a stable release: ${RELEASE_VERSION}"
-                    export npm_tag="latest"
-                  fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${{ needs.determine-version.outputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
 
             - name: Check that the release version don't have typo in it
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
@@ -316,8 +348,8 @@ jobs:
 
     publish-base-to-npm:
         name: Publish the base TypeScript package
-        needs: publish-platform-packages
-        if: github.action == 'workflow_dispatch' || github.event_name == 'push'
+        needs: [publish-platform-packages, determine-version]
+        if: github.event_name == 'push' || github.event.inputs.publish == true
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -333,21 +365,11 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
 
-            - name: Set the release version
+            - name: Set versioning environment variables from determine-version job
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    echo "${{env.EVENT_NAME}}"
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  echo "RELEASE_VERSION=${{ needs.determine-version.outputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
 
             - name: Create directory for TypeScript package
               shell: bash
@@ -384,35 +406,17 @@ jobs:
                   # Install napi-rs CLI
                   npm install -g @napi-rs/cli
 
-                  # Update version in package.json
+                  # Update version in package.json using RELEASE_VERSION from job environment
                   jq ".version = \"${RELEASE_VERSION}\"" package.json > package.json.tmp && mv package.json.tmp package.json
 
                   # Run napi prepublish to add optionalDependencies for platform packages
+                  # It uses the 'name' (e.g., @valkey/valkey-glide) and 'napi' section from package.json
                   napi prepublish
 
                   # Check the result
+                  echo "--- package.json after napi prepublish ---"
                   cat package.json
-
-                  # Set scope variable
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-
-                  # Fix index.ts based on the scope variable
-                  sed -i "s|@scope/|${scope}|g" index.ts
-              env:
-                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
-
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ ${{ env.RELEASE_VERSION }} == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    export npm_tag="next"
-                  else
-                    echo "This is a stable release"
-                    export npm_tag="latest"
-                  fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+                  echo "-----------------------------------------"
 
             - name: Publish the base package
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
@@ -435,7 +439,7 @@ jobs:
     test-release:
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
         name: Test the release
-        needs: [publish-base-to-npm, load-platform-matrix]
+        needs: [publish-base-to-npm, load-platform-matrix, determine-version]
         runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
@@ -500,34 +504,31 @@ jobs:
                   npm install -g typescript
                   npx tsc -p ./tsconfig.json
 
-            - name: Set the release version
+            - name: Setup environment variables
               shell: bash
               run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    echo "${{env.EVENT_NAME}}"
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
+                  # Set RELEASE_VERSION and NPM_TAG from the determine-version job outputs
+                  echo "RELEASE_VERSION=${{ needs.determine-version.outputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
 
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ "${RELEASE_VERSION}" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    export npm_tag="next"
+                  # Determine if the target is musl and set PLATFORM_ID (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    MUSL_FLAG="-musl"
                   else
-                    echo "This is a stable release"
-                    export npm_tag="latest"
+                    MUSL_FLAG=""
                   fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
+                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+
+                  # Determine build type (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"apple-darwin"* ]]; then
+                    BUILD_TYPE="mac"
+                  elif [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    BUILD_TYPE="musl"
+                  else
+                    BUILD_TYPE="gnu"
+                  fi
+                  echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_ENV
 
             - name: Run the tests
               shell: bash
@@ -541,9 +542,6 @@ jobs:
               if: ${{ failure() }}
               shell: bash
               env:
-                  GH_EVENT_NAME: ${{ github.event_name }}
-                  GH_EVENT_INPUT_VERSION: ${{ github.event.inputs.version }}
-                  GH_REF: ${{ github.ref }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   PLATFORM_MATRIX: ${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }}
               run: |
@@ -556,23 +554,22 @@ jobs:
                       sudo apt-get update && sudo apt-get install -y jq
                   fi
 
-                  # Set RELEASE_VERSION correctly using environment variables
-                  if [[ "${GH_EVENT_NAME}" == "workflow_dispatch" ]]; then
-                      RELEASE_VERSION="${GH_EVENT_INPUT_VERSION}"
-                  else
-                      RELEASE_VERSION="${GH_REF#refs/tags/v}"
-                  fi
+                  # RELEASE_VERSION is now directly available from the environment
+                  echo "Release version for Deprecating: ${RELEASE_VERSION}"
 
                   # Validate RELEASE_VERSION
-                  if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+                  if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ && "${RELEASE_VERSION}" != "0.0.0-pr" ]]; then
                       echo "Invalid release version format: ${RELEASE_VERSION}"
                       exit 1
                   fi
 
-                  echo "Release version for Deprecating: ${RELEASE_VERSION}"
+                  if [[ "${RELEASE_VERSION}" == "0.0.0-pr" ]]; then
+                      echo "Skipping deprecation for PR version."
+                      exit 0
+                  fi
 
                   # Deprecating base package
-                  npm deprecate "@valkey/valkey-glide@${RELEASE_VERSION}" "This version has been deprecated" --force || true
+                  npm deprecate "@valkey/valkey-glide@${RELEASE_VERSION}" "This version has been deprecated due to test failures" --force || true
 
                   # Process platform matrix
                   echo "${PLATFORM_MATRIX}" > platform_matrix.json
@@ -580,5 +577,5 @@ jobs:
                   while read -r pkg; do
                       package_name="@valkey/valkey-glide-${pkg}"
                       echo "Deprecating ${package_name}@${RELEASE_VERSION}"
-                      npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated" --force || true
+                      npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated due to test failures" --force || true
                   done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
