@@ -182,7 +182,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         const openTelemetryConfig: OpenTelemetryConfig = {
             traces: {
                 endpoint: VALID_FILE_ENDPOINT_TRACES,
-                samplePercentage: 1,
+                samplePercentage: 100,
             },
             metrics: {
                 endpoint: VALID_ENDPOINT_METRICS,
@@ -274,9 +274,10 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     protocol,
                 ),
             });
-            OpenTelemetry.setRequestsPercentage(0);
+            OpenTelemetry.setSamplePercentage(0);
             // wait for the spans to be flushed and removed the file
             await new Promise((resolve) => setTimeout(resolve, 500));
+
             if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
                 fs.unlinkSync(VALID_ENDPOINT_TRACES);
             }
@@ -286,7 +287,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             // check that the spans not exporter to the file due to the requests percentage is 0
             expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
 
-            OpenTelemetry.setRequestsPercentage(100);
+            OpenTelemetry.setSamplePercentage(100);
 
             // Execute a series of commands sequentially
             for (let i = 0; i < 50; i++) {

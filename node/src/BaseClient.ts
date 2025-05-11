@@ -1074,6 +1074,15 @@ export class BaseClient {
         }
     }
 
+    private shouldSample() {
+        const percentage = OpenTelemetry.getSamplePercentage();
+        return (
+            OpenTelemetry.isInitialized() &&
+            percentage !== undefined &&
+            Math.random() * 100 < percentage
+        );
+    }
+
     /**
      * @internal
      */
@@ -1089,12 +1098,8 @@ export class BaseClient {
 
             // create a span only if the otel config exits and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
-            const percentage = OpenTelemetry.getRequestsPercentage();
-            if (
-                OpenTelemetry.isInitialized() &&
-                percentage !== undefined &&
-                percentage >= Math.random() * 100
-            ) {
+
+            if (this.shouldSample()) {
                 const commandObj =
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]

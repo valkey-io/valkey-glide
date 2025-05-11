@@ -1,5 +1,5 @@
 #### Changes
-* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3784](https://github.com/valkey-io/valkey-glide/pull/3784)) 
+* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830)) 
 * Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
 * Core: Ensure UDS socket filename is truly unique. ([#3596](https://github.com/valkey-io/valkey-glide/pull/3596))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
