@@ -11,6 +11,9 @@ authors = ["Valkey GLIDE Maintainers"]
 rand = "0.8.5"
 test-env-helpers = "0.2.2"
 
+[features]
+rust_client = []
+
 [dependencies]
 tracing = "0.1"
 tracing-appender = { version = "0.2.3", default-features = false }
