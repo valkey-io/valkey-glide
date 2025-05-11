@@ -15,6 +15,7 @@ import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
+    BatchOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -25,6 +26,7 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClusterBatchOptions,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -281,6 +283,7 @@ export type GlideReturnType =
     | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
+    | RequestError
     | GlideReturnType[];
 
 /**
@@ -302,7 +305,16 @@ export enum Decoder {
     String,
 }
 
-/** An extension to command option types with {@link Decoder}. */
+/**
+ * An extension to command option types with {@link Decoder}.
+ *
+ * WARNING:
+ *
+ * Be aware that if decoding fails during a command execution (due to
+ * invalid inputs, incorrect decoder), data COULD BE UNRECOVERABLY LOST.
+ *
+ * Use with caution.
+ */
 export interface DecoderOption {
     /**
      * {@link Decoder} type which defines how to handle the response.
@@ -744,10 +756,20 @@ export interface PubSubMsg {
 
 /**
  * @internal
- * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
- * See - {@link DecoderOption} and {@link RouteOption}
+ * Options used when creating a write promise for a command.
+ *
+ * This type combines {@link RouteOption} and {@link DecoderOption} with optional support for
+ * {@link ClusterBatchOptions} or {@link BatchOptions}.
+ *
+ * @see {@link DecoderOption}
+ * @see {@link RouteOption}
+ * @see {@link ClusterBatchOptions}
+ * @see {@link BatchOptions}
  */
-export type WritePromiseOptions = RouteOption & DecoderOption;
+type BaseOptions = RouteOption & DecoderOption;
+export type WritePromiseOptions =
+    | BaseOptions
+    | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
 /**
  * Base client interface for GLIDE
@@ -962,7 +984,9 @@ export class BaseClient {
                 reject(
                     err instanceof ValkeyError
                         ? err
-                        : new Error(`Decoding error: '${err}'`),
+                        : new Error(
+                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                          ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -1054,22 +1078,68 @@ export class BaseClient {
 
     /**
      * @internal
+     *
+     * Creates a promise that resolves or rejects based on the result of a command request.
+     *
+     * @template T - The type of the result expected from the promise.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param options - Optional settings for the write operation, including route, batch options and decoder.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @returns A promise that resolves with the result of the command(s) or rejects with an error.
      */
     protected createWritePromise<T>(
         command: command_request.Command | command_request.Command[],
         options: WritePromiseOptions = {},
+        isAtomic = false,
+        raiseOnError = false,
     ): Promise<T> {
         this.ensureClientIsOpen();
 
         const route = this.toProtobufRoute(options?.route);
-        return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
+        const callbackIndex = this.getCallbackIndex();
+        const basePromise = new Promise<T>((resolve, reject) => {
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+
+            this.writeOrBufferCommandRequest(
+                callbackIndex,
+                command,
+                route,
+                isAtomic,
+                raiseOnError,
+                options as ClusterBatchOptions,
+            );
+        });
+
+        if (!Array.isArray(command)) {
+            return basePromise;
+        }
+
+        return basePromise.then((result: T) => {
+            if (Array.isArray(result)) {
+                const loopLen = result.length;
+
+                for (let i = 0; i < loopLen; i++) {
+                    const item = result[i];
+
+                    // Check if the item is an instance of napi Error
+                    // Can be checked by checking if the constructor name is "Error"
+                    // and if there is a name property with the value "RequestError" (that we added in the Rust code)
+                    if (
+                        item?.constructor?.name === "Error" &&
+                        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                        (item as any).name === "RequestError"
+                    ) {
+                        Object.setPrototypeOf(item, RequestError.prototype);
+                    }
+                }
+            }
+
+            return result;
         });
     }
 
@@ -1127,31 +1197,64 @@ export class BaseClient {
         });
     }
 
+    /**
+     * @internal
+     *
+     * @param callbackIdx - The requests callback index.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param route - Optional routing information for the command.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @param options - Optional settings for batch requests.
+     */
     protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        isAtomic = false,
+        raiseOnError = false,
+        options: ClusterBatchOptions | BatchOptions = {},
     ) {
-        const message = Array.isArray(command)
-            ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  batch: command_request.Batch.create({
-                      isAtomic: true,
-                      commands: command,
-                      // TODO: add support for timeout, raiseOnError and retryStrategy
-                  }),
-                  route,
-              })
-            : command_request.CommandRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-                  route,
-              });
+        if (isAtomic && "retryStrategy" in options) {
+            throw new RequestError(
+                "Retry strategy is not supported for atomic batches.",
+            );
+        }
+
+        const isBatch = Array.isArray(command);
+        let batch: command_request.Batch | undefined;
+
+        if (isBatch) {
+            let retryServerError: boolean | undefined;
+            let retryConnectionError: boolean | undefined;
+
+            if ("retryStrategy" in options) {
+                retryServerError = options.retryStrategy?.retryServerError;
+                retryConnectionError =
+                    options.retryStrategy?.retryConnectionError;
+            }
+
+            batch = command_request.Batch.create({
+                isAtomic,
+                commands: command,
+                raiseOnError,
+                timeout: options.timeout,
+                retryServerError,
+                retryConnectionError,
+            });
+        }
+
+        const message = command_request.CommandRequest.create({
+            callbackIdx,
+            singleCommand: isBatch ? undefined : command,
+            batch,
+            route,
+        });
 
         this.writeOrBufferRequest(
             message,
-            (message: command_request.CommandRequest, writer: Writer) => {
-                command_request.CommandRequest.encodeDelimited(message, writer);
+            (msg: command_request.CommandRequest, writer: Writer) => {
+                command_request.CommandRequest.encodeDelimited(msg, writer);
             },
         );
     }
@@ -1169,7 +1272,7 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
-    // Define a common function to process the result of a transaction with set commands
+    // Define a common function to process the result of a batch with set commands
     /**
      * @internal
      */
@@ -1181,10 +1284,12 @@ export class BaseClient {
             return null;
         }
 
-        for (const index of setCommandsIndexes) {
-            result[index] = new Set<GlideReturnType>(
-                result[index] as GlideReturnType[],
-            );
+        for (let i = 0, len = setCommandsIndexes.length; i < len; i++) {
+            if (Array.isArray(result[setCommandsIndexes[i]])) {
+                result[setCommandsIndexes[i]] = new Set<GlideReturnType>(
+                    result[setCommandsIndexes[i]] as GlideReturnType[],
+                );
+            }
         }
 
         return result;
@@ -1383,8 +1488,8 @@ export class BaseClient {
      * const result = await client.get("key");
      * console.log(result); // Output: 'value'
      * // Example usage of get method to retrieve the value of a key with Bytes decoder
-     * const result = await client.get("key", Decoder.Bytes);
-     * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
+     * const result = await client.get("key", { decoder: Decoder.Bytes });
+     * console.log(result); // Output: <Buffer 76 61 6c 75 65>
      * ```
      */
     public async get(
@@ -7276,14 +7381,14 @@ export class BaseClient {
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.

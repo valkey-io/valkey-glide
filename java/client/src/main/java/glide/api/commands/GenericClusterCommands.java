@@ -10,6 +10,7 @@ import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.exceptions.RequestException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -98,8 +99,8 @@ public interface GenericClusterCommands {
     CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route);
 
     /**
-     * @deprecated Use {@link #exec(ClusterBatch)} instead. This method is being replaced by a more
-     *     flexible approach using {@link ClusterBatch}.
+     * @deprecated Use {@link #exec(ClusterBatch, boolean)} instead. This method is being replaced by
+     *     a more flexible approach using {@link ClusterBatch}.
      *     <p>Executes a transaction by processing the queued commands.
      *     <p>The transaction will be routed to the slot owner of the first key found in the
      *     transaction. If no key is found, the command will be sent to a random node.
@@ -114,7 +115,7 @@ public interface GenericClusterCommands {
      *           return <code>null</code>.
      *     </ul>
      *
-     * @see #exec(ClusterBatch)
+     * @see #exec(ClusterBatch, boolean)
      * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io documentation on
      *     Transactions</a>
      * @example
@@ -129,8 +130,8 @@ public interface GenericClusterCommands {
     CompletableFuture<Object[]> exec(ClusterTransaction transaction);
 
     /**
-     * @deprecated Use {@link #exec(ClusterBatch, ClusterBatchOptions)} instead. This method is being
-     *     replaced by a more flexible approach using {@link ClusterBatch} and {@link
+     * @deprecated Use {@link #exec(ClusterBatch, boolean, ClusterBatchOptions)} instead. This method
+     *     is being replaced by a more flexible approach using {@link ClusterBatch} and {@link
      *     ClusterBatchOptions}.
      *     <p>Executes a transaction by processing the queued commands.
      * @param transaction A {@link ClusterTransaction} object containing a list of commands to be
@@ -146,7 +147,7 @@ public interface GenericClusterCommands {
      *           return <code>null</code>.
      *     </ul>
      *
-     * @see #exec(ClusterBatch, ClusterBatchOptions)
+     * @see #exec(ClusterBatch, boolean, ClusterBatchOptions)
      * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io documentation on
      *     Transactions</a>
      * @example
@@ -189,6 +190,13 @@ public interface GenericClusterCommands {
      * </ul>
      *
      * @param batch A {@link ClusterBatch} object containing a list of commands to be executed.
+     * @param raiseOnError Determines how errors are handled within the batch response.
+     *     <p>When set to {@code true}, the first encountered error in the batch will be raised as an
+     *     exception of type {@link RequestException} after all retries and reconnections have been
+     *     executed.
+     *     <p>When set to {@code false}, errors will be included as part of the batch response,
+     *     allowing the caller to process both successful and failed commands together. In this case,
+     *     error details will be provided as instances of {@link RequestException}.
      * @return A {@link CompletableFuture} resolving to an array of results, where each entry
      *     corresponds to a command’s execution result.
      * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
@@ -202,7 +210,7 @@ public interface GenericClusterCommands {
      *     .set("key", "1")
      *     .incr("key")
      *     .get("key");
-     * Object[] atomicResult = clusterClient.exec(atomicBatch).get();
+     * Object[] atomicResult = clusterClient.exec(atomicBatch, true).get();
      * System.out.println("Atomic Batch Result: " + Arrays.toString(atomicResult));
      * // Expected Output: Atomic Batch Result: [OK, 2, 2]
      *
@@ -212,12 +220,12 @@ public interface GenericClusterCommands {
      *     .set("key2", "value2")
      *     .get("key1")
      *     .get("key2");
-     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch).get();
+     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch, true).get();
      * System.out.println("Non-Atomic Batch Result: " + Arrays.toString(nonAtomicResult));
      * // Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
      * }</pre>
      */
-    CompletableFuture<Object[]> exec(ClusterBatch batch);
+    CompletableFuture<Object[]> exec(ClusterBatch batch, boolean raiseOnError);
 
     /**
      * Executes a batch by processing the queued commands.
@@ -257,10 +265,17 @@ public interface GenericClusterCommands {
      *             errors will be redirected.
      *       </ul>
      *   <li>Retries for failures will be handled according to the configured {@link
-     *       BatchRetryStrategy}.
+     *       ClusterBatchRetryStrategy}.
      * </ul>
      *
      * @param batch A {@link ClusterBatch} containing the commands to execute.
+     * @param raiseOnError Determines how errors are handled within the batch response.
+     *     <p>When set to {@code true}, the first encountered error in the batch will be raised as an
+     *     exception of type {@link RequestException} after all retries and reconnections have been
+     *     executed.
+     *     <p>When set to {@code false}, errors will be included as part of the batch response,
+     *     allowing the caller to process both successful and failed commands together. In this case,
+     *     error details will be provided as instances of {@link RequestException}.
      * @param options A {@link ClusterBatchOptions} object containing execution options.
      * @return A {@link CompletableFuture} resolving to an array of results, where each entry
      *     corresponds to a command’s execution result.
@@ -273,7 +288,6 @@ public interface GenericClusterCommands {
      * // Atomic batch (transaction): all keys must share the same hash slot
      * ClusterBatchOptions options = ClusterBatchOptions.builder()
      *     .timeout(1000) // Set a timeout of 1000 milliseconds
-     *     .raiseOnError(false) // Do not raise an error on failure
      *     .build();
      *
      * ClusterBatch atomicBatch = new ClusterBatch(true)
@@ -281,13 +295,13 @@ public interface GenericClusterCommands {
      *     .incr("key")
      *     .get("key");
      *
-     * Object[] atomicResult = clusterClient.exec(atomicBatch, options).get();
+     * Object[] atomicResult = clusterClient.exec(atomicBatch, false, options).get();
      * System.out.println("Atomic Batch Result: " + Arrays.toString(atomicResult));
      * // Output: [OK, 2, 2]
      *
      * // Non-atomic batch (pipeline): keys may span different hash slots
      * ClusterBatchOptions pipelineOptions = ClusterBatchOptions.builder()
-     *     .retryStrategy(BatchRetryStrategy.builder()
+     *     .retryStrategy(ClusterBatchRetryStrategy.builder()
      *         .retryServerError(true)
      *         .retryConnectionError(false)
      *         .build())
@@ -299,12 +313,13 @@ public interface GenericClusterCommands {
      *     .get("key1")
      *     .get("key2");
      *
-     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch, pipelineOptions).get();
+     * Object[] nonAtomicResult = clusterClient.exec(nonAtomicBatch, false, pipelineOptions).get();
      * System.out.println("Non-Atomic Batch Result: " + Arrays.toString(nonAtomicResult));
      * // Output: [OK, OK, value1, value2]
      * }</pre>
      */
-    CompletableFuture<Object[]> exec(ClusterBatch batch, ClusterBatchOptions options);
+    CompletableFuture<Object[]> exec(
+            ClusterBatch batch, boolean raiseOnError, ClusterBatchOptions options);
 
     /**
      * Returns a random key.

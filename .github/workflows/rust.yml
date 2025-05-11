@@ -79,7 +79,7 @@ jobs:
     tests:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
-        timeout-minutes: 15
+        timeout-minutes: 20
         strategy:
             fail-fast: false
             matrix:
@@ -97,7 +97,13 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: Swatinem/rust-cache@v2
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      glide-core/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-glide-core
+                  restore-keys: ${{ matrix.host.TARGET }}
 
             - name: Run glide-core tests
               working-directory: ./glide-core
@@ -106,6 +112,13 @@ jobs:
             - name: Run glide-ffi tests
               working-directory: ./ffi
               run: cargo test
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      glide-core/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-logger_core
 
             - name: Run logger tests
               working-directory: ./logger_core
@@ -116,6 +129,16 @@ jobs:
               run: |
                   cargo check --benches --all-features
                   cargo check --no-default-features
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      glide-core/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-benchmarks/rust
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -129,24 +152,24 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./glide-core
+                  cargo-toml-folder: glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./ffi
+                  cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-ffi
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./logger_core
+                  cargo-toml-folder: logger_core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint logger
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./benchmarks/rust
+                  cargo-toml-folder: benchmarks/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint benchmark

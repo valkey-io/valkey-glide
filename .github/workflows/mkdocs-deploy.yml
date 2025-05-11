@@ -1,0 +1,34 @@
+name: Deploy mkdocs website to GitHub Pages
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - python/**
+            - node/**
+            - docs/**
+            - .github/workflows/mkdocs-deploy.yml
+    workflow_dispatch:
+
+jobs:
+    build-and-deploy-docs:
+        runs-on: ubuntu-latest
+        if: github.repository_owner == 'valkey-io'
+
+        steps:
+            - name: Checkout your branch
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install protoc
+              uses: ./.github/workflows/install-rust-and-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install dependencies and build docs
+              run: ./docs/build-docs.sh gh-deploy --force

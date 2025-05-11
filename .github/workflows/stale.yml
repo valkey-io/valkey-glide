@@ -1,0 +1,31 @@
+name: Mark stale issues and pull requests
+
+on:
+    schedule:
+        - cron: "35 00 * * *"
+    workflow_dispatch:
+
+jobs:
+    stale:
+        runs-on: ubuntu-latest
+        if: github.repository_owner == 'valkey-io'
+        permissions:
+            issues: write
+            pull-requests: write
+        steps:
+            - name: Close Stale Issues
+              uses: actions/stale@v9.1.0
+              with:
+                  repo-token: ${{ github.token }}
+                  stale-issue-message: "This issue is inactive for 90 days, hence marked as stale, if the issue is still relevant please perform some activity"
+                  stale-pr-message: "This PR is inactive for 60 days, hence marked as stale, if the PR is still relevant please perform some activity"
+                  close-issue-message: "Since issue was marked as stale and no activity perfomed for 14 days after it was mark, this issue is closed automatically"
+                  close-pr-message: "Since PR was marked as stale and no activity perfomed for 10 days after it was mark, this PR is closed automatically"
+                  days-before-stale: 90
+                  days-before-pr-stale: 60
+                  days-before-close: 14
+                  days-before-pr-close: 10
+                  exempt-issue-labels: "bug,Users Pain,Epic,User issue,Unatriaged user issue"
+                  exempt-all-milestones: true
+                  operations-per-run: 50
+                  labels-to-add-when-unstale: "Unstaled"

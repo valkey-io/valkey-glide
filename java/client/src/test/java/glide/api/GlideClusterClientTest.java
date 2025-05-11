@@ -73,8 +73,8 @@ import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
-import glide.api.models.commands.batch.BatchRetryStrategy;
 import glide.api.models.commands.batch.ClusterBatchOptions;
+import glide.api.models.commands.batch.ClusterBatchRetryStrategy;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -300,11 +300,11 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(false), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch);
+        CompletableFuture<Object[]> response = service.exec(batch, false);
         Object[] payload = response.get();
 
         // verify
@@ -322,10 +322,13 @@ public class GlideClusterClientTest {
         SingleNodeRoute route = RANDOM;
 
         ClusterBatchOptions.ClusterBatchOptionsBuilder builder =
-                ClusterBatchOptions.builder().raiseOnError(true).timeout(1000).route(route);
+                ClusterBatchOptions.builder().timeout(1000).route(route);
         if (!isAtomic) {
-            BatchRetryStrategy strategy =
-                    BatchRetryStrategy.builder().retryServerError(true).retryConnectionError(true).build();
+            ClusterBatchRetryStrategy strategy =
+                    ClusterBatchRetryStrategy.builder()
+                            .retryServerError(true)
+                            .retryConnectionError(true)
+                            .build();
             builder.retryStrategy(strategy);
         }
         ClusterBatchOptions options = builder.build();
@@ -334,11 +337,12 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewBatch(eq(batch), eq(Optional.of(options)), any()))
+        when(commandManager.<Object[]>submitNewBatch(
+                        eq(batch), eq(false), eq(Optional.of(options)), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.exec(batch, options);
+        CompletableFuture<Object[]> response = service.exec(batch, false, options);
         Object[] payload = response.get();
 
         // verify

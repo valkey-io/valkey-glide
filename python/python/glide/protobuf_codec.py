@@ -9,7 +9,7 @@ from google.protobuf import message
 class ProtobufCodec:
     """
     Codec for protobuf messages.
-    All of the Varint functions were copied from https://github.com/protocolbuffers/protobuf
+    All of the Varint functions were copied from [protobuf](https://github.com/protocolbuffers/protobuf)
     """
 
     @classmethod

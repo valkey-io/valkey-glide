@@ -6,7 +6,7 @@ use redis::{cmd, Cmd};
 use crate::command_request::RequestType as ProtobufRequestType;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum RequestType {
     /// Invalid request type
     InvalidRequest = 0,

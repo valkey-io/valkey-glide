@@ -946,4 +946,230 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	functionResult, err = client.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{"one", "two"})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
+
+	// Test FunctionList
+	query := api.FunctionListQuery{
+		LibraryName: libName,
+		WithCode:    false,
+	}
+	functionList, err := client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo := functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+
+	// Check function info
+	assert.Len(suite.T(), libInfo.Functions, 1)
+	funcInfo := libInfo.Functions[0]
+	assert.Equal(suite.T(), funcName, funcInfo.Name)
+	assert.Empty(suite.T(), funcInfo.Description)
+	assert.Contains(suite.T(), funcInfo.Flags, "no-writes")
+
+	// Test FunctionList with WithCode and query for all libraries
+	query = api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err = client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo = functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+	assert.Contains(suite.T(), libInfo.Code, libName) // Code should be present
+
+	// load new lib and delete it - first lib remains loaded
+	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
+	result, err = client.FunctionLoad(anotherLib, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "anotherLib", result)
+
+	deleteResult, err := client.FunctionDelete("anotherLib")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", deleteResult)
+
+	// delete missing lib returns a error
+	_, err = client.FunctionDelete("anotherLib")
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestFunctionStats() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions with SYNC option
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Load first function
+	libName := "functionStats"
+	funcName := libName
+	functions := map[string]string{
+		funcName: "return args[1]",
+	}
+	code := GenerateLuaLibCode(libName, functions, false)
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	// Check stats after loading first function
+	stats, err := client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(1), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(1), nodeStats.Engines["LUA"].FunctionCount)
+	}
+
+	// Load second function with multiple functions
+	libName2 := libName + "_2"
+	functions2 := map[string]string{
+		funcName + "_2": "return 'OK'",
+		funcName + "_3": "return 42",
+	}
+	code2 := GenerateLuaLibCode(libName2, functions2, false)
+	result, err = client.FunctionLoad(code2, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName2, result)
+
+	// Check stats after loading second function
+	stats, err = client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(2), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(3), nodeStats.Engines["LUA"].FunctionCount)
+	}
+
+	// Flush all functions
+	result, err = client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Check stats after flushing
+	stats, err = client.FunctionStats()
+	assert.NoError(suite.T(), err)
+	for _, nodeStats := range stats {
+		assert.Empty(suite.T(), nodeStats.RunningScript.Name)
+		assert.Equal(suite.T(), 1, len(nodeStats.Engines))
+		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].LibraryCount)
+		assert.Equal(suite.T(), int64(0), nodeStats.Engines["LUA"].FunctionCount)
+	}
+}
+
+func (suite *GlideTestSuite) TestFunctionKill() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+
+	client := suite.defaultClient()
+	libName := "functionKill_no_write"
+	funcName := "deadlock"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, readOnly)
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10000)
+	testClient := suite.client(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond) // interval of 100ms for kill attempts
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				if readOnly {
+					result, err = client.FunctionKill()
+					if err == nil {
+						return
+					}
+				} else {
+					result, err = client.FunctionKill()
+					if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+						return
+					}
+				}
+
+			}
+		}
+	}()
+
+	// Call the function - this should block until killed and return a script kill error
+	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	if readOnly {
+		assert.Error(suite.T(), err)
+		assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+	} else {
+		assert.NoError(suite.T(), err)
+	}
+
+	// Wait for the function to complete
+	time.Sleep(6 * time.Second)
+}
+
+func (suite *GlideTestSuite) TestFunctionKillNoWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(true)
+}
+
+func (suite *GlideTestSuite) TestFunctionKillWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(false)
 }

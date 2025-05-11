@@ -13,25 +13,55 @@ import (
 // GlideClient interface compliance check.
 var _ GlideClientCommands = (*GlideClient)(nil)
 
-// GlideClientCommands is a client used for connection in Standalone mode.
+// All commands that can be executed by GlideClient.
 type GlideClientCommands interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
 	BitmapCommands
 	ConnectionManagementCommands
+	ScriptingAndFunctionStandaloneCommands
+	PubSubStandaloneCommands
 }
 
-// GlideClient implements standalone mode operations by extending baseClient functionality.
+// Client used for connection to standalone servers.
+// Use [NewGlideClient] to request a client.
+//
+// For full documentation refer to [Valkey Glide Wiki].
+//
+// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
 type GlideClient struct {
 	*baseClient
 }
 
-// NewGlideClient creates a [GlideClientCommands] in standalone mode using the given [GlideClientConfiguration].
+// Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey server.
+//
+// Parameters:
+//
+//	config - The configuration options for the client, including server addresses, authentication credentials,
+//	    TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
+//
+// Return value:
+//
+//	A connected `GlideClient` instance.
+//
+// Remarks:
+//
+//	Use this static method to create and connect a `GlideClient` to a standalone Valkey server.
+//	The client will automatically handle connection establishment, including any authentication and TLS configurations.
+//
+//	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+//	      using the specified username and password.
+//	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
+//	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
+//	      in case of disconnections.
 func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
+	}
+	if config.subscriptionConfig != nil {
+		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
 	}
 
 	return &GlideClient{client}, nil
@@ -39,8 +69,7 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed
-// command.
+// the executed command.
 //
 // See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
 //
@@ -85,7 +114,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Gets the values of configuration parameters.
@@ -128,7 +157,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Gets information and statistics about the server.
@@ -253,7 +282,7 @@ func (client *GlideClient) FlushAll() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of all the existing databases.
@@ -274,7 +303,7 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -291,7 +320,7 @@ func (client *GlideClient) FlushDB() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -312,7 +341,7 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
@@ -395,7 +424,7 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Gets the name of the current connection.
@@ -429,7 +458,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Move key from the currently selected database to the database specified by dbIndex.
@@ -514,7 +543,7 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Returns a random existing key name from the currently selected database.
@@ -530,4 +559,83 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
+}
+
+// Returns information about the function that's currently running and information about the
+// available execution engines.
+// `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
+// The response includes a mapping from node address to the command response for that node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
+	response, err := client.executeCommand(C.FunctionStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionStatsResponse(response)
+}
+
+// Deletes a library and all its functions.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	libName - The library name to delete.
+//
+// Return value:
+//
+//	"OK" if the library exists, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/function-delete/
+func (client *GlideClient) FunctionDelete(libName string) (string, error) {
+	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClient) Publish(channel string, message string) (int64, error) {
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }

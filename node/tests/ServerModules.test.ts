@@ -9,9 +9,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { v4 as uuidv4 } from "uuid";
 import {
-    ClusterTransaction,
+    ClusterBatch,
     ConditionalChange,
     convertGlideRecordToRecord,
     Decoder,
@@ -36,10 +35,11 @@ import {
     CreateJsonBatchCommands,
     flushAndCloseClient,
     getClientConfigurationOption,
+    getRandomKey,
     getServerVersion,
     JsonBatchForArrCommands,
     parseEndpoints,
-    validateTransactionResponse,
+    validateBatchResponse,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -93,7 +93,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = { a: 1.0, b: 2 };
 
                 // JSON.set
@@ -154,7 +154,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
 
                 // JSON.set with complex object
                 expect(
@@ -197,7 +197,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const value = JSON.stringify({ a: 1.0, b: 2 });
 
                 expect(
@@ -240,7 +240,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 // Set initial JSON value
                 expect(
                     await GlideJson.set(
@@ -290,8 +290,8 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const data = {
                     [key1]: '{"a": 1, "b": ["one", "two"]}',
                     [key2]: '{"a": 1, "c": false}',
@@ -304,7 +304,7 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.mget(
                         client,
-                        [key1, key2, uuidv4()],
+                        [key1, key2, getRandomKey()],
                         Buffer.from("$.c"),
                     ),
                 ).toEqual(["[]", "[false]", null]);
@@ -326,7 +326,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const key = uuidv4();
+                const key = getRandomKey();
                 const doc = {
                     a: [],
                     b: { a: [1, 2, 3, 4] },
@@ -442,7 +442,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const key = uuidv4();
+                const key = getRandomKey();
                 let doc =
                     '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}';
                 expect(await GlideJson.set(client, key, "$", doc)).toBe("OK");
@@ -497,7 +497,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const key = uuidv4();
+                const key = getRandomKey();
                 const doc =
                     '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}';
                 expect(await GlideJson.set(client, key, "$", doc)).toBe("OK");
@@ -540,8 +540,8 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const doc1 =
                     '{"a": [1, 3, true, "hello"], "b": {"a": [3, 4, [3, false], 5], "c": {"a": 42}}}';
 
@@ -703,8 +703,8 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
-                const key2 = uuidv4();
+                const key = getRandomKey();
+                const key2 = getRandomKey();
                 const jsonValue = {
                     bool: true,
                     nested: { bool: false, nested: { bool: 10 } },
@@ -763,7 +763,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = { a: 1.0, b: { a: 1, b: 2.5, c: true } };
                 // setup
                 expect(
@@ -865,7 +865,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = { a: 1.0, b: { a: 1, b: 2.5, c: true } };
                 // setup
                 expect(
@@ -973,7 +973,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = [1, 2.3, "foo", true, null, {}, []];
                 // setup
                 expect(
@@ -1006,7 +1006,7 @@ describe("Server Module Tests", () => {
                     }),
                 ).toEqual([]);
 
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 const jsonValue2 = { Name: "John", Age: 27 };
                 // setup
                 expect(
@@ -1045,7 +1045,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     obj: { a: 1, b: 2 },
                     arr: [1, 2, 3],
@@ -1188,7 +1188,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     obj: { a: 1, b: 2 },
                     arr: [1, 2, 3],
@@ -1323,7 +1323,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     a: [0, 1, 2, 3, 4, 5, 6, 7, 8],
                     b: { a: [0, 9, 10, 11, 12, 13], c: { a: 42 } },
@@ -1455,7 +1455,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     a: "foo",
                     nested: { a: "hello" },
@@ -1525,7 +1525,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 let doc = { a: 1, b: ["one", "two"] };
                 expect(
                     await GlideJson.set(client, key, "$", JSON.stringify(doc)),
@@ -1562,7 +1562,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     a: "foo",
                     nested: { a: "hello" },
@@ -1666,7 +1666,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     key1: 1,
                     key2: 3.5,
@@ -1863,7 +1863,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue =
                     "{" +
                     ' "key1": 1,' +
@@ -2069,7 +2069,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue =
                     '{ "key1": 1, "key2": 3.5, "key3": {"nested_key": {"key1": [4, 5]}}, "key4":' +
                     ' [1, 2, 3], "key5": 0, "key6": "hello", "key7": null, "key8":' +
@@ -2125,7 +2125,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     a: 1.0,
                     b: { a: { x: 1, y: 2 }, b: 2.5, c: true },
@@ -2228,7 +2228,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const key = uuidv4();
+                const key = getRandomKey();
                 const jsonValue = {
                     a: 1.0,
                     b: { a: { x: 1, y: 2 }, b: 2.5, c: true },
@@ -2313,37 +2313,41 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
-            it("can send JsonBatch transactions for ARR commands", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-                const clusterTransaction = new ClusterTransaction();
-                const expectedRes =
-                    await JsonBatchForArrCommands(clusterTransaction);
-                const result = await client.exec(clusterTransaction);
+            it.each([true, false])(
+                "can send JsonBatch batches for ARR commands with isAtomic=%s",
+                async (isAtomic) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const batch = new ClusterBatch(isAtomic);
+                    const expectedRes = await JsonBatchForArrCommands(batch);
+                    const result = await client.exec(batch, true);
 
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            });
+                    validateBatchResponse(result, expectedRes);
+                    client.close();
+                },
+            );
 
-            it("can send JsonBatch transactions general commands", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-                const clusterTransaction = new ClusterTransaction();
-                const expectedRes =
-                    await CreateJsonBatchCommands(clusterTransaction);
-                const result = await client.exec(clusterTransaction);
+            it.each([true, false])(
+                "can send JsonBatch batches general commands with isAtomic=%s",
+                async (isAtomic) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const batch = new ClusterBatch(isAtomic);
+                    const expectedRes = await CreateJsonBatchCommands(batch);
+                    const result = await client.exec(batch, true);
 
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            });
+                    validateBatchResponse(result, expectedRes);
+                    client.close();
+                },
+            );
         },
     );
 
@@ -2389,7 +2393,7 @@ describe("Server Module Tests", () => {
                 },
             };
             expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_1]),
+                await GlideFt.create(client, getRandomKey(), [vectorField_1]),
             ).toEqual("OK");
 
             expect(
@@ -2429,7 +2433,7 @@ describe("Server Module Tests", () => {
                 },
             };
             expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_2]),
+                await GlideFt.create(client, getRandomKey(), [vectorField_2]),
             ).toEqual("OK");
 
             // create an index with HNSW vector with additional parameters
@@ -2447,7 +2451,7 @@ describe("Server Module Tests", () => {
                 },
             };
             expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_3], {
+                await GlideFt.create(client, getRandomKey(), [vectorField_3], {
                     dataType: "HASH",
                     prefixes: ["docs:"],
                 }),
@@ -2457,7 +2461,7 @@ describe("Server Module Tests", () => {
             expect(
                 await GlideFt.create(
                     client,
-                    uuidv4(),
+                    getRandomKey(),
                     [
                         { type: "TEXT", name: "title" },
                         { type: "NUMERIC", name: "published_at" },
@@ -2468,7 +2472,7 @@ describe("Server Module Tests", () => {
             ).toEqual("OK");
 
             // create an index with multiple prefixes
-            const name = uuidv4();
+            const name = getRandomKey();
             expect(
                 await GlideFt.create(
                     client,
@@ -2501,7 +2505,7 @@ describe("Server Module Tests", () => {
             // create an index without fields - expect a RequestError
             try {
                 expect(
-                    await GlideFt.create(client, uuidv4(), []),
+                    await GlideFt.create(client, getRandomKey(), []),
                 ).rejects.toThrow();
             } catch (e) {
                 expect((e as Error).message).toContain(
@@ -2512,7 +2516,7 @@ describe("Server Module Tests", () => {
             // duplicated field name - expect a RequestError
             try {
                 expect(
-                    await GlideFt.create(client, uuidv4(), [
+                    await GlideFt.create(client, getRandomKey(), [
                         { type: "TEXT", name: "name" },
                         { type: "TEXT", name: "name" },
                     ]),
@@ -2531,7 +2535,7 @@ describe("Server Module Tests", () => {
             );
 
             // create an index
-            const index = uuidv4();
+            const index = getRandomKey();
             expect(
                 await GlideFt.create(client, index, [
                     {
@@ -2577,7 +2581,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const index = uuidv4();
+                const index = getRandomKey();
                 expect(
                     await GlideFt.create(
                         client,
@@ -2652,7 +2656,7 @@ describe("Server Module Tests", () => {
 
                 const isResp3 = protocol == ProtocolVersion.RESP3;
                 const prefixBicycles = "{bicycles}:";
-                const indexBicycles = prefixBicycles + uuidv4();
+                const indexBicycles = prefixBicycles + getRandomKey();
                 const query = "*";
 
                 // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
@@ -2862,7 +2866,7 @@ describe("Server Module Tests", () => {
 
                 const isResp3 = protocol == ProtocolVersion.RESP3;
                 const prefixMovies = "{movies}:";
-                const indexMovies = prefixMovies + uuidv4();
+                const indexMovies = prefixMovies + getRandomKey();
                 const query = "*";
 
                 // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC
@@ -3034,7 +3038,7 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const prefix = "{" + uuidv4() + "}:";
+                const prefix = "{" + getRandomKey() + "}:";
                 const index = prefix + "index";
                 const query = "*=>[KNN 2 @VEC $query_vec]";
 
@@ -3169,7 +3173,7 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const prefix = "{" + uuidv4() + "}:";
+                const prefix = "{" + getRandomKey() + "}:";
                 const index = prefix + "index";
                 const query = "*";
 
@@ -3270,7 +3274,7 @@ describe("Server Module Tests", () => {
                 ),
             );
 
-            const index = uuidv4();
+            const index = getRandomKey();
             expect(
                 await GlideFt.create(client, index, [
                     { type: "NUMERIC", name: "price" },
@@ -3334,8 +3338,8 @@ describe("Server Module Tests", () => {
                     ProtocolVersion.RESP3,
                 ),
             );
-            const index = uuidv4();
-            const alias = uuidv4() + "-alias";
+            const index = getRandomKey();
+            const alias = getRandomKey() + "-alias";
 
             // Create an index.
             expect(
@@ -3350,8 +3354,8 @@ describe("Server Module Tests", () => {
             // Add an alias to the index.
             expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
 
-            const newIndex = uuidv4();
-            const newAlias = uuidv4();
+            const newIndex = getRandomKey();
+            const newAlias = getRandomKey();
 
             // Create a second index.
             expect(
@@ -3413,10 +3417,10 @@ describe("Server Module Tests", () => {
                     ProtocolVersion.RESP3,
                 ),
             );
-            const index1 = uuidv4();
-            const alias1 = uuidv4() + "-alias";
-            const index2 = uuidv4();
-            const alias2 = uuidv4() + "-alias";
+            const index1 = getRandomKey();
+            const alias1 = getRandomKey() + "-alias";
+            const index2 = getRandomKey();
+            const alias2 = getRandomKey() + "-alias";
 
             //Create the 2 test indexes.
             expect(

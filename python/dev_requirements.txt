@@ -7,6 +7,9 @@ flake8 == 5.0
 isort == 5.10
 mypy == 1.13.0
 mypy-protobuf == 3.5
+types-protobuf ~= 5.29.1
 packaging >= 22.0
 sphinx >= 7.4.7
 sphinx-rtd-theme
+deprecated
+types-Deprecated

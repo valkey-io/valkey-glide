@@ -8,7 +8,7 @@ public class StandaloneClientTests
     [Fact]
     public void CustomCommand()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
             () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
@@ -20,7 +20,7 @@ public class StandaloneClientTests
     [Fact]
     public async Task CustomCommandWithBinary()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
@@ -29,7 +29,7 @@ public class StandaloneClientTests
 
         gs dump = (await client.CustomCommand(["DUMP", key1]) as gs)!;
 
-        Assert.Equal("OK".ToGlideString(), await client.CustomCommand(["RESTORE", key2, "0", dump!]));
+        Assert.Equal("OK", await client.CustomCommand(["RESTORE", key2, "0", dump!]));
         Assert.Equal(value, (await client.Get(key2))!);
 
         // Set and get a binary value
@@ -40,31 +40,31 @@ public class StandaloneClientTests
     [Fact]
     public void CanConnectWithDifferentParameters()
     {
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithClientName("GLIDE").Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithTls(false).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithConnectionTimeout(2000).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithRequestTimeout(2000).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithDataBaseId(4).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithConnectionRetryStrategy(1, 2, 3).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithAuthentication("default", "").Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build());
 
-        _ = new GlideClient(TestConfiguration.DefaultClientConfig()
+        _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
     }
 
@@ -73,7 +73,7 @@ public class StandaloneClientTests
     // TODO: remove this test once we add tests with these commands
     public async Task CustomCommandWithDifferentReturnTypes()
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
 
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);

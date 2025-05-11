@@ -82,7 +82,7 @@ public class BatchTests {
     @SneakyThrows
     public void custom_command_info(GlideClient client, boolean isAtomic) {
         Batch batch = new Batch(isAtomic).customCommand(new String[] {"info"});
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
@@ -91,7 +91,7 @@ public class BatchTests {
     @SneakyThrows
     public void info_test(GlideClient client, boolean isAtomic) {
         Batch batch = new Batch(isAtomic).info().info(new Section[] {CLUSTER});
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
 
         // sanity check
         assertTrue(((String) result[0]).contains("# Stats"));
@@ -111,7 +111,7 @@ public class BatchTests {
                 batch.ping(Integer.toString(idx));
             }
         }
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         for (int idx = 0; idx < numberOfPings; idx++) {
             if ((idx % 2) == 0) {
                 assertEquals("PONG", result[idx]);
@@ -147,7 +147,7 @@ public class BatchTests {
         Batch batches = new Batch(isAtomic);
         Object[] expectedResult = builder.apply(batches, isAtomic);
 
-        Object[] results = client.exec(batches).get();
+        Object[] results = client.exec(batches, true).get();
         assertDeepEquals(expectedResult, results);
     }
 
@@ -193,7 +193,7 @@ public class BatchTests {
             // Empty pipelines returns an error
             return;
         }
-        Object[] results = client.exec(batches).get();
+        Object[] results = client.exec(batches, true).get();
         assertDeepEquals(expectedResult, results);
     }
 
@@ -215,7 +215,7 @@ public class BatchTests {
                     value, // batch.get(key);
                 };
 
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         assertArrayEquals(expectedResult, result);
     }
 
@@ -246,7 +246,7 @@ public class BatchTests {
                     value // batch.get(key);
                 };
 
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         assertArrayEquals(expectedResult, result);
     }
 
@@ -256,7 +256,7 @@ public class BatchTests {
     public void lastsave(GlideClient client, boolean isAtomic) {
         var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
 
-        var response = client.exec(new Batch(isAtomic).lastsave()).get();
+        var response = client.exec(new Batch(isAtomic).lastsave(), true).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -273,7 +273,7 @@ public class BatchTests {
             batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
             batch.set(objectFreqKey, "");
             batch.objectFreq(objectFreqKey);
-            var response = client.exec(batch).get();
+            var response = client.exec(batch, true).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
@@ -290,7 +290,7 @@ public class BatchTests {
         Batch batch = new Batch(isAtomic);
         batch.set(objectIdletimeKey, "");
         batch.objectIdletime(objectIdletimeKey);
-        var response = client.exec(batch).get();
+        var response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -303,7 +303,7 @@ public class BatchTests {
         Batch batch = new Batch(isAtomic);
         batch.set(objectRefcountKey, "");
         batch.objectRefcount(objectRefcountKey);
-        var response = client.exec(batch).get();
+        var response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -319,7 +319,7 @@ public class BatchTests {
         batch.zrankWithScore(zSetKey1, "one");
         batch.zrevrankWithScore(zSetKey1, "one");
 
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
@@ -359,7 +359,7 @@ public class BatchTests {
                     "one", // get(copyKey2)
                 };
 
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         assertArrayEquals(expectedResult, result);
     }
 
@@ -383,7 +383,7 @@ public class BatchTests {
         assertEquals(OK, client.watch(keys).get());
         assertEquals(OK, client.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertNull(client.exec(setFoobarTransaction).get());
+        assertNull(client.exec(setFoobarTransaction, true).get());
         assertNull(client.get(key1).get()); // Sanity check
         assertEquals(helloString, client.get(key2).get());
         assertNull(client.get(key3).get());
@@ -392,14 +392,14 @@ public class BatchTests {
         // transaction is executed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(helloString, client.get(key2).get());
-        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, client.get(key1).get()); // Sanity check
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
 
         // Batch executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
-        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, client.get(key1).get()); // Sanity check
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
@@ -408,7 +408,7 @@ public class BatchTests {
         // transaction.
         assertEquals(OK, client.watch(new String[] {key4}).get());
         setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
-        assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction, true).get());
         assertEquals(helloString, client.get(key1).get()); // Sanity check
         assertEquals(helloString, client.get(key2).get());
         assertEquals(helloString, client.get(key3).get());
@@ -442,7 +442,7 @@ public class BatchTests {
                 .set(key1.toString(), foobarString)
                 .set(key2.toString(), foobarString)
                 .set(key3.toString(), foobarString);
-        assertNull(client.exec(setFoobarTransaction).get());
+        assertNull(client.exec(setFoobarTransaction, true).get());
         assertNull(client.get(key1).get()); // Sanity check
         assertEquals(gs(helloString), client.get(key2).get());
         assertNull(client.get(key3).get());
@@ -451,14 +451,14 @@ public class BatchTests {
         // transaction is executed.
         assertEquals(OK, client.watch(keys).get());
         assertEquals(gs(helloString), client.get(key2).get());
-        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction, true).get());
         assertEquals(gs(foobarString), client.get(key1).get()); // Sanity check
         assertEquals(gs(foobarString), client.get(key2).get());
         assertEquals(gs(foobarString), client.get(key3).get());
 
         // Batch executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
-        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction, true).get());
         assertEquals(gs(foobarString), client.get(key1).get()); // Sanity check
         assertEquals(gs(foobarString), client.get(key2).get());
         assertEquals(gs(foobarString), client.get(key3).get());
@@ -470,7 +470,7 @@ public class BatchTests {
                 .set(key1.toString(), helloString)
                 .set(key2.toString(), helloString)
                 .set(key3.toString(), helloString);
-        assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction, true).get());
         assertEquals(gs(helloString), client.get(key1).get()); // Sanity check
         assertEquals(gs(helloString), client.get(key2).get());
         assertEquals(gs(helloString), client.get(key3).get());
@@ -501,7 +501,7 @@ public class BatchTests {
         assertEquals(OK, client.set(key2, helloString).get());
         assertEquals(OK, client.unwatch().get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString);
-        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction, true).get());
         assertEquals(foobarString, client.get(key1).get());
         assertEquals(foobarString, client.get(key2).get());
     }
@@ -566,7 +566,7 @@ public class BatchTests {
                     descendingListByAge, // lrange(genericKey2, 0, -1)
                 };
 
-        assertArrayEquals(expectedResults, client.exec(batch1).get());
+        assertArrayEquals(expectedResults, client.exec(batch1, true).get());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch2
@@ -590,7 +590,7 @@ public class BatchTests {
                         descendingListByAge, // sortReadOnly(genericKey1, SortOptions)
                     };
 
-            assertArrayEquals(expectedResults, client.exec(batch2).get());
+            assertArrayEquals(expectedResults, client.exec(batch2, true).get());
         }
     }
 
@@ -607,7 +607,7 @@ public class BatchTests {
         batch.set(key, "value");
         batch.wait(numreplicas, timeout);
 
-        Object[] results = client.exec(batch).get();
+        Object[] results = client.exec(batch, true).get();
         Object[] expectedResult =
                 new Object[] {
                     OK, // set(key,  "value")
@@ -632,7 +632,7 @@ public class BatchTests {
         do {
             Batch batch = new Batch(isAtomic);
             batch.scan(cursor);
-            Object[] results = client.exec(batch).get();
+            Object[] results = client.exec(batch, true).get();
             cursor = (String) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
         } while (!cursor.equals("0"));
@@ -655,7 +655,7 @@ public class BatchTests {
         do {
             Batch batch = new Batch(isAtomic).withBinaryOutput();
             batch.scan(cursor);
-            Object[] results = client.exec(batch).get();
+            Object[] results = client.exec(batch, true).get();
             cursor = (GlideString) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
         } while (!cursor.equals(gs("0")));
@@ -688,7 +688,7 @@ public class BatchTests {
                 typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
                 typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        assertNotNull(client.exec(setupBatch).get());
+        assertNotNull(client.exec(setupBatch, true).get());
 
         for (var type : ScanOptions.ObjectType.values()) {
             ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
@@ -698,7 +698,7 @@ public class BatchTests {
             do {
                 Batch batch = new Batch(isAtomic);
                 batch.scan(cursor, options);
-                Object[] results = client.exec(batch).get();
+                Object[] results = client.exec(batch, true).get();
                 cursor = (String) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals("0"));
@@ -713,7 +713,7 @@ public class BatchTests {
             do {
                 Batch batch = new Batch(isAtomic);
                 batch.scan(cursor, options);
-                Object[] results = client.exec(batch).get();
+                Object[] results = client.exec(batch, true).get();
                 cursor = (String) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals("0"));
@@ -749,7 +749,7 @@ public class BatchTests {
                 typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
                 typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-        assertNotNull(client.exec(setupBatch).get());
+        assertNotNull(client.exec(setupBatch, true).get());
 
         final GlideString initialCursor = gs("0");
 
@@ -761,7 +761,7 @@ public class BatchTests {
             do {
                 Batch batch = new Batch(isAtomic).withBinaryOutput();
                 batch.scan(cursor, options);
-                Object[] results = client.exec(batch).get();
+                Object[] results = client.exec(batch, true).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals(initialCursor));
@@ -777,7 +777,7 @@ public class BatchTests {
             do {
                 Batch batch = new Batch(isAtomic).withBinaryOutput();
                 batch.scan(cursor, options);
-                Object[] results = client.exec(batch).get();
+                Object[] results = client.exec(batch, true).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
             } while (!cursor.equals(initialCursor));
@@ -801,14 +801,14 @@ public class BatchTests {
 
         // Verify dump
         Batch batch = new Batch(isAtomic).withBinaryOutput().dump(key1);
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         GlideString payload = (GlideString) result[0];
 
         // Verify restore
         batch = new Batch(isAtomic);
         batch.restore(key2, 0, payload.getBytes());
         batch.get(key2);
-        Object[] response = client.exec(batch).get();
+        Object[] response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertEquals(value, response[1]);
     }
@@ -827,13 +827,13 @@ public class BatchTests {
 
         // Verify functionDump
         Batch batch = new Batch(isAtomic).withBinaryOutput().functionDump();
-        Object[] result = client.exec(batch).get();
+        Object[] result = client.exec(batch, true).get();
         GlideString payload = (GlideString) result[0];
 
         // Verify functionRestore
         batch = new Batch(isAtomic);
         batch.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
-        Object[] response = client.exec(batch).get();
+        Object[] response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
     }
 
@@ -872,7 +872,7 @@ public class BatchTests {
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
-        Object[] results = client.exec(batch).get();
+        Object[] results = client.exec(batch, true).get();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedStreamInfo.put("max-deleted-entry-id", "0-0");
@@ -903,7 +903,7 @@ public class BatchTests {
 
         var batch = new Batch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = client.exec(batch).get();
+        var responses = client.exec(batch, true).get();
 
         assertDeepEquals(
                 new Object[] {
