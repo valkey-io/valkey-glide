@@ -27,9 +27,10 @@
     "scripts": {
         "build:dev": "napi build --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
         "build:benchmark": "napi build --release --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
-        "build:release:gnu": "napi build --release --strip --omit=dev --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
-        "build:release:musl": "napi build --release --strip --omit=dev --platform --zig --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
-        "build:release:mac": "napi build --release --strip --omit=dev --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release": "napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release:gnu": "napi build --release --strip --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:musl": "napi build --release --strip --platform --zig --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:mac": "napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
         "postbuild:copy-node": "cp glide-rs.*.node ../build-ts/",
         "artifacts": "napi artifacts",
         "prepublishOnly": "napi prepublish -t npm",
