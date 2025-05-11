@@ -1,5 +1,5 @@
 #### Changes
-
+* Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
 * Python: Add support for Trio ([#3465](https://github.com/valkey-io/valkey-glide/pull/3465))
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
