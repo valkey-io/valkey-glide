@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
+
 from glide import RequestError, TimeoutError
 from glide.async_commands.batch import (
     BaseBatch,
@@ -60,7 +61,6 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
-
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -1639,6 +1639,6 @@ class TestBatch:
             assert isinstance(node_info, bytes)
             # Ensure the errorstats section indicates no errors reported for this test
             # It should only contain the header line.
-            assert node_info.strip() == b"# Errorstats", (
-                f"Node {node_address.decode()} reported errors: {node_info.decode()}"
-            )
+            assert (
+                node_info.strip() == b"# Errorstats"
+            ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"

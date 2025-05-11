@@ -7,6 +7,7 @@ import typing
 from typing import List, Optional
 
 import pytest
+
 from glide.async_commands.batch import ClusterBatch
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules import glide_json as json
@@ -1690,13 +1691,10 @@ class TestJson:
             '"gamma"',
             JsonArrIndexOptions(start=0, end=2),
         )
-        assert (
-            result
-            == [
-                0,
-                -1,
-            ]
-        )  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the
+        assert result == [
+            0,
+            -1,
+        ]  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the
         # search range.
 
         # Check for passing start = 0, end = 0 in JSONPath syntax
