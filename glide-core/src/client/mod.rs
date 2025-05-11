@@ -18,7 +18,6 @@ use redis::{
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,7 +28,7 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use redis::InfoDict;
-use telemetrylib::*;
+use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::mpsc;
 use versions::Versioning;
 
@@ -137,7 +136,7 @@ async fn run_with_timeout<T>(
         Some(duration) => match tokio::time::timeout(duration, future).await {
             Ok(result) => result,
             Err(_) => {
-                // Record timeout error metric
+                // Record timeout error metric if telemetry is initialized
                 if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
                     log_error(
                         "OpenTelemetry:timeout_error",
@@ -958,27 +957,6 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
-
-        // initilaize open telemetry traces exporter
-        if let Some(endpoint_str) = &request.otel_traces_endpoint {
-            let trace_exporter = GlideOpenTelemetrySignalsExporter::from_str(endpoint_str.as_str())
-                .map_err(ConnectionError::IoError)?;
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(
-                    request
-                        .otel_flush_interval_ms
-                        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS) as u64,
-                ))
-                .with_trace_exporter(trace_exporter)
-                .build();
-
-            if let Err(e) = GlideOpenTelemetry::initialise(config) {
-                log_error(
-                    "OpenTelemetry initialization",
-                    format!("OpenTelemetry initialization failed: {}", e),
-                );
-            }
-        }
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
