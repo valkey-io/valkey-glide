@@ -89,7 +89,11 @@ arguments_parser.add_argument(
     "--minimal", help="Should run a minimal benchmark", action="store_true"
 )
 arguments_parser.add_argument(
-    "--backend", help="Async backend to use", required=False, default="asyncio"
+    "--backend",
+    help="Async backend to use",
+    required=False,
+    default="asyncio",
+    choices=["asyncio", "trio"],
 )
 args = arguments_parser.parse_args()
 

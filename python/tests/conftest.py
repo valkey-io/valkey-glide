@@ -5,7 +5,6 @@ import sys
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
-
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -22,6 +21,7 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
+
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -176,9 +176,9 @@ def call_before_all_pytests(request):
     cluster_endpoints = request.config.getoption("--cluster-endpoints")
     standalone_endpoints = request.config.getoption("--standalone-endpoints")
 
+    # only run asyncio by default. trio is run in CI nightly
     request.config.async_backends = request.config.getoption("--async-backend") or (
         "asyncio",
-        "trio",
     )
 
     create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
