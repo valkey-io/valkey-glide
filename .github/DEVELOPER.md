@@ -147,39 +147,53 @@ This dynamic matrix generation allows for flexible and efficient CI/CD workflows
 
 The Node.js CD workflow (`npm-cd.yml`) uses a multi-stage approach to build and publish platform-specific native modules and a TypeScript package:
 
-#### 1. Platform Matrix Generation (`load-platform-matrix`)
+#### 1. Version Determination (`determine-version`)
+
+- Determines the `release_version` and `npm_tag` for the build.
+- `release_version` logic:
+  - For pull requests: defaults to `"0.0.0-pr"`.
+  - For manual `workflow_dispatch`: uses the version provided in the input.
+  - For pushes to tags (e.g., `v1.2.3`): extracts the version from the tag (e.g., `1.2.3`).
+- `npm_tag` logic:
+  - Set to `"next"` if the `release_version` contains `"rc"` (e.g., for release candidates).
+  - Otherwise, set to `"latest"`.
+
+#### 2. Platform Matrix Generation (`load-platform-matrix`)
+
 - Filters entries from `build-matrix.json` that include "npm" in their `PACKAGE_MANAGERS` field
 - Creates a platform matrix for building native modules
 
-#### 2. Native Binary Building (`build-binaries`)
+#### 3. Native Binary Building (`build-binaries`)
+
 - Runs on multiple platforms defined by the matrix
 - Sets up environment-specific configurations (GNU vs musl)
-- Builds native modules with NAPI-RS
+- Builds native modules with NAPI-RS, **using Zig for cross-compilation capabilities.**
+- **For macOS ARM64 (`aarch64-apple-darwin`) targets, the workflow also triggers a build for macOS x86_64 (`x86_64-apple-darwin`) to ensure binaries are available for both architectures.**
 - Uploads native binary artifacts with unique platform identifiers
 
-#### 3. Artifact Organization (`organize-artifacts`)
+#### 4. Artifact Organization (`organize-artifacts`)
+
 - Downloads all platform-specific binary artifacts
 - Uses NAPI-RS CLI to organize artifacts into platform-specific directories
 - Organizes artifacts under `node/npm/` directory for publishing
 
-#### 4. Platform Package Publishing (`publish-platform-packages`)
-- Publishes each platform-specific package
-- Sets version and tag (latest/next) based on release version
-- Handles errors gracefully, allowing for idempotent publishing
-- Skips already published packages
+#### 5. Platform Package Publishing (`publish-platform-packages`)
 
-#### 5. Base TypeScript Package (`publish-base-to-npm`)
+- Publishes each platform-specific package
+- Sets version and tag (latest/next) based on release version (determined in the `determine-version` job).
+- Handles errors gracefully, allowing for idempotent publishing.
+- Skips already published packages, **ensuring idempotency (i.e., the workflow can be re-run without causing issues if packages are already published).**
+- **Packages are named using the convention: `@valkey/valkey-glide-<os>-<arch>[-<libc>]`. For example, `@valkey/valkey-glide-linux-x64-gnu` or `@valkey/valkey-glide-linux-arm64-musl`. The `[-<libc>]` part is specific to Linux, indicating `gnu` (glibc) or `musl`.**
+
+#### 6. Base TypeScript Package Publishing (`publish-base-to-npm`)
+
 - Creates and configures the main TypeScript-only package
 - Copies required files from build outputs
 - Runs `napi prepublish` to add platform-specific optional dependencies
 - Publishes the main package with proper version and tag
 
-#### 6. Release Testing (`test-release`)
-- Tests the published packages on each supported platform
-- Verifies packages work correctly in real-world scenarios
-- Deprecates packages on test failure
+#### 7. Release Testing (`test-release`)
 
-#### Special Considerations
-- ARM64 musl builds require special handling as GitHub's checkout action doesn't work in Docker on ARM runners
-- The `setup-musl-on-linux` action handles repository setup for these environments
-- Version handling synchronizes all packages to the same version
+- Tests the published packages on each supported platform
+- Verifies packages work correctly in real-world scenarios.
+- **If tests fail, it triggers a deprecation process for the published packages. This includes deprecating the base TypeScript package (`@valkey/valkey-glide@<version>`) and all associated platform-specific native packages (`@valkey/valkey-glide-<platform>-<arch>[-<libc>]@<version>`) for that release version on npm.**

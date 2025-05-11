@@ -1,5 +1,3 @@
-# The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
-
 name: NPM - Continuous Deployment
 
 on:
@@ -14,7 +12,7 @@ on:
             - .github/workflows/create-test-matrices/action.yml
     push:
         tags:
-            - "v*.*"
+            - "v*.*.*"
     workflow_dispatch:
         inputs:
             version:
@@ -168,10 +166,9 @@ jobs:
                   named_os: ${{ matrix.build.NAMED_OS }}
 
             # Install Zig for cross-compilation
-            - name: Install Zig
-              uses: korandoru/setup-zig@v1
+            - uses: mlugg/setup-zig@v2
               with:
-                  zig-version: latest
+                  version: latest
 
             # Build native modules using appropriate script based on platform
             - name: Build native modules
