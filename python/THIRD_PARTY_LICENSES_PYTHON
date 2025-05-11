@@ -2077,7 +2077,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: backtrace:0.3.74
+Package: backtrace:0.3.75
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3018,7 +3018,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: chrono:0.4.40
+Package: chrono:0.4.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9738,7 +9738,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hashbrown:0.15.2
+Package: hashbrown:0.15.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20152,7 +20152,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: redox_syscall:0.5.11
+Package: redox_syscall:0.5.12
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21382,7 +21382,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.11.0
+Package: rustls-pki-types:1.12.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26436,7 +26436,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.44.2
+Package: tokio:1.45.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35682,7 +35682,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
 ----
 
-Package: charset-normalizer:3.4.1
+Package: charset-normalizer:3.4.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36148,7 +36148,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: google-auth:2.39.0
+Package: google-auth:2.40.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37922,7 +37922,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
 ----
 
-Package: platformdirs:4.3.7
+Package: platformdirs:4.3.8
 
 The following copyrights and licenses were found in the source code of this package:
 
