@@ -19,15 +19,17 @@ var (
 )
 
 var (
-	clusterClients      []*GlideClusterClient
-	clusterOnce         sync.Once
-	clusterSubOnce      sync.Once
-	clusterAddresses    []NodeAddress
-	standaloneClients   []*GlideClient
-	standaloneOnce      sync.Once
-	standaloneSubOnce   sync.Once
-	standaloneAddresses []NodeAddress
-	initOnce            sync.Once
+	clusterClients              []*GlideClusterClient
+	clusterOnce                 sync.Once
+	clusterSubOnce              sync.Once
+	clusterAddresses            []NodeAddress
+	standaloneClients           []*GlideClient
+	standaloneOnce              sync.Once
+	standaloneSubOnce           sync.Once
+	standaloneTransactionOnce   sync.Once
+	standaloneTransactionClient *Transaction
+	standaloneAddresses         []NodeAddress
+	initOnce                    sync.Once
 )
 
 func initFlags() {
@@ -192,4 +194,27 @@ func closeAllClients() {
 	for _, client := range clusterClients {
 		client.Close()
 	}
+}
+
+func getExampleTransactionGlideClient() *Transaction {
+	standaloneTransactionOnce.Do(func() {
+		initFlags()
+		addresses := parseHosts(*standaloneNode)
+		config := NewGlideClientConfiguration().
+			WithAddress(&addresses[0]) // use default address
+
+		client, err := NewGlideClient(config)
+		if err != nil {
+			fmt.Println("error connecting to database: ", err)
+		}
+		// Flush the database before each test to ensure a clean state.
+		_, errFlush := client.CustomCommand([]string{"FLUSHALL"})
+		if errFlush != nil {
+			fmt.Println("error flushing database: ", err)
+		}
+		clientTx := NewTransaction(client)
+
+		standaloneTransactionClient = clientTx
+	})
+	return standaloneTransactionClient
 }

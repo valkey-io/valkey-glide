@@ -64,7 +64,14 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
 	}
 
-	return &GlideClient{client}, nil
+	glideClient := &GlideClient{client}
+
+	// Update the executor to point to the GlideClient instance
+	// This ensures that any calls through the executor path
+	// will properly route through GlideClient
+	client.executor = glideClient
+	// return &GlideClient{client}, nil
+	return glideClient, nil
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
@@ -83,11 +90,16 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //
 // Return value:
 //
-//	The returned value for the custom command.
+//		The returned value for the custom command.
+//
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the returned value for the custom command will be accessible in the returned
+//	      results array.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
-	res, err := client.executeCommand(C.CustomCommand, args)
+	res, err := client.executor.sendCommand(C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +108,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 
 // Sets configuration parameters to the specified values.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note (non transaction): Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -108,9 +120,13 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
-	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	result, err := client.executor.sendCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -119,7 +135,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 
 // Gets the values of configuration parameters.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note (non transaction): Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -129,13 +145,21 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //
 // Return value:
 //
-//	A map of api.Result[string] corresponding to the configuration parameters.
+//		A map of api.Result[string] corresponding to the configuration parameters.
+//
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual map of api.Result[string] corresponding to the configuration
+//	      parameters value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
-	res, err := client.executeCommand(C.ConfigGet, args)
+	res, err := client.executor.sendCommand(C.ConfigGet, args)
 	if err != nil {
 		return nil, err
+	}
+	if res == nil {
+		return make(map[string]string), err
 	}
 	return handleStringToStringMapResponse(res)
 }
@@ -150,10 +174,17 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 //
 //	A simple `"OK"` response.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *GlideClient) Select(index int64) (string, error) {
-	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
+	result, err := client.executor.sendCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
+		return DefaultStringResponse, err
+	}
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return DefaultStringResponse, err
 	}
 
@@ -166,7 +197,12 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 // Return value:
 //
-//	A string with the information for the default sections.
+//		A string with the information for the default sections.
+//
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual string with the information for the default sections will be
+//	      accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
@@ -185,13 +221,17 @@ func (client *GlideClient) Info() (string, error) {
 //
 //	A string containing the information for the sections requested.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Info, optionArgs)
+	result, err := client.executor.sendCommand(C.Info, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -205,9 +245,13 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 //
 //	The number of keys in the currently selected database.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/dbsize/
 func (client *GlideClient) DBSize() (int64, error) {
-	result, err := client.executeCommand(C.DBSize, []string{})
+	result, err := client.executor.sendCommand(C.DBSize, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -223,11 +267,16 @@ func (client *GlideClient) DBSize() (int64, error) {
 //
 // Return value:
 //
-//	The provided message
+//		The provided message
+//
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the actual provided message value will be accessible in the returned results
+//	      array.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
+	result, err := client.executor.sendCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -238,7 +287,11 @@ func (client *GlideClient) Echo(message string) (Result[string], error) {
 //
 // Return value:
 //
-//	Returns "PONG".
+//	  Returns "PONG".
+//
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) Ping() (string, error) {
@@ -253,7 +306,11 @@ func (client *GlideClient) Ping() (string, error) {
 //
 // Return value:
 //
-//	Returns the copy of message.
+//	  Returns the copy of message.
+//
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the copy of message will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
@@ -261,7 +318,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Ping, optionArgs)
+	result, err := client.executor.sendCommand(C.Ping, optionArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -276,9 +333,13 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 //
 //	`"OK"` response on success.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAll() (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{})
+	result, err := client.executor.sendCommand(C.FlushAll, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -297,9 +358,13 @@ func (client *GlideClient) FlushAll() (string, error) {
 //
 //	`"OK"` response on success.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/flushall/
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
+	result, err := client.executor.sendCommand(C.FlushAll, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -314,9 +379,13 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 //
 //	`"OK"` response on success.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDB() (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{})
+	result, err := client.executor.sendCommand(C.FlushDB, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -335,9 +404,13 @@ func (client *GlideClient) FlushDB() (string, error) {
 //
 //	`"OK"` response on success.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/flushdb/
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+	result, err := client.executor.sendCommand(C.FlushDB, []string{string(mode)})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -350,9 +423,14 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), piece of generative computer art of that specific valkey version along with the
+//	      Valkey version will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *GlideClient) Lolwut() (string, error) {
-	result, err := client.executeCommand(C.Lolwut, []string{})
+	result, err := client.executor.sendCommand(C.Lolwut, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -368,6 +446,12 @@ func (client *GlideClient) Lolwut() (string, error) {
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
+// `
+//
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), piece of generative computer art of that specific valkey version
+//	  along with the Valkey version will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
 func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
@@ -375,7 +459,7 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	result, err := client.executor.sendCommand(C.Lolwut, commandArgs)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -388,9 +472,13 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 //
 //	The id of the client.
 //
+//	In transaction:
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), the id of the client will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/client-id/
 func (client *GlideClient) ClientId() (int64, error) {
-	result, err := client.executeCommand(C.ClientId, []string{})
+	result, err := client.executor.sendCommand(C.ClientId, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -403,9 +491,14 @@ func (client *GlideClient) ClientId() (int64, error) {
 //
 //	UNIX TIME of the last DB save executed with success.
 //
+//	In transaction:
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), UNIX TIME of the last DB save executed
+//	 will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/lastsave/
 func (client *GlideClient) LastSave() (int64, error) {
-	response, err := client.executeCommand(C.LastSave, []string{})
+	response, err := client.executor.sendCommand(C.LastSave, []string{})
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -418,9 +511,13 @@ func (client *GlideClient) LastSave() (int64, error) {
 //
 //	OK to confirm that the statistics were successfully reset.
 //
+//	In transaction:
+//	  Returns a [api.DefaultShandleOkResponsetringResponse] immediately while adding the command to the transaction queue.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
 func (client *GlideClient) ConfigResetStat() (string, error) {
-	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+	response, err := client.executor.sendCommand(C.ConfigResetStat, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -431,11 +528,16 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//		The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+//		In transaction:
+//		  It adds the command to the transaction queue instead of executing immediately.
+//		  Upon transaction completion with Exec(), the name of the client connection as a string value will be accessible in the
+//	      returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *GlideClient) ClientGetName() (string, error) {
-	result, err := client.executeCommand(C.ClientGetName, []string{})
+	result, err := client.executor.sendCommand(C.ClientGetName, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -452,9 +554,13 @@ func (client *GlideClient) ClientGetName() (string, error) {
 //
 //	OK - when connection name is set
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
-	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+	result, err := client.executor.sendCommand(C.ClientSetName, []string{connectionName})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -472,9 +578,13 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 //
 //	Returns "OK".
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual bool value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/move/
 func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
-	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+	result, err := client.executor.sendCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
 		return defaultBoolResponse, err
 	}
@@ -495,9 +605,13 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 //	iteration of results. "0" will be the cursor returned on the last iteration
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
-	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+	res, err := client.executor.sendCommand(C.Scan, []string{utils.IntToString(cursor)})
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
@@ -518,14 +632,21 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 //	iteration of results. "0" will be the cursor returned on the last iteration
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string array value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, nil, err
 	}
-	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executor.sendCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
+		return DefaultStringResponse, nil, err
+	}
+	if res == nil {
 		return DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(res)
@@ -537,9 +658,13 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *GlideClient) ConfigRewrite() (string, error) {
-	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+	response, err := client.executor.sendCommand(C.ConfigRewrite, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -552,10 +677,18 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //
 //	A random existing key name from the currently selected database.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), a random existing key name from the
+//	  currently selected database will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/randomkey/
 func (client *GlideClient) RandomKey() (Result[string], error) {
-	result, err := client.executeCommand(C.RandomKey, []string{})
+	result, err := client.executor.sendCommand(C.RandomKey, []string{})
 	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	if _, isTransaction := client.executor.(*Transaction); isTransaction && result == nil {
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
@@ -579,9 +712,14 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
 //
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the running_script and engines information value
+//	  will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
-	response, err := client.executeCommand(C.FunctionStats, []string{})
+	response, err := client.executor.sendCommand(C.FunctionStats, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -603,6 +741,10 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 // Return value:
 //
 //	"OK" if the library exists, otherwise an error is thrown.
+//
+//	In transaction:
+//	  It adds the command to the transaction queue instead of executing immediately.
+//	  Upon transaction completion with Exec(), the actual string value will be accessible in the returned results array.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *GlideClient) FunctionDelete(libName string) (string, error) {
@@ -629,10 +771,14 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 //
 //	The number of clients that received the message.
 //
+//	In transaction:
+//	 It adds the command to the transaction queue instead of executing immediately.
+//	 Upon transaction completion with Exec(), the actual int value will be accessible in the returned results array.
+//
 // [valkey.io]: https://valkey.io/commands/publish
 func (client *GlideClient) Publish(channel string, message string) (int64, error) {
 	args := []string{channel, message}
-	result, err := client.executeCommand(C.Publish, args)
+	result, err := client.executor.sendCommand(C.Publish, args)
 	if err != nil {
 		return 0, err
 	}

@@ -7,6 +7,7 @@ use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors;
+use glide_core::errors::error_message;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
@@ -103,6 +104,7 @@ pub enum ResponseType {
     Map = 6,
     Sets = 7,
     Ok = 8,
+    Error = 9,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -674,6 +676,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
         ResponseType::Map => c"Map",
         ResponseType::Sets => c"Sets",
         ResponseType::Ok => c"Ok",
+        ResponseType::Error => c"Error",
     };
     c_str.as_ptr()
 }
@@ -890,6 +893,20 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::Sets;
             Ok(command_response)
         }
+
+        Value::ServerError(server_error) => {
+            let error_message: String = error_message(&server_error.into());
+            // Convert the formatted string to bytes
+            let bytes = error_message.into_bytes();
+            // Process the bytes as before
+            let (vec_ptr, len) = convert_vec_to_pointer(bytes);
+            command_response.string_value = vec_ptr as *mut c_char;
+            command_response.string_value_len = len;
+            command_response.response_type = ResponseType::Error;
+
+            // Return as Ok to continue transaction processing
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -955,6 +972,129 @@ pub unsafe extern "C" fn command(
     client_adapter.execute_command(channel, async move {
         client
             .send_command(&cmd, get_route(route, Some(&cmd)))
+            .await
+    })
+}
+
+#[repr(C)]
+pub struct Cmder {
+    request_type: RequestType, // Equivalent to Go's C.RequestType
+    args_count: usize,
+    args: *const *const c_char, // Array of C strings
+}
+
+#[repr(C)]
+pub struct Transaction {
+    cmd_count: usize,
+    commands: *const Cmder,
+}
+
+#[repr(C)]
+pub struct TransactionParam {
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    transaction: *const Transaction,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    timeout: u32,
+    raise_on_error: bool,
+}
+
+/// CGO method which allows the Go client to executes all queued commands as a transaction
+///
+/// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
+/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `transaction` must not be null. It contain the consolidated commands
+/// `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// `timeout` The duration in milliseconds that the client should wait for the batch request to complete.
+///           This duration encompasses sending the request, awaiting for a response from the server, and any
+///           required reconnections or retries
+/// `raise_on_error` When set to false, errors will be included as part of the batch response, allowing the caller to process both successful and failed commands together.
+///                  In this case, error details will be provided as instances of `RequestError`.
+///                  When set to true, the first encountered error in the batch will be raised as an exception.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
+#[no_mangle]
+pub unsafe extern "C" fn execute_transaction(
+    transaction_param: TransactionParam,
+) -> *mut CommandResult {
+    let transaction =
+        unsafe { transaction_param.transaction.as_ref() }.expect("Transaction pointer is NULL");
+
+    let _commands =
+        unsafe { transaction.commands.as_ref() }.expect("Transaction commands pointer is NULL");
+
+    let mut pipeline = redis::Pipeline::with_capacity(transaction.cmd_count);
+    pipeline.atomic();
+
+    for i in 0..transaction.cmd_count {
+        let cmder = unsafe { &*transaction.commands.add(i) };
+
+        let mut cmd = cmder
+            .request_type
+            .get_command()
+            .expect("Invalid command type");
+
+        for j in 0..cmder.args_count {
+            let arg_ptr = unsafe { *cmder.args.add(j) };
+
+            let _arg = unsafe { arg_ptr.as_ref() }.expect("Argument pointer (arg_ptr) is NULL");
+
+            let arg_str = unsafe { CStr::from_ptr(arg_ptr) }.to_bytes();
+
+            cmd.arg(arg_str);
+        }
+
+        pipeline.add_command(cmd);
+    }
+
+    // Ensure route_bytes_len is reasonable
+    if transaction_param.route_bytes_len > 1024 {
+        panic!(
+            "Error: route_bytes_len ({}) is too large!",
+            transaction_param.route_bytes_len
+        );
+    }
+
+    let route: Option<RoutingInfo> = if !transaction_param.route_bytes.is_null() {
+        let r_bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                transaction_param.route_bytes,
+                transaction_param.route_bytes_len,
+            )
+        };
+        let route = Routes::parse_from_bytes(r_bytes).unwrap();
+        get_route(route, None)
+    } else {
+        None
+    };
+
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(transaction_param.client_adapter_ptr);
+        Arc::from_raw(transaction_param.client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let mut client = client_adapter.core.client.clone();
+
+    let timeout_ms: Option<u32> = if transaction_param.timeout > 0 {
+        Some(transaction_param.timeout)
+    } else {
+        None
+    };
+
+    client_adapter.execute_command(transaction_param.channel, async move {
+        client
+            .send_transaction(
+                &pipeline,
+                route,
+                timeout_ms,
+                transaction_param.raise_on_error,
+            )
             .await
     })
 }

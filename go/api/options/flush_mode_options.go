@@ -19,7 +19,8 @@ type FlushClusterOptions struct {
 	*FlushMode
 	// Specifies the routing configuration for the command.
 	// The client will route the command to the nodes defined by Route.
-	// The command will be routed to all primary nodes, unless Route is provided.
+	// In non transaction, the command will be routed to all primary nodes, unless Route is provided.
+	// When executed within a transaction, the command is routed to a single node.
 	*RouteOption
 }
 
