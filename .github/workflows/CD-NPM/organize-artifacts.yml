@@ -1,0 +1,258 @@
+name: Organize Artifacts for Publishing
+
+on:
+    workflow_call:
+        inputs:
+            release_version:
+                required: true
+                type: string
+                description: "The release version to build"
+            npm_tag:
+                required: true
+                type: string
+                description: "The npm tag (latest or next)"
+        outputs:
+            organized_artifacts:
+                description: "Path to the organized artifacts"
+                value: ${{ jobs.organize-artifacts.outputs.organized_artifacts }}
+
+jobs:
+    organize-artifacts:
+        name: Organize artifacts for publishing
+        runs-on: ubuntu-latest
+        outputs:
+            organized_artifacts: ${{ steps.upload-artifacts.outputs.artifact_name }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Set versioning environment variables
+              shell: bash
+              run: |
+                  echo "RELEASE_VERSION=${{ inputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ inputs.npm_tag }}" >> $GITHUB_ENV
+
+            - name: Install napi-rs CLI
+              shell: bash
+              run: |
+                  npm install -g @napi-rs/cli
+
+            - name: Download all binary artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: node-binaries-*
+                  path: ./artifacts/binaries
+
+            - name: Download native JS files
+              uses: actions/download-artifact@v4
+              with:
+                  name: native-js-files
+                  path: ./artifacts/native-js
+
+            - name: List and verify downloaded artifacts
+              shell: bash
+              run: |
+                  echo "## Artifact Verification" >> $GITHUB_STEP_SUMMARY
+                  echo "Verifying all required artifacts were downloaded successfully" >> $GITHUB_STEP_SUMMARY
+
+                  # Check binary artifacts
+                  echo "Binary artifacts:"
+                  binary_count=$(find ./artifacts/binaries -type f -name "*.node" | sort | tee >(cat) | wc -l)
+                  echo "Found ${binary_count} binary artifacts" >> $GITHUB_STEP_SUMMARY
+
+                  # Check JavaScript files
+                  echo "Native JS files:"
+                  js_files=$(find ./artifacts/native-js -type f | sort | tee >(cat))
+                  js_count=$(echo "$js_files" | wc -l)
+
+                  echo "Found ${js_count} JavaScript binding files" >> $GITHUB_STEP_SUMMARY
+
+                  # Verify JS files specifically
+                  if [[ -f "./artifacts/native-js/native.js" && -f "./artifacts/native-js/native.d.ts" ]]; then
+                    echo "✅ Required JavaScript bindings verified:" >> $GITHUB_STEP_SUMMARY
+                    ls -la ./artifacts/native-js/native.js ./artifacts/native-js/native.d.ts >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "❌ ERROR: Missing required JavaScript binding files!" >> $GITHUB_STEP_SUMMARY
+                    echo "Content of ./artifacts/native-js:" >> $GITHUB_STEP_SUMMARY
+                    ls -la ./artifacts/native-js/ >> $GITHUB_STEP_SUMMARY
+                    echo "This will cause issues later in the workflow. Failing now." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+            # Prepare binary artifacts for organization
+            - name: Prepare directory structure for artifacts
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Preparing Binary Artifacts" >> $GITHUB_STEP_SUMMARY
+                  echo "Creating directory structure and preparing for artifact organization" >> $GITHUB_STEP_SUMMARY
+
+                  # Create artifacts directory for binaries
+                  mkdir -p ./organized-artifacts
+
+                  # Extract the .node files from artifacts/binaries into organized-artifacts/
+                  find ./artifacts/binaries -type f -name "*.node" -exec cp -v {} ./organized-artifacts/ \;
+
+                  # Document findings
+                  num_binaries=$(find ./organized-artifacts -type f -name "*.node" | wc -l)
+                  echo "- Located and copied ${num_binaries} native binary files for packaging" >> $GITHUB_STEP_SUMMARY
+
+            # Run NAPI-RS tool to organize binaries by platform
+            - name: Organize binaries with napi-rs
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Organizing Artifacts by Platform" >> $GITHUB_STEP_SUMMARY
+                  echo "Using NAPI-RS CLI to organize native modules into platform-specific directories" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy the .node files to platform-specific directories
+                  # The napi artifacts command will organize them under npm/ directory
+                  napi artifacts --dir ./organized-artifacts --npm-dir ./node/npm
+
+                  # Document results
+                  num_dirs=$(find ./node/npm -maxdepth 1 -type d | grep -v "^./node/npm$" | wc -l)
+                  echo "- Created ${num_dirs} platform-specific package directories" >> $GITHUB_STEP_SUMMARY
+
+            # Add JavaScript binding files to platform packages
+            - name: Add native JavaScript files to packages
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Adding JavaScript Binding Files" >> $GITHUB_STEP_SUMMARY
+                  echo "Adding native.js and native.d.ts to each platform package" >> $GITHUB_STEP_SUMMARY
+
+                  # Verify source files exist before attempting to copy
+                  if [[ ! -f "./artifacts/native-js/native.js" ]]; then
+                    echo "❌ ERROR: JavaScript binding file native.js not found!" >> $GITHUB_STEP_SUMMARY
+                    ls -la ./artifacts/native-js/ || echo "Directory not found or empty"
+                    exit 1
+                  fi
+
+                  if [[ ! -f "./artifacts/native-js/native.d.ts" ]]; then
+                    echo "❌ ERROR: TypeScript definitions file native.d.ts not found!" >> $GITHUB_STEP_SUMMARY
+                    ls -la ./artifacts/native-js/ || echo "Directory not found or empty"
+                    exit 1
+                  fi
+
+                  # Copy native.js and native.d.ts to each platform package directory
+                  copied_count=0
+                  failed_count=0
+                  echo "| Package | JS File | TS Definitions | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  for pkg_dir in ./node/npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "./node/npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Get package name for reporting
+                    pkg_name=$(basename "${pkg_dir}")
+                    status="✅ Success"
+                    js_status="✅"
+                    ts_status="✅"
+                    
+                    # Copy native.js with error handling
+                    if ! cp -v ./artifacts/native-js/native.js "${pkg_dir}" 2>/dev/null; then
+                      js_status="❌"
+                      status="❌ Failed"
+                      ((failed_count++))
+                    fi
+                    
+                    # Copy native.d.ts with error handling
+                    if ! cp -v ./artifacts/native-js/native.d.ts "${pkg_dir}" 2>/dev/null; then
+                      ts_status="❌"
+                      status="❌ Failed"
+                      ((failed_count++))
+                    else
+                      # Only increment success count if both files were copied
+                      if [[ "$js_status" == "✅" ]]; then
+                        ((copied_count++))
+                      fi
+                    fi
+                    
+                    echo "| ${pkg_name} | ${js_status} | ${ts_status} | ${status} |" >> $GITHUB_STEP_SUMMARY
+                  done
+
+                  # Report overall status
+                  if [[ $failed_count -gt 0 ]]; then
+                    echo "❌ WARNING: Failed to add JS bindings to ${failed_count} packages!" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  else
+                    echo "✅ Successfully added JS bindings to ${copied_count} platform packages" >> $GITHUB_STEP_SUMMARY
+                  fi
+
+            # Verify package integrity with checksums
+            - name: Generate and verify package checksums
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Verifying Package Integrity" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | JS Files | TypeScript Definitions | Binary | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Track any missing files
+                  missing_files=false
+                  missing_count=0
+
+                  # Generate and verify checksums
+                  for pkg_dir in ./node/npm/*/; do
+                    # Skip the glide directory
+                    if [[ "${pkg_dir}" == "./node/npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    pkg_name=$(basename "${pkg_dir}")
+                    
+                    # Check for required files
+                    has_js=$(test -f "${pkg_dir}/native.js" && echo "✅" || echo "❌")
+                    has_dts=$(test -f "${pkg_dir}/native.d.ts" && echo "✅" || echo "❌")
+                    has_node=$(find "${pkg_dir}" -name "*.node" | grep -q . && echo "✅" || echo "❌")
+                    
+                    # Determine overall status
+                    if [[ "$has_js" == "✅" && "$has_dts" == "✅" && "$has_node" == "✅" ]]; then
+                      status="✅ Complete"
+                    else
+                      status="❌ Missing files"
+                      missing_files=true
+                      ((missing_count++))
+                    fi
+                    
+                    echo "| ${pkg_name} | ${has_js} | ${has_dts} | ${has_node} | ${status} |" >> $GITHUB_STEP_SUMMARY
+                    
+                    # Generate checksums for verification (with error handling)
+                    echo "Checksums for ${pkg_name}:" 
+                    if ! sha256sum "${pkg_dir}"/*.js "${pkg_dir}"/*.d.ts "${pkg_dir}"/*.node 2>/dev/null; then
+                      echo "⚠️ Warning: Could not generate complete checksums for ${pkg_name}" >> $GITHUB_STEP_SUMMARY
+                      # List files that were found
+                      echo "Files found in ${pkg_name}:" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                      ls -la "${pkg_dir}" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                    fi
+                  done
+
+                  # Add summary section with results
+                  echo "## Package Verification Summary" >> $GITHUB_STEP_SUMMARY
+                  if [[ "$missing_files" == "true" ]]; then
+                    echo "❌ ${missing_count} packages are missing required files!" >> $GITHUB_STEP_SUMMARY
+                    echo "This will cause issues when publishing. Failing the workflow." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  else 
+                    echo "✅ All package files verified successfully" >> $GITHUB_STEP_SUMMARY
+                  fi
+
+                  # Check the final organized files and structure
+                  echo "## Final Package Structure" >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+                  find ./node/npm -type f | sort >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+
+            - name: Upload organized artifacts for reference
+              id: upload-artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: organized-node-artifacts
+                  path: ./node/npm

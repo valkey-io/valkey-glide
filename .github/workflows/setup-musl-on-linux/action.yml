@@ -1,21 +1,20 @@
 name: Setup musl on Linux
+description: "Sets up musl environment on Linux runners with special handling for ARM64, including repository cleanup and NPM configuration"
 
 inputs:
     npm-scope:
         description: "npm scope"
         required: true
-        type: string
+        # type: string
     npm-auth-token:
         description: "npm auth token"
         required: true
-        type: string
+        # type: string
     arch:
         description: "architecture"
         required: false
-        type: string
-        options:
-            - "arm64"
-            - "x64"
+        # options: ["x64", "arm64"]
+        # type: string
         default: "arm64"
 
 runs:
@@ -25,17 +24,13 @@ runs:
           shell: sh
           run: |
               apk update
-              apk add bash git sed python3
-
-        - name: Skip all steps if not on ARM64
-          shell: bash
-          if: ${{ inputs.arch != 'arm64' }}
-          run: exit 0
+              apk add bash git sed python3 redis
 
         # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and
         # here we just making sure we getting the clean repo
         - name: Clean repository for musl on ARM64
           shell: bash
+          if: ${{ inputs.arch == 'arm64' }}
           run: |
               git config --global --add safe.directory $GITHUB_WORKSPACE
               git fetch origin ${{ github.sha }}
@@ -43,12 +38,8 @@ runs:
               git clean -xdf
               git reset --hard
 
-        - name: Set up access for musl on ARM
-          shell: bash
-          run: |
-              chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE
-
         - name: Setup node
+          if: ${{ inputs.arch == 'arm64' }}
           shell: bash
           working-directory: ./node
           env:
