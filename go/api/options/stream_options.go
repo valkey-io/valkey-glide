@@ -423,6 +423,8 @@ func (xiso *XInfoStreamOptions) ToArgs() ([]string, error) {
 type StreamBoundary string
 
 // Create a new stream boundary.
+//
+// Note: Exclusive ranges (`isInclusive=false`) have been added since Valkey 6.2.0.
 func NewStreamBoundary(streamId string, isInclusive bool) StreamBoundary {
 	if !isInclusive {
 		return StreamBoundary("(" + streamId)

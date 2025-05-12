@@ -8345,37 +8345,40 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId3)
 
-		// get the newest stream entry
-		xrangeResult, err = client.XRangeWithOptions(
-			key,
-			options.NewStreamBoundary(streamId2.Value(), false),
-			positiveInfinity,
-			*options.NewXRangeOptions().SetCount(1),
-		)
-		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.XRangeResponse{
-				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
-			},
-			xrangeResult,
-		)
+		// Exclusive ranges are added in 6.2.0
+		if suite.serverVersion >= "6.2.0" {
+			// get the newest stream entry
+			xrangeResult, err = client.XRangeWithOptions(
+				key,
+				options.NewStreamBoundary(streamId2.Value(), false),
+				positiveInfinity,
+				*options.NewXRangeOptions().SetCount(1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(
+				suite.T(),
+				[]api.XRangeResponse{
+					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				},
+				xrangeResult,
+			)
 
-		// doing the same with rev search
-		xrevrangeResult, err = client.XRevRangeWithOptions(
-			key,
-			positiveInfinity,
-			options.NewStreamBoundary(streamId2.Value(), false),
-			*options.NewXRangeOptions().SetCount(1),
-		)
-		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.XRangeResponse{
-				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
-			},
-			xrevrangeResult,
-		)
+			// doing the same with rev search
+			xrevrangeResult, err = client.XRevRangeWithOptions(
+				key,
+				positiveInfinity,
+				options.NewStreamBoundary(streamId2.Value(), false),
+				*options.NewXRangeOptions().SetCount(1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(
+				suite.T(),
+				[]api.XRangeResponse{
+					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				},
+				xrevrangeResult,
+			)
+		}
 
 		// both xrange and xrevrange return nil with a zero/negative count
 		xrangeResult, err = client.XRangeWithOptions(
@@ -8456,7 +8459,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// xrange and xrevrange when range bound is not a valid id
 		_, err = client.XRange(
 			key,
-			options.NewStreamBoundary("invalid-id", false),
+			options.NewStreamBoundary("invalid-id", true),
 			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
@@ -8464,7 +8467,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 
 		_, err = client.XRevRange(
 			key,
-			options.NewStreamBoundary("invalid-id", false),
+			options.NewStreamBoundary("invalid-id", true),
 			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
