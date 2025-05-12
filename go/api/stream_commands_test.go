@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -1451,8 +1454,8 @@ func ExampleGlideClient_XRange() {
 	client.XAdd(key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRange(key,
-		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1469,8 +1472,8 @@ func ExampleGlideClusterClient_XRange() {
 	client.XAdd(key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRange(key,
-		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -3,6 +3,8 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -25,9 +27,9 @@ type GeoSpatialCommands interface {
 
 	GeoPos(key string, members []string) ([][]float64, error)
 
-	GeoDist(key string, member1 string, member2 string) (Result[float64], error)
+	GeoDist(key string, member1 string, member2 string) (models.Result[float64], error)
 
-	GeoDistWithUnit(key string, member1 string, member2 string, unit options.GeoUnit) (Result[float64], error)
+	GeoDistWithUnit(key string, member1 string, member2 string, unit constants.GeoUnit) (models.Result[float64], error)
 
 	GeoSearch(
 		key string,

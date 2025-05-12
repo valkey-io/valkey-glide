@@ -4,14 +4,16 @@ package glidejson
 import (
 	"fmt"
 
+	"github.com/valkey-io/valkey-glide/go/api/config"
+
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
 // getExampleGlideClient returns a GlideClient instance for testing purposes.
 // This function is used in the examples of the GlideClient methods.
 func getExampleGlideClient() *api.GlideClient {
-	config := api.NewGlideClientConfiguration().
-		WithAddress(new(api.NodeAddress)) // use default address
+	config := config.NewGlideClientConfiguration().
+		WithAddress(new(config.NodeAddress)) // use default address
 
 	client, err := api.NewGlideClient(config)
 	if err != nil {
@@ -27,8 +29,8 @@ func getExampleGlideClient() *api.GlideClient {
 }
 
 func getExampleGlideClusterClient() *api.GlideClusterClient {
-	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7001}).
+	config := config.NewGlideClusterClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: "localhost", Port: 7001}).
 		WithRequestTimeout(5000)
 
 	client, err := api.NewGlideClusterClient(config)

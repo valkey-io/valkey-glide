@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -106,7 +109,7 @@ func ExampleGlideClient_Info() {
 func ExampleGlideClient_InfoWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	opts := options.InfoOptions{Sections: []constants.Section{constants.Server}}
 	response, err := client.InfoWithOptions(opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -230,7 +233,7 @@ func ExampleGlideClient_ConfigResetStat() {
 
 func ExampleGlideClient_ConfigRewrite() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	opts := options.InfoOptions{Sections: []constants.Section{constants.Server}}
 	var resultRewrite string
 	response, err := client.InfoWithOptions(opts)
 	if err != nil {

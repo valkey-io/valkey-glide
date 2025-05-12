@@ -22,11 +22,11 @@ var (
 	clusterClients      []*GlideClusterClient
 	clusterOnce         sync.Once
 	clusterSubOnce      sync.Once
-	clusterAddresses    []NodeAddress
+	clusterAddresses    []config.NodeAddress
 	standaloneClients   []*GlideClient
 	standaloneOnce      sync.Once
 	standaloneSubOnce   sync.Once
-	standaloneAddresses []NodeAddress
+	standaloneAddresses []config.NodeAddress
 	initOnce            sync.Once
 )
 
@@ -40,12 +40,12 @@ func initFlags() {
 	})
 }
 
-func getStandaloneAddresses() []NodeAddress {
+func getStandaloneAddresses() []config.NodeAddress {
 	initFlags()
 	return standaloneAddresses
 }
 
-func getClusterAddresses() []NodeAddress {
+func getClusterAddresses() []config.NodeAddress {
 	initFlags()
 	return clusterAddresses
 }
@@ -56,7 +56,7 @@ func getExampleGlideClient() *GlideClient {
 	standaloneOnce.Do(func() {
 		initFlags()
 	})
-	config := NewGlideClientConfiguration().
+	config := config.NewGlideClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
 	client, err := NewGlideClient(config)
@@ -80,7 +80,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	clusterOnce.Do(func() {
 		initFlags()
 	})
-	cConfig := NewGlideClusterClientConfiguration().
+	cConfig := config.NewGlideClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
 		WithRequestTimeout(5000)
 
@@ -104,14 +104,14 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	return thisClient
 }
 
-func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPattern string) *GlideClient {
+func getExampleGlideClientWithSubscription(mode config.PubSubChannelMode, channelOrPattern string) *GlideClient {
 	standaloneSubOnce.Do(func() {
 		initFlags()
 	})
-	sConfig := NewStandaloneSubscriptionConfig().
+	sConfig := config.NewStandaloneSubscriptionConfig().
 		WithSubscription(mode, channelOrPattern)
 
-	config := NewGlideClientConfiguration().
+	config := config.NewGlideClientConfiguration().
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
@@ -132,14 +132,17 @@ func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPatt
 	return thisClient
 }
 
-func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *GlideClusterClient {
+func getExampleGlideClusterClientWithSubscription(
+	mode config.PubSubClusterChannelMode,
+	channelOrPattern string,
+) *GlideClusterClient {
 	clusterSubOnce.Do(func() {
 		initFlags()
 	})
-	cConfig := NewClusterSubscriptionConfig().
+	cConfig := config.NewClusterSubscriptionConfig().
 		WithSubscription(mode, channelOrPattern)
 
-	ccConfig := NewGlideClusterClientConfiguration().
+	ccConfig := config.NewGlideClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
@@ -163,11 +166,11 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 	return thisClient
 }
 
-func parseHosts(addresses string) []NodeAddress {
-	var result []NodeAddress
+func parseHosts(addresses string) []config.NodeAddress {
+	var result []config.NodeAddress
 
 	if addresses == "" {
-		result = append(result, *new(NodeAddress))
+		result = append(result, *new(config.NodeAddress))
 	} else {
 		addressList := strings.Split(addresses, ",")
 		for _, address := range addressList {
@@ -178,7 +181,7 @@ func parseHosts(addresses string) []NodeAddress {
 				continue
 			}
 
-			result = append(result, NodeAddress{Host: parts[0], Port: port})
+			result = append(result, config.NodeAddress{Host: parts[0], Port: port})
 		}
 	}
 	return result

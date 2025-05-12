@@ -1,11 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
 	"errors"
 
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/internal/protobuf"
 )
 
 const (
@@ -186,7 +186,7 @@ func NewGlideClientConfiguration() *GlideClientConfiguration {
 	return &GlideClientConfiguration{}
 }
 
-func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+func (config *GlideClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
 		return nil, err
@@ -299,6 +299,17 @@ func (config *GlideClientConfiguration) WithSubscriptionConfig(
 	return config
 }
 
+func (config *GlideClientConfiguration) HasSubscription() bool {
+	return config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0
+}
+
+func (config *GlideClientConfiguration) GetSubscription() *StandaloneSubscriptionConfig {
+	if config.HasSubscription() {
+		return config.subscriptionConfig
+	}
+	return nil
+}
+
 // GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
 // Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
 // used.
@@ -317,7 +328,7 @@ func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
 	}
 }
 
-func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+func (config *GlideClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
 		return nil, err
@@ -374,7 +385,7 @@ func (config *GlideClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *
 }
 
 // WithRequestTimeout sets the duration in milliseconds that the client should wait for a request to complete. This duration
-// encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
+// encompasses sending the request, awaiting a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
 func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout int) *GlideClusterClientConfiguration {
@@ -409,6 +420,17 @@ func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
 ) *GlideClusterClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
+}
+
+func (config *GlideClusterClientConfiguration) HasSubscription() bool {
+	return config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0
+}
+
+func (config *GlideClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
+	if config.HasSubscription() {
+		return config.subscriptionConfig
+	}
+	return nil
 }
 
 // Advanced configuration settings class for creating a client. Shared settings for standalone and

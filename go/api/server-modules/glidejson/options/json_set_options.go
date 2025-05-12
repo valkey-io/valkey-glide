@@ -2,12 +2,12 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 )
 
 // This struct represents the optional arguments for the JSON.SET command.
 type JsonSetOptions struct {
-	ConditionalSet options.ConditionalSet
+	ConditionalSet constants.ConditionalSet
 }
 
 func NewJsonSetOptionsBuilder() *JsonSetOptions {
@@ -15,7 +15,7 @@ func NewJsonSetOptionsBuilder() *JsonSetOptions {
 }
 
 // Sets the value only if the given condition is met (within the key or path).
-func (jsonSetOptions *JsonSetOptions) SetConditionalSet(conditionalSet options.ConditionalSet) *JsonSetOptions {
+func (jsonSetOptions *JsonSetOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *JsonSetOptions {
 	jsonSetOptions.ConditionalSet = conditionalSet
 	return jsonSetOptions
 }

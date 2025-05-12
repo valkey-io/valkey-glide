@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Connection Management" group of commands for cluster client.
 //
@@ -14,19 +17,19 @@ type ConnectionManagementClusterCommands interface {
 
 	PingWithOptions(pingOptions options.ClusterPingOptions) (string, error)
 
-	Echo(message string) (Result[string], error)
+	Echo(message string) (models.Result[string], error)
 
-	EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error)
+	EchoWithOptions(echoOptions options.ClusterEchoOptions) (models.ClusterValue[string], error)
 
-	ClientId() (ClusterValue[int64], error)
+	ClientId() (models.ClusterValue[int64], error)
 
-	ClientIdWithOptions(routeOptions options.RouteOption) (ClusterValue[int64], error)
+	ClientIdWithOptions(routeOptions options.RouteOption) (models.ClusterValue[int64], error)
 
-	ClientSetName(connectionName string) (ClusterValue[string], error)
+	ClientSetName(connectionName string) (models.ClusterValue[string], error)
 
-	ClientSetNameWithOptions(connectionName string, routeOptions options.RouteOption) (ClusterValue[string], error)
+	ClientSetNameWithOptions(connectionName string, routeOptions options.RouteOption) (models.ClusterValue[string], error)
 
-	ClientGetName() (ClusterValue[string], error)
+	ClientGetName() (models.ClusterValue[string], error)
 
-	ClientGetNameWithOptions(routeOptions options.RouteOption) (ClusterValue[string], error)
+	ClientGetNameWithOptions(routeOptions options.RouteOption) (models.ClusterValue[string], error)
 }

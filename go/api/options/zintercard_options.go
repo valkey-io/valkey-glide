@@ -2,7 +2,8 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // This struct represents the optional arguments for the ZINTER command.
@@ -24,7 +25,7 @@ func (options *ZInterCardOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if options.limit != -1 {
-		args = append(args, LimitKeyword, utils.IntToString(options.limit))
+		args = append(args, constants.LimitKeyword, utils.IntToString(options.limit))
 	}
 
 	return args, nil

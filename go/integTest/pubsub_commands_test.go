@@ -365,7 +365,11 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				{Channel: "cluster.shard.events.local", Mode: ShardedMode},
 				{Channel: "cluster.shard.sports.*", Mode: PatternMode},
 			},
-			queryChannels: []string{"cluster.shard.news.sports", "cluster.shard.events.local", "cluster.shard.sports.football"},
+			queryChannels: []string{
+				"cluster.shard.news.sports",
+				"cluster.shard.events.local",
+				"cluster.shard.sports.football",
+			},
 			expectedCounts: map[string]int64{
 				"cluster.shard.news.sports":     0, // Pattern subscribers don't count for exact channel queries
 				"cluster.shard.events.local":    1,

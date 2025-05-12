@@ -4,13 +4,15 @@ package api
 
 import (
 	"fmt"
+
+	config2 "github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 func ExampleNewGlideClient() {
-	config := NewGlideClientConfiguration().
+	config := config2.NewGlideClientConfiguration().
 		WithAddress(&getStandaloneAddresses()[0]).
 		WithUseTLS(false).
-		WithReconnectStrategy(NewBackoffStrategy(5, 1000, 2)).
+		WithReconnectStrategy(config2.NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
 	client, err := NewGlideClient(config)
 	if err != nil {
@@ -23,7 +25,7 @@ func ExampleNewGlideClient() {
 }
 
 func ExampleNewGlideClusterClient() {
-	config := NewGlideClusterClientConfiguration().
+	config := config2.NewGlideClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5000).
 		WithUseTLS(false)

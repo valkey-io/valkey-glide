@@ -4,6 +4,7 @@ package api
 
 import (
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -13,9 +14,9 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericClusterCommands interface {
-	CustomCommand(args []string) (ClusterValue[interface{}], error)
+	CustomCommand(args []string) (models.ClusterValue[any], error)
 
-	CustomCommandWithRoute(args []string, route config.Route) (ClusterValue[interface{}], error)
+	CustomCommandWithRoute(args []string, route config.Route) (models.ClusterValue[any], error)
 
 	Scan(cursor options.ClusterScanCursor) (options.ClusterScanCursor, []string, error)
 
@@ -24,7 +25,7 @@ type GenericClusterCommands interface {
 		opts options.ClusterScanOptions,
 	) (options.ClusterScanCursor, []string, error)
 
-	RandomKey() (Result[string], error)
+	RandomKey() (models.Result[string], error)
 
-	RandomKeyWithRoute(opts options.RouteOption) (Result[string], error)
+	RandomKeyWithRoute(opts options.RouteOption) (models.Result[string], error)
 }

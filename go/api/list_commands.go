@@ -3,6 +3,8 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -14,13 +16,13 @@ import (
 type ListCommands interface {
 	LPush(key string, elements []string) (int64, error)
 
-	LPop(key string) (Result[string], error)
+	LPop(key string) (models.Result[string], error)
 
 	LPopCount(key string, count int64) ([]string, error)
 
-	LPos(key string, element string) (Result[int64], error)
+	LPos(key string, element string) (models.Result[int64], error)
 
-	LPosWithOptions(key string, element string, options options.LPosOptions) (Result[int64], error)
+	LPosWithOptions(key string, element string, options options.LPosOptions) (models.Result[int64], error)
 
 	LPosCount(key string, element string, count int64) ([]int64, error)
 
@@ -30,7 +32,7 @@ type ListCommands interface {
 
 	LRange(key string, start int64, end int64) ([]string, error)
 
-	LIndex(key string, index int64) (Result[string], error)
+	LIndex(key string, index int64) (models.Result[string], error)
 
 	LTrim(key string, start int64, end int64) (string, error)
 
@@ -38,11 +40,11 @@ type ListCommands interface {
 
 	LRem(key string, count int64, element string) (int64, error)
 
-	RPop(key string) (Result[string], error)
+	RPop(key string) (models.Result[string], error)
 
 	RPopCount(key string, count int64) ([]string, error)
 
-	LInsert(key string, insertPosition options.InsertPosition, pivot string, element string) (int64, error)
+	LInsert(key string, insertPosition constants.InsertPosition, pivot string, element string) (int64, error)
 
 	BLPop(keys []string, timeoutSecs float64) ([]string, error)
 
@@ -52,15 +54,15 @@ type ListCommands interface {
 
 	LPushX(key string, elements []string) (int64, error)
 
-	LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error)
+	LMPop(keys []string, listDirection constants.ListDirection) (map[string][]string, error)
 
-	LMPopCount(keys []string, listDirection options.ListDirection, count int64) (map[string][]string, error)
+	LMPopCount(keys []string, listDirection constants.ListDirection, count int64) (map[string][]string, error)
 
-	BLMPop(keys []string, listDirection options.ListDirection, timeoutSecs float64) (map[string][]string, error)
+	BLMPop(keys []string, listDirection constants.ListDirection, timeoutSecs float64) (map[string][]string, error)
 
 	BLMPopCount(
 		keys []string,
-		listDirection options.ListDirection,
+		listDirection constants.ListDirection,
 		count int64,
 		timeoutSecs float64,
 	) (map[string][]string, error)
@@ -70,15 +72,15 @@ type ListCommands interface {
 	LMove(
 		source string,
 		destination string,
-		whereFrom options.ListDirection,
-		whereTo options.ListDirection,
-	) (Result[string], error)
+		whereFrom constants.ListDirection,
+		whereTo constants.ListDirection,
+	) (models.Result[string], error)
 
 	BLMove(
 		source string,
 		destination string,
-		whereFrom options.ListDirection,
-		whereTo options.ListDirection,
+		whereFrom constants.ListDirection,
+		whereTo constants.ListDirection,
 		timeoutSecs float64,
-	) (Result[string], error)
+	) (models.Result[string], error)
 }

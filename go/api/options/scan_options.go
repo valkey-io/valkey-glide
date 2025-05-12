@@ -2,9 +2,11 @@
 
 package options
 
+import "github.com/valkey-io/valkey-glide/go/api/constants"
+
 type ScanOptions struct {
 	BaseScanOptions
-	Type ObjectType
+	Type constants.ObjectType
 }
 
 func NewScanOptions() *ScanOptions {
@@ -30,7 +32,7 @@ func (scanOptions *ScanOptions) SetCount(count int64) *ScanOptions {
 // Set TYPE(string, list, set, zset, hash and stream)sets the type of the SCAN command.
 // You can use the Type option to ask SCAN to only return objects that match a given type,
 // allowing you to iterate through the database looking for keys of a specific type.
-func (scanOptions *ScanOptions) SetType(typeOpts ObjectType) *ScanOptions {
+func (scanOptions *ScanOptions) SetType(typeOpts constants.ObjectType) *ScanOptions {
 	scanOptions.Type = typeOpts
 	return scanOptions
 }
@@ -39,7 +41,7 @@ func (opts *ScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	baseArgs, err := opts.BaseScanOptions.ToArgs()
 	if opts.Type != "" {
-		args = append(args, TypeKeyword, string(opts.Type))
+		args = append(args, constants.TypeKeyword, string(opts.Type))
 	}
 	args = append(args, baseArgs...)
 	return args, err

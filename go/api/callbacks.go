@@ -10,7 +10,8 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/internal/errors"
 )
 
 // Registry to track clients by their pointer address
@@ -73,14 +74,14 @@ func pubSubCallback(
 
 	msg := string(C.GoBytes(message, message_len))
 	cha := string(C.GoBytes(channel, channel_len))
-	pat := CreateNilStringResult()
+	pat := models.CreateNilStringResult()
 	if pattern_len > 0 && pattern != nil {
-		pat = CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
+		pat = models.CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
 	}
 
 	go func() {
 		// Process different types of push messages
-		message := NewPubSubMessageWithPattern(msg, cha, pat)
+		message := models.NewPubSubMessageWithPattern(msg, cha, pat)
 
 		if clientPtr != nil {
 			// Look up the client in our registry using the pointer address

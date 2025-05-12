@@ -4,8 +4,9 @@ package glidejson
 import (
 	"fmt"
 
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+
 	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/options"
 	jsonOptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 )
 
@@ -38,7 +39,7 @@ func Example_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfDoesNotExist),
 	)
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
@@ -55,7 +56,7 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 		"key",
 		"$",
 		"{\"a\": 1.0, \"b\": 2}",
-		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*jsonOptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfDoesNotExist),
 	)
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)

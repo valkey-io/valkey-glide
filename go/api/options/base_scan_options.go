@@ -4,6 +4,8 @@ package options
 
 import (
 	"strconv"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 )
 
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.
@@ -43,11 +45,11 @@ func (opts *BaseScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.match != "" {
-		args = append(args, MatchKeyword, opts.match)
+		args = append(args, constants.MatchKeyword, opts.match)
 	}
 
 	if opts.count != 0 {
-		args = append(args, CountKeyword, strconv.FormatInt(opts.count, 10))
+		args = append(args, constants.CountKeyword, strconv.FormatInt(opts.count, 10))
 	}
 
 	return args, err

@@ -3,7 +3,8 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // Represents a geographic position defined by longitude and latitude
@@ -27,7 +28,7 @@ func MapGeoDataToArray(memberGeoMap map[string]GeospatialData) []string {
 
 // Optional arguments to `GeoAdd` in [GeoSpatialCommands]
 type GeoAddOptions struct {
-	conditionalChange ConditionalSet
+	conditionalChange constants.ConditionalSet
 	changed           bool
 }
 
@@ -36,7 +37,7 @@ func NewGeoAddOptions() *GeoAddOptions {
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options *GeoAddOptions) SetConditionalChange(conditionalChange ConditionalSet) *GeoAddOptions {
+func (options *GeoAddOptions) SetConditionalChange(conditionalChange constants.ConditionalSet) *GeoAddOptions {
 	options.conditionalChange = conditionalChange
 	return options
 }
@@ -52,12 +53,12 @@ func (opts *GeoAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
-	if opts.conditionalChange == OnlyIfExists || opts.conditionalChange == OnlyIfDoesNotExist {
+	if opts.conditionalChange == constants.OnlyIfExists || opts.conditionalChange == constants.OnlyIfDoesNotExist {
 		args = append(args, string(opts.conditionalChange))
 	}
 
 	if opts.changed {
-		args = append(args, ChangedKeyword)
+		args = append(args, constants.ChangedKeyword)
 	}
 
 	return args, err

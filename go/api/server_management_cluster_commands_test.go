@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -32,7 +35,7 @@ func ExampleGlideClusterClient_InfoWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Cluster}},
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Cluster}},
 	}
 
 	response, err := client.InfoWithOptions(opts)
@@ -302,7 +305,7 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	var resultRewrite string
 	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
 	}
 	res, err := client.InfoWithOptions(opts)
 	if err != nil {
@@ -337,7 +340,7 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 
 func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	sections := []options.Section{options.Server}
+	sections := []constants.Section{constants.Server}
 
 	// info with option or with multiple options without route
 	var runResultNilRoute string

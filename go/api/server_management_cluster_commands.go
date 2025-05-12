@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // ServerManagementCommands supports commands for the "Server Management" group for a cluster client.
 //
@@ -12,9 +15,9 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 type ServerManagementClusterCommands interface {
 	Info() (map[string]string, error)
 
-	InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error)
+	InfoWithOptions(options options.ClusterInfoOptions) (models.ClusterValue[string], error)
 
-	TimeWithOptions(routeOption options.RouteOption) (ClusterValue[[]string], error)
+	TimeWithOptions(routeOption options.RouteOption) (models.ClusterValue[[]string], error)
 
 	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
 
@@ -28,11 +31,11 @@ type ServerManagementClusterCommands interface {
 
 	Lolwut() (string, error)
 
-	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error)
+	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error)
 
-	LastSave() (ClusterValue[int64], error)
+	LastSave() (models.ClusterValue[int64], error)
 
-	LastSaveWithOptions(routeOption options.RouteOption) (ClusterValue[int64], error)
+	LastSaveWithOptions(routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
 	ConfigResetStat() (string, error)
 
@@ -44,7 +47,7 @@ type ServerManagementClusterCommands interface {
 
 	ConfigGet(parameters []string) (map[string]string, error)
 
-	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (ClusterValue[map[string]string], error)
+	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (models.ClusterValue[map[string]string], error)
 
 	ConfigRewrite() (string, error)
 

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -12,7 +13,7 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericCommands interface {
-	CustomCommand(args []string) (interface{}, error)
+	CustomCommand(args []string) (any, error)
 
 	Move(key string, dbIndex int64) (bool, error)
 
@@ -21,5 +22,5 @@ type GenericCommands interface {
 	ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string,
 		error)
 
-	RandomKey() (Result[string], error)
+	RandomKey() (models.Result[string], error)
 }

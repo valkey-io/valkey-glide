@@ -1,12 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package models
 
 // A value to return alongside with error in case if command failed
 var (
-	defaultFloatResponse  float64
-	defaultBoolResponse   bool
-	defaultIntResponse    int64
+	DefaultFloatResponse  float64
+	DefaultBoolResponse   bool
+	DefaultIntResponse    int64
 	DefaultStringResponse string
 )
 
@@ -168,32 +168,32 @@ func (value ClusterValue[T]) IsEmpty() bool {
 	return value.valueType == NoValue
 }
 
-func createClusterValue[T any](data any) ClusterValue[T] {
+func CreateClusterValue[T any](data any) ClusterValue[T] {
 	switch any(data).(type) {
-	case map[string]interface{}:
-		return createClusterMultiValue(data.(map[string]T))
+	case map[string]any:
+		return CreateClusterMultiValue(data.(map[string]T))
 	case nil:
-		return createEmptyClusterValue[T]()
+		return CreateEmptyClusterValue[T]()
 	default:
-		return createClusterSingleValue(data.(T))
+		return CreateClusterSingleValue(data.(T))
 	}
 }
 
-func createClusterSingleValue[T any](data T) ClusterValue[T] {
+func CreateClusterSingleValue[T any](data T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType:   SingleValue,
 		singleValue: data,
 	}
 }
 
-func createClusterMultiValue[T any](data map[string]T) ClusterValue[T] {
+func CreateClusterMultiValue[T any](data map[string]T) ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: MultiValue,
 		mutiValue: data,
 	}
 }
 
-func createEmptyClusterValue[T any]() ClusterValue[T] {
+func CreateEmptyClusterValue[T any]() ClusterValue[T] {
 	return ClusterValue[T]{
 		valueType: NoValue,
 	}

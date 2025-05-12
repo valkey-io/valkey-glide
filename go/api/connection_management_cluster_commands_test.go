@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -60,7 +61,7 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.singleValue)
+	fmt.Println(result.SingleValue())
 
 	// Output: Hello World
 }

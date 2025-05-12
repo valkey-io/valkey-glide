@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/errors"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	config := api.NewGlideClientConfiguration().
+	config := config.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
 	client, err := api.NewGlideClient(config)
 
@@ -25,7 +25,7 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect() {
-	config := api.NewGlideClusterClientConfiguration()
+	config := config.NewGlideClusterClientConfiguration()
 	for _, host := range suite.clusterHosts {
 		config.WithAddress(&host)
 	}
@@ -39,7 +39,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	config := api.NewGlideClusterClientConfiguration().
+	config := config.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
 	client, err := api.NewGlideClusterClient(config)
@@ -51,8 +51,8 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 }
 
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
-	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: "invalid-host"})
+	config := config.NewGlideClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: "invalid-host"})
 	client, err := api.NewGlideClient(config)
 
 	assert.Nil(suite.T(), client)
@@ -62,7 +62,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
 	suite.runWithTimeoutClients(func(client api.BaseClient) {
-		backoffStrategy := api.NewBackoffStrategy(2, 100, 1)
+		backoffStrategy := config.NewBackoffStrategy(2, 100, 1)
 		_, clusterMode := client.(api.GlideClusterClientCommands)
 
 		// Runnable for long-running DEBUG SLEEP command

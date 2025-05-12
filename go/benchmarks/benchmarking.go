@@ -152,7 +152,7 @@ func closeClients(clients []benchmarkClient) error {
 	return nil
 }
 
-var jsonResults []map[string]interface{}
+var jsonResults []map[string]any
 
 func writeResults(file *os.File) error {
 	fileInfo, err := file.Stat()
@@ -162,7 +162,7 @@ func writeResults(file *os.File) error {
 
 	if fileInfo.Size() != 0 {
 		decoder := json.NewDecoder(file)
-		var existingData []map[string]interface{}
+		var existingData []map[string]any
 		err = decoder.Decode(&existingData)
 		if err != nil {
 			return err
@@ -448,7 +448,7 @@ func printResults(results *benchmarkResults) {
 }
 
 func addJsonResults(config *benchmarkConfig, results *benchmarkResults) {
-	jsonResult := make(map[string]interface{})
+	jsonResult := make(map[string]any)
 
 	jsonResult["client"] = config.clientName
 	jsonResult["is_cluster"] = config.connectionSettings.clusterModeEnabled

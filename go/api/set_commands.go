@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
@@ -32,9 +35,9 @@ type SetCommands interface {
 
 	SInterCardLimit(keys []string, limit int64) (int64, error)
 
-	SRandMember(key string) (Result[string], error)
+	SRandMember(key string) (models.Result[string], error)
 
-	SPop(key string) (Result[string], error)
+	SPop(key string) (models.Result[string], error)
 
 	SMIsMember(key string, members []string) ([]bool, error)
 

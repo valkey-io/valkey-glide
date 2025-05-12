@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/api/models"
+
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // or cluster client.
 //
@@ -27,5 +29,5 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FunctionKill() (string, error)
 
-	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
+	FunctionList(query models.FunctionListQuery) ([]models.LibraryInfo, error)
 }

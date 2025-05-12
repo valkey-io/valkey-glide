@@ -1,11 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package models
 
 import (
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 )
 
 type Engine struct {
@@ -45,10 +45,10 @@ type FunctionListQuery struct {
 func (query FunctionListQuery) ToArgs() []string {
 	args := []string{}
 	if query.LibraryName != "" {
-		args = append(args, options.LibraryNameKeyword, query.LibraryName)
+		args = append(args, constants.LibraryNameKeyword, query.LibraryName)
 	}
 	if query.WithCode {
-		args = append(args, options.WithCodeKeyword)
+		args = append(args, constants.WithCodeKeyword)
 	}
 	return args
 }
