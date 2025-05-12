@@ -33,7 +33,7 @@ public interface StringBaseCommands {
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
-     * value exists.
+     * <code>key</code> exists.
      *
      * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
@@ -52,7 +52,7 @@ public interface StringBaseCommands {
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
-     * value exists.
+     * <code>key</code> exists.
      *
      * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
@@ -620,7 +620,9 @@ public interface StringBaseCommands {
      * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
      * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
      * order to provide an offset starting from the end of the string. So <code>-1</code> means the
-     * last character, <code>-2</code> the penultimate and so forth.
+     * last character, <code>-2</code> the penultimate and so forth. If <code>key</code> does not
+     * exist, an empty string is returned. If <code>start</code> or <code>end</code> are out of range,
+     * returns the substring within the valid range of the string.
      *
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key of the string.
@@ -642,7 +644,9 @@ public interface StringBaseCommands {
      * Returns the subGlideString of the GlideString value stored at <code>key</code>, determined by
      * the offsets <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can
      * be used in order to provide an offset starting from the end of the GlideString. So <code>-1
-     * </code> means the last character, <code>-2</code> the penultimate and so forth.
+     * </code> means the last character, <code>-2</code> the penultimate and so forth. If <code>key
+     * </code> does not exist, an empty GlideString is returned. If <code>start</code> or <code>end
+     * </code> are out of range, returns the subGlideString within the valid range of the GlideString.
      *
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key of the GlideString.
