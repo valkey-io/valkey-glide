@@ -5,8 +5,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"sort"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"

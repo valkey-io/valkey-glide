@@ -4,9 +4,10 @@ package integTest
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
 	"strings"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api/config"

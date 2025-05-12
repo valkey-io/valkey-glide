@@ -8,10 +8,11 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/models"
 	"log"
 	"sync"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 )
 
 var (

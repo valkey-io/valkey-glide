@@ -38,7 +38,11 @@ type SortedSetCommands interface {
 
 	BZPopMin(keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
-	BZMPop(keys []string, scoreFilter constants.ScoreFilter, timeoutSecs float64) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
+	BZMPop(
+		keys []string,
+		scoreFilter constants.ScoreFilter,
+		timeoutSecs float64,
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		keys []string,
@@ -101,7 +105,10 @@ type SortedSetCommands interface {
 
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]models.MemberAndScore, error)
+	ZInterWithScores(
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options options.ZInterOptions,
+	) ([]models.MemberAndScore, error)
 
 	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
@@ -113,7 +120,10 @@ type SortedSetCommands interface {
 
 	ZUnion(keys options.KeyArray) ([]string, error)
 
-	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]models.MemberAndScore, error)
+	ZUnionWithScores(
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options *options.ZUnionOptions,
+	) ([]models.MemberAndScore, error)
 
 	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 

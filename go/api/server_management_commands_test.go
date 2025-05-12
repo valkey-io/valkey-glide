@@ -4,10 +4,11 @@ package api
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
 

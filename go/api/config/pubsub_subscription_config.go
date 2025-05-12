@@ -44,6 +44,7 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 func (config *BaseSubscriptionConfig) GetCallback() MessageCallback {
 	return config.callback
 }
+
 func (config *BaseSubscriptionConfig) GetContext() any {
 	return config.context
 }

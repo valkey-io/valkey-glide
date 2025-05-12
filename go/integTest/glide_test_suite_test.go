@@ -6,8 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
-	"github.com/valkey-io/valkey-glide/go/api/models"
 	"log"
 	"math"
 	"os"
@@ -18,6 +16,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

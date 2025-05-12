@@ -598,7 +598,9 @@ func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]models
 	return slice, nil
 }
 
-func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (models.Result[int64], models.Result[float64], error) {
+func handleLongAndDoubleOrNullResponse(
+	response *C.struct_CommandResponse,
+) (models.Result[int64], models.Result[float64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, true)
@@ -763,7 +765,9 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]str
 	return slice, nil
 }
 
-func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (models.Result[models.KeyWithMemberAndScore], error) {
+func handleKeyWithMemberAndScoreResponse(
+	response *C.struct_CommandResponse,
+) (models.Result[models.KeyWithMemberAndScore], error) {
 	defer C.free_command_response(response)
 
 	if response == nil || response.response_type == uint32(C.Null) {
@@ -828,7 +832,9 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 		MemberAndScoreArray = append(MemberAndScoreArray, models.MemberAndScore{Member: k, Score: v})
 	}
 
-	return models.CreateKeyWithArrayOfMembersAndScoresResult(models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: MemberAndScoreArray}), nil
+	return models.CreateKeyWithArrayOfMembersAndScoresResult(
+		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: MemberAndScoreArray},
+	), nil
 }
 
 func handleMemberAndScoreArrayResponse(response *C.struct_CommandResponse) ([]models.MemberAndScore, error) {
@@ -944,7 +950,7 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
 
 	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{k, v})
+		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
 	}
 
 	sort.Slice(XRangeResponseArray, func(i, j int) bool {
@@ -989,7 +995,7 @@ func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]models.XRang
 	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
 
 	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{k, v})
+		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
 	}
 
 	sort.Slice(XRangeResponseArray, func(i, j int) bool {
@@ -1046,7 +1052,11 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 			return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
 		}
 	}
-	return models.XAutoClaimResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
+	return models.XAutoClaimResponse{
+		NextEntry:       arr[0].(string),
+		ClaimedEntries:  claimedEntries,
+		DeletedMessages: deletedMessages,
+	}, nil
 }
 
 func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.XAutoClaimJustIdResponse, error) {
@@ -1091,7 +1101,11 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 			return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
 		}
 	}
-	return models.XAutoClaimJustIdResponse{NextEntry: arr[0].(string), ClaimedEntries: claimedEntries, DeletedMessages: deletedMessages}, nil
+	return models.XAutoClaimJustIdResponse{
+		NextEntry:       arr[0].(string),
+		ClaimedEntries:  claimedEntries,
+		DeletedMessages: deletedMessages,
+	}, nil
 }
 
 func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
@@ -1201,9 +1215,14 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (models.X
 				})
 			}
 		}
-		return models.XPendingSummary{NumOfMessages, StartId, EndId, ConsumerPendingMessages}, nil
+		return models.XPendingSummary{
+			NumOfMessages:    NumOfMessages,
+			StartId:          StartId,
+			EndId:            EndId,
+			ConsumerMessages: ConsumerPendingMessages,
+		}, nil
 	} else {
-		return models.XPendingSummary{NumOfMessages, StartId, EndId, make([]models.ConsumerPendingMessage, 0)}, nil
+		return models.XPendingSummary{NumOfMessages: NumOfMessages, StartId: StartId, EndId: EndId, ConsumerMessages: make([]models.ConsumerPendingMessage, 0)}, nil
 	}
 }
 
@@ -1629,7 +1648,7 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	zRangeResponseArray := make([]models.MemberAndScore, 0, len(result))
 
 	for k, v := range result {
-		zRangeResponseArray = append(zRangeResponseArray, models.MemberAndScore{k, v})
+		zRangeResponseArray = append(zRangeResponseArray, models.MemberAndScore{Member: k, Score: v})
 	}
 
 	if !reverse {

@@ -32,7 +32,11 @@ type GenericBaseCommands interface {
 
 	PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error)
 
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition constants.ExpireCondition) (bool, error)
+	PExpireAtWithOptions(
+		key string,
+		unixTimestampInMilliSeconds int64,
+		expireCondition constants.ExpireCondition,
+	) (bool, error)
 
 	ExpireTime(key string) (int64, error)
 

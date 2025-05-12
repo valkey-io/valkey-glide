@@ -3,8 +3,9 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 )
 
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.

@@ -88,7 +88,9 @@ func TestByAddressRouteWithHost(t *testing.T) {
 }
 
 func TestByAddressRoute_MultiplePorts(t *testing.T) {
-	_, err := config.NewByAddressRouteWithHost(fmt.Sprintf("%s:%d:%d", config.DefaultHost, config.DefaultPort, config.DefaultPort+1))
+	_, err := config.NewByAddressRouteWithHost(
+		fmt.Sprintf("%s:%d:%d", config.DefaultHost, config.DefaultPort, config.DefaultPort+1),
+	)
 	assert.NotNil(t, err)
 }
 

@@ -6,8 +6,9 @@ package options
 import "C"
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"unsafe"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 )
 
 var FINISHED_SCAN_CURSOR = "finished"

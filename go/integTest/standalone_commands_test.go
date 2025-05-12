@@ -4,12 +4,13 @@ package integTest
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"math/rand"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/api/models"

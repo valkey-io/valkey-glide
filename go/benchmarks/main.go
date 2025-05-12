@@ -6,13 +6,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/config"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 type options struct {

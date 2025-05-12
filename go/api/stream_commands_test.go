@@ -5,10 +5,11 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
 

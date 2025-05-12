@@ -3,8 +3,9 @@
 package integTest
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strings"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api/options"

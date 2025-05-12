@@ -4,8 +4,9 @@ package api
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )

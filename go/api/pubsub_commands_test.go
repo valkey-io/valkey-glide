@@ -4,9 +4,10 @@ package api
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/config"
 	"sort"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 func ExampleGlideClient_Publish() {

@@ -44,5 +44,8 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionKillWithRoute(route options.RouteOption) (string, error)
 
-	FunctionListWithRoute(query models.FunctionListQuery, route options.RouteOption) (models.ClusterValue[[]models.LibraryInfo], error)
+	FunctionListWithRoute(
+		query models.FunctionListQuery,
+		route options.RouteOption,
+	) (models.ClusterValue[[]models.LibraryInfo], error)
 }

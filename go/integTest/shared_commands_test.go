@@ -4,13 +4,14 @@ package integTest
 
 import (
 	"fmt"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -8906,7 +8907,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result
 		zrangeResult, err := client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}},
+			zrangeResult,
+		)
 
 		// Store the intersection of key1 and key2 in key4 with max aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8918,7 +8923,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with max aggregate
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "one", Score: 1.5}, {Member: "two", Score: 2.5}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "one", Score: 1.5}, {Member: "two", Score: 2.5}},
+			zrangeResult,
+		)
 
 		// Store the intersection of key1 and key2 in key5 with min aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8930,7 +8939,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with min aggregate
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "one", Score: 1.0}, {Member: "two", Score: 2.0}},
+			zrangeResult,
+		)
 
 		// Store the intersection of key1 and key2 in key6 with sum aggregate
 		res, err = client.ZInterStoreWithOptions(key3, options.KeyArray{Keys: []string{key1, key2}},
@@ -8942,7 +8955,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with sum aggregate (same as default aggregate)
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "one", Score: 2.5}, {Member: "two", Score: 4.5}},
+			zrangeResult,
+		)
 
 		// Store the intersection of key1 and key2 in key3 with 2.0 weights
 		res, err = client.ZInterStore(key3, options.WeightedKeys{
@@ -8957,7 +8974,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with weighted keys
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "one", Score: 5.0}, {Member: "two", Score: 9.0}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "one", Score: 5.0}, {Member: "two", Score: 9.0}},
+			zrangeResult,
+		)
 
 		// Store the intersection of key1 with 1.0 weight and key2 with -2.0 weight in key3 with 2.0 weights
 		// and min aggregate
@@ -8975,7 +8996,11 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		// checking stored intersection result with weighted keys
 		zrangeResult, err = client.ZRangeWithScores(key3, query)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: -5.0}, {Member: "one", Score: -3.0}}, zrangeResult)
+		assert.Equal(
+			suite.T(),
+			[]models.MemberAndScore{{Member: "two", Score: -5.0}, {Member: "one", Score: -3.0}},
+			zrangeResult,
+		)
 
 		// key exists but not a set
 		_, err = client.Set(key4, "value")
@@ -10171,7 +10196,10 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			[]models.MemberAndScore{{Member: "Palermo", Score: 3479099956230698}, {Member: "Catania", Score: 3479447370796909}},
+			[]models.MemberAndScore{
+				{Member: "Palermo", Score: 3479099956230698},
+				{Member: "Catania", Score: 3479447370796909},
+			},
 			zRangeResultWithCount,
 		)
 

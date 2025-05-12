@@ -3,8 +3,9 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/internal/utils"

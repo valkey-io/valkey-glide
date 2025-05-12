@@ -4,6 +4,7 @@ package options
 
 import (
 	"errors"
+
 	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/internal/utils"

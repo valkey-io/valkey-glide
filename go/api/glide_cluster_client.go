@@ -6,8 +6,9 @@ package api
 import "C"
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"unsafe"
+
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/models"
@@ -415,7 +416,9 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (models.ClusterValue[string], error) {
+func (client *GlideClusterClient) EchoWithOptions(
+	echoOptions options.ClusterEchoOptions,
+) (models.ClusterValue[string], error) {
 	args, err := echoOptions.ToArgs()
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
@@ -607,7 +610,9 @@ func (client *GlideClusterClient) Lolwut() (string, error) {
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error) {
+func (client *GlideClusterClient) LolwutWithOptions(
+	lolwutOptions options.ClusterLolwutOptions,
+) (models.ClusterValue[string], error) {
 	args, err := lolwutOptions.ToArgs()
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
@@ -1212,7 +1217,10 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 //	The invoked function's return value.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithRoute(function string, route options.RouteOption) (models.ClusterValue[any], error) {
+func (client *GlideClusterClient) FCallWithRoute(
+	function string,
+	route options.RouteOption,
+) (models.ClusterValue[any], error) {
 	result, err := client.executeCommandWithRoute(
 		C.FCall,
 		[]string{function, utils.IntToString(0)},

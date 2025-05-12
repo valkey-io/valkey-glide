@@ -1047,7 +1047,10 @@ func (client *baseClient) GetDel(key string) (models.Result[string], error) {
 //
 // Return value:
 //
-//	The models.Result[string] associated with field, or [api.Nilmodels.Result[string]](modelsCreateNilStringResult()) when field is not
+//	The models.Result[string] associated with field, or [api.Nilmodels.Result[string]](modelsCreateNilStringResult()) when
+//
+// field is not
+//
 //	present in the hash or key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hget/
@@ -1587,7 +1590,10 @@ func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 //
 // Return value:
 //
-//	The models.Result[int64] containing the index of the first occurrence of element, or [modelsCreateNilInt64Result()] if element is
+//	The models.Result[int64] containing the index of the first occurrence of element, or [modelsCreateNilInt64Result()] if
+//
+// element is
+//
 //	not in the list.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
@@ -1616,7 +1622,11 @@ func (client *baseClient) LPos(key string, element string) (models.Result[int64]
 //	The models.Result[int64] containing the index of element, or [modelsCreateNilInt64Result()] if element is not in the list.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *baseClient) LPosWithOptions(key string, element string, options options.LPosOptions) (models.Result[int64], error) {
+func (client *baseClient) LPosWithOptions(
+	key string,
+	element string,
+	options options.LPosOptions,
+) (models.Result[int64], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return models.CreateNilInt64Result(), err
@@ -2975,7 +2985,11 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition constants.ExpireCondition) (bool, error) {
+func (client *baseClient) ExpireWithOptions(
+	key string,
+	seconds int64,
+	expireCondition constants.ExpireCondition,
+) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return models.DefaultBoolResponse, err
