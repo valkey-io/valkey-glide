@@ -68,6 +68,7 @@
 * Benchmarks: Fix rust benchmark latencies calculation
 * Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
 * Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
+* Update Go Ort([#3469](https://github.com/valkey-io/valkey-glide/pull/3469))
 
 #### Breaking Changes
 
