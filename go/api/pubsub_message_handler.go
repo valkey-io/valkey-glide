@@ -8,6 +8,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"log"
 	"sync"
 )
@@ -33,12 +35,12 @@ func (e *MessageCallbackError) Cause() error {
 // *** Message Handler ***
 
 type MessageHandler struct {
-	callback MessageCallback
+	callback config.MessageCallback
 	context  any
 	queue    *PubSubMessageQueue
 }
 
-func NewMessageHandler(callback MessageCallback, context any) *MessageHandler {
+func NewMessageHandler(callback config.MessageCallback, context any) *MessageHandler {
 	return &MessageHandler{
 		callback: callback,
 		context:  context,
@@ -46,7 +48,7 @@ func NewMessageHandler(callback MessageCallback, context any) *MessageHandler {
 	}
 }
 
-func (handler *MessageHandler) handleMessage(message *PubSubMessage) error {
+func (handler *MessageHandler) handleMessage(message *models.PubSubMessage) error {
 	if handler.callback != nil {
 		defer func() {
 			if r := recover(); r != nil {
@@ -74,22 +76,22 @@ func (handler *MessageHandler) GetQueue() *PubSubMessageQueue {
 
 type PubSubMessageQueue struct {
 	mu                      sync.Mutex
-	messages                []*PubSubMessage
-	waiters                 []chan *PubSubMessage
+	messages                []*models.PubSubMessage
+	waiters                 []chan *models.PubSubMessage
 	nextMessageReadyCh      chan struct{}
 	nextMessageReadySignals []chan struct{}
 }
 
 func NewPubSubMessageQueue() *PubSubMessageQueue {
 	return &PubSubMessageQueue{
-		messages:                make([]*PubSubMessage, 0),
-		waiters:                 make([]chan *PubSubMessage, 0),
+		messages:                make([]*models.PubSubMessage, 0),
+		waiters:                 make([]chan *models.PubSubMessage, 0),
 		nextMessageReadyCh:      make(chan struct{}, 1),
 		nextMessageReadySignals: make([]chan struct{}, 0),
 	}
 }
 
-func (queue *PubSubMessageQueue) Push(message *PubSubMessage) {
+func (queue *PubSubMessageQueue) Push(message *models.PubSubMessage) {
 	queue.mu.Lock()
 	defer queue.mu.Unlock()
 
@@ -121,7 +123,7 @@ func (queue *PubSubMessageQueue) Push(message *PubSubMessage) {
 	}
 }
 
-func (queue *PubSubMessageQueue) Pop() *PubSubMessage {
+func (queue *PubSubMessageQueue) Pop() *models.PubSubMessage {
 	queue.mu.Lock()
 	defer queue.mu.Unlock()
 
@@ -134,13 +136,13 @@ func (queue *PubSubMessageQueue) Pop() *PubSubMessage {
 	return message
 }
 
-func (queue *PubSubMessageQueue) WaitForMessage() <-chan *PubSubMessage {
+func (queue *PubSubMessageQueue) WaitForMessage() <-chan *models.PubSubMessage {
 	queue.mu.Lock()
 	defer queue.mu.Unlock()
 
 	// If a message is already queued, return it immediately
 	if len(queue.messages) > 0 {
-		messageCh := make(chan *PubSubMessage, 1)
+		messageCh := make(chan *models.PubSubMessage, 1)
 		message := queue.messages[0]
 		queue.messages = queue.messages[1:]
 		messageCh <- message
@@ -148,7 +150,7 @@ func (queue *PubSubMessageQueue) WaitForMessage() <-chan *PubSubMessage {
 	}
 
 	// Otherwise register a waiter
-	messageCh := make(chan *PubSubMessage, 1)
+	messageCh := make(chan *models.PubSubMessage, 1)
 	queue.waiters = append(queue.waiters, messageCh)
 	return messageCh
 }

@@ -3,6 +3,8 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -16,9 +18,9 @@ type SortedSetCommands interface {
 
 	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts options.ZAddOptions) (int64, error)
 
-	ZAddIncr(key string, member string, increment float64) (Result[float64], error)
+	ZAddIncr(key string, member string, increment float64) (models.Result[float64], error)
 
-	ZAddIncrWithOptions(key string, member string, increment float64, opts options.ZAddOptions) (Result[float64], error)
+	ZAddIncrWithOptions(key string, member string, increment float64, opts options.ZAddOptions) (models.Result[float64], error)
 
 	ZIncrBy(key string, increment float64, member string) (float64, error)
 
@@ -34,42 +36,42 @@ type SortedSetCommands interface {
 
 	ZCard(key string) (int64, error)
 
-	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMin(keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
-	BZMPop(keys []string, scoreFilter options.ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+	BZMPop(keys []string, scoreFilter constants.ScoreFilter, timeoutSecs float64) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		keys []string,
-		scoreFilter options.ScoreFilter,
+		scoreFilter constants.ScoreFilter,
 		timeoutSecs float64,
 		options options.ZMPopOptions,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	BZPopMax(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMax(keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
-	ZMPop(keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
+	ZMPop(keys []string, scoreFilter constants.ScoreFilter) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZMPopWithOptions(
 		keys []string,
-		scoreFilter options.ScoreFilter,
+		scoreFilter constants.ScoreFilter,
 		opts options.ZPopOptions,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
-	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) ([]models.MemberAndScore, error)
 
 	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 
-	ZRank(key string, member string) (Result[int64], error)
+	ZRank(key string, member string) (models.Result[int64], error)
 
-	ZRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+	ZRankWithScore(key string, member string) (models.Result[int64], models.Result[float64], error)
 
-	ZRevRank(key string, member string) (Result[int64], error)
+	ZRevRank(key string, member string) (models.Result[int64], error)
 
-	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+	ZRevRankWithScore(key string, member string) (models.Result[int64], models.Result[float64], error)
 
-	ZScore(key string, member string) (Result[float64], error)
+	ZScore(key string, member string) (models.Result[float64], error)
 
 	ZCount(key string, rangeOptions options.ZCountRange) (int64, error)
 
@@ -85,21 +87,21 @@ type SortedSetCommands interface {
 
 	ZDiff(keys []string) ([]string, error)
 
-	ZDiffWithScores(keys []string) ([]MemberAndScore, error)
+	ZDiffWithScores(keys []string) ([]models.MemberAndScore, error)
 
-	ZRandMember(key string) (Result[string], error)
+	ZRandMember(key string) (models.Result[string], error)
 
 	ZRandMemberWithCount(key string, count int64) ([]string, error)
 
-	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
+	ZRandMemberWithCountWithScores(key string, count int64) ([]models.MemberAndScore, error)
 
-	ZMScore(key string, members []string) ([]Result[float64], error)
+	ZMScore(key string, members []string) ([]models.Result[float64], error)
 
 	ZDiffStore(destination string, keys []string) (int64, error)
 
 	ZInter(keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]MemberAndScore, error)
+	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]models.MemberAndScore, error)
 
 	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
@@ -111,7 +113,7 @@ type SortedSetCommands interface {
 
 	ZUnion(keys options.KeyArray) ([]string, error)
 
-	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]MemberAndScore, error)
+	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]models.MemberAndScore, error)
 
 	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 

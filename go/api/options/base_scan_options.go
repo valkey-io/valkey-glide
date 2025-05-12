@@ -3,6 +3,7 @@
 package options
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
 )
 
@@ -43,11 +44,11 @@ func (opts *BaseScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.match != "" {
-		args = append(args, MatchKeyword, opts.match)
+		args = append(args, constants.MatchKeyword, opts.match)
 	}
 
 	if opts.count != 0 {
-		args = append(args, CountKeyword, strconv.FormatInt(opts.count, 10))
+		args = append(args, constants.CountKeyword, strconv.FormatInt(opts.count, 10))
 	}
 
 	return args, err

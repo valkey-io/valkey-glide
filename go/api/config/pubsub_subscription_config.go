@@ -1,13 +1,14 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/internal/protobuf"
 )
 
 // *** BaseSubscriptionConfig ***
-type MessageCallback func(message *PubSubMessage, ctx any)
+type MessageCallback func(message *models.PubSubMessage, ctx any)
 
 type BaseSubscriptionConfig struct {
 	callback      MessageCallback
@@ -38,6 +39,13 @@ func (config *BaseSubscriptionConfig) toProtobuf() *protobuf.PubSubSubscriptions
 		}
 	}
 	return &request
+}
+
+func (config *BaseSubscriptionConfig) GetCallback() MessageCallback {
+	return config.callback
+}
+func (config *BaseSubscriptionConfig) GetContext() any {
+	return config.context
 }
 
 // *** StandaloneSubscriptionConfig ***

@@ -4,8 +4,9 @@ package options
 
 import (
 	"errors"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // return type for the `GeoSearch` command
@@ -29,7 +30,7 @@ type GeoCoordOrigin struct {
 // Converts the [GeoCoordOrigin] to the arguments for the `GeoSearch` command
 func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
 	return []string{
-		GeoCoordOriginAPIKeyword,
+		constants.GeoCoordOriginAPIKeyword,
 		utils.FloatToString(o.GeospatialData.Longitude),
 		utils.FloatToString(o.GeospatialData.Latitude),
 	}, nil
@@ -43,24 +44,24 @@ type GeoMemberOrigin struct {
 // Converts the [GeoMemberOrigin] to the arguments for the `GeoSearch` command
 func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
 	return []string{
-		GeoMemberOriginAPIKeyword,
+		constants.GeoMemberOriginAPIKeyword,
 		o.Member,
 	}, nil
 }
 
 // The search options for the `GeoSearch` command
 type GeoSearchShape struct {
-	shape  SearchShape
+	shape  constants.SearchShape
 	radius float64
 	width  float64
 	height float64
-	unit   GeoUnit
+	unit   constants.GeoUnit
 }
 
 // Creates a new [GeoSearchShape] for a circle search by radius
-func NewCircleSearchShape(radius float64, unit GeoUnit) *GeoSearchShape {
+func NewCircleSearchShape(radius float64, unit constants.GeoUnit) *GeoSearchShape {
 	return &GeoSearchShape{
-		shape:  BYRADIUS,
+		shape:  constants.BYRADIUS,
 		radius: radius,
 		width:  0,
 		height: 0,
@@ -69,9 +70,9 @@ func NewCircleSearchShape(radius float64, unit GeoUnit) *GeoSearchShape {
 }
 
 // Creates a new [GeoSearchShape] for a box search by width and height
-func NewBoxSearchShape(width float64, height float64, unit GeoUnit) *GeoSearchShape {
+func NewBoxSearchShape(width float64, height float64, unit constants.GeoUnit) *GeoSearchShape {
 	return &GeoSearchShape{
-		shape:  BYBOX,
+		shape:  constants.BYBOX,
 		width:  width,
 		height: height,
 		unit:   unit,
@@ -81,9 +82,9 @@ func NewBoxSearchShape(width float64, height float64, unit GeoUnit) *GeoSearchSh
 // Converts the [GeoSearchShape] to the arguments for the `GeoSearch` command
 func (o *GeoSearchShape) ToArgs() ([]string, error) {
 	switch o.shape {
-	case BYRADIUS:
+	case constants.BYRADIUS:
 		return []string{string(o.shape), utils.FloatToString(o.radius), string(o.unit)}, nil
-	case BYBOX:
+	case constants.BYBOX:
 		return []string{
 			string(o.shape),
 			utils.FloatToString(o.width),
@@ -139,13 +140,13 @@ func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if o.WithDist {
-		args = append(args, WithDistValkeyApi)
+		args = append(args, constants.WithDistValkeyApi)
 	}
 	if o.WithCoord {
-		args = append(args, WithCoordValkeyApi)
+		args = append(args, constants.WithCoordValkeyApi)
 	}
 	if o.WithHash {
-		args = append(args, WithHashValkeyApi)
+		args = append(args, constants.WithHashValkeyApi)
 	}
 	return args, nil
 }
@@ -197,7 +198,7 @@ func (o *GeoSearchResultOptions) ToArgs() ([]string, error) {
 	}
 
 	if o.countIsSet {
-		args = append(args, CountKeyword)
+		args = append(args, constants.CountKeyword)
 		args = append(args, utils.IntToString(o.count))
 
 		if o.isAny {

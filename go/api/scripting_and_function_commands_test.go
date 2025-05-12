@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -757,7 +759,7 @@ func ExampleGlideClient_FunctionList() {
 		return
 	}
 
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		LibraryName: "mylib",
 		WithCode:    true,
 	}
@@ -790,7 +792,7 @@ func ExampleGlideClusterClient_FunctionList() {
 		return
 	}
 
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		LibraryName: "mylib",
 		WithCode:    true,
 	}
@@ -828,7 +830,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	}
 
 	// List functions with route
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		WithCode: true,
 	}
 	result, err := client.FunctionListWithRoute(query, opts)

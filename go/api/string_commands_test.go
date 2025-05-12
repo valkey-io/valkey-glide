@@ -4,6 +4,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -37,7 +38,7 @@ func ExampleGlideClient_SetWithOptions() {
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(5))
 	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
@@ -53,7 +54,7 @@ func ExampleGlideClusterClient_SetWithOptions() {
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(uint64(5)))
 	result, err := client.SetWithOptions("my_key", "my_value", *options)
 	if err != nil {
@@ -154,7 +155,7 @@ func ExampleGlideClient_GetExWithOptions() {
 	client.Set("my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(5))
 	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {
@@ -175,7 +176,7 @@ func ExampleGlideClusterClient_GetExWithOptions() {
 	client.Set("my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(uint64(5)))
 	result, err := client.GetExWithOptions("my_key", *options)
 	if err != nil {

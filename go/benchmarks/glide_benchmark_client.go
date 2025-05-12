@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/api/config"
 )
 
 type glideBenchmarkClient struct {
@@ -12,8 +13,8 @@ type glideBenchmarkClient struct {
 
 func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *connectionSettings) error {
 	if connectionSettings.clusterModeEnabled {
-		config := api.NewGlideClusterClientConfiguration().
-			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
+		config := config.NewGlideClusterClientConfiguration().
+			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
 		glideClient, err := api.NewGlideClusterClient(config)
 		if err != nil {
@@ -23,8 +24,8 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		glideBenchmarkClient.client = glideClient
 		return nil
 	} else {
-		config := api.NewGlideClientConfiguration().
-			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
+		config := config.NewGlideClientConfiguration().
+			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
 		glideClient, err := api.NewGlideClient(config)
 		if err != nil {

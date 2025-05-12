@@ -2,6 +2,8 @@
 
 package options
 
+import "github.com/valkey-io/valkey-glide/go/api/constants"
+
 // This struct represents the optional arguments for the ZSCAN command.
 type ZScanOptions struct {
 	BaseScanOptions
@@ -38,7 +40,7 @@ func (options *ZScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if options.noScores {
-		args = append(args, NoScoresKeyword)
+		args = append(args, constants.NoScoresKeyword)
 	}
 	return args, err
 }

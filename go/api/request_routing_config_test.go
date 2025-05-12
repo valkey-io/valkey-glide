@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/internal/protobuf"
 )
 
 func TestSimpleNodeRoute(t *testing.T) {
@@ -60,10 +60,10 @@ func TestSlotKeyRoute(t *testing.T) {
 }
 
 func TestByAddressRoute(t *testing.T) {
-	route := config.NewByAddressRoute(DefaultHost, DefaultPort)
+	route := config.NewByAddressRoute(config.DefaultHost, config.DefaultPort)
 	expected := &protobuf.Routes{
 		Value: &protobuf.Routes_ByAddressRoute{
-			ByAddressRoute: &protobuf.ByAddressRoute{Host: DefaultHost, Port: DefaultPort},
+			ByAddressRoute: &protobuf.ByAddressRoute{Host: config.DefaultHost, Port: config.DefaultPort},
 		},
 	}
 
@@ -74,10 +74,10 @@ func TestByAddressRoute(t *testing.T) {
 }
 
 func TestByAddressRouteWithHost(t *testing.T) {
-	route, _ := config.NewByAddressRouteWithHost(fmt.Sprintf("%s:%d", DefaultHost, DefaultPort))
+	route, _ := config.NewByAddressRouteWithHost(fmt.Sprintf("%s:%d", config.DefaultHost, config.DefaultPort))
 	expected := &protobuf.Routes{
 		Value: &protobuf.Routes_ByAddressRoute{
-			ByAddressRoute: &protobuf.ByAddressRoute{Host: DefaultHost, Port: DefaultPort},
+			ByAddressRoute: &protobuf.ByAddressRoute{Host: config.DefaultHost, Port: config.DefaultPort},
 		},
 	}
 
@@ -88,11 +88,11 @@ func TestByAddressRouteWithHost(t *testing.T) {
 }
 
 func TestByAddressRoute_MultiplePorts(t *testing.T) {
-	_, err := config.NewByAddressRouteWithHost(fmt.Sprintf("%s:%d:%d", DefaultHost, DefaultPort, DefaultPort+1))
+	_, err := config.NewByAddressRouteWithHost(fmt.Sprintf("%s:%d:%d", config.DefaultHost, config.DefaultPort, config.DefaultPort+1))
 	assert.NotNil(t, err)
 }
 
 func TestByAddressRoute_InvalidHost(t *testing.T) {
-	_, err := config.NewByAddressRouteWithHost(DefaultHost)
+	_, err := config.NewByAddressRouteWithHost(config.DefaultHost)
 	assert.NotNil(t, err)
 }

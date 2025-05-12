@@ -5,7 +5,10 @@ package options
 // #include "../../lib.h"
 import "C"
 
-import "unsafe"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"unsafe"
+)
 
 var FINISHED_SCAN_CURSOR = "finished"
 
@@ -43,7 +46,7 @@ func (clusterScanCursor *ClusterScanCursor) HasFinished() bool {
 // The options used for performing a Cluster scan.
 type ClusterScanOptions struct {
 	BaseScanOptions
-	scanType ObjectType
+	scanType constants.ObjectType
 }
 
 // Creates a options struct to be used in the Cluster Scan.
@@ -64,7 +67,7 @@ func (scanOptions *ClusterScanOptions) SetCount(c int64) *ClusterScanOptions {
 }
 
 // SetType sets the type to look for during the Cluster Scan.
-func (scanOptions *ClusterScanOptions) SetType(t ObjectType) *ClusterScanOptions {
+func (scanOptions *ClusterScanOptions) SetType(t constants.ObjectType) *ClusterScanOptions {
 	scanOptions.scanType = t
 	return scanOptions
 }
@@ -75,7 +78,7 @@ func (opts *ClusterScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if string(opts.scanType) != "" {
-		args = append(args, TypeKeyword, string(opts.scanType))
+		args = append(args, constants.TypeKeyword, string(opts.scanType))
 	}
 
 	return args, err

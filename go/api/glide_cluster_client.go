@@ -6,12 +6,14 @@ package api
 import "C"
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // GlideClusterClient interface compliance check.
@@ -59,13 +61,14 @@ type GlideClusterClient struct {
 //	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
 //	      using the specified username and password.
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
-func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
+func NewGlideClusterClient(config *config.GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
 	}
-	if config.subscriptionConfig != nil {
-		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
+	if config.HasSubscription() {
+		subConfig := config.GetSubscription()
+		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
 	return &GlideClusterClient{client}, nil
@@ -92,16 +95,16 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //	The returned value for the custom command.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
+func (client *GlideClusterClient) CustomCommand(args []string) (models.ClusterValue[any], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := handleInterfaceResponse(res)
+	data, err := HandleInterfaceResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	return createClusterValue[interface{}](data), nil
+	return models.CreateClusterValue[any](data), nil
 }
 
 // Gets information and statistics about the server.
@@ -141,38 +144,38 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	When a single node route is given, command returns a string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (models.ClusterValue[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if options.RouteOption == nil || options.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Info, optionArgs)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if options.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // CustomCommandWithRoute executes a single command, specified by args, without checking inputs. Every part of the command,
@@ -195,19 +198,19 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 func (client *GlideClusterClient) CustomCommandWithRoute(
 	args []string,
 	route config.Route,
-) (ClusterValue[interface{}], error) {
+) (models.ClusterValue[any], error) {
 	res, err := client.executeCommandWithRoute(C.CustomCommand, args, route)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := handleInterfaceResponse(res)
+	data, err := HandleInterfaceResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[interface{}](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if !route.IsMultiNode() {
-		return createClusterSingleValue[interface{}](data), err
+		return models.CreateClusterSingleValue[any](data), err
 	}
-	return createClusterValue[interface{}](data), nil
+	return models.CreateClusterValue[any](data), nil
 }
 
 // Pings the server.
@@ -221,7 +224,7 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 func (client *GlideClusterClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -248,19 +251,19 @@ func (client *GlideClusterClient) Ping() (string, error) {
 func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
 	args, err := pingOptions.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Ping, args)
 		if err != nil {
-			return DefaultStringResponse, err
+			return models.DefaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
 	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleStringResponse(response)
@@ -281,10 +284,10 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 // [valkey.io]: https://valkey.io/commands/time/
-func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
+func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (models.ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[[]string](), err
+		return models.CreateEmptyClusterValue[[]string](), err
 	}
 	return handleTimeClusterResponse(result)
 }
@@ -303,7 +306,7 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
 	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -321,7 +324,7 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 func (client *GlideClusterClient) FlushAll() (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -343,13 +346,13 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
 		result, err := client.executeCommand(C.FlushAll, flushOptions.ToArgs())
 		if err != nil {
-			return DefaultStringResponse, err
+			return models.DefaultStringResponse, err
 		}
 		return handleOkResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -367,7 +370,7 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 func (client *GlideClusterClient) FlushDB() (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -389,13 +392,13 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
 		result, err := client.executeCommand(C.FlushDB, flushOptions.ToArgs())
 		if err != nil {
-			return DefaultStringResponse, err
+			return models.DefaultStringResponse, err
 		}
 		return handleOkResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -412,10 +415,10 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (models.ClusterValue[string], error) {
 	args, err := echoOptions.ToArgs()
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	var route config.Route
 	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
@@ -423,21 +426,21 @@ func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEch
 	}
 	response, err := client.executeCommandWithRoute(C.Echo, args, route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
 		(echoOptions.RouteOption.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Helper function to perform the cluster scan.
@@ -588,7 +591,7 @@ func (client *GlideClusterClient) ScanWithOptions(
 func (client *GlideClusterClient) Lolwut() (string, error) {
 	result, err := client.executeCommand(C.Lolwut, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -604,43 +607,43 @@ func (client *GlideClusterClient) Lolwut() (string, error) {
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error) {
 	args, err := lolwutOptions.ToArgs()
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 
 	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
 		response, err := client.executeCommand(C.Lolwut, args)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
 		data, err := handleStringResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterSingleValue[string](data), nil
+		return models.CreateClusterSingleValue[string](data), nil
 	}
 
 	route := lolwutOptions.RouteOption.Route
 	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 
 	if route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Gets the current connection id.
@@ -650,16 +653,16 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
+func (client *GlideClusterClient) ClientId() (models.ClusterValue[int64], error) {
 	response, err := client.executeCommand(C.ClientId, []string{})
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
 	data, err := handleIntResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
-	return createClusterSingleValue[int64](data), nil
+	return models.CreateClusterSingleValue[int64](data), nil
 }
 
 // Gets the current connection id.
@@ -674,24 +677,24 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (models.ClusterValue[int64], error) {
 	response, err := client.executeCommandWithRoute(C.ClientId, []string{}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[int64](), err
+			return models.CreateEmptyClusterValue[int64](), err
 		}
-		return createClusterMultiValue[int64](data), nil
+		return models.CreateClusterMultiValue[int64](data), nil
 	}
 	data, err := handleIntResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
-	return createClusterSingleValue[int64](data), nil
+	return models.CreateClusterSingleValue[int64](data), nil
 }
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
@@ -702,16 +705,16 @@ func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) 
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
+func (client *GlideClusterClient) LastSave() (models.ClusterValue[int64], error) {
 	response, err := client.executeCommand(C.LastSave, []string{})
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
 	data, err := handleIntResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
-	return createClusterSingleValue[int64](data), nil
+	return models.CreateClusterSingleValue[int64](data), nil
 }
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
@@ -726,24 +729,24 @@ func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
+func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (models.ClusterValue[int64], error) {
 	response, err := client.executeCommandWithRoute(C.LastSave, []string{}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[int64](), err
+			return models.CreateEmptyClusterValue[int64](), err
 		}
-		return createClusterMultiValue[int64](data), nil
+		return models.CreateClusterMultiValue[int64](data), nil
 	}
 	data, err := handleIntResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[int64](), err
+		return models.CreateEmptyClusterValue[int64](), err
 	}
-	return createClusterSingleValue[int64](data), nil
+	return models.CreateClusterSingleValue[int64](data), nil
 }
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
@@ -756,7 +759,7 @@ func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) 
 func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 	response, err := client.executeCommand(C.ConfigResetStat, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -776,7 +779,7 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
 	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -799,7 +802,7 @@ func (client *GlideClusterClient) ConfigSet(
 ) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -823,7 +826,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 ) (string, error) {
 	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -871,23 +874,23 @@ func (client *GlideClusterClient) ConfigGet(
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClusterClient) ConfigGetWithOptions(
 	parameters []string, opts options.RouteOption,
-) (ClusterValue[map[string]string], error) {
+) (models.ClusterValue[map[string]string], error) {
 	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[map[string]string](), err
+		return models.CreateEmptyClusterValue[map[string]string](), err
 	}
 	if opts.Route == nil || !opts.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(res)
 		if err != nil {
-			return createEmptyClusterValue[map[string]string](), err
+			return models.CreateEmptyClusterValue[map[string]string](), err
 		}
-		return createClusterSingleValue[map[string]string](data), nil
+		return models.CreateClusterSingleValue[map[string]string](data), nil
 	}
 	data, err := handleMapOfStringMapResponse(res)
 	if err != nil {
-		return createEmptyClusterValue[map[string]string](), err
+		return models.CreateEmptyClusterValue[map[string]string](), err
 	}
-	return createClusterMultiValue[map[string]string](data), nil
+	return models.CreateClusterMultiValue[map[string]string](data), nil
 }
 
 // Set the name of the current connection.
@@ -901,16 +904,16 @@ func (client *GlideClusterClient) ConfigGetWithOptions(
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterValue[string], error) {
+func (client *GlideClusterClient) ClientSetName(connectionName string) (models.ClusterValue[string], error) {
 	response, err := client.executeCommand(C.ClientSetName, []string{connectionName})
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Set the name of the current connection.
@@ -929,24 +932,24 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 func (client *GlideClusterClient) ClientSetNameWithOptions(
 	connectionName string,
 	opts options.RouteOption,
-) (ClusterValue[string], error) {
+) (models.ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.ClientSetName, []string{connectionName}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Gets the name of the current connection.
@@ -956,16 +959,16 @@ func (client *GlideClusterClient) ClientSetNameWithOptions(
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) {
+func (client *GlideClusterClient) ClientGetName() (models.ClusterValue[string], error) {
 	response, err := client.executeCommand(C.ClientGetName, []string{})
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Gets the name of the current connection.
@@ -980,24 +983,24 @@ func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) 
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
+func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (models.ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(C.ClientGetName, []string{}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Rewrites the configuration file with the current configuration.
@@ -1011,7 +1014,7 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 	response, err := client.executeCommand(C.ConfigRewrite, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -1031,7 +1034,7 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOption) (string, error) {
 	response, err := client.executeCommandWithRoute(C.ConfigRewrite, []string{}, opts.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -1043,10 +1046,10 @@ func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOpt
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKey() (Result[string], error) {
+func (client *GlideClusterClient) RandomKey() (models.Result[string], error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -1065,10 +1068,10 @@ func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (Result[string], error) {
+func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (models.Result[string], error) {
 	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts.Route)
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -1101,12 +1104,12 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 ) (string, error) {
 	args := []string{}
 	if replace {
-		args = append(args, options.ReplaceKeyword)
+		args = append(args, constants.ReplaceKeyword)
 	}
 	args = append(args, libraryCode)
 	result, err := client.executeCommandWithRoute(C.FunctionLoad, args, route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -1132,7 +1135,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{}, route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -1158,7 +1161,7 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.SYNC)}, route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -1184,7 +1187,7 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.ASYNC)}, route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -1209,28 +1212,28 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 //	The invoked function's return value.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithRoute(function string, route options.RouteOption) (ClusterValue[any], error) {
+func (client *GlideClusterClient) FCallWithRoute(function string, route options.RouteOption) (models.ClusterValue[any], error) {
 	result, err := client.executeCommandWithRoute(
 		C.FCall,
 		[]string{function, utils.IntToString(0)},
 		route.Route,
 	)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
 		(route.Route).IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 	data, err := handleAnyResponse(result)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	return createClusterSingleValue[any](data), nil
+	return models.CreateClusterSingleValue[any](data), nil
 }
 
 // Invokes a previously loaded read-only function.
@@ -1255,28 +1258,28 @@ func (client *GlideClusterClient) FCallWithRoute(function string, route options.
 func (client *GlideClusterClient) FCallReadOnlyWithRoute(
 	function string,
 	route options.RouteOption,
-) (ClusterValue[any], error) {
+) (models.ClusterValue[any], error) {
 	result, err := client.executeCommandWithRoute(
 		C.FCallReadOnly,
 		[]string{function, utils.IntToString(0)},
 		route.Route,
 	)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
 		(route.Route).IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 	data, err := handleAnyResponse(result)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	return createClusterSingleValue[any](data), nil
+	return models.CreateClusterSingleValue[any](data), nil
 }
 
 // Invokes a previously loaded function.
@@ -1295,10 +1298,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithRoute(
 //
 // Return value:
 //
-//	The invoked function's return value wrapped by a [ClusterValue].
+//	The invoked function's return value wrapped by a [models.ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithArgs(function string, args []string) (ClusterValue[any], error) {
+func (client *GlideClusterClient) FCallWithArgs(function string, args []string) (models.ClusterValue[any], error) {
 	return client.FCallWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
@@ -1319,14 +1322,14 @@ func (client *GlideClusterClient) FCallWithArgs(function string, args []string) 
 //
 // Return value:
 //
-//	The invoked function's return value wrapped by a [ClusterValue].
+//	The invoked function's return value wrapped by a [models.ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (client *GlideClusterClient) FCallWithArgsWithRoute(
 	function string,
 	args []string,
 	route options.RouteOption,
-) (ClusterValue[any], error) {
+) (models.ClusterValue[any], error) {
 	cmdArgs := append([]string{function, utils.IntToString(0)}, args...)
 	result, err := client.executeCommandWithRoute(
 		C.FCall,
@@ -1334,21 +1337,21 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(
 		route.Route,
 	)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
 		(route.Route).IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 	data, err := handleAnyResponse(result)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	return createClusterSingleValue[any](data), nil
+	return models.CreateClusterSingleValue[any](data), nil
 }
 
 // Invokes a previously loaded read-only function.
@@ -1368,14 +1371,14 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(
 //
 // Return value:
 //
-//	The invoked function's return value wrapped by a [ClusterValue].
+//	The invoked function's return value wrapped by a [models.ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 	function string,
 	args []string,
 	route options.RouteOption,
-) (ClusterValue[any], error) {
+) (models.ClusterValue[any], error) {
 	cmdArgs := append([]string{function, utils.IntToString(0)}, args...)
 	result, err := client.executeCommandWithRoute(
 		C.FCallReadOnly,
@@ -1383,21 +1386,21 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 		route.Route,
 	)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
 		(route.Route).IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 	data, err := handleAnyResponse(result)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
-	return createClusterSingleValue[any](data), nil
+	return models.CreateClusterSingleValue[any](data), nil
 }
 
 // Invokes a previously loaded read-only function.
@@ -1416,10 +1419,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 //
 // Return value:
 //
-//	The invoked function's return value wrapped by a [ClusterValue].
+//	The invoked function's return value wrapped by a [models.ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
-func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
+func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (models.ClusterValue[any], error) {
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
@@ -1442,7 +1445,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClusterClient) FunctionStats() (
-	map[string]FunctionStatsResult, error,
+	map[string]models.FunctionStatsResult, error,
 ) {
 	response, err := client.executeCommand(C.FunctionStats, []string{})
 	if err != nil {
@@ -1475,31 +1478,31 @@ func (client *GlideClusterClient) FunctionStats() (
 //
 // Return value:
 //
-//	A [ClusterValue] containing a map of node addresses to their function statistics.
+//	A [models.ClusterValue] containing a map of node addresses to their function statistics.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (client *GlideClusterClient) FunctionStatsWithRoute(
 	opts options.RouteOption,
-) (ClusterValue[FunctionStatsResult], error) {
+) (models.ClusterValue[models.FunctionStatsResult], error) {
 	response, err := client.executeCommandWithRoute(C.FunctionStats, []string{}, opts.Route)
 	if err != nil {
-		return createEmptyClusterValue[FunctionStatsResult](), err
+		return models.CreateEmptyClusterValue[models.FunctionStatsResult](), err
 	}
 
 	stats, err := handleFunctionStatsResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[FunctionStatsResult](), err
+		return models.CreateEmptyClusterValue[models.FunctionStatsResult](), err
 	}
 
 	// single node routes return a single stat response
 	if len(stats) == 1 {
 		for _, result := range stats {
-			return createClusterSingleValue[FunctionStatsResult](result), nil
+			return models.CreateClusterSingleValue[models.FunctionStatsResult](result), nil
 		}
 	}
 
 	// For multi-node routes, return the map of node addresses to FunctionStatsResult
-	return createClusterMultiValue[FunctionStatsResult](stats), nil
+	return models.CreateClusterMultiValue[models.FunctionStatsResult](stats), nil
 }
 
 // Deletes a library and all its functions.
@@ -1546,7 +1549,7 @@ func (client *GlideClusterClient) FunctionDelete(libName string) (string, error)
 func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(C.FunctionDelete, []string{libName}, route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -1578,7 +1581,7 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 		route.Route,
 	)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -1599,31 +1602,31 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 //
 // Return value:
 //
-//	A [ClusterValue] containing a list of info about queried libraries and their functions.
+//	A [models.ClusterValue] containing a list of info about queried libraries and their functions.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
 func (client *GlideClusterClient) FunctionListWithRoute(
-	query FunctionListQuery,
+	query models.FunctionListQuery,
 	route options.RouteOption,
-) (ClusterValue[[]LibraryInfo], error) {
+) (models.ClusterValue[[]models.LibraryInfo], error) {
 	response, err := client.executeCommandWithRoute(C.FunctionList, query.ToArgs(), route.Route)
 	if err != nil {
-		return createEmptyClusterValue[[]LibraryInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LibraryInfo](), err
 	}
 
 	if route.Route != nil && route.Route.IsMultiNode() {
 		multiNodeLibs, err := handleFunctionListMultiNodeResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[[]LibraryInfo](), err
+			return models.CreateEmptyClusterValue[[]models.LibraryInfo](), err
 		}
-		return createClusterMultiValue[[]LibraryInfo](multiNodeLibs), nil
+		return models.CreateClusterMultiValue[[]models.LibraryInfo](multiNodeLibs), nil
 	}
 
 	libs, err := handleFunctionListResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[[]LibraryInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LibraryInfo](), err
 	}
-	return createClusterSingleValue[[]LibraryInfo](libs), nil
+	return models.CreateClusterSingleValue[[]models.LibraryInfo](libs), nil
 }
 
 // Publish posts a message to the specified channel. Returns the number of clients that received the message.

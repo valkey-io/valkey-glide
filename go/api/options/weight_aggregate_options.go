@@ -2,7 +2,10 @@
 
 package options
 
-import "github.com/valkey-io/valkey-glide/go/utils"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
+)
 
 // Aggregate represents the method of aggregating scores from multiple sets
 type Aggregate string
@@ -15,7 +18,7 @@ const (
 
 // converts the Aggregate to its Valkey API representation
 func (a Aggregate) ToArgs() ([]string, error) {
-	return []string{AggregateKeyWord, string(a)}, nil
+	return []string{constants.AggregateKeyWord, string(a)}, nil
 }
 
 // This is a basic interface. Please use one of the following implementations:
@@ -58,7 +61,7 @@ func (w WeightedKeys) ToArgs() ([]string, error) {
 	}
 	args = append(args, utils.IntToString(int64(len(keys))))
 	args = append(args, keys...)
-	args = append(args, WeightsKeyword)
+	args = append(args, constants.WeightsKeyword)
 	args = append(args, weights...)
 	return args, nil
 }

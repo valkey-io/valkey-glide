@@ -4,6 +4,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
 
@@ -55,7 +56,7 @@ func ExampleGlideClient_Scan() {
 
 func ExampleGlideClient_ScanWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	opts := options.NewScanOptions().SetCount(10).SetType(options.ObjectTypeList)
+	opts := options.NewScanOptions().SetCount(10).SetType(constants.ObjectTypeList)
 	client.CustomCommand([]string{"FLUSHALL"})
 	client.LPush("key1", []string{"1", "3", "2", "4"})
 	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)

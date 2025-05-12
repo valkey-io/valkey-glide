@@ -3,7 +3,7 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // Optional arguments to `BitPos` in [BitMapCommands]

@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Generic Commands" group for standalone and cluster clients.
 //
@@ -16,19 +20,19 @@ type GenericBaseCommands interface {
 
 	Expire(key string, seconds int64) (bool, error)
 
-	ExpireWithOptions(key string, seconds int64, expireCondition options.ExpireCondition) (bool, error)
+	ExpireWithOptions(key string, seconds int64, expireCondition constants.ExpireCondition) (bool, error)
 
 	ExpireAt(key string, unixTimestampInSeconds int64) (bool, error)
 
-	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition options.ExpireCondition) (bool, error)
+	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition constants.ExpireCondition) (bool, error)
 
 	PExpire(key string, milliseconds int64) (bool, error)
 
-	PExpireWithOptions(key string, milliseconds int64, expireCondition options.ExpireCondition) (bool, error)
+	PExpireWithOptions(key string, milliseconds int64, expireCondition constants.ExpireCondition) (bool, error)
 
 	PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error)
 
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition options.ExpireCondition) (bool, error)
+	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition constants.ExpireCondition) (bool, error)
 
 	ExpireTime(key string) (int64, error)
 
@@ -54,27 +58,27 @@ type GenericBaseCommands interface {
 
 	RestoreWithOptions(key string, ttl int64, value string, option options.RestoreOptions) (string, error)
 
-	ObjectEncoding(key string) (Result[string], error)
+	ObjectEncoding(key string) (models.Result[string], error)
 
-	Dump(key string) (Result[string], error)
+	Dump(key string) (models.Result[string], error)
 
-	ObjectFreq(key string) (Result[int64], error)
+	ObjectFreq(key string) (models.Result[int64], error)
 
-	ObjectIdleTime(key string) (Result[int64], error)
+	ObjectIdleTime(key string) (models.Result[int64], error)
 
-	ObjectRefCount(key string) (Result[int64], error)
+	ObjectRefCount(key string) (models.Result[int64], error)
 
-	Sort(key string) ([]Result[string], error)
+	Sort(key string) ([]models.Result[string], error)
 
-	SortWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortWithOptions(key string, sortOptions options.SortOptions) ([]models.Result[string], error)
 
 	SortStore(key string, destination string) (int64, error)
 
 	SortStoreWithOptions(key string, destination string, sortOptions options.SortOptions) (int64, error)
 
-	SortReadOnly(key string) ([]Result[string], error)
+	SortReadOnly(key string) ([]models.Result[string], error)
 
-	SortReadOnlyWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(key string, sortOptions options.SortOptions) ([]models.Result[string], error)
 
 	Wait(numberOfReplicas int64, timeout int64) (int64, error)
 

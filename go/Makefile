@@ -49,7 +49,7 @@ clean:
 	go clean
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
-	rm -rf protobuf
+	rm -rf internal/protobuf
 	rm -rf $(GLIDE_FFI_FOLDER)/target
 	rm -rf reports
 
@@ -77,13 +77,13 @@ gen-c-bindings: libglide_ffi
 	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
-	rm -rf protobuf
-	mkdir -p protobuf
+	rm -rf internal/protobuf
+	mkdir -p internal/protobuf
 	protoc --proto_path=$(GLIDE_CORE_FOLDER)/src/protobuf \
-		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_out=./protobuf \
+		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
+		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
+		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
+		--go_out=./internal/protobuf \
 		--go_opt=paths=source_relative \
 		$(GLIDE_CORE_FOLDER)/src/protobuf/*.proto
 

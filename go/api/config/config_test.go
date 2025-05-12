@@ -1,13 +1,14 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
 	"fmt"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/internal/protobuf"
 )
 
 func TestDefaultStandaloneConfig(t *testing.T) {

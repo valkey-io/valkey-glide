@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Connection Management" group of commands for standalone client.
 //
@@ -14,7 +17,7 @@ type ConnectionManagementCommands interface {
 
 	PingWithOptions(pingOptions options.PingOptions) (string, error)
 
-	Echo(message string) (Result[string], error)
+	Echo(message string) (models.Result[string], error)
 
 	ClientId() (int64, error)
 

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -21,21 +22,21 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionFlushAsyncWithRoute(route options.RouteOption) (string, error)
 
-	FCallWithRoute(function string, route options.RouteOption) (ClusterValue[any], error)
+	FCallWithRoute(function string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FCallReadOnlyWithRoute(function string, route options.RouteOption) (ClusterValue[any], error)
+	FCallReadOnlyWithRoute(function string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FCallWithArgs(function string, args []string) (ClusterValue[any], error)
+	FCallWithArgs(function string, args []string) (models.ClusterValue[any], error)
 
-	FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error)
+	FCallReadOnlyWithArgs(function string, args []string) (models.ClusterValue[any], error)
 
-	FCallWithArgsWithRoute(function string, args []string, route options.RouteOption) (ClusterValue[any], error)
+	FCallWithArgsWithRoute(function string, args []string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FCallReadOnlyWithArgsWithRoute(function string, args []string, route options.RouteOption) (ClusterValue[any], error)
+	FCallReadOnlyWithArgsWithRoute(function string, args []string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FunctionStats() (map[string]FunctionStatsResult, error)
+	FunctionStats() (map[string]models.FunctionStatsResult, error)
 
-	FunctionStatsWithRoute(route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
+	FunctionStatsWithRoute(route options.RouteOption) (models.ClusterValue[models.FunctionStatsResult], error)
 
 	FunctionDelete(libName string) (string, error)
 
@@ -43,5 +44,5 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionKillWithRoute(route options.RouteOption) (string, error)
 
-	FunctionListWithRoute(query FunctionListQuery, route options.RouteOption) (ClusterValue[[]LibraryInfo], error)
+	FunctionListWithRoute(query models.FunctionListQuery, route options.RouteOption) (models.ClusterValue[[]models.LibraryInfo], error)
 }

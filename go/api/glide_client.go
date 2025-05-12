@@ -6,8 +6,11 @@ package api
 import "C"
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // GlideClient interface compliance check.
@@ -55,13 +58,14 @@ type GlideClient struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
-func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, error) {
+func NewGlideClient(config *config.GlideClientConfiguration) (GlideClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
 	}
-	if config.subscriptionConfig != nil {
-		client.setMessageHandler(NewMessageHandler(config.subscriptionConfig.callback, config.subscriptionConfig.context))
+	if config.HasSubscription() {
+		subConfig := config.GetSubscription()
+		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
 	return &GlideClient{client}, nil
@@ -86,12 +90,12 @@ func NewGlideClient(config *GlideClientConfiguration) (GlideClientCommands, erro
 //	The returned value for the custom command.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
+func (client *GlideClient) CustomCommand(args []string) (any, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
-	return handleInterfaceResponse(res)
+	return HandleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
@@ -112,7 +116,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -129,7 +133,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 //
 // Return value:
 //
-//	A map of api.Result[string] corresponding to the configuration parameters.
+//	A map of modelsResult[string] corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
@@ -154,7 +158,7 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -170,7 +174,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/info/
 func (client *GlideClient) Info() (string, error) {
-	return client.InfoWithOptions(options.InfoOptions{Sections: []options.Section{}})
+	return client.InfoWithOptions(options.InfoOptions{Sections: []constants.Section{}})
 }
 
 // Gets information and statistics about the server.
@@ -189,11 +193,11 @@ func (client *GlideClient) Info() (string, error) {
 func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Info, optionArgs)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -209,7 +213,7 @@ func (client *GlideClient) InfoWithOptions(options options.InfoOptions) (string,
 func (client *GlideClient) DBSize() (int64, error) {
 	result, err := client.executeCommand(C.DBSize, []string{})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -226,10 +230,10 @@ func (client *GlideClient) DBSize() (int64, error) {
 //	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClient) Echo(message string) (Result[string], error) {
+func (client *GlideClient) Echo(message string) (models.Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -259,11 +263,11 @@ func (client *GlideClient) Ping() (string, error) {
 func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (string, error) {
 	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Ping, optionArgs)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -280,7 +284,7 @@ func (client *GlideClient) PingWithOptions(pingOptions options.PingOptions) (str
 func (client *GlideClient) FlushAll() (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -301,7 +305,7 @@ func (client *GlideClient) FlushAll() (string, error) {
 func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -318,7 +322,7 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 func (client *GlideClient) FlushDB() (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -339,7 +343,7 @@ func (client *GlideClient) FlushDB() (string, error) {
 func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -354,7 +358,7 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 func (client *GlideClient) Lolwut() (string, error) {
 	result, err := client.executeCommand(C.Lolwut, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -373,11 +377,11 @@ func (client *GlideClient) Lolwut() (string, error) {
 func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
 	commandArgs, err := opts.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(C.Lolwut, commandArgs)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -392,7 +396,7 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 func (client *GlideClient) ClientId() (int64, error) {
 	result, err := client.executeCommand(C.ClientId, []string{})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -407,7 +411,7 @@ func (client *GlideClient) ClientId() (int64, error) {
 func (client *GlideClient) LastSave() (int64, error) {
 	response, err := client.executeCommand(C.LastSave, []string{})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(response)
 }
@@ -422,7 +426,7 @@ func (client *GlideClient) LastSave() (int64, error) {
 func (client *GlideClient) ConfigResetStat() (string, error) {
 	response, err := client.executeCommand(C.ConfigResetStat, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -437,7 +441,7 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 func (client *GlideClient) ClientGetName() (string, error) {
 	result, err := client.executeCommand(C.ClientGetName, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -456,7 +460,7 @@ func (client *GlideClient) ClientGetName() (string, error) {
 func (client *GlideClient) ClientSetName(connectionName string) (string, error) {
 	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -476,7 +480,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -499,7 +503,7 @@ func (client *GlideClient) Move(key string, dbIndex int64) (bool, error) {
 func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(res)
 }
@@ -522,11 +526,11 @@ func (client *GlideClient) Scan(cursor int64) (string, []string, error) {
 func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(res)
 }
@@ -541,7 +545,7 @@ func (client *GlideClient) ScanWithOptions(cursor int64, scanOptions options.Sca
 func (client *GlideClient) ConfigRewrite() (string, error) {
 	response, err := client.executeCommand(C.ConfigRewrite, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
 }
@@ -553,10 +557,10 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 //	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClient) RandomKey() (Result[string], error) {
+func (client *GlideClient) RandomKey() (models.Result[string], error) {
 	result, err := client.executeCommand(C.RandomKey, []string{})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -580,7 +584,7 @@ func (client *GlideClient) RandomKey() (Result[string], error) {
 //	engines - Information about available engines and their stats.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
-func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, error) {
+func (client *GlideClient) FunctionStats() (map[string]models.FunctionStatsResult, error) {
 	response, err := client.executeCommand(C.FunctionStats, []string{})
 	if err != nil {
 		return nil, err
@@ -608,7 +612,7 @@ func (client *GlideClient) FunctionStats() (map[string]FunctionStatsResult, erro
 func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }

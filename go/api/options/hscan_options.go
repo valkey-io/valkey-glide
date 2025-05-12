@@ -2,6 +2,8 @@
 
 package options
 
+import "github.com/valkey-io/valkey-glide/go/api/constants"
+
 // This struct represents the optional arguments for the HSCAN command.
 type HashScanOptions struct {
 	BaseScanOptions
@@ -37,7 +39,7 @@ func (options *HashScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if options.noValue {
-		args = append(args, NoValueKeyword)
+		args = append(args, constants.NoValueKeyword)
 	}
 	return args, err
 }

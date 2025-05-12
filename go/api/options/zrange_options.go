@@ -3,7 +3,8 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // Query for `ZRange` in [SortedSetCommands]
@@ -57,7 +58,7 @@ func NewScoreBoundary(bound float64, isInclusive bool) scoreBoundary {
 }
 
 // Create a new score boundary defined by an infinity.
-func NewInfiniteScoreBoundary(bound InfBoundary) scoreBoundary {
+func NewInfiniteScoreBoundary(bound constants.InfBoundary) scoreBoundary {
 	return scoreBoundary(string(bound) + "inf")
 }
 
@@ -70,7 +71,7 @@ func NewLexBoundary(bound string, isInclusive bool) lexBoundary {
 }
 
 // Create a new lex boundary defined by an infinity.
-func NewInfiniteLexBoundary(bound InfBoundary) lexBoundary {
+func NewInfiniteLexBoundary(bound constants.InfBoundary) lexBoundary {
 	return lexBoundary(string(bound))
 }
 

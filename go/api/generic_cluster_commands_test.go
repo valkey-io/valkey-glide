@@ -4,8 +4,10 @@ package api
 
 import (
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
@@ -197,7 +199,7 @@ func ExampleGlideClusterClient_ScanWithOptions_type() {
 	}
 
 	cursor := *options.NewClusterScanCursor()
-	opts := options.NewClusterScanOptions().SetType(options.ObjectTypeSet)
+	opts := options.NewClusterScanOptions().SetType(constants.ObjectTypeSet)
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {

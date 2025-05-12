@@ -2,7 +2,10 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Hash" group of commands for standalone and cluster clients.
 //
@@ -10,11 +13,11 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#hash
 type HashCommands interface {
-	HGet(key string, field string) (Result[string], error)
+	HGet(key string, field string) (models.Result[string], error)
 
 	HGetAll(key string) (map[string]string, error)
 
-	HMGet(key string, fields []string) ([]Result[string], error)
+	HMGet(key string, fields []string) ([]models.Result[string], error)
 
 	HSet(key string, values map[string]string) (int64, error)
 
@@ -38,7 +41,7 @@ type HashCommands interface {
 
 	HScan(key string, cursor string) (string, []string, error)
 
-	HRandField(key string) (Result[string], error)
+	HRandField(key string) (models.Result[string], error)
 
 	HRandFieldWithCount(key string, count int64) ([]string, error)
 

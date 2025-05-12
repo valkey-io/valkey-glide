@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 

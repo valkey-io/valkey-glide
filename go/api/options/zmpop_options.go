@@ -3,7 +3,8 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // Optional arguments for `ZMPop` and `BZMPop` in [SortedSetCommands]
@@ -27,7 +28,7 @@ func (zmpo *ZMPopOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	if zmpo.countIsSet {
-		args = append(args, CountKeyword, utils.IntToString(zmpo.count))
+		args = append(args, constants.CountKeyword, utils.IntToString(zmpo.count))
 	}
 
 	return args, nil

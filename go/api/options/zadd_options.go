@@ -4,13 +4,14 @@ package options
 
 import (
 	"errors"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // Optional arguments to `ZAdd` in [SortedSetCommands]
 type ZAddOptions struct {
-	conditionalChange ConditionalSet
+	conditionalChange constants.ConditionalSet
 	updateOptions     UpdateOptions
 	changed           bool
 	incr              bool
@@ -23,7 +24,7 @@ func NewZAddOptions() *ZAddOptions {
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options *ZAddOptions) SetConditionalChange(c ConditionalSet) *ZAddOptions {
+func (options *ZAddOptions) SetConditionalChange(c constants.ConditionalSet) *ZAddOptions {
 	options.conditionalChange = c
 	return options
 }
@@ -59,7 +60,7 @@ func (opts *ZAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
-	if opts.conditionalChange == OnlyIfExists || opts.conditionalChange == OnlyIfDoesNotExist {
+	if opts.conditionalChange == constants.OnlyIfExists || opts.conditionalChange == constants.OnlyIfDoesNotExist {
 		args = append(args, string(opts.conditionalChange))
 	}
 
@@ -68,11 +69,11 @@ func (opts *ZAddOptions) ToArgs() ([]string, error) {
 	}
 
 	if opts.changed {
-		args = append(args, ChangedKeyword)
+		args = append(args, constants.ChangedKeyword)
 	}
 
 	if opts.incr {
-		args = append(args, IncrKeyword, utils.FloatToString(opts.increment), opts.member)
+		args = append(args, constants.IncrKeyword, utils.FloatToString(opts.increment), opts.member)
 	}
 
 	return args, err

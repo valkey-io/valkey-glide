@@ -5,8 +5,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"sort"
 
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -399,7 +401,7 @@ func ExampleGlideClient_ZRange() {
 	// Retrieve members within a score range in descending order
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result2, err := client.ZRange("key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -424,7 +426,7 @@ func ExampleGlideClusterClient_ZRange() {
 	// Retrieve members within a score range in descending order
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result2, err := client.ZRange("key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -448,7 +450,7 @@ func ExampleGlideClient_ZRangeWithScores() {
 
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result2, err := client.ZRangeWithScores("key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -471,7 +473,7 @@ func ExampleGlideClusterClient_ZRangeWithScores() {
 
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result2, err := client.ZRangeWithScores("key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -492,7 +494,7 @@ func ExampleGlideClient_ZRangeStore() {
 	client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result, err := client.ZRangeStore("dest", "key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -509,7 +511,7 @@ func ExampleGlideClusterClient_ZRangeStore() {
 	client.ZAdd("{key}1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
 	result, err := client.ZRangeStore("{key}dest", "{key}1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -693,7 +695,7 @@ func ExampleGlideClient_ZCount() {
 
 	zCountRange := options.NewZCountRange(
 		options.NewInclusiveScoreBoundary(2.0),
-		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
 	)
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0})
 	result1, err := client.ZCount("key1", *zCountRange)
@@ -713,7 +715,7 @@ func ExampleGlideClusterClient_ZCount() {
 
 	zCountRange := options.NewZCountRange(
 		options.NewInclusiveScoreBoundary(2.0),
-		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
 	)
 	result, err := client.ZAdd("key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0})
 	result1, err := client.ZCount("key1", *zCountRange)
@@ -875,8 +877,8 @@ func ExampleGlideClient_ZRemRangeByScore() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 	result1, err := client.ZRemRangeByScore("key1", *options.NewRangeByScoreQuery(
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity),
-		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
 	))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -894,8 +896,8 @@ func ExampleGlideClusterClient_ZRemRangeByScore() {
 
 	result, err := client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 	result1, err := client.ZRemRangeByScore("key1", *options.NewRangeByScoreQuery(
-		options.NewInfiniteScoreBoundary(options.NegativeInfinity),
-		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
 	))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -912,7 +914,7 @@ func ExampleGlideClient_BZMPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result, err := client.BZMPop([]string{"key1"}, options.MAX, float64(0.5))
+	result, err := client.BZMPop([]string{"key1"}, constants.MAX, float64(0.5))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -925,7 +927,7 @@ func ExampleGlideClusterClient_BZMPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result, err := client.BZMPop([]string{"key1"}, options.MAX, float64(0.5))
+	result, err := client.BZMPop([]string{"key1"}, constants.MAX, float64(0.5))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -939,19 +941,19 @@ func ExampleGlideClient_BZMPopWithOptions() {
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
-	result, err := client.BZMPopWithOptions([]string{"key1"}, options.MAX, 0.1, *options.NewZMPopOptions().SetCount(2))
+	result, err := client.BZMPopWithOptions([]string{"key1"}, constants.MAX, 0.1, *options.NewZMPopOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	kms := KeyWithArrayOfMembersAndScores{
+	kms := models.KeyWithArrayOfMembersAndScores{
 		Key: "key1",
-		MembersAndScores: []MemberAndScore{
+		MembersAndScores: []models.MemberAndScore{
 			{Member: "d", Score: 4},
 			{Member: "c", Score: 3},
 		},
 	}
 	fmt.Println(kms.Key == result.Value().Key)
-	// isEqual := CompareUnorderedSlices[MemberAndScore](
+	// isEqual := CompareUnorderedSlices[models.MemberAndScore](
 	// 	kms.MembersAndScores,
 	// 	result.Value().MembersAndScores,
 	// ) // helper function for comparing arrays and slices
@@ -966,7 +968,7 @@ func ExampleGlideClusterClient_BZMPopWithOptions() {
 
 	client.ZAdd("key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
-	result, err := client.BZMPopWithOptions([]string{"key1"}, options.MAX, 0.1, *options.NewZMPopOptions().SetCount(1))
+	result, err := client.BZMPopWithOptions([]string{"key1"}, constants.MAX, 0.1, *options.NewZMPopOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1688,7 +1690,7 @@ func ExampleGlideClient_ZMPop() {
 	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
 
 	// Pop the lowest-score member
-	res, err := client.ZMPop([]string{"mySortedSet"}, options.MIN)
+	res, err := client.ZMPop([]string{"mySortedSet"}, constants.MIN)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 		return
@@ -1714,7 +1716,7 @@ func ExampleGlideClusterClient_ZMPop() {
 	client.ZAdd("{key}sortedSet", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 
 	// Pop the lowest-score member
-	res, err := client.ZMPop([]string{"{key}sortedSet"}, options.MIN)
+	res, err := client.ZMPop([]string{"{key}sortedSet"}, constants.MIN)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 		return
@@ -1739,7 +1741,7 @@ func ExampleGlideClient_ZMPopWithOptions() {
 	client.ZAdd("mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
 	opts := *options.NewZPopOptions().SetCount(2)
-	res, err := client.ZMPopWithOptions([]string{"mySortedSet"}, options.MAX, opts)
+	res, err := client.ZMPopWithOptions([]string{"mySortedSet"}, constants.MAX, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 		return
@@ -1769,7 +1771,7 @@ func ExampleGlideClusterClient_ZMPopWithOptions() {
 	client.ZAdd("{key}SortedSet", map[string]float64{"p": 10.0, "q": 20.0, "r": 30.0})
 
 	opts := *options.NewZPopOptions().SetCount(2)
-	res, err := client.ZMPopWithOptions([]string{"{key}SortedSet"}, options.MAX, opts)
+	res, err := client.ZMPopWithOptions([]string{"{key}SortedSet"}, constants.MAX, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 		return

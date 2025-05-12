@@ -3,10 +3,11 @@
 package options
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strconv"
 
-	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // SetOptions represents optional arguments for the [api.StringCommands.SetWithOptions] command.
@@ -17,7 +18,7 @@ import (
 type SetOptions struct {
 	// If ConditionalSet is not set the value will be set regardless of prior value existence. If value isn't set because of
 	// the condition, [api.StringCommands.SetWithOptions] will return a zero-value string ("").
-	ConditionalSet ConditionalSet
+	ConditionalSet constants.ConditionalSet
 	// Value to compare when [SetOptions.ConditionalSet] is set to `OnlyIfEquals`.
 	ComparisonValue string
 	// Set command to return the old value stored at the given key, or a zero-value string ("") if the key did not exist. An
@@ -38,7 +39,7 @@ func NewSetOptions() *SetOptions {
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
 // Deprecated: Use [SetOptions.SetOnlyIfExists], [SetOptions.SetOnlyIfDoesNotExist], or [SetOptions.SetOnlyIfEquals] instead.
-func (setOptions *SetOptions) SetConditionalSet(conditionalSet ConditionalSet) *SetOptions {
+func (setOptions *SetOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *SetOptions {
 	setOptions.ConditionalSet = conditionalSet
 	setOptions.ComparisonValue = ""
 	return setOptions
@@ -49,7 +50,7 @@ func (setOptions *SetOptions) SetConditionalSet(conditionalSet ConditionalSet) *
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 func (setOptions *SetOptions) SetOnlyIfExists() *SetOptions {
-	setOptions.ConditionalSet = OnlyIfExists
+	setOptions.ConditionalSet = constants.OnlyIfExists
 	setOptions.ComparisonValue = ""
 	return setOptions
 }
@@ -59,7 +60,7 @@ func (setOptions *SetOptions) SetOnlyIfExists() *SetOptions {
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
-	setOptions.ConditionalSet = OnlyIfDoesNotExist
+	setOptions.ConditionalSet = constants.OnlyIfDoesNotExist
 	setOptions.ComparisonValue = ""
 	return setOptions
 }
@@ -71,7 +72,7 @@ func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
 //
 // since Valkey 8.1 and above.
 func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOptions {
-	setOptions.ConditionalSet = OnlyIfEquals
+	setOptions.ConditionalSet = constants.OnlyIfEquals
 	setOptions.ComparisonValue = comparisonValue
 	return setOptions
 }
@@ -91,20 +92,20 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	var err error
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
-		if opts.ConditionalSet == OnlyIfEquals {
+		if opts.ConditionalSet == constants.OnlyIfEquals {
 			args = append(args, opts.ComparisonValue)
 		}
 	}
 
 	if opts.ReturnOldValue {
-		args = append(args, returnOldValue)
+		args = append(args, constants.ReturnOldValue)
 	}
 
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
-		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
 			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
-		case KeepExisting:
+		case constants.KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
 			err = &errors.RequestError{Msg: "Invalid expiry type"}
@@ -140,9 +141,9 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
-		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
 			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
-		case Persist:
+		case constants.Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
 			err = &errors.RequestError{Msg: "Invalid expiry type"}
@@ -152,24 +153,9 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 	return args, err
 }
 
-func (expireCondition ExpireCondition) ToString() (string, error) {
-	switch expireCondition {
-	case HasExistingExpiry:
-		return string(HasExistingExpiry), nil
-	case HasNoExpiry:
-		return string(HasNoExpiry), nil
-	case NewExpiryGreaterThanCurrent:
-		return string(NewExpiryGreaterThanCurrent), nil
-	case NewExpiryLessThanCurrent:
-		return string(NewExpiryLessThanCurrent), nil
-	default:
-		return "", &errors.RequestError{Msg: "Invalid expire condition"}
-	}
-}
-
 // Expiry is used to configure the lifetime of a value.
 type Expiry struct {
-	Type  ExpiryType
+	Type  constants.ExpiryType
 	Count uint64
 }
 
@@ -177,7 +163,7 @@ func NewExpiry() *Expiry {
 	return &Expiry{}
 }
 
-func (ex *Expiry) SetType(expiryType ExpiryType) *Expiry {
+func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	ex.Type = expiryType
 	return ex
 }
@@ -223,47 +209,14 @@ func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
 func (opts *LPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
-		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
+		args = append(args, constants.RankKeyword, utils.IntToString(opts.Rank))
 	}
 
 	if opts.IsMaxLenSet {
-		args = append(args, MaxLenKeyword, utils.IntToString(opts.MaxLen))
+		args = append(args, constants.MaxLenKeyword, utils.IntToString(opts.MaxLen))
 	}
 
 	return args, nil
-}
-
-func (insertPosition InsertPosition) ToString() (string, error) {
-	switch insertPosition {
-	case Before:
-		return string(Before), nil
-	case After:
-		return string(After), nil
-	default:
-		return "", &errors.RequestError{Msg: "Invalid insert position"}
-	}
-}
-
-func (listDirection ListDirection) ToString() (string, error) {
-	switch listDirection {
-	case Left:
-		return string(Left), nil
-	case Right:
-		return string(Right), nil
-	default:
-		return "", &errors.RequestError{Msg: "Invalid list direction"}
-	}
-}
-
-func (scoreFilter ScoreFilter) ToString() (string, error) {
-	switch scoreFilter {
-	case MAX:
-		return string(MAX), nil
-	case MIN:
-		return string(MIN), nil
-	default:
-		return "", &errors.RequestError{Msg: "Invalid score filter"}
-	}
 }
 
 // Optional arguments to Restore(key string, ttl int64, value string, option RestoreOptions)
@@ -286,26 +239,26 @@ func NewRestoreOptions() *RestoreOptions {
 
 // Custom setter methods to replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = ReplaceKeyword
+	restoreOption.replace = constants.ReplaceKeyword
 	return restoreOption
 }
 
 // Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = ABSTTLKeyword
+	restoreOption.absTTL = constants.ABSTTLKeyword
 	return restoreOption
 }
 
 // For eviction purpose, you may use IDLETIME or FREQ modifiers.
 type Eviction struct {
 	// It represent IDLETIME or FREQ.
-	Type EvictionType
+	Type constants.EvictionType
 	// It represents count(int) of the idletime/frequency of object.
 	Count int64
 }
 
 // Custom setter methods set the idletime/frequency of object.
-func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
+func (restoreOption *RestoreOptions) SetEviction(evictionType constants.EvictionType, count int64) *RestoreOptions {
 	restoreOption.eviction.Type = evictionType
 	restoreOption.eviction.Count = count
 	return restoreOption
@@ -331,7 +284,7 @@ type InfoOptions struct {
 	// A list of [Section] values specifying which sections of information to retrieve.
 	// When no parameter is provided, [Section.Default] is assumed.
 	// Starting with server version 7.0.0 `INFO` command supports multiple sections.
-	Sections []Section
+	Sections []constants.Section
 }
 
 // Optional arguments for `Info` for cluster client
@@ -381,7 +334,7 @@ func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {
-		args = append(args, string(ReplaceKeyword))
+		args = append(args, string(constants.ReplaceKeyword))
 	}
 	if opts.dbDestination >= 0 {
 		args = append(args, "DB", utils.IntToString(opts.dbDestination))

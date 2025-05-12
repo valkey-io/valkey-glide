@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,7 +17,7 @@ func (suite *GlideTestSuite) TestModuleVerifyJsonLoaded() {
 	client := suite.defaultClusterClient()
 	result, err := client.InfoWithOptions(
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
 			RouteOption: nil,
 		},
 	)
@@ -89,7 +90,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$",
 		jsonValue,
-		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfExists),
+		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfExists),
 	)
 	assert.NoError(t, err)
 	assert.True(t, jsonSetResult.IsNil())
@@ -99,7 +100,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$",
 		jsonValue,
-		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfDoesNotExist),
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", jsonSetResult.Value())
@@ -109,7 +110,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$.a",
 		"4.5",
-		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfDoesNotExist),
+		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfDoesNotExist),
 	)
 	assert.NoError(t, err)
 	assert.True(t, jsonSetResult.IsNil())
@@ -124,7 +125,7 @@ func (suite *GlideTestSuite) TestModuleGetSetCommandConditionalSet() {
 		key,
 		"$.a",
 		"4.5",
-		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(options.OnlyIfExists),
+		*glideoptions.NewJsonSetOptionsBuilder().SetConditionalSet(constants.OnlyIfExists),
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", jsonSetResult.Value())

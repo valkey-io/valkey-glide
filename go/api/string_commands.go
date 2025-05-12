@@ -3,6 +3,7 @@
 package api
 
 import (
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -14,17 +15,17 @@ import (
 type StringCommands interface {
 	Set(key string, value string) (string, error)
 
-	SetWithOptions(key string, value string, options options.SetOptions) (Result[string], error)
+	SetWithOptions(key string, value string, options options.SetOptions) (models.Result[string], error)
 
-	Get(key string) (Result[string], error)
+	Get(key string) (models.Result[string], error)
 
-	GetEx(key string) (Result[string], error)
+	GetEx(key string) (models.Result[string], error)
 
-	GetExWithOptions(key string, options options.GetExOptions) (Result[string], error)
+	GetExWithOptions(key string, options options.GetExOptions) (models.Result[string], error)
 
 	MSet(keyValueMap map[string]string) (string, error)
 
-	MGet(keys []string) ([]Result[string], error)
+	MGet(keys []string) ([]models.Result[string], error)
 
 	MSetNX(keyValueMap map[string]string) (bool, error)
 
@@ -50,7 +51,7 @@ type StringCommands interface {
 
 	LCSLen(key1 string, key2 string) (int64, error)
 
-	LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error)
+	LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]any, error)
 
-	GetDel(key string) (Result[string], error)
+	GetDel(key string) (models.Result[string], error)
 }
