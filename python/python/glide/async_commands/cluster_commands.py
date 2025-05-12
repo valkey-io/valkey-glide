@@ -36,9 +36,13 @@ class ClusterCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
             For example - Return a list of all pub/sub clients from all nodes::
 
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
+                await client.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
 
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
@@ -62,6 +66,8 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the server.
+
+        Starting from server version 7, command supports multiple section arguments.
 
         See [valkey.io](https://valkey.io/commands/info/) for details.
 
@@ -167,7 +173,7 @@ class ClusterCommands(CoreCommands):
             >>> atomic_batch.set("key", "1")
             >>> atomic_batch.incr("key")
             >>> atomic_batch.get("key")
-            >>> atomic_result = await cluster_client.exec(atomic_batch)
+            >>> atomic_result = await cluster_client.exec(atomic_batch, false)
             >>> print(f"Atomic Batch Result: {atomic_result}")
             # Expected Output: Atomic Batch Result: [OK, 2, 2]
 
@@ -177,7 +183,7 @@ class ClusterCommands(CoreCommands):
             >>> non_atomic_batch.set("key2", "value2")
             >>> non_atomic_batch.get("key1")
             >>> non_atomic_batch.get("key2")
-            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch)
+            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, false)
             >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
             # Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
 
@@ -202,6 +208,7 @@ class ClusterCommands(CoreCommands):
             >>> non_atomic_batch.get("key2")
             >>> non_atomic_result = await cluster_client.exec(
             ...     non_atomic_batch,
+            ...     raise_on_error=False,
             ...     retry_server_error=True,
             ...     retry_connection_error=False
             ... )

@@ -1,1 +1,1 @@
-::: glide.async_commands.transaction.ClusterTransaction
+::: glide.async_commands.batch.ClusterTransaction
