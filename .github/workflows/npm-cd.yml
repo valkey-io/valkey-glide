@@ -179,11 +179,11 @@ jobs:
                   folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+            - name: Install Rust and protoc
+              uses: ./.github/workflows/install-rust-and-protoc/action.yml
               with:
-                  version: "25.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+                target: ${{ matrix.build.TARGET }}
+                github-token: ${{ secrets.GITHUB_TOKEN }}
 
             # Install Zig for cross-compilation - direct installation for musl environments
             - name: Install Zig directly on Alpine/musl
