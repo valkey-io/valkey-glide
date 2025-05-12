@@ -1475,9 +1475,7 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1634,9 +1632,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1697,9 +1693,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1765,9 +1759,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1898,9 +1890,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1916,9 +1906,7 @@ func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1954,9 +1942,7 @@ func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
 }
 
 func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write"
@@ -2072,9 +2058,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_key_based_write_function"
@@ -2144,9 +2128,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	client := suite.defaultClusterClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	// Flush all functions first
 	suite.verifyOK(client.FunctionFlushSync())

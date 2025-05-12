@@ -858,41 +858,46 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 func ExampleGlideClient_FunctionDump() {
 	client := getExampleGlideClient()
 
-	// Attempt to call a non-existent function
-	_, err := client.FCall("nonexistent_function")
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	_, err := client.FunctionDump()
 	if err != nil {
 		fmt.Println("Error:", err.Error())
+	} else {
+		fmt.Println("Function dump got a payload")
 	}
 
 	// Output:
-	// Error: An error was signalled by the server: - ResponseError: Function not found
+	// Function dump got a payload
 }
 
 func ExampleGlideClusterClient_FunctionDump() {
 	client := getExampleGlideClusterClient()
 
-	// Attempt to call a non-existent function
-	_, err := client.FCall("nonexistent_function")
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	_, err := client.FunctionDump()
 	if err != nil {
 		fmt.Println("Error:", err.Error())
+	} else {
+		fmt.Println("Function dump got a payload")
 	}
 
 	// Output:
-	// Error: An error was signalled by the server: - ResponseError: Function not found
+	// Function dump got a payload
 }
 
 func ExampleGlideClusterClient_FunctionDumpWithRoute() {
 	client := getExampleGlideClusterClient()
 
-	// Attempt to call a non-existent function with route
-	route := options.RouteOption{Route: config.RandomRoute}
-	_, err := client.FCallWithRoute("nonexistent_function", route)
+	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
+	_, err := client.FunctionDumpWithRoute(config.RandomRoute)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
+	} else {
+		fmt.Println("Function dump got a payload")
 	}
 
 	// Output:
-	// Error: An error was signalled by the server: - ResponseError: Function not found
+	// Function dump got a payload
 }
 
 func ExampleGlideClient_FunctionRestore() {

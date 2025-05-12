@@ -123,9 +123,8 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 	client := suite.defaultClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	suite.verifyOK(client.ConfigSet(configMap))
 
@@ -180,9 +179,8 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 	client := suite.defaultClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
 	suite.verifyOK(client.ConfigSet(configMap))
@@ -277,9 +275,8 @@ func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -305,9 +302,8 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -336,9 +332,8 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightAndGet() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -915,9 +910,7 @@ func (suite *GlideTestSuite) TestRandomKey() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -998,9 +991,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStats() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1068,9 +1059,7 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKill() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1086,9 +1075,7 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 }
 
 func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 	libName := "functionKill_no_write"
@@ -1177,9 +1164,7 @@ func (suite *GlideTestSuite) TestFunctionKillWrite() {
 func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	client := suite.defaultClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	// Flush all functions first
 	suite.verifyOK(client.FunctionFlushSync())
