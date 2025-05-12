@@ -109,7 +109,7 @@ class BaseBatch:
 
     def get(self: TBatch, key: TEncodable) -> TBatch:
         """
-        Get the value associated with the given key, or null if no such value exists.
+        Get the value associated with the given key, or null if no such key exists.
 
         See [valkey.io](https://valkey.io/commands/get/) for details.
 
@@ -273,6 +273,10 @@ class BaseBatch:
         [custom command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
         Args:
             command_args (List[TEncodable]): List of command arguments.
                 Every part of the command, including the command name and subcommands, should be added as a
@@ -311,6 +315,8 @@ class BaseBatch:
     ) -> TBatch:
         """
         Get information and statistics about the server.
+
+        Starting from server version 7, command supports multiple section arguments.
 
         See [valkey.io](https://valkey.io/commands/info/) for details.
 
@@ -1057,7 +1063,7 @@ class BaseBatch:
         Command response:
             Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements.
 
-            None if no elements could be popped.
+            `None` if no elements could be popped.
 
         Since: Valkey version 7.0.0.
         """
@@ -2412,26 +2418,26 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key of the stream.
-            start (StreamRangeBound): The starting stream ID bound for the range.
+            start (StreamRangeBound): The starting stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
-            end (StreamRangeBound): The ending stream ID bound for the range.
+            end (StreamRangeBound): The ending stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Command response:
-            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream entry IDs to stream entry data, where entry data is a
             list of pairings with format `[[field, entry], [field, entry], ...]`.
 
-            Returns None if the range arguments are not applicable.
+            Returns None if the range arguments are not applicable. Or if count is non-positive.
         """
         args = [key, start.to_arg(), end.to_arg()]
         if count is not None:
@@ -2454,26 +2460,26 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key of the stream.
-            end (StreamRangeBound): The ending stream ID bound for the range.
+            end (StreamRangeBound): The ending stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
-            start (StreamRangeBound): The starting stream ID bound for the range.
+            start (StreamRangeBound): The starting stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Command response:
-            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream entry IDs to stream entry data, where entry data is a
             list of pairings with format `[[field, entry], [field, entry], ...]`.
 
-            Returns None if the range arguments are not applicable.
+            Returns None if the range arguments are not applicable. Or if count is non-positive.
         """
         args = [key, end.to_arg(), start.to_arg()]
         if count is not None:
@@ -2787,7 +2793,7 @@ class BaseBatch:
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
             start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
-            count (Optional[int]): Limits the number of claimed entries to the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value. Default value is 100.
 
         Command response:
             List[Union[str, Mapping[bytes, List[List[bytes]]], List[bytes]]]: A list containing the following elements:
@@ -2832,7 +2838,7 @@ class BaseBatch:
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
             start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
-            count (Optional[int]): Limits the number of claimed entries to the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value. Default value is 100.
 
         Command response:
             List[Union[bytes, List[bytes]]]: A list containing the following elements:
@@ -3263,7 +3269,7 @@ class BaseBatch:
         Commands response:
             Optional[float]: The score of the member.
 
-            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and `None` is returned.
         """
         args = [key]
         if existing_options:

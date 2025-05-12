@@ -20,7 +20,7 @@ import lombok.NonNull;
  * Batch batch = new Batch(true);
  * JsonBatch.set(batch, "doc", ".", "{\"a\": 1.0, \"b\": 2}");
  * JsonBatch.get(batch, "doc");
- * Object[] result = client.exec(batch).get();
+ * Object[] result = client.exec(batch, false).get();
  * assert result[0].equals("OK"); // result of JsonBatch.set()
  * assert result[1].equals("{\"a\": 1.0, \"b\": 2}"); // result of JsonBatch.get()
  * }</pre>
