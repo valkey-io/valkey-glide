@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import traceback
 from enum import Enum
 from typing import Optional
-import traceback
 
 from .glide import Level as internalLevel
 from .glide import py_init, py_log
@@ -56,7 +56,13 @@ class Logger:
             cls._instance = cls(level, file_name)
 
     @classmethod
-    def log(cls, log_level: Level, log_identifier: str, message: str, err: Optional[Exception] = None):
+    def log(
+        cls,
+        log_level: Level,
+        log_identifier: str,
+        message: str,
+        err: Optional[Exception] = None,
+    ):
         """
         Logs the provided message if the provided log level is lower then the logger level.
 
