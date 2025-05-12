@@ -101,13 +101,10 @@ use dispose::{Disposable, Dispose};
 use futures::{future::BoxFuture, prelude::*, ready};
 use pin_project_lite::pin_project;
 use std::sync::RwLock as StdRwLock;
-use tokio::{
-    sync::{
-        mpsc,
-        oneshot::{self, Receiver},
-        RwLock as TokioRwLock,
-    },
-    time::Instant,
+use tokio::sync::{
+    mpsc,
+    oneshot::{self, Receiver},
+    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -711,7 +708,6 @@ struct Message<C: Sized> {
 // The state of the refresh slots background task
 struct SlotRefreshTaskState {
     retry_count: u8,
-    start_time: Instant,
     task_handle: JoinHandle<()>,
     result_receiver: oneshot::Receiver<RedisResult<()>>,
 }
@@ -723,7 +719,6 @@ impl SlotRefreshTaskState {
     ) -> Self {
         Self {
             retry_count: 0,
-            start_time: Instant::now(),
             task_handle,
             result_receiver,
         }
@@ -2765,10 +2760,12 @@ where
 
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         trace!("entered poll_recover");
+
         let recover_future = match &mut self.state {
             ConnectionState::PollComplete => return Poll::Ready(Ok(())),
             ConnectionState::Recover(future) => future,
         };
+
         match recover_future {
             RecoverFuture::RefreshingSlots(refresh_state) => {
                 // Check if there's a result ready on the channel
@@ -2806,50 +2803,14 @@ where
 
                             // Update state
                             refresh_state.task_handle = task_handle;
-                            refresh_state.start_time = Instant::now();
                             refresh_state.result_receiver = result_receiver;
 
                             return Poll::Ready(Ok(()));
                         }
                     }
                     Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                        // No result yet, task is still running - check for timeout
-                        if refresh_state.start_time.elapsed() > Duration::from_secs(30) {
-                            trace!("Slot refresh timed out after 30 seconds");
-
-                            // Abort the task
-                            refresh_state.task_handle.abort();
-
-                            if refresh_state.retry_count >= 2 {
-                                // After 3 attempts, try reconnect
-                                self.state = ConnectionState::Recover(
-                                    RecoverFuture::ReconnectToInitialNodes(Box::pin(
-                                        ClusterConnInner::reconnect_to_initial_nodes(
-                                            self.inner.clone(),
-                                        ),
-                                    )),
-                                );
-                                return Poll::Ready(Err((
-                                    ErrorKind::IoError,
-                                    "Slot refresh timed out after multiple attempts",
-                                )
-                                    .into()));
-                            } else {
-                                // Retry
-                                refresh_state.retry_count += 1;
-
-                                // Create a new task with a new channel
-                                let (task_handle, result_receiver) = Self::spawn_refresh_slots_task(
-                                    self.inner.clone(),
-                                    &RefreshPolicy::Throttable,
-                                );
-
-                                // Update state
-                                refresh_state.task_handle = task_handle;
-                                refresh_state.start_time = Instant::now();
-                                refresh_state.result_receiver = result_receiver;
-                            }
-                        }
+                        // No result yet, task is still running
+                        // Just continue and return Ok to not block poll_flush
                     }
                     Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                         // Sender was dropped without sending a value - task likely failed or was aborted
@@ -2880,7 +2841,6 @@ where
 
                             // Update state
                             refresh_state.task_handle = task_handle;
-                            refresh_state.start_time = Instant::now();
                             refresh_state.result_receiver = result_receiver;
                         }
                     }
