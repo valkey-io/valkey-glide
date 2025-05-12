@@ -48,6 +48,9 @@ use pipeline_routing::{
     collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
+
+use logger_core::log_error;
+
 use std::{
     collections::{HashMap, HashSet},
     fmt, io, mem,
@@ -66,7 +69,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::Telemetry;
+use telemetrylib::{GlideOpenTelemetry, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -2898,6 +2901,13 @@ where
             match result {
                 Next::Done => {}
                 Next::Retry { request } => {
+                    // Record retries error metric if telemetry is initialized
+                    if let Err(e) = GlideOpenTelemetry::record_retries() {
+                        log_error(
+                            "OpenTelemetry:retry_error",
+                            format!("Failed to record retry attempt: {}", e),
+                        );
+                    }
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
                     self.in_flight_requests.push(Box::pin(Request {
                         retry_params: retry_params.clone(),
@@ -2908,6 +2918,13 @@ where
                     }));
                 }
                 Next::RetryBusyLoadingError { request, address } => {
+                    // Record retry attempt metric if telemetry is initialized
+                    if let Err(e) = GlideOpenTelemetry::record_retries() {
+                        log_error(
+                            "OpenTelemetry:retry_error",
+                            format!("Failed to record retry attempt: {}", e),
+                        );
+                    }
                     // TODO - do we also want to try and reconnect to replica if it is loading?
                     let future = Self::handle_loading_error_and_retry(
                         self.inner.clone(),
@@ -2934,6 +2951,13 @@ where
                     let future: Option<
                         RequestState<Pin<Box<dyn Future<Output = OperationResult> + Send>>>,
                     > = if let Some(moved_redirect) = moved_redirect {
+                        // record moved error metric if telemetry is initialized
+                            if let Err(e) = GlideOpenTelemetry::record_moved_error() {
+                                log_error(
+                                    "OpenTelemetry:moved_error",
+                                    format!("Failed to record moved error: {}", e),
+                                );
+                            }
                         Some(RequestState::UpdateMoved {
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
