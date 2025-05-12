@@ -4,26 +4,23 @@
 
 import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
-import {
-    createLeakedArray,
-    createLeakedAttribute,
-    createLeakedBigint,
-    createLeakedDouble,
-    createLeakedMap,
-    createLeakedString,
-    MAX_REQUEST_ARGS_LEN,
-} from "glide-rs";
 import Long from "long";
 import net from "net";
 import os from "os";
 import path from "path";
-import { Reader } from "protobufjs";
+import { Reader } from "protobufjs/minimal";
 import {
     BaseClientConfiguration,
     ClosingError,
     ClusterBatch,
     ClusterTransaction,
     convertGlideRecordToRecord,
+    createLeakedArray,
+    createLeakedAttribute,
+    createLeakedBigint,
+    createLeakedDouble,
+    createLeakedMap,
+    createLeakedString,
     Decoder,
     GlideClient,
     GlideClientConfiguration,
@@ -33,15 +30,16 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
+    MAX_REQUEST_ARGS_LEN,
     RequestError,
     SlotKeyTypes,
     TimeUnit,
-} from "..";
+} from "../build-ts";
 import {
     command_request,
     connection_request,
     response,
-} from "../src/ProtobufMessage";
+} from "../build-ts/ProtobufMessage";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
