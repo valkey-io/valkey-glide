@@ -218,12 +218,14 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 	}
 
 	if config.AdvancedGlideClientConfiguration.openTelemetryConfig != nil {
+		otelCfg := config.AdvancedGlideClientConfiguration.openTelemetryConfig
 		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
-			CollectorEndPoint: config.AdvancedGlideClientConfiguration.openTelemetryConfig.TracesCollectorEndPoint,
+			TracesCollectorEndpoint:  otelCfg.TracesCollectorEndPoint,
+			MetricsCollectorEndpoint: otelCfg.MetricsCollectorEndPoint,
 		}
-		if config.AdvancedGlideClientConfiguration.openTelemetryConfig.FlushIntervalMs > 0 {
-			flushInterval := uint64(config.AdvancedGlideClientConfiguration.openTelemetryConfig.FlushIntervalMs)
-			request.OpentelemetryConfig.SpanFlushInterval = &flushInterval
+		if otelCfg.FlushIntervalMs > 0 {
+			flushInterval := uint32(otelCfg.FlushIntervalMs)
+			request.OpentelemetryConfig.FlushIntervalMs = &flushInterval
 		}
 	}
 
@@ -349,12 +351,14 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	}
 
 	if config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig != nil {
+		otelCfg := config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig
 		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
-			CollectorEndPoint: config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.TracesCollectorEndPoint,
+			TracesCollectorEndpoint:  otelCfg.TracesCollectorEndPoint,
+			MetricsCollectorEndpoint: otelCfg.MetricsCollectorEndPoint,
 		}
-		if config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.FlushIntervalMs > 0 {
-			flushInterval := uint64(config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig.FlushIntervalMs)
-			request.OpentelemetryConfig.SpanFlushInterval = &flushInterval
+		if otelCfg.FlushIntervalMs > 0 {
+			flushInterval := uint32(otelCfg.FlushIntervalMs)
+			request.OpentelemetryConfig.FlushIntervalMs = &flushInterval
 		}
 	}
 

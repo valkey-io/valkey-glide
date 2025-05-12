@@ -32,6 +32,9 @@ use std::{
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 
+// Telemetry and OpenTelemetry imports
+use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
+
 /// The struct represents the response of the command.
 ///
 /// It will have one of the value populated depending on the return type of the command.
@@ -924,6 +927,7 @@ pub unsafe extern "C" fn command(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -952,6 +956,9 @@ pub unsafe extern "C" fn command(
     } else {
         Routes::default()
     };
+
+    // TODO: Use span_ptr for OpenTelemetry tracking in command execution
+    let _otel_span_ptr = span_ptr;
 
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_command(channel, async move {
@@ -1256,4 +1263,32 @@ pub unsafe extern "C" fn update_connection_password(
             .update_connection_password(password_option, immediate_auth)
             .await
     })
+}
+
+/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
+#[no_mangle]
+pub extern "C" fn create_otel_span(name: *const c_char) -> u64 {
+    if name.is_null() {
+        return 0;
+    }
+    let c_str = unsafe { CStr::from_ptr(name) };
+    let name_str = match c_str.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    let span = GlideOpenTelemetry::new_span(name_str);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
+/// Drops an OpenTelemetry span given its pointer as u64.
+#[no_mangle]
+pub extern "C" fn drop_otel_span(span_ptr: u64) {
+    if span_ptr == 0 {
+        return;
+    }
+    unsafe {
+        Arc::from_raw(span_ptr as *const GlideSpan);
+    }
 }
