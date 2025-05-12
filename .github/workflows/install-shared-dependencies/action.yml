@@ -60,7 +60,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext tar --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
