@@ -33,8 +33,16 @@ permissions:
     id-token: write
 
 jobs:
+    checkout:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
     determine-version:
         uses: ./.github/workflows/CD-NPM/determine-version.yml
+        needs: checkout
         with:
             event_name: ${{ github.event_name }}
             version: ${{ github.event.inputs.version }}
@@ -42,6 +50,7 @@ jobs:
 
     load-platform-matrix:
         uses: ./.github/workflows/CD-NPM/load-platform-matrix.yml
+        needs: checkout
 
     build-binaries:
         needs: [determine-version, load-platform-matrix]
