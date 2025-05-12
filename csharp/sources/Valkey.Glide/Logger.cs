@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-
-using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -23,10 +21,10 @@ public enum Level
 /// The logger can be set up in 2 ways:
 /// <list type="number">
 ///   <item>
-///     By calling <see cref="Logger.Init(Level?, string?)"/>, which configures the logger only if it wasn't previously configured.
+///     By calling <see cref="Init(Level, string?)" />, which configures the logger only if it wasn't previously configured.
 ///   </item>
 ///   <item>
-///      By calling <see cref="Logger.SetLoggerConfig(Level?, string?)"/>, which replaces the existing configuration, and means that
+///      By calling <see cref="SetLoggerConfig(Level, string?)" />, which replaces the existing configuration, and means that
 ///      new logs will not be saved with the logs that were sent before the call.
 ///   </item>
 /// </list>
@@ -56,10 +54,7 @@ public class Logger
     /// If provided the target of the logs will be the file mentioned.<br />
     /// Otherwise, logs will be printed to the console.
     /// </param>
-    public static void Init(Level level, string? filename = null)
-    {
-        SetLoggerConfig(level, filename);
-    }
+    public static void Init(Level level, string? filename = null) => SetLoggerConfig(level, filename);
 
     /// <summary>
     /// Logs the provided message if the provided log level is lower then the logger level.
