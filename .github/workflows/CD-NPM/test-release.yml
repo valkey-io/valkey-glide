@@ -1,0 +1,324 @@
+name: Test Release
+
+on:
+    workflow_call:
+        inputs:
+            release_version:
+                required: true
+                type: string
+                description: "The release version to test"
+            npm_tag:
+                required: true
+                type: string
+                description: "The npm tag (latest or next)"
+            platform_matrix:
+                required: true
+                type: string
+                description: "JSON string containing platform matrix"
+            npm_scope:
+                required: true
+                type: string
+                description: "The npm scope for the packages"
+            publish:
+                required: true
+                type: boolean
+                default: false
+                description: "Whether packages were published"
+        secrets:
+            npm_auth_token:
+                required: true
+                description: "NPM authentication token"
+            github_token:
+                required: true
+                description: "GitHub token"
+        outputs:
+            test_success:
+                description: "Whether all tests passed"
+                value: ${{ jobs.test-release.outputs.test_success }}
+
+jobs:
+    test-release:
+        if: inputs.publish
+        name: Test the release
+        runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{fromJson(inputs.platform_matrix)}}
+        outputs:
+            test_success: ${{ steps.test-summary.outputs.success }}
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - name: Install redis and git for alpine
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              run: |
+                  apk update
+                  apk add git redis build-base libc-dev
+                  node -v
+
+                  # Try to install Zig for testing
+                  if ! apk add --no-cache zig; then
+                    echo "Zig not available in apk, installing manually..."
+                    
+                    # Install dependencies for manual installation
+                    apk add --no-cache curl xz
+                    
+                    # Download latest stable Zig for Linux
+                    ZIG_VERSION="0.12.0"
+                    ARCH=$(uname -m)
+                    if [[ "${ARCH}" == "x86_64" ]]; then
+                      ZIG_ARCH="x86_64"
+                    elif [[ "${ARCH}" == "aarch64" ]]; then
+                      ZIG_ARCH="aarch64"
+                    else
+                      echo "Unsupported architecture: ${ARCH}"
+                      exit 1
+                    fi
+                    
+                    # Download and extract Zig
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+                    mkdir -p /usr/local/zig
+                    tar -xf zig.tar.xz --strip-components=1 -C /usr/local/zig
+                    ln -s /usr/local/zig/zig /usr/local/bin/zig
+                  fi
+
+                  # Verify Zig installation
+                  if command -v zig &> /dev/null; then
+                    echo "Zig installed:"
+                    zig version
+                  else
+                    echo "WARNING: Zig installation not found in PATH"
+                  fi
+
+            - name: Install Python for ubuntu
+              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
+              run: |
+                  sudo apt update
+                  sudo apt install python3
+
+            - name: Checkout
+              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
+              uses: actions/checkout@v4
+
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  npm-scope: ${{ inputs.npm_scope }}
+                  npm-auth-token: ${{ secrets.npm_auth_token }}
+                  arch: ${{ matrix.build.ARCH }}
+
+            - name: Install engine
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: "8.0"
+                  target: ${{ matrix.build.target }}
+
+            - name: Setup node
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  architecture: ${{ matrix.build.ARCH }}
+                  scope: "${{ inputs.npm_scope }}"
+                  always-auth: true
+                  token: ${{ secrets.npm_auth_token }}
+
+            - name: Install tsc and compile utils
+              shell: bash
+              working-directory: ./utils
+              run: |
+                  npm install
+                  npm install -g typescript
+                  npx tsc -p ./tsconfig.json
+
+            - name: Setup environment variables
+              shell: bash
+              run: |
+                  # Set RELEASE_VERSION and NPM_TAG from inputs
+                  echo "RELEASE_VERSION=${{ inputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ inputs.npm_tag }}" >> $GITHUB_ENV
+
+                  # Determine if the target is musl and set PLATFORM_ID (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    MUSL_FLAG="-musl"
+                  else
+                    MUSL_FLAG=""
+                  fi
+                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
+                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+
+                  # Determine build type (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"apple-darwin"* ]]; then
+                    BUILD_TYPE="mac"
+                  elif [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    BUILD_TYPE="musl"
+                  else
+                    BUILD_TYPE="gnu"
+                  fi
+                  echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_ENV
+
+            # Install and test the published package across different platforms
+            - name: Install test dependencies
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/node
+              run: |
+                  # Step summary for installation process
+                  echo "## Package Installation" >> $GITHUB_STEP_SUMMARY
+                  echo "Installing dependencies and published package on platform: ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+
+                  # Install project dependencies first
+                  echo "Installing project dependencies..."
+                  npm install
+
+                  # Add status table for installation
+                  echo "| Operation | Status | Details |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+                  echo "| Project Dependencies | ✅ Installed | utils/release-candidate-testing/node |" >> $GITHUB_STEP_SUMMARY
+
+                  # Install the package for testing
+                  echo "Installing ${{ inputs.npm_scope }}/valkey-glide@${{ env.NPM_TAG }}..."
+                  if npm install --no-save ${{ inputs.npm_scope }}/valkey-glide@${{ env.NPM_TAG }}; then
+                    echo "| Published Package | ✅ Installed | ${{ inputs.npm_scope }}/valkey-glide@${RELEASE_VERSION} (${NPM_TAG}) |" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "| Published Package | ❌ Failed | ${{ inputs.npm_scope }}/valkey-glide@${RELEASE_VERSION} (${NPM_TAG}) |" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  # Check binary files detection
+                  echo "Verifying native binaries..."
+                  if [[ -d "node_modules/${{ inputs.npm_scope }}" ]]; then
+                    binary_files=$(find node_modules/${{ inputs.npm_scope }} -name "*.node" | wc -l)
+                    if [[ $binary_files -gt 0 ]]; then
+                      echo "| Native Binaries | ✅ Found | ${binary_files} files detected |" >> $GITHUB_STEP_SUMMARY
+                    else
+                      echo "| Native Binaries | ⚠️ Warning | No binaries found |" >> $GITHUB_STEP_SUMMARY
+                    fi
+                  fi
+
+            # Run the test suite against the published package
+            - name: Run tests
+              id: run-tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/node
+              run: |
+                  # Step summary for test execution
+                  echo "## Testing Published Package" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Platform | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+                  echo "| ${{ inputs.npm_scope }}/valkey-glide | ${RELEASE_VERSION} (${NPM_TAG}) | ${{ env.PLATFORM_ID }} | 🔄 Running tests... |" >> $GITHUB_STEP_SUMMARY
+
+                  # Run tests
+                  echo "Running tests on platform ${{ env.PLATFORM_ID }}..."
+
+                  # Set variables to track if tests succeed or fail
+                  tests_passed=false
+
+                  if npm run test; then
+                    tests_passed=true
+                  fi
+
+                  # Save test result for other steps
+                  echo "tests_passed=${tests_passed}" >> $GITHUB_OUTPUT
+
+            - name: Record test results
+              id: test-summary
+              shell: bash
+              if: always()
+              run: |
+                  # Update step summary with test results
+                  echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+                  echo "| Test Suite | Platform | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  if [[ "${{ steps.run-tests.outputs.tests_passed }}" == "true" ]]; then
+                    echo "| Release Verification | ${{ env.PLATFORM_ID }} | ✅ All tests passed |" >> $GITHUB_STEP_SUMMARY
+                    echo "🟢 Package validation completed successfully on platform ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+                    echo "success=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "| Release Verification | ${{ env.PLATFORM_ID }} | ❌ Tests failed |" >> $GITHUB_STEP_SUMMARY
+                    echo "❌ Package validation failed on platform ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+                    echo "success=false" >> $GITHUB_OUTPUT
+                  fi
+
+            # Changed from deprecation to unpublish for better package management
+            - name: Unpublish packages on failure
+              if: ${{ failure() || steps.run-tests.outputs.tests_passed == 'false' }}
+              shell: bash
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+                  PLATFORM_MATRIX: ${{ inputs.platform_matrix }}
+              run: |
+                  # Add error information to step summary
+                  echo "## ❌ Test Failure Recovery" >> $GITHUB_STEP_SUMMARY
+                  echo "Tests failed on platform: ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+                  echo "Initiating unpublish operation for packages at version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+
+                  # Detect OS and install jq
+                  if [[ "${OSTYPE}" == "darwin"* ]]; then
+                      brew install jq || true
+                  elif command -v apk > /dev/null; then
+                      apk add --no-cache jq
+                  else
+                      sudo apt-get update && sudo apt-get install -y jq
+                  fi
+
+                  # Log release version for unpublishing
+                  echo "Release version for unpublishing: ${RELEASE_VERSION}"
+
+                  # Validate RELEASE_VERSION
+                  if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ && "${RELEASE_VERSION}" != "0.0.0-pr" ]]; then
+                      echo "❌ Invalid release version format: ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+                      exit 1
+                  fi
+
+                  if [[ "${RELEASE_VERSION}" == "0.0.0-pr" ]]; then
+                      echo "⚠️ Skipping unpublish for PR version." >> $GITHUB_STEP_SUMMARY
+                      exit 0
+                  fi
+
+                  # Unpublishing base package instead of deprecating
+                  echo "Unpublishing base package ${{ inputs.npm_scope }}/valkey-glide@${RELEASE_VERSION}..."
+                  npm unpublish "${{ inputs.npm_scope }}/valkey-glide@${RELEASE_VERSION}" --force || true
+                  echo "- Unpublished ${{ inputs.npm_scope }}/valkey-glide@${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+
+                  # Process platform matrix for unpublishing platform-specific packages
+                  echo "${PLATFORM_MATRIX}" > platform_matrix.json
+                  echo "## Platform-specific packages unpublished:" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Track unpublishing status
+                  unpublish_success=true
+
+                  # Process each platform package
+                  while read -r pkg; do
+                      package_name="${{ inputs.npm_scope }}/valkey-glide-${pkg}"
+                      echo "Unpublishing ${package_name}@${RELEASE_VERSION}..."
+                      
+                      # Attempt to unpublish with error handling
+                      if npm unpublish "${package_name}@${RELEASE_VERSION}" --force; then
+                          echo "| ${package_name} | ${RELEASE_VERSION} | ✅ Unpublished |" >> $GITHUB_STEP_SUMMARY
+                          echo "✅ Successfully unpublished ${package_name}@${RELEASE_VERSION}"
+                      else
+                          echo "| ${package_name} | ${RELEASE_VERSION} | ⚠️ Failed to unpublish |" >> $GITHUB_STEP_SUMMARY
+                          echo "⚠️ Failed to unpublish ${package_name}@${RELEASE_VERSION}"
+                          unpublish_success=false
+                      fi
+                  done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
+
+                  # Add summary status
+                  if [ "$unpublish_success" = true ]; then
+                      echo "✅ All packages successfully unpublished" >> $GITHUB_STEP_SUMMARY
+                  else
+                      echo "⚠️ Some packages could not be unpublished" >> $GITHUB_STEP_SUMMARY
+                      echo "Note: This might be because they were not published yet, or due to npm registry issues." >> $GITHUB_STEP_SUMMARY
+                  fi

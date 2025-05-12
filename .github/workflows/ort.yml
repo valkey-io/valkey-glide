@@ -105,24 +105,6 @@ jobs:
             - name: Set up Node.js
               uses: actions/setup-node@v4
 
-            - name: Create package.json file for the Node wrapper
-              uses: ./.github/workflows/node-create-package-file
-              with:
-                  release_version: ${{ env.TARGET_COMMIT }}
-                  os: "ubuntu-latest"
-
-            - name: Fix Node base NPM package.json file for ORT
-              working-directory: ./node/npm/glide
-              run: |
-                  # Remove the glide-rs dependency to avoid duplication 
-                  sed -i '/ "glide-rs":/d' ../../package.json
-                  export pkg_name=valkey-glide-base
-                  export package_version="${{ env.TARGET_COMMIT }}"
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
-                  cat package.json
-
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
               with:

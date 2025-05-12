@@ -1,0 +1,412 @@
+name: Publish Platform-Specific NPM Packages
+
+on:
+    workflow_call:
+        inputs:
+            release_version:
+                required: true
+                type: string
+                description: "The release version to publish"
+            npm_tag:
+                required: true
+                type: string
+                description: "The npm tag (latest or next)"
+            publish:
+                required: true
+                type: boolean
+                default: false
+                description: "Whether to actually publish packages or just verify them"
+            npm_scope:
+                required: true
+                type: string
+                description: "The npm scope for the packages"
+            artifact_name:
+                required: true
+                type: string
+                description: "Name of the artifact containing organized packages"
+        secrets:
+            npm_auth_token:
+                required: true
+                description: "NPM authentication token"
+        outputs:
+            published_packages:
+                description: "List of successfully published packages"
+                value: ${{ jobs.publish-platform-packages.outputs.published_packages }}
+
+jobs:
+    publish-platform-packages:
+        name: Publish platform-specific NPM packages
+        if: inputs.publish
+        runs-on: ubuntu-latest
+        outputs:
+            published_packages: ${{ steps.publish-summary.outputs.published_pkgs }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ inputs.npm_scope }}"
+                  always-auth: true
+                  token: ${{ secrets.npm_auth_token }}
+
+            - name: Set versioning environment variables
+              shell: bash
+              run: |
+                  echo "RELEASE_VERSION=${{ inputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ inputs.npm_tag }}" >> $GITHUB_ENV
+
+            - name: Check that the release version doesn't have typo in it
+              shell: bash
+              run: |
+                  echo "Current release version from env: ${{ env.RELEASE_VERSION }}"
+                  if [ -z "${{ env.RELEASE_VERSION }}" ]; then
+                    echo "Error: RELEASE_VERSION is empty!"
+                    exit 1
+                  fi
+                  # Example: Check if version matches a simple pattern like X.Y.Z or X.Y.Z-rc.N or 0.0.0-pr
+                  # Adjust the regex to your specific versioning scheme
+                  if ! [[ "${{ env.RELEASE_VERSION }}" =~ ^([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?|0\.0\.0-pr)$ ]]; then
+                    echo "Error: RELEASE_VERSION format appears incorrect: ${{ env.RELEASE_VERSION }}"
+                    # exit 1 # Optionally exit on format mismatch
+                  fi
+                  echo "RELEASE_VERSION (${{ env.RELEASE_VERSION }}) is present."
+
+            - name: Download organized artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: ${{ inputs.artifact_name }}
+                  path: ./node/npm
+
+            - name: Prepare and verify package files
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## Package Preparation" >> $GITHUB_STEP_SUMMARY
+                  echo "Preparing platform-specific packages for publishing" >> $GITHUB_STEP_SUMMARY
+
+                  # Prepare common files
+                  echo "Preparing common README and LICENSE files..."
+                  cp -v README.md npm/ || { echo "❌ Failed to copy README.md" >> $GITHUB_STEP_SUMMARY; exit 1; }
+                  cp -v ../LICENSE npm/ || { echo "❌ Failed to copy LICENSE" >> $GITHUB_STEP_SUMMARY; exit 1; }
+                  echo "✅ Common files prepared successfully" >> $GITHUB_STEP_SUMMARY
+
+                  # Count and log platform packages
+                  platform_pkg_count=$(find npm/ -maxdepth 1 -type d -not -path "npm/" -not -path "npm/glide" | wc -l)
+                  echo "Found ${platform_pkg_count} platform-specific packages to verify" >> $GITHUB_STEP_SUMMARY
+
+                  # Set up summary table
+                  echo "### Package Verification" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | JS File | TS Definitions | Binary | Version | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Verify native JS files in all packages
+                  echo "Verifying platform packages and adding metadata..."
+                  has_errors=false
+
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Get package name for reporting
+                    pkg_name=$(basename "${pkg_dir}")
+                    
+                    # Check component files
+                    has_js=$(test -f "${pkg_dir}/native.js" && echo "✅" || echo "❌")
+                    has_dts=$(test -f "${pkg_dir}/native.d.ts" && echo "✅" || echo "❌")
+                    has_node=$(find "${pkg_dir}" -name "*.node" | grep -q . && echo "✅" || echo "❌")
+                    
+                    # Determine if package is complete
+                    if [[ "$has_js" == "❌" || "$has_dts" == "❌" || "$has_node" == "❌" ]]; then
+                      status="❌ Missing files"
+                      has_errors=true
+                      echo "ERROR: Package ${pkg_name} is missing required files"
+                      ls -la "${pkg_dir}"
+                    else
+                      status="✅ Complete"
+                      
+                      # Replace version placeholder (only if package is complete)
+                      sed -i "s/\$RELEASE_VERSION/${RELEASE_VERSION}/g" "${pkg_dir}/package.json"
+                      pkg_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                      
+                      # Copy README and LICENSE
+                      cp -v npm/README.md "${pkg_dir}/README.md"
+                      cp -v npm/LICENSE "${pkg_dir}/LICENSE"
+                    fi
+                    
+                    # Add to summary table
+                    echo "| ${pkg_name} | ${has_js} | ${has_dts} | ${has_node} | ${pkg_version:-N/A} | ${status} |" >> $GITHUB_STEP_SUMMARY
+                    
+                    # Generate checksums for logging
+                    echo "Checksums for ${pkg_name}:"
+                    sha256sum "${pkg_dir}"/*.js "${pkg_dir}"/*.d.ts "${pkg_dir}"/*.node 2>/dev/null || echo "  - Could not generate complete checksums"
+                  done
+
+                  # Fail if any packages are incomplete
+                  if [[ "$has_errors" == "true" ]]; then
+                    echo "❌ Some packages are missing required files. Cannot proceed with publishing." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  echo "✅ All platform packages verified and prepared successfully" >> $GITHUB_STEP_SUMMARY
+
+            # Set up npm registry authentication and configuration
+            - name: Configure npm authentication
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## NPM Registry Configuration" >> $GITHUB_STEP_SUMMARY
+                  echo "Setting up npm registry authentication for publishing" >> $GITHUB_STEP_SUMMARY
+
+                  # Set npm auth token
+                  npm config set registry https://registry.npmjs.org/
+                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.npm_auth_token }}
+                  npm config set scope ${{ inputs.npm_scope }}
+
+                  # Report success
+                  echo "✅ npm registry configured with scope: ${{ inputs.npm_scope }}" >> $GITHUB_STEP_SUMMARY
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+
+            # Collect information about packages to be published
+            - name: Analyze platform packages
+              shell: bash
+              working-directory: ./node
+              id: analyze-packages
+              run: |
+                  # Step summary
+                  echo "## Platform Package Analysis" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Platform | Files |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Count packages for reporting
+                  platform_pkg_count=0
+
+                  # Track package information
+                  echo "package_names=" > package_info.txt
+
+                  # Analyze each package directory
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    package_name=$(jq -r '.name' "${pkg_dir}/package.json")
+                    package_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                    platform_info=$(jq -r '.os[0] // "unknown" | " (" + . + ")"' "${pkg_dir}/package.json")
+                    
+                    # Count binary files
+                    binary_count=$(find "${pkg_dir}" -name "*.node" | wc -l)
+                    file_count=$(find "${pkg_dir}" -type f | wc -l)
+                    
+                    # Append to package names list
+                    echo "package_names+=${package_name}," >> package_info.txt
+                    
+                    # Report in summary
+                    echo "| ${package_name} | ${package_version} | ${platform_info} | ${file_count} (${binary_count} native) |" >> $GITHUB_STEP_SUMMARY
+                    ((platform_pkg_count++))
+                  done
+
+                  # Report total count
+                  echo "Found ${platform_pkg_count} platform-specific packages to publish" >> $GITHUB_STEP_SUMMARY
+                  echo "::set-output name=package_count::${platform_pkg_count}"
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+
+            # Step 1: Verify packages to be published
+            - name: Verify packages before publishing
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## Pre-Publish Verification" >> $GITHUB_STEP_SUMMARY
+                  echo "Verifying packages before publishing" >> $GITHUB_STEP_SUMMARY
+
+                  # Count packages and collect metadata
+                  pkg_count=0
+                  verified_packages=()
+
+                  echo "| Package | Version | Platform | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Check all packages
+                  for pkg_dir in npm/*/; do
+                    # Skip the TypeScript-only package
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Extract package metadata
+                    package_name=$(jq -r '.name' "${pkg_dir}/package.json")
+                    package_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                    platform_info=$(jq -r '.os[0] // "unknown" | " (" + . + ")"' "${pkg_dir}/package.json")
+                    
+                    # Verify package.json has required fields
+                    if [[ -z "$package_name" || "$package_name" == "null" || "$package_version" == "null" ]]; then
+                      echo "| ${package_name:-Unknown} | ${package_version:-None} | ${platform_info} | ❌ Invalid metadata |" >> $GITHUB_STEP_SUMMARY
+                      continue
+                    fi
+                    
+                    # Verify package files exist
+                    if [[ ! -f "${pkg_dir}/native.js" || ! -f "${pkg_dir}/native.d.ts" ]]; then
+                      echo "| ${package_name} | ${package_version} | ${platform_info} | ❌ Missing JS files |" >> $GITHUB_STEP_SUMMARY
+                      continue
+                    fi
+                    
+                    # Verify binary exists
+                    if ! find "${pkg_dir}" -name "*.node" | grep -q .; then
+                      echo "| ${package_name} | ${package_version} | ${platform_info} | ❌ Missing binary |" >> $GITHUB_STEP_SUMMARY
+                      continue
+                    fi
+                    
+                    # Package is valid
+                    echo "| ${package_name} | ${package_version} | ${platform_info} | ✅ Ready |" >> $GITHUB_STEP_SUMMARY
+                    verified_packages+=(${package_name})
+                    ((pkg_count++))
+                  done
+
+                  # Create file with verified packages for next step
+                  printf "%s\n" "${verified_packages[@]}" > verified_packages.txt
+
+                  # Report results
+                  echo "✅ ${pkg_count} packages verified and ready for publishing" >> $GITHUB_STEP_SUMMARY
+
+                  # Fail if no packages are ready
+                  if [[ $pkg_count -eq 0 ]]; then
+                    echo "❌ No valid packages found to publish!" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+            # Step 2: Publish verified packages
+            - name: Publish platform packages
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## Platform Package Publishing" >> $GITHUB_STEP_SUMMARY
+                  echo "Publishing platform-specific packages with version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Track package publishing status
+                  published_packages=()
+                  skipped_packages=()
+                  failed_packages=()
+
+                  # Read list of verified packages
+                  readarray -t verified_packages < verified_packages.txt
+
+                  # Process each platform package
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Extract package info
+                    package_name=$(jq -r '.name' "${pkg_dir}/package.json")
+                    package_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                    
+                    # Skip if not in verified packages
+                    if ! printf '%s\n' "${verified_packages[@]}" | grep -q "^${package_name}$"; then
+                      echo "Skipping ${package_name} (not verified)"
+                      skipped_packages+=(${package_name})
+                      echo "| ${package_name} | ${package_version} | ⚠️ Skipped - not verified |" >> $GITHUB_STEP_SUMMARY
+                      continue
+                    fi
+                    
+                    # Publish the package
+                    echo "Publishing package ${package_name}@${package_version}..."
+                    cd "${pkg_dir}"
+                    
+                    # Handle publishing with error handling
+                    set +e
+                    npm_publish_output=$(npm publish --tag "${NPM_TAG}" --access public --loglevel=error 2>&1)
+                    publish_exit_code=$?
+                    set -e
+                    
+                    # Process result
+                    if [[ $publish_exit_code -eq 0 ]]; then
+                      echo "| ${package_name} | ${package_version} | ✅ Published |" >> $GITHUB_STEP_SUMMARY
+                      published_packages+=(${package_name})
+                    elif echo "$npm_publish_output" | grep -q "You cannot publish over the previously published versions"; then
+                      echo "| ${package_name} | ${package_version} | ⚠️ Already exists |" >> $GITHUB_STEP_SUMMARY
+                      skipped_packages+=(${package_name})
+                    else
+                      echo "| ${package_name} | ${package_version} | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+                      echo "Error: $npm_publish_output" >> $GITHUB_STEP_SUMMARY
+                      failed_packages+=(${package_name})
+                    fi
+                    
+                    # Return to working directory
+                    cd "${OLDPWD}"
+                  done
+
+                  # Save results to files for the next step
+                  printf "%s\n" "${published_packages[@]}" > published_packages.txt
+                  printf "%s\n" "${failed_packages[@]}" > failed_packages.txt
+
+            # Step 3: Report publishing results
+            - name: Report publishing results
+              id: publish-summary
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## Publishing Results Summary" >> $GITHUB_STEP_SUMMARY
+
+                  # Read result files
+                  readarray -t published_packages < <(cat published_packages.txt 2>/dev/null || echo "")
+                  readarray -t failed_packages < <(cat failed_packages.txt 2>/dev/null || echo "")
+
+                  # Count results
+                  published_count=${#published_packages[@]}
+                  failed_count=${#failed_packages[@]}
+
+                  # Adjust for empty files
+                  if [[ "${published_packages[0]}" == "" ]]; then
+                    published_count=0
+                  fi
+
+                  if [[ "${failed_packages[0]}" == "" ]]; then
+                    failed_count=0
+                  fi
+
+                  # Report statistics
+                  echo "### Publishing Statistics" >> $GITHUB_STEP_SUMMARY
+                  echo "- ✅ **Successfully published:** ${published_count} packages" >> $GITHUB_STEP_SUMMARY
+                  echo "- ❌ **Failed to publish:** ${failed_count} packages" >> $GITHUB_STEP_SUMMARY
+
+                  # List published packages if any
+                  if [[ $published_count -gt 0 ]]; then
+                    echo "### Published Packages" >> $GITHUB_STEP_SUMMARY
+                    echo "```" >> $GITHUB_STEP_SUMMARY
+                    printf "  %s\n" "${published_packages[@]}" >> $GITHUB_STEP_SUMMARY
+                    echo "```" >> $GITHUB_STEP_SUMMARY
+                  fi
+
+                  # Report and exit with error if any failures
+                  if [[ $failed_count -gt 0 ]]; then
+                    echo "### Failed Packages" >> $GITHUB_STEP_SUMMARY
+                    echo "```" >> $GITHUB_STEP_SUMMARY
+                    printf "  %s\n" "${failed_packages[@]}" >> $GITHUB_STEP_SUMMARY
+                    echo "```" >> $GITHUB_STEP_SUMMARY
+                    echo "❌ Some packages failed to publish. See above for details." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  # Output published packages
+                  published_pkgs=$(IFS=,; echo "${published_packages[*]}")
+                  echo "published_pkgs=${published_pkgs}" >> $GITHUB_OUTPUT
+
+                  echo "✅ All package publishing completed successfully" >> $GITHUB_STEP_SUMMARY
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}

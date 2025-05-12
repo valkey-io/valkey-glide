@@ -1,0 +1,224 @@
+name: Publish Base TypeScript Package
+
+on:
+    workflow_call:
+        inputs:
+            release_version:
+                required: true
+                type: string
+                description: "The release version to publish"
+            npm_tag:
+                required: true
+                type: string
+                description: "The npm tag (latest or next)"
+            publish:
+                required: true
+                type: boolean
+                default: false
+                description: "Whether to actually publish packages or just verify them"
+            npm_scope:
+                required: true
+                type: string
+                description: "The npm scope for the packages"
+        secrets:
+            npm_auth_token:
+                required: true
+                description: "NPM authentication token"
+        outputs:
+            published_package:
+                description: "Name of the published package"
+                value: ${{ jobs.publish-base-package.outputs.package_name }}
+            package_version:
+                description: "Version of the published package"
+                value: ${{ jobs.publish-base-package.outputs.package_version }}
+
+jobs:
+    publish-base-package:
+        name: Publish the base TypeScript package
+        if: inputs.publish
+        runs-on: ubuntu-latest
+        outputs:
+            package_name: ${{ steps.publish-info.outputs.pkg_name }}
+            package_version: ${{ steps.publish-info.outputs.pkg_version }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Install node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ inputs.npm_scope }}"
+                  always-auth: true
+
+            - name: Set versioning environment variables
+              shell: bash
+              run: |
+                  echo "RELEASE_VERSION=${{ inputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ inputs.npm_tag }}" >> $GITHUB_ENV
+
+            - name: Create directory for TypeScript package
+              shell: bash
+              run: |
+                  mkdir -p ./node/npm/glide
+
+            # Copy package source files to the publishing directory
+            - name: Copy source files to npm package
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Preparing TypeScript Package" >> $GITHUB_STEP_SUMMARY
+                  echo "Copying TypeScript source files to the npm package directory" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy the main package.json
+                  cp ./node/package.json ./node/npm/glide/
+                  echo "- Copied package.json" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy the compiled TypeScript files
+                  mkdir -p ./node/npm/glide/build-ts
+                  cp -r ./node/build-ts/* ./node/npm/glide/build-ts/
+
+                  # Count files for reporting
+                  ts_files=$(find ./node/npm/glide/build-ts -type f -name "*.js" | wc -l)
+                  d_ts_files=$(find ./node/npm/glide/build-ts -type f -name "*.d.ts" | wc -l)
+                  echo "- Copied ${ts_files} JavaScript files and ${d_ts_files} TypeScript definition files" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy documentation
+                  cp ./node/README.md ./node/npm/glide/
+                  echo "- Copied README.md" >> $GITHUB_STEP_SUMMARY
+
+            # Create the TypeScript entry point file
+            - name: Create package entry point
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Creating Package Entry Point" >> $GITHUB_STEP_SUMMARY
+                  echo "Creating index.ts entry point for the TypeScript package" >> $GITHUB_STEP_SUMMARY
+
+                  # Create index.ts loader
+                  cat > ./node/npm/glide/index.ts << 'EOL'
+                  /**
+                   * This is the entry point for the TypeScript-only package.
+                   * It imports the main package and re-exports everything.
+                   */
+                  import * as glide from './build-ts/index';
+                  export = glide;
+                  EOL
+
+                  echo "✅ Created TypeScript entry point file (index.ts)" >> $GITHUB_STEP_SUMMARY
+                  echo '```typescript' >> $GITHUB_STEP_SUMMARY
+                  cat ./node/npm/glide/index.ts >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+
+            # Configure the package.json version and run napi prepublish
+            - name: Update package version
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Configuring Package Version" >> $GITHUB_STEP_SUMMARY
+                  echo "Setting version to ${RELEASE_VERSION} in package.json" >> $GITHUB_STEP_SUMMARY
+
+                  # Update version in package.json using RELEASE_VERSION from job environment
+                  jq ".version = \"${RELEASE_VERSION}\"" package.json > package.json.tmp && mv package.json.tmp package.json
+
+                  # Display the updated version
+                  pkg_name=$(jq -r '.name' package.json)
+                  echo "✅ Updated package ${pkg_name} to version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+
+            # Add platform-specific dependencies to the package
+            - name: Configure platform dependencies
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Configuring Platform Dependencies" >> $GITHUB_STEP_SUMMARY
+                  echo "Using NAPI-RS to add platform-specific packages as optional dependencies" >> $GITHUB_STEP_SUMMARY
+
+                  # Install napi-rs CLI
+                  npm install -g @napi-rs/cli
+
+                  # Run napi prepublish to add optionalDependencies for platform packages
+                  # It uses the 'name' (e.g., @valkey/valkey-glide) and 'napi' section from package.json
+                  napi prepublish
+
+                  # Extract and display dependencies for reporting
+                  echo "### Added Optional Dependencies:" >> $GITHUB_STEP_SUMMARY
+                  echo '```json' >> $GITHUB_STEP_SUMMARY
+                  jq '.optionalDependencies' package.json >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+
+                  # Count dependencies
+                  dep_count=$(jq '.optionalDependencies | length' package.json)
+                  echo "✅ Added ${dep_count} platform-specific optional dependencies" >> $GITHUB_STEP_SUMMARY
+
+            # Install dependencies and prepare the package for publishing
+            - name: Prepare package
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Preparing Package for Publishing" >> $GITHUB_STEP_SUMMARY
+                  echo "Installing dependencies and preparing the package" >> $GITHUB_STEP_SUMMARY
+
+                  # Install dependencies
+                  echo "Installing dependencies..."
+                  npm install
+
+                  # Run the build if the package has a build script
+                  if [[ -f "package.json" && -n "$(jq -r '.scripts.build // ""' package.json)" ]]; then
+                    echo "Running build script..."
+                    npm run build
+                    echo "- Build completed successfully" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "- No build script found, skipping" >> $GITHUB_STEP_SUMMARY
+                  fi
+
+                  # Verify package contents before publishing
+                  file_count=$(find . -type f | wc -l)
+                  echo "- Package contains ${file_count} files ready for publishing" >> $GITHUB_STEP_SUMMARY
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+
+            # Publish the TypeScript package to npm
+            - name: Publish package
+              id: publish-info
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Publishing TypeScript Package" >> $GITHUB_STEP_SUMMARY
+
+                  # Get package name and version
+                  pkg_name=$(jq -r '.name' package.json)
+                  pkg_version="${RELEASE_VERSION}"
+
+                  echo "Publishing ${pkg_name}@${pkg_version} with tag ${NPM_TAG}" >> $GITHUB_STEP_SUMMARY
+
+                  # Output for workflow
+                  echo "pkg_name=${pkg_name}" >> $GITHUB_OUTPUT
+                  echo "pkg_version=${pkg_version}" >> $GITHUB_OUTPUT
+
+                  # Publish the package
+                  set +e  # Don't exit immediately on error
+                  npm_publish_output=$(npm publish --access public --tag ${{ env.NPM_TAG }} --ignore-scripts 2>&1)
+                  publish_exit_code=$?
+                  set -e
+
+                  # Handle the result
+                  if [[ $publish_exit_code -eq 0 ]]; then
+                    echo "✅ Successfully published ${pkg_name}@${pkg_version}" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                  elif echo "${npm_publish_output}" | grep -q "You cannot publish over the previously published versions"; then
+                    echo "⚠️ Package ${pkg_name}@${pkg_version} already exists" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                  else
+                    echo "❌ Failed to publish package: ${npm_publish_output}" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                    exit 1
+                  fi
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
