@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NonNull;
 
 /**
- * A singleton class that allows logging which is consistent with logs from the internal rust core.
+ * A singleton class that allows logging which is consistent with logs from the internal GLIDE core.
  * The logger can be set up in 2 ways -
  *
  * <ol>
@@ -22,8 +22,8 @@ import lombok.NonNull;
  *       and means that new logs will not be saved with the logs that were sent before the call.
  * </ol>
  *
- * If <code>setLoggerConfig</code> wasn't called, the first log attempt will initialize a new logger
- * with default configuration decided by Glide core.
+ * If no call to any of these function is received, the first log attempt will initialize a new
+ * logger with default configuration decided by Glide core.
  */
 public final class Logger {
     @Getter
@@ -71,16 +71,12 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the given level. If given a <code>fileName</code> argument, will write the
-     * logs to files postfixed with <code>fileName</code>. If <code>fileName</code> isn't provided,
-     * the logs will be written to the console.
+     * level lower than the given level.
      *
      * @param level Set the logger level to one of <code>
-     *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]
-     *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by Glide core.
-     * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
-     *     will be printed to the console.
+     *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]</code>. To turn off logging completely, set
+     *     the level to {@link Level#OFF}.
+     * @param fileName The target of the logs will be the file mentioned.
      */
     public static void init(@NonNull Level level, String fileName) {
         if (loggerLevel == null) {
@@ -91,8 +87,8 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by Glide core. Given a <code>fileName</code>
-     * argument, will write the logs to files postfixed with <code>fileName</code>.
+     * level lower than the default level decided by Glide core. All logs will be printed to the
+     * console.
      *
      * @param fileName The target of the logs will be the file mentioned.
      */
@@ -103,7 +99,8 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by Glide core. The logs will be written to stdout.
+     * level lower than the default level decided by Glide core. The logs will be written to the
+     * console.
      */
     public static void init() {
         init(Level.DEFAULT, null);
@@ -112,11 +109,10 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the given level. The logs will be written to stdout.
+     * level lower than the given level. The logs will be written to the console.
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
-     *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by Glide core.
+     *     </code>. To turn off logging completely, set the level to {@link Level#OFF}.
      */
     public static void init(@NonNull Level level) {
         init(level, null);
@@ -134,18 +130,7 @@ public final class Logger {
             @NonNull Level level,
             @NonNull String logIdentifier,
             @NonNull Supplier<String> messageSupplier) {
-        if (loggerLevel == null) {
-            initLogger(Level.DEFAULT, null);
-        }
-
-        if (level == Level.OFF) {
-            return;
-        }
-
-        if (!(level.getLevel() <= loggerLevel.getLevel())) {
-            return;
-        }
-        logInternal(level.getLevel(), logIdentifier, messageSupplier.get());
+        log(level, logIdentifier, messageSupplier.get());
     }
 
     /**
@@ -184,25 +169,24 @@ public final class Logger {
             @NonNull String logIdentifier,
             @NonNull String message,
             @NonNull Throwable throwable) {
-        // TODO: Add the corresponding API to Python and Node.js.
-        log(level, logIdentifier, () -> message + ": " + prettyPrintException(throwable));
+        log(level, logIdentifier, message + ": " + prettyPrintException(throwable));
     }
 
     /**
      * Logs the provided exception or error if the provided log level is lower than the logger level.
+     * This overload takes a <code>Supplier</code> to lazily construct the message.
      *
      * @param level The log level of the provided message.
      * @param logIdentifier The log identifier should give the log a context.
-     * @param message The message to log with the exception.
+     * @param messageSupplier The <code>Supplier</code> of the message to log.
      * @param throwable The exception or error to log.
      */
     public static void log(
             @NonNull Level level,
             @NonNull String logIdentifier,
-            @NonNull Supplier<String> message,
+            @NonNull Supplier<String> messageSupplier,
             @NonNull Throwable throwable) {
-        // TODO: Add the corresponding API to Python and Node.js.
-        log(level, logIdentifier, () -> message.get() + ": " + prettyPrintException(throwable));
+        log(level, logIdentifier, messageSupplier.get() + ": " + prettyPrintException(throwable));
     }
 
     private static String prettyPrintException(@NonNull Throwable throwable) {
