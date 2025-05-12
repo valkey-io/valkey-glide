@@ -2,13 +2,7 @@
     "name": "glide-rs",
     "version": "0.1.0",
     "description": "Valkey client",
-    "main": "index.js",
     "license": "Apache-2.0",
-    "files": [
-        "index.d.ts",
-        "index.js",
-        "glide*.*.node"
-    ],
     "napi": {
         "name": "glide-rs",
         "triples": {
@@ -31,20 +25,25 @@
         "access": "public"
     },
     "scripts": {
+        "build:dev": "napi build --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:benchmark": "napi build --release --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release": "napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
+        "build:release:gnu": "napi build --release --strip --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:musl": "napi build --release --strip --platform --zig --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release:mac": "napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
+        "postbuild:copy-node": "cp glide-rs.*.node ../build-ts/",
         "artifacts": "napi artifacts",
-        "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm run globals && npm install --omit=dev && npm run globals && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:benchmark": "npm run globals && npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
+        "prepublishOnly": "napi prepublish -t npm",
+        "version": "napi version",
         "format": "npm run format:prettier && npm run format:rs",
         "format:prettier": "prettier . -w",
         "format:rs": "cargo fmt",
-        "prepublishOnly": "napi prepublish -t npm",
-        "version": "napi version",
-        "globals": "npm install --global @napi-rs/cli prettier"
+        "globals": "npm install --global @napi-rs/cli prettier",
+        "check:build-output": "ls -lh ../build-ts/ && file ../build-ts/*.node"
     },
     "devDependencies": {
         "@napi-rs/cli": "2",
-        "lint-staged": "15",
+        "lint-staged": "16",
         "prettier": "3"
     },
     "lint-staged": {

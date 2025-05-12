@@ -1,8 +1,10 @@
 {
     "extends": "../tsconfig.json",
     "compilerOptions": {
+        "target": "ESNext",
         "rootDir": "../../",
-        "types": ["jest", "node"]
+        "types": ["jest", "node"],
+        "lib": ["ESNext"]
     },
     "include": ["*.ts", "./*.test.ts", "setup.ts"],
     "exclude": ["node_modules", "**/*.spec.ts"],
