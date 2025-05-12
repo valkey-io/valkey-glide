@@ -175,7 +175,7 @@ jobs:
                   folder_path: "${{ github.workspace }}/java"
 
               ### GO ###
-            - name: Set up GO    
+            - name: Set up GO
               uses: actions/setup-go@v5
               with:
                   go-version: 1.22
