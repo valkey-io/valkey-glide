@@ -76,10 +76,22 @@ jobs:
               shell: bash
               run: |
                   # Filter entries with npm in PACKAGE_MANAGERS
-                  export PLATFORM_MATRIX=$(jq 'map(
+                  FILTERED_MATRIX_JSON=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
-                  )' < .github/json_matrices/build-matrix.json | jq -c .)
-                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  )' .github/json_matrices/build-matrix.json)
+
+                  # If aarch64-apple-darwin is present, remove x86_64-apple-darwin to avoid redundant builds,
+                  # as the aarch64 job will build both.
+                  FINAL_MATRIX_JSON=$(echo "${FILTERED_MATRIX_JSON}" | jq '
+                    . as $npm_platforms
+                    | ($npm_platforms | map(select(.TARGET == "aarch64-apple-darwin")) | length > 0) as $has_arm_darwin
+                    | if $has_arm_darwin then
+                        $npm_platforms | map(select(.TARGET != "x86_64-apple-darwin"))
+                      else
+                        $npm_platforms
+                      end
+                  ')
+                  echo "PLATFORM_MATRIX=$(echo "${FINAL_MATRIX_JSON}" | jq -c .)" >> $GITHUB_OUTPUT
 
     build-binaries:
         needs: [load-platform-matrix, determine-version]
@@ -111,10 +123,10 @@ jobs:
               uses: ./.github/workflows/setup-musl-on-linux
               with:
                   npm-scope: ${{ vars.NPM_SCOPE }}
-                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }} # Ensure NPM_AUTH_TOKEN is defined in repo secrets
                   arch: ${{ matrix.build.ARCH }}
 
-            - name: Setup environment variables
+            - name: Set versioning environment variables
               shell: bash
               run: |
                   # Set RELEASE_VERSION and NPM_TAG from the determine-version job outputs
@@ -156,8 +168,10 @@ jobs:
               working-directory: ./node
               run: |
                   npm config set registry https://registry.npmjs.org/
-                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                  npm config set '//registry.npmjs.org/:_authToken' "${NODE_AUTH_TOKEN}"
                   npm config set scope ${{ vars.NPM_SCOPE }}
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
@@ -169,10 +183,46 @@ jobs:
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
-                  repo-token: ${{ inputs.github-token }}
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            # Install Zig for cross-compilation
+            # Install Zig for cross-compilation - direct installation for musl environments
+            - name: Install Zig directly on Alpine/musl
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              shell: bash
+              run: |
+                  echo "Installing Zig directly on Alpine Linux..."
+                  # Try to install from package manager first
+                  if ! apk add --no-cache zig; then
+                    echo "Zig not available in apk, installing manually..."
+                    
+                    # Install dependencies for manual installation
+                    apk add --no-cache curl xz
+                    
+                    # Download latest stable Zig for Linux
+                    ZIG_VERSION="0.12.0"
+                    ARCH=$(uname -m)
+                    if [[ "${ARCH}" == "x86_64" ]]; then
+                      ZIG_ARCH="x86_64"
+                    elif [[ "${ARCH}" == "aarch64" ]]; then
+                      ZIG_ARCH="aarch64"
+                    else
+                      echo "Unsupported architecture: ${ARCH}"
+                      exit 1
+                    fi
+                    
+                    # Download and extract Zig
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+                    mkdir -p /usr/local/zig
+                    tar -xf zig.tar.xz --strip-components=1 -C /usr/local/zig
+                    ln -s /usr/local/zig/zig /usr/local/bin/zig
+                    
+                    # Verify installation
+                    zig version
+                  fi
+
+            # Install Zig for cross-compilation - use action for non-musl environments
             - uses: mlugg/setup-zig@v2
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               with:
                   version: latest
 
@@ -185,6 +235,59 @@ jobs:
               run: |
                   # Install build dependencies
                   npm install
+
+                  # Verify Zig installation
+                  if ! command -v zig &> /dev/null; then
+                    echo "Zig not found in PATH, installing manually..."
+                    
+                    # Install dependencies for manual installation if not on musl
+                    # (for musl, they should have been installed in the previous step)
+                    if ! command -v apk &> /dev/null; then
+                      if command -v apt-get &> /dev/null; then
+                        sudo apt-get update
+                        sudo apt-get install -y curl xz-utils
+                      elif command -v yum &> /dev/null; then
+                        sudo yum install -y curl xz
+                      fi
+                    fi
+                    
+                    # Download latest stable Zig for the appropriate platform
+                    ZIG_VERSION="0.12.0"
+                    PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+                    ARCH=$(uname -m)
+                    
+                    if [[ "${PLATFORM}" == "darwin" ]]; then
+                      if [[ "${ARCH}" == "x86_64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-macos-x86_64-${ZIG_VERSION}.tar.xz"
+                      elif [[ "${ARCH}" == "arm64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-macos-aarch64-${ZIG_VERSION}.tar.xz"
+                      fi
+                    elif [[ "${PLATFORM}" == "linux" ]]; then
+                      if [[ "${ARCH}" == "x86_64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+                      elif [[ "${ARCH}" == "aarch64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-aarch64-${ZIG_VERSION}.tar.xz"
+                      fi
+                    fi
+                    
+                    if [[ -n "${ZIG_URL}" ]]; then
+                      echo "Downloading Zig from ${ZIG_URL}..."
+                      curl -sSL "${ZIG_URL}" -o zig.tar.xz
+                      mkdir -p /tmp/zig
+                      tar -xf zig.tar.xz --strip-components=1 -C /tmp/zig
+                      
+                      # Add Zig to PATH
+                      echo "Adding Zig to PATH..."
+                      export PATH="/tmp/zig:$PATH"
+                    else
+                      echo "ERROR: Unsupported platform/architecture: ${PLATFORM}/${ARCH}"
+                      exit 1
+                    fi
+                  fi
+
+                  # Verify Zig is now available
+                  echo "Zig version:"
+                  zig version
 
                   # Select appropriate build script based on platform
                   if [[ "$TARGET" == *"apple-darwin"* ]]; then
@@ -199,6 +302,10 @@ jobs:
                     
                   elif [[ "$TARGET" == *"-musl"* ]]; then
                     echo "Building for musl ($TARGET)..."
+                    # Make sure all dependencies for building on Alpine are installed
+                    if command -v apk &> /dev/null; then
+                      apk add --no-cache libc-dev build-base
+                    fi
                     npm run build:release:musl
                   else
                     echo "Building for gnu ($TARGET)..."
@@ -208,14 +315,23 @@ jobs:
                   # Verify the build output
                   ls -la *.node
 
+            # Upload native JS/TS declaration files once from Ubuntu x64 build
+            - name: Upload native JS files
+              if: ${{ matrix.build.TARGET == 'x86_64-unknown-linux-gnu' }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-js-files
+                  path: |
+                      node/rust-client/native.js
+                      node/rust-client/native.d.ts
+                  if-no-files-found: error
+
             - name: Upload node binaries artifact
               uses: actions/upload-artifact@v4
               with:
                   name: node-binaries-${{ env.PLATFORM_ID }}
                   path: |
                       node/rust-client/glide-rs.*.node
-                      node/src/native.js
-                      node/src/native.d.ts
                   if-no-files-found: error
 
     organize-artifacts:
@@ -239,29 +355,130 @@ jobs:
               run: |
                   npm install -g @napi-rs/cli
 
-            - name: Download all artifacts
+            - name: Download all binary artifacts
               uses: actions/download-artifact@v4
               with:
                   pattern: node-binaries-*
-                  path: ./artifacts
+                  path: ./artifacts/binaries
+
+            - name: Download native JS files
+              uses: actions/download-artifact@v4
+              with:
+                  name: native-js-files
+                  path: ./artifacts/native-js
 
             - name: List downloaded artifacts
               shell: bash
               run: |
-                  find ./artifacts -type f -name "*.node" | sort
+                  echo "Binary artifacts:"
+                  find ./artifacts/binaries -type f -name "*.node" | sort
 
-            - name: Organize artifacts with napi-rs
+                  echo "Native JS files:"
+                  find ./artifacts/native-js -type f | sort
+
+            # Prepare binary artifacts for organization
+            - name: Prepare directory structure for artifacts
               shell: bash
               run: |
-                  # Create artifacts directory
+                  # Step summary
+                  echo "## Preparing Binary Artifacts" >> $GITHUB_STEP_SUMMARY
+                  echo "Creating directory structure and preparing for artifact organization" >> $GITHUB_STEP_SUMMARY
+
+                  # Create artifacts directory for binaries
                   mkdir -p ./organized-artifacts
+
+                  # Extract the .node files from artifacts/binaries into organized-artifacts/
+                  find ./artifacts/binaries -type f -name "*.node" -exec cp -v {} ./organized-artifacts/ \;
+
+                  # Document findings
+                  num_binaries=$(find ./organized-artifacts -type f -name "*.node" | wc -l)
+                  echo "- Located and copied ${num_binaries} native binary files for packaging" >> $GITHUB_STEP_SUMMARY
+
+            # Run NAPI-RS tool to organize binaries by platform
+            - name: Organize binaries with napi-rs
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Organizing Artifacts by Platform" >> $GITHUB_STEP_SUMMARY
+                  echo "Using NAPI-RS CLI to organize native modules into platform-specific directories" >> $GITHUB_STEP_SUMMARY
 
                   # Copy the .node files to platform-specific directories
                   # The napi artifacts command will organize them under npm/ directory
-                  napi artifacts --dir ./artifacts --npm-dir ./node/npm
+                  napi artifacts --dir ./organized-artifacts --npm-dir ./node/npm
 
-                  # Check the organized files
-                  find ./node/npm -type f | sort
+                  # Document results
+                  num_dirs=$(find ./node/npm -maxdepth 1 -type d | grep -v "^./node/npm$" | wc -l)
+                  echo "- Created ${num_dirs} platform-specific package directories" >> $GITHUB_STEP_SUMMARY
+
+            # Add JavaScript binding files to platform packages
+            - name: Add native JavaScript files to packages
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Adding JavaScript Binding Files" >> $GITHUB_STEP_SUMMARY
+                  echo "Adding native.js and native.d.ts to each platform package" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy native.js and native.d.ts to each platform package directory
+                  copied_count=0
+                  for pkg_dir in ./node/npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "./node/npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Copy native.js and native.d.ts
+                    cp -v ./artifacts/native-js/native.js "${pkg_dir}"
+                    cp -v ./artifacts/native-js/native.d.ts "${pkg_dir}"
+                    
+                    # Get package name from directory for reporting
+                    pkg_name=$(basename "${pkg_dir}")
+                    echo "- Added native JS files to ${pkg_name}" >> $GITHUB_STEP_SUMMARY
+                    ((copied_count++))
+                  done
+                  echo "✅ Successfully added JS bindings to ${copied_count} packages" >> $GITHUB_STEP_SUMMARY
+
+            # Verify package integrity with checksums
+            - name: Generate and verify package checksums
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Verifying Package Integrity" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | JS Files | TypeScript Definitions | Binary | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Generate and verify checksums
+                  for pkg_dir in ./node/npm/*/; do
+                    # Skip the glide directory
+                    if [[ "${pkg_dir}" == "./node/npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    pkg_name=$(basename "${pkg_dir}")
+                    
+                    # Check for required files
+                    has_js=$(test -f "${pkg_dir}/native.js" && echo "✅" || echo "❌")
+                    has_dts=$(test -f "${pkg_dir}/native.d.ts" && echo "✅" || echo "❌")
+                    has_node=$(find "${pkg_dir}" -name "*.node" | grep -q . && echo "✅" || echo "❌")
+                    
+                    # Determine overall status
+                    if [[ "$has_js" == "✅" && "$has_dts" == "✅" && "$has_node" == "✅" ]]; then
+                      status="✅ Complete"
+                    else
+                      status="❌ Missing files"
+                    fi
+                    
+                    echo "| ${pkg_name} | ${has_js} | ${has_dts} | ${has_node} | ${status} |" >> $GITHUB_STEP_SUMMARY
+                    
+                    # Generate checksums for verification
+                    echo "Checksums for ${pkg_name}:" 
+                    sha256sum "${pkg_dir}"/*.js "${pkg_dir}"/*.d.ts "${pkg_dir}"/*.node
+                  done
+
+                  # Check the final organized files and structure
+                  echo "## Final Package Structure" >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+                  find ./node/npm -type f | sort >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
 
             - name: Upload organized artifacts for reference
               uses: actions/upload-artifact@v4
@@ -283,8 +500,9 @@ jobs:
               with:
                   node-version: "latest"
                   registry-url: "https://registry.npmjs.org"
-                  scope: "${{ vars.NPM_SCOPE }}"
+                  scope: "${{ vars.NPM_SCOPE }}" # Ensure NPM_SCOPE is defined in repo variables
                   always-auth: true
+                  token: ${{ secrets.NPM_AUTH_TOKEN }} # Ensure NPM_AUTH_TOKEN is defined in repo secrets
 
             - name: Set versioning environment variables from determine-version job
               shell: bash
@@ -293,11 +511,20 @@ jobs:
                   echo "NPM_TAG=${{ needs.determine-version.outputs.npm_tag }}" >> $GITHUB_ENV
 
             - name: Check that the release version don't have typo in it
-              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
+              shell: bash
               run: |
-                  echo "The release version "${RELEASE_VERSION}" contains a typo, please fix it"
-                  echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
-                  exit 1
+                  echo "Current release version from env: ${{ env.RELEASE_VERSION }}"
+                  if [ -z "${{ env.RELEASE_VERSION }}" ]; then
+                    echo "Error: RELEASE_VERSION is empty!"
+                    exit 1
+                  fi
+                  # Example: Check if version matches a simple pattern like X.Y.Z or X.Y.Z-rc.N or 0.0.0-pr
+                  # Adjust the regex to your specific versioning scheme
+                  if ! [[ "${{ env.RELEASE_VERSION }}" =~ ^([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?|0\.0\.0-pr)$ ]]; then
+                    echo "Error: RELEASE_VERSION format appears incorrect: ${{ env.RELEASE_VERSION }}"
+                    # exit 1 # Optionally exit on format mismatch
+                  fi
+                  echo "RELEASE_VERSION (${{ env.RELEASE_VERSION }}) is present."
 
             - name: Download organized artifacts
               uses: actions/download-artifact@v4
@@ -305,15 +532,128 @@ jobs:
                   name: organized-node-artifacts
                   path: ./node/npm
 
+            - name: Prepare and verify package files
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Prepare common files
+                  echo "Preparing common README and LICENSE files..."
+                  cp -v README.md npm/
+                  cp -v ../LICENSE npm/
+
+                  # Verify native JS files in all packages
+                  echo "Verifying native JS files are present in all platform packages..."
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    # Verify required files exist
+                    if [ ! -f "${pkg_dir}/native.js" ] || [ ! -f "${pkg_dir}/native.d.ts" ]; then
+                      echo "ERROR: Missing native JS files in ${pkg_dir}"
+                      ls -la "${pkg_dir}"
+                      exit 1
+                    fi
+                    
+                    # Replace version placeholder
+                    sed -i "s/\$RELEASE_VERSION/${RELEASE_VERSION}/g" "${pkg_dir}/package.json"
+                    
+                    # Copy README and LICENSE
+                    cp -v npm/README.md "${pkg_dir}/README.md"
+                    cp -v npm/LICENSE "${pkg_dir}/LICENSE"
+                    
+                    # Verify package contents
+                    echo "Content of ${pkg_dir}:"
+                    ls -la "${pkg_dir}"
+                    
+                    # Calculate checksum for verification
+                    echo "Checksums for ${pkg_dir}:"
+                    sha256sum "${pkg_dir}"/*.js "${pkg_dir}"/*.d.ts "${pkg_dir}"/*.node
+                  done
+
+            # Set up npm registry authentication and configuration
+            - name: Configure npm authentication
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              shell: bash
+              working-directory: ./node
+              run: |
+                  # Step summary
+                  echo "## NPM Registry Configuration" >> $GITHUB_STEP_SUMMARY
+                  echo "Setting up npm registry authentication for publishing" >> $GITHUB_STEP_SUMMARY
+
+                  # Set npm auth token
+                  npm config set registry https://registry.npmjs.org/
+                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                  npm config set scope ${{ vars.NPM_SCOPE }}
+
+                  # Report success
+                  echo "✅ npm registry configured with scope: ${{ vars.NPM_SCOPE }}" >> $GITHUB_STEP_SUMMARY
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+            # Collect information about packages to be published
+            - name: Analyze platform packages
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              shell: bash
+              working-directory: ./node
+              id: analyze-packages
+              run: |
+                  # Step summary
+                  echo "## Platform Package Analysis" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Platform | Files |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Count packages for reporting
+                  platform_pkg_count=0
+
+                  # Track package information
+                  echo "package_names=" > package_info.txt
+
+                  # Analyze each package directory
+                  for pkg_dir in npm/*/; do
+                    # Skip the glide directory (TypeScript-only package)
+                    if [[ "${pkg_dir}" == "npm/glide/" ]]; then
+                      continue
+                    fi
+                    
+                    package_name=$(jq -r '.name' "${pkg_dir}/package.json")
+                    package_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                    platform_info=$(jq -r '.os[0] // "unknown" | " (" + . + ")"' "${pkg_dir}/package.json")
+                    
+                    # Count binary files
+                    binary_count=$(find "${pkg_dir}" -name "*.node" | wc -l)
+                    file_count=$(find "${pkg_dir}" -type f | wc -l)
+                    
+                    # Append to package names list
+                    echo "package_names+=${package_name}," >> package_info.txt
+                    
+                    # Report in summary
+                    echo "| ${package_name} | ${package_version} | ${platform_info} | ${file_count} (${binary_count} native) |" >> $GITHUB_STEP_SUMMARY
+                    ((platform_pkg_count++))
+                  done
+
+                  # Report total count
+                  echo "Found ${platform_pkg_count} platform-specific packages to publish" >> $GITHUB_STEP_SUMMARY
+                  echo "::set-output name=package_count::${platform_pkg_count}"
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+            # Publish all platform-specific packages
             - name: Publish platform-specific packages
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
               shell: bash
               working-directory: ./node
               run: |
-                  # Set npm auth token
-                  npm config set registry https://registry.npmjs.org/
-                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
-                  npm config set scope ${{ vars.NPM_SCOPE }}
+                  # Step summary
+                  echo "## Platform Package Publishing" >> $GITHUB_STEP_SUMMARY
+                  echo "Publishing platform-specific packages with version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+
+                  # Track which packages were successfully published
+                  published_packages=()
+                  failed_publish=false
 
                   # Find all platform package directories and publish them
                   for pkg_dir in npm/*/; do
@@ -321,33 +661,45 @@ jobs:
                     if [[ "${pkg_dir}" == "npm/glide/" ]]; then
                       continue
                     fi
-
-                    echo "Publishing package in ${pkg_dir}..."
+                    
+                    package_name=$(jq -r '.name' "${pkg_dir}/package.json")
+                    package_version=$(jq -r '.version' "${pkg_dir}/package.json")
+                    
+                    echo "Publishing package ${package_name}@${package_version}..."
                     cd "${pkg_dir}"
-
-                    # Replace version placeholder
-                    sed -i "s/\$RELEASE_VERSION/${RELEASE_VERSION}/g" package.json
-
+                    
                     set +e  # Disable immediate exit on non-zero exit codes
-                    # Copy readme and license files
-                    cp ../README.md ./README.md
-                    cp ../LICENSE ./LICENSE
-                    # Publish the package
                     npm_publish_err=$(npm publish --tag "${NPM_TAG}" --access public --loglevel=error 2>&1 || true)
                     publish_exit_code=$?
-
-                    # Re-enable immediate exit
                     set -e
-
+                    
                     if [[ $publish_exit_code -eq 0 ]]; then
-                      echo "Package published successfully."
+                      echo "| ${package_name} | ${package_version} | ✅ Published |" >> $GITHUB_STEP_SUMMARY
+                      echo "Package ${package_name}@${package_version} published successfully."
+                      published_packages+=("${package_name}@${package_version}")
                     elif echo "$npm_publish_err" | grep -q "You cannot publish over the previously published versions"; then
-                      echo "Skipping publishing, package already published."
+                      echo "| ${package_name} | ${package_version} | ⚠️ Already exists |" >> $GITHUB_STEP_SUMMARY
+                      echo "Skipping publishing, package ${package_name}@${package_version} already published."
                     else
-                      echo "Failed to publish with error: $npm_publish_err"
-                      exit 1
+                      echo "| ${package_name} | ${package_version} | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+                      echo "Failed to publish ${package_name}@${package_version} with error: $npm_publish_err"
+                      failed_publish=true
+                      break
                     fi
                   done
+
+                  # If any package failed to publish, exit with error
+                  if [[ "${failed_publish}" == "true" ]]; then
+                    echo "❌ One or more packages failed to publish. Exiting." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  # Report success
+                  echo "## Publishing Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "✅ Successfully published ${#published_packages[@]} platform-specific packages" >> $GITHUB_STEP_SUMMARY
+                  echo "```" >> $GITHUB_STEP_SUMMARY
+                  printf "  - %s\n" "${published_packages[@]}" >> $GITHUB_STEP_SUMMARY
+                  echo "```" >> $GITHUB_STEP_SUMMARY
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
@@ -381,18 +733,38 @@ jobs:
               run: |
                   mkdir -p ./node/npm/glide
 
-            - name: Copy package.json and other files to npm/glide
+            # Copy package source files to the publishing directory
+            - name: Copy source files to npm package
               shell: bash
               run: |
+                  # Step summary
+                  echo "## Preparing TypeScript Package" >> $GITHUB_STEP_SUMMARY
+                  echo "Copying TypeScript source files to the npm package directory" >> $GITHUB_STEP_SUMMARY
+
                   # Copy the main package.json
                   cp ./node/package.json ./node/npm/glide/
+                  echo "- Copied package.json" >> $GITHUB_STEP_SUMMARY
 
-                  # Copy the source files
+                  # Copy the compiled TypeScript files
                   mkdir -p ./node/npm/glide/build-ts
                   cp -r ./node/build-ts/* ./node/npm/glide/build-ts/
 
-                  # Copy the README
+                  # Count files for reporting
+                  ts_files=$(find ./node/npm/glide/build-ts -type f -name "*.js" | wc -l)
+                  d_ts_files=$(find ./node/npm/glide/build-ts -type f -name "*.d.ts" | wc -l)
+                  echo "- Copied ${ts_files} JavaScript files and ${d_ts_files} TypeScript definition files" >> $GITHUB_STEP_SUMMARY
+
+                  # Copy documentation
                   cp ./node/README.md ./node/npm/glide/
+                  echo "- Copied README.md" >> $GITHUB_STEP_SUMMARY
+
+            # Create the TypeScript entry point file
+            - name: Create package entry point
+              shell: bash
+              run: |
+                  # Step summary
+                  echo "## Creating Package Entry Point" >> $GITHUB_STEP_SUMMARY
+                  echo "Creating index.ts entry point for the TypeScript package" >> $GITHUB_STEP_SUMMARY
 
                   # Create index.ts loader
                   cat > ./node/npm/glide/index.ts << 'EOL'
@@ -404,40 +776,110 @@ jobs:
                   export = glide;
                   EOL
 
-            - name: Prepare package.json with napi prepublish
+                  echo "✅ Created TypeScript entry point file (index.ts)" >> $GITHUB_STEP_SUMMARY
+                  echo '```typescript' >> $GITHUB_STEP_SUMMARY
+                  cat ./node/npm/glide/index.ts >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+
+            # Configure the package.json version and run napi prepublish
+            - name: Update package version
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  # Install napi-rs CLI
-                  npm install -g @napi-rs/cli
+                  # Step summary
+                  echo "## Configuring Package Version" >> $GITHUB_STEP_SUMMARY
+                  echo "Setting version to ${RELEASE_VERSION} in package.json" >> $GITHUB_STEP_SUMMARY
 
                   # Update version in package.json using RELEASE_VERSION from job environment
                   jq ".version = \"${RELEASE_VERSION}\"" package.json > package.json.tmp && mv package.json.tmp package.json
+
+                  # Display the updated version
+                  pkg_name=$(jq -r '.name' package.json)
+                  echo "✅ Updated package ${pkg_name} to version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+
+            # Add platform-specific dependencies to the package
+            - name: Configure platform dependencies
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Configuring Platform Dependencies" >> $GITHUB_STEP_SUMMARY
+                  echo "Using NAPI-RS to add platform-specific packages as optional dependencies" >> $GITHUB_STEP_SUMMARY
+
+                  # Install napi-rs CLI
+                  npm install -g @napi-rs/cli
 
                   # Run napi prepublish to add optionalDependencies for platform packages
                   # It uses the 'name' (e.g., @valkey/valkey-glide) and 'napi' section from package.json
                   napi prepublish
 
-                  # Check the result
-                  echo "--- package.json after napi prepublish ---"
-                  cat package.json
-                  echo "-----------------------------------------"
+                  # Extract and display dependencies for reporting
+                  echo "### Added Optional Dependencies:" >> $GITHUB_STEP_SUMMARY
+                  echo '```json' >> $GITHUB_STEP_SUMMARY
+                  jq '.optionalDependencies' package.json >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
 
-            - name: Publish the base package
+                  # Count dependencies
+                  dep_count=$(jq '.optionalDependencies | length' package.json)
+                  echo "✅ Added ${dep_count} platform-specific optional dependencies" >> $GITHUB_STEP_SUMMARY
+
+            # Install dependencies and prepare the package for publishing
+            - name: Prepare package
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
               shell: bash
               working-directory: ./node/npm/glide
               run: |
+                  # Step summary
+                  echo "## Preparing Package for Publishing" >> $GITHUB_STEP_SUMMARY
+                  echo "Installing dependencies and preparing the package" >> $GITHUB_STEP_SUMMARY
+
                   # Install dependencies
+                  echo "Installing dependencies..."
                   npm install
 
-                  # Run the build if needed
+                  # Run the build if the package has a build script
                   if [[ -f "package.json" && -n "$(jq -r '.scripts.build // ""' package.json)" ]]; then
+                    echo "Running build script..."
                     npm run build
+                    echo "- Build completed successfully" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "- No build script found, skipping" >> $GITHUB_STEP_SUMMARY
                   fi
 
+                  # Verify package contents before publishing
+                  file_count=$(find . -type f | wc -l)
+                  echo "- Package contains ${file_count} files ready for publishing" >> $GITHUB_STEP_SUMMARY
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+            # Publish the TypeScript package to npm
+            - name: Publish package
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  # Step summary
+                  echo "## Publishing TypeScript Package" >> $GITHUB_STEP_SUMMARY
+                  echo "Publishing @valkey/valkey-glide@${RELEASE_VERSION} with tag ${NPM_TAG}" >> $GITHUB_STEP_SUMMARY
+
                   # Publish the package
-                  npm publish --access public --tag ${{ env.NPM_TAG }} --ignore-scripts
+                  set +e  # Don't exit immediately on error
+                  npm_publish_output=$(npm publish --access public --tag ${{ env.NPM_TAG }} --ignore-scripts 2>&1)
+                  publish_exit_code=$?
+                  set -e
+
+                  # Handle the result
+                  if [[ $publish_exit_code -eq 0 ]]; then
+                    echo "✅ Successfully published @valkey/valkey-glide@${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                  elif echo "${npm_publish_output}" | grep -q "You cannot publish over the previously published versions"; then
+                    echo "⚠️ Package @valkey/valkey-glide@${RELEASE_VERSION} already exists" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                  else
+                    echo "❌ Failed to publish package: ${npm_publish_output}" >> $GITHUB_STEP_SUMMARY
+                    echo "${npm_publish_output}"
+                    exit 1
+                  fi
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
@@ -462,8 +904,42 @@ jobs:
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
-                  apk add git redis
+                  apk add git redis build-base libc-dev
                   node -v
+
+                  # Try to install Zig for testing
+                  if ! apk add --no-cache zig; then
+                    echo "Zig not available in apk, installing manually..."
+                    
+                    # Install dependencies for manual installation
+                    apk add --no-cache curl xz
+                    
+                    # Download latest stable Zig for Linux
+                    ZIG_VERSION="0.12.0"
+                    ARCH=$(uname -m)
+                    if [[ "${ARCH}" == "x86_64" ]]; then
+                      ZIG_ARCH="x86_64"
+                    elif [[ "${ARCH}" == "aarch64" ]]; then
+                      ZIG_ARCH="aarch64"
+                    else
+                      echo "Unsupported architecture: ${ARCH}"
+                      exit 1
+                    fi
+                    
+                    # Download and extract Zig
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+                    mkdir -p /usr/local/zig
+                    tar -xf zig.tar.xz --strip-components=1 -C /usr/local/zig
+                    ln -s /usr/local/zig/zig /usr/local/bin/zig
+                  fi
+
+                  # Verify Zig installation
+                  if command -v zig &> /dev/null; then
+                    echo "Zig installed:"
+                    zig version
+                  else
+                    echo "WARNING: Zig installation not found in PATH"
+                  fi
 
             - name: Install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
@@ -535,21 +1011,80 @@ jobs:
                   fi
                   echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_ENV
 
-            - name: Run the tests
+            # Install and test the published package across different platforms
+            - name: Install test dependencies
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
+                  # Step summary for installation process
+                  echo "## Package Installation" >> $GITHUB_STEP_SUMMARY
+                  echo "Installing dependencies and published package on platform: ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+
+                  # Install project dependencies first
+                  echo "Installing project dependencies..."
                   npm install
-                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
+
+                  # Add status table for installation
+                  echo "| Operation | Status | Details |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+                  echo "| Project Dependencies | ✅ Installed | utils/release-candidate-testing/node |" >> $GITHUB_STEP_SUMMARY
+
+                  # Install the package for testing
+                  echo "Installing @valkey/valkey-glide@${{ env.NPM_TAG }}..."
+                  if npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}; then
+                    echo "| Published Package | ✅ Installed | @valkey/valkey-glide@${RELEASE_VERSION} (${NPM_TAG}) |" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "| Published Package | ❌ Failed | @valkey/valkey-glide@${RELEASE_VERSION} (${NPM_TAG}) |" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  # Check binary files detection
+                  echo "Verifying native binaries..."
+                  if [[ -d "node_modules/@valkey" ]]; then
+                    binary_files=$(find node_modules/@valkey -name "*.node" | wc -l)
+                    if [[ $binary_files -gt 0 ]]; then
+                      echo "| Native Binaries | ✅ Found | ${binary_files} files detected |" >> $GITHUB_STEP_SUMMARY
+                    else
+                      echo "| Native Binaries | ⚠️ Warning | No binaries found |" >> $GITHUB_STEP_SUMMARY
+                    fi
+                  fi
+
+            # Run the test suite against the published package
+            - name: Run tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/node
+              run: |
+                  # Step summary for test execution
+                  echo "## Testing Published Package" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Platform | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+                  echo "| @valkey/valkey-glide | ${RELEASE_VERSION} (${NPM_TAG}) | ${{ env.PLATFORM_ID }} | 🔄 Running tests... |" >> $GITHUB_STEP_SUMMARY
+
+                  # Run tests
+                  echo "Running tests on platform ${{ env.PLATFORM_ID }}..."
                   npm run test
 
-            - name: Deprecating packages on failure
+                  # Update step summary with success status
+                  echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+                  echo "| Test Suite | Platform | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+                  echo "| Release Verification | ${{ env.PLATFORM_ID }} | ✅ All tests passed |" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "🟢 Package validation completed successfully on platform ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+
+            # Changed from deprecation to unpublish for better package management
+            - name: Unpublish packages on failure
               if: ${{ failure() }}
               shell: bash
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   PLATFORM_MATRIX: ${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }}
               run: |
+                  # Add error information to step summary
+                  echo "## ❌ Test Failure Recovery" >> $GITHUB_STEP_SUMMARY
+                  echo "Tests failed on platform: ${{ env.PLATFORM_ID }}" >> $GITHUB_STEP_SUMMARY
+                  echo "Initiating unpublish operation for packages at version ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
+
                   # Detect OS and install jq
                   if [[ "${OSTYPE}" == "darwin"* ]]; then
                       brew install jq || true
@@ -559,28 +1094,54 @@ jobs:
                       sudo apt-get update && sudo apt-get install -y jq
                   fi
 
-                  # RELEASE_VERSION is now directly available from the environment
-                  echo "Release version for Deprecating: ${RELEASE_VERSION}"
+                  # Log release version for unpublishing
+                  echo "Release version for unpublishing: ${RELEASE_VERSION}"
 
                   # Validate RELEASE_VERSION
                   if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ && "${RELEASE_VERSION}" != "0.0.0-pr" ]]; then
-                      echo "Invalid release version format: ${RELEASE_VERSION}"
+                      echo "❌ Invalid release version format: ${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
                       exit 1
                   fi
 
                   if [[ "${RELEASE_VERSION}" == "0.0.0-pr" ]]; then
-                      echo "Skipping deprecation for PR version."
+                      echo "⚠️ Skipping unpublish for PR version." >> $GITHUB_STEP_SUMMARY
                       exit 0
                   fi
 
-                  # Deprecating base package
-                  npm deprecate "@valkey/valkey-glide@${RELEASE_VERSION}" "This version has been deprecated due to test failures" --force || true
+                  # Unpublishing base package instead of deprecating
+                  echo "Unpublishing base package @valkey/valkey-glide@${RELEASE_VERSION}..."
+                  npm unpublish "@valkey/valkey-glide@${RELEASE_VERSION}" --force || true
+                  echo "- Unpublished @valkey/valkey-glide@${RELEASE_VERSION}" >> $GITHUB_STEP_SUMMARY
 
-                  # Process platform matrix
+                  # Process platform matrix for unpublishing platform-specific packages
                   echo "${PLATFORM_MATRIX}" > platform_matrix.json
+                  echo "## Platform-specific packages unpublished:" >> $GITHUB_STEP_SUMMARY
+                  echo "| Package | Version | Status |" >> $GITHUB_STEP_SUMMARY
+                  echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
 
+                  # Track unpublishing status
+                  unpublish_success=true
+
+                  # Process each platform package
                   while read -r pkg; do
                       package_name="@valkey/valkey-glide-${pkg}"
-                      echo "Deprecating ${package_name}@${RELEASE_VERSION}"
-                      npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated due to test failures" --force || true
+                      echo "Unpublishing ${package_name}@${RELEASE_VERSION}..."
+                      
+                      # Attempt to unpublish with error handling
+                      if npm unpublish "${package_name}@${RELEASE_VERSION}" --force; then
+                          echo "| ${package_name} | ${RELEASE_VERSION} | ✅ Unpublished |" >> $GITHUB_STEP_SUMMARY
+                          echo "✅ Successfully unpublished ${package_name}@${RELEASE_VERSION}"
+                      else
+                          echo "| ${package_name} | ${RELEASE_VERSION} | ⚠️ Failed to unpublish |" >> $GITHUB_STEP_SUMMARY
+                          echo "⚠️ Failed to unpublish ${package_name}@${RELEASE_VERSION}"
+                          unpublish_success=false
+                      fi
                   done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
+
+                  # Add summary status
+                  if [ "$unpublish_success" = true ]; then
+                      echo "✅ All packages successfully unpublished" >> $GITHUB_STEP_SUMMARY
+                  else
+                      echo "⚠️ Some packages could not be unpublished" >> $GITHUB_STEP_SUMMARY
+                      echo "Note: This might be because they were not published yet, or due to npm registry issues." >> $GITHUB_STEP_SUMMARY
+                  fi
