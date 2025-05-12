@@ -12,7 +12,6 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/build-node-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -26,7 +25,6 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/build-node-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -53,9 +51,7 @@ concurrency:
 env:
     CARGO_TERM_COLOR: always
 
-run-name:
-    # Set custom name if job is started manually and name is given
-    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
 jobs:
     get-matrices:
@@ -92,6 +88,16 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
+            # Install software dependencies
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            # Setup Node.js
             - name: Setup Node
               uses: actions/setup-node@v4
               env:
@@ -99,6 +105,7 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
 
+            # Use caching to speed up builds
             - uses: actions/cache@v4
               with:
                   path: |
@@ -109,22 +116,24 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.host.OS }}
-                  named_os: ${{ matrix.host.NAMED_OS }}
-                  arch: ${{ matrix.host.ARCH }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
+            # Install npm dependencies
+            - name: Build and Install
+              run: |
+                  cd node
+                  npm install
+                  cd rust-client
+                  npm install
+                  cd ../
+                  npm run build
 
-            - name: test
+            # Run tests
+            - name: Run tests
               run: npm test
               working-directory: ./node
 
-            - name: test hybrid node modules - commonjs
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+            # Additional tests for specific configurations
+            - name: Test hybrid node modules - commonjs
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
               run: |
                   npm install
                   npm run test
@@ -132,8 +141,8 @@ jobs:
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
-            - name: test hybrid node modules - ecma
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+            - name: Test hybrid node modules - ecma
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
               run: |
                   npm install
                   npm run test
@@ -142,7 +151,7 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
               with:
                   language-flag: -node
 
@@ -151,11 +160,10 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
+                  name: node-test-reports-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}-${{ matrix.node }}
                   path: |
-                      node/test-report*.html
-                      utils/clusters/**
-                      benchmarks/results/**
+                      ./node/test-report*.html
+                      ./node/hybrid-node-tests/*/test-report*.html
 
     lint-rust:
         timeout-minutes: 15
@@ -198,7 +206,7 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }}
         steps:
             - name: Install git
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
@@ -207,18 +215,10 @@ jobs:
                   apk add --no-cache git tar
 
             - name: Checkout code
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+              if: ${{ matrix.host.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
 
-            - name: Setup musl on Linux
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
-              uses: ./.github/workflows/setup-musl-on-linux
-              with:
-                  npm-scope: ${{ secrets.NPM_SCOPE }}
-                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
-
             - name: Setup Node
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               uses: actions/setup-node@v4
               env:
                   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
@@ -226,7 +226,6 @@ jobs:
                   node-version: ${{ matrix.node }}
 
             - uses: actions/cache@v4
-              if: ${{ matrix.host.ARCH != 'arm64' }} # JavaScript Actions in Alpine containers are not supported on arm
               with:
                   path: |
                       node/rust-client/target
@@ -234,19 +233,17 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Build Node wrapper
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.host.OS }}
-                  named_os: ${{ matrix.host.NAMED_OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-                  arch: ${{ matrix.host.ARCH }}
+            - name: Set default for SANITIZED_IMAGE
+              run: echo "SANITIZED_IMAGE=default" >> $GITHUB_ENV
+
+            - name: Build Node.js wrapper
+              if: ${{ matrix.host.TARGET != 'aarch64-unknown-linux-musl' }}
+              run: |
+                  cd node
+                  npm run build
 
             - name: test
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+              if: ${{ matrix.host.TARGET != 'aarch64-unknown-linux-musl' }}
               run: npm test
               working-directory: ./node
 
@@ -256,7 +253,6 @@ jobs:
               run: echo "SANITIZED_IMAGE=${{ matrix.host.IMAGE }}" | sed -r 's/:/-/g' >> $GITHUB_ENV
 
             - name: Upload test reports
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
@@ -282,7 +278,7 @@ jobs:
             - name: Install Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: 20.x
+                  node-version: latest
 
             - uses: actions/cache@v4
               with:
@@ -294,14 +290,11 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ubuntu
-                  named_os: linux
-                  arch: arm64
-                  target: aarch64-unknown-linux-gnu
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Build Node.js wrapper
+              run: |
+                  cd node
+                  TARGET_FLAG="${{ matrix.host.TARGET != '' && format('--target {0}', matrix.host.TARGET) || '' }}"
+                  npm run build -- --build-flags="$TARGET_FLAG"
 
             - name: test
               run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
