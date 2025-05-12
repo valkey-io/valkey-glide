@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 
 using Valkey.Glide.Internals;
 
+using static Valkey.Glide.Internals.FFI;
+
 namespace Valkey.Glide;
 
 public abstract class ConnectionConfiguration
@@ -25,29 +27,6 @@ public abstract class ConnectionConfiguration
 
         internal FFI.ConnectionConfig ToFfi() =>
             new(Addresses, TlsMode, ClusterMode, RequestTimeout, ConnectionTimeout, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct NodeAddress
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Host;
-        public ushort Port;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct AuthenticationInfo(string? username, string password)
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? Username = username;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Password = password;
-    }
-
-    internal enum TlsMode : uint
-    {
-        NoTls = 0,
-        SecureTls = 2,
     }
 
     /// <summary>
