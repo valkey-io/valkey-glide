@@ -1,19 +1,22 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClusterClient_Info() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Info() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	response, err := client.Info(context.Background())
 	if err != nil {
@@ -29,11 +32,11 @@ func ExampleGlideClusterClient_Info() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_InfoWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_InfoWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Cluster}},
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Cluster}},
 	}
 
 	response, err := client.InfoWithOptions(context.Background(), opts)
@@ -51,8 +54,8 @@ func ExampleGlideClusterClient_InfoWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_TimeWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_TimeWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	route := config.Route(config.RandomRoute)
 	opts := options.RouteOption{
 		Route: route,
@@ -67,8 +70,8 @@ func ExampleGlideClusterClient_TimeWithOptions() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_DBSizeWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_DBSizeWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	route := config.SimpleNodeRoute(config.RandomRoute)
 	opts := options.RouteOption{
 		Route: route,
@@ -83,8 +86,8 @@ func ExampleGlideClusterClient_DBSizeWithOptions() {
 	// 0
 }
 
-func ExampleGlideClusterClient_FlushAll() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_FlushAll() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.FlushAll(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -94,8 +97,8 @@ func ExampleGlideClusterClient_FlushAll() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_FlushDB() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_FlushDB() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.FlushDB(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -105,8 +108,8 @@ func ExampleGlideClusterClient_FlushDB() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_FlushAllWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_FlushAllWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	route := config.SimpleNodeRoute(config.AllPrimaries)
 	routeOption := &options.RouteOption{
@@ -129,8 +132,8 @@ func ExampleGlideClusterClient_FlushAllWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_FlushDBWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_FlushDBWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	route := config.SimpleNodeRoute(config.AllPrimaries)
 	routeOption := &options.RouteOption{
@@ -153,8 +156,8 @@ func ExampleGlideClusterClient_FlushDBWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_Lolwut() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Lolwut() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.Lolwut(context.Background())
 	if err != nil {
@@ -168,8 +171,8 @@ func ExampleGlideClusterClient_Lolwut() {
 	// Output: LOLWUT pattern generated successfully
 }
 
-func ExampleGlideClusterClient_LolwutWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LolwutWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	randomRouteOptions := options.ClusterLolwutOptions{
 		LolwutOptions: &options.LolwutOptions{
 			Version: 6,
@@ -191,8 +194,8 @@ func ExampleGlideClusterClient_LolwutWithOptions() {
 	// Output: LOLWUT pattern generated successfully
 }
 
-func ExampleGlideClusterClient_LastSave() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LastSave() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "key-" + uuid.NewString()
 	client.Set(context.Background(), key, "hello")
 	result, err := client.LastSave(context.Background())
@@ -204,8 +207,8 @@ func ExampleGlideClusterClient_LastSave() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_LastSaveWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LastSaveWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	opts := options.RouteOption{Route: nil}
 	key := "key-" + uuid.NewString()
 	client.Set(context.Background(), key, "hello")
@@ -218,8 +221,8 @@ func ExampleGlideClusterClient_LastSaveWithOptions() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_ConfigResetStat() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigResetStat() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.ConfigResetStat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -229,8 +232,8 @@ func ExampleGlideClusterClient_ConfigResetStat() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_ConfigResetStatWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigResetStatWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	opts := options.RouteOption{Route: nil}
 	result, err := client.ConfigResetStatWithOptions(context.Background(), opts)
 	if err != nil {
@@ -241,8 +244,8 @@ func ExampleGlideClusterClient_ConfigResetStatWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_ConfigSet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigSet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	result, err := client.ConfigSet(context.Background(), configParam)
 	if err != nil {
@@ -254,8 +257,8 @@ func ExampleGlideClusterClient_ConfigSet() {
 	// OK
 }
 
-func ExampleGlideClusterClient_ConfigSetWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigSetWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	opts := options.RouteOption{Route: config.RandomRoute}
 	configParam := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	result, err := client.ConfigSetWithOptions(context.Background(), configParam, opts)
@@ -268,8 +271,8 @@ func ExampleGlideClusterClient_ConfigSetWithOptions() {
 	// OK
 }
 
-func ExampleGlideClusterClient_ConfigGet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigGet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	configParamSet := map[string]string{"timeout": "1000"}
 	client.ConfigSet(context.Background(), configParamSet)
 	configParamGet := []string{"timeout"}
@@ -283,8 +286,8 @@ func ExampleGlideClusterClient_ConfigGet() {
 	// map[timeout:1000]
 }
 
-func ExampleGlideClusterClient_ConfigGetWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigGetWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	opts := options.RouteOption{Route: config.RandomRoute}
 	configParamSet := map[string]string{"timeout": "1000"}
 	client.ConfigSetWithOptions(context.Background(), configParamSet, opts)
@@ -299,11 +302,11 @@ func ExampleGlideClusterClient_ConfigGetWithOptions() {
 	// map[timeout:1000]
 }
 
-func ExampleGlideClusterClient_ConfigRewrite() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ConfigRewrite() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	var resultRewrite string
 	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
 	}
 	res, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
@@ -336,9 +339,9 @@ func ExampleGlideClusterClient_ConfigRewrite() {
 	// OK
 }
 
-func ExampleGlideClusterClient_ConfigRewriteWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	sections := []options.Section{options.Server}
+func ExampleClusterClient_ConfigRewriteWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	sections := []constants.Section{constants.Server}
 
 	// info with option or with multiple options without route
 	var runResultNilRoute string

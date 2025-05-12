@@ -1,16 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_SetBit() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SetBit() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1) // initialize bit 1 with a value of 1
 
@@ -23,8 +23,8 @@ func ExampleGlideClient_SetBit() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_SetBit() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SetBit() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1) // initialize bit 1 with a value of 1
 
@@ -37,8 +37,8 @@ func ExampleGlideClusterClient_SetBit() {
 	// Output: 1
 }
 
-func ExampleGlideClient_GetBit() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetBit() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1)
 	result, err := client.GetBit(context.Background(), "my_key", 1)
@@ -50,8 +50,8 @@ func ExampleGlideClient_GetBit() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_GetBit() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetBit() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1)
 	client.SetBit(context.Background(), "my_key", 1, 1)
@@ -64,8 +64,8 @@ func ExampleGlideClusterClient_GetBit() {
 	// Output: 1
 }
 
-func ExampleGlideClient_BitCount() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitCount() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1)
 	client.SetBit(context.Background(), "my_key", 2, 1)
@@ -78,8 +78,8 @@ func ExampleGlideClient_BitCount() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_BitCount() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 1, 1)
 	client.SetBit(context.Background(), "my_key", 2, 1)
@@ -92,8 +92,8 @@ func ExampleGlideClusterClient_BitCount() {
 	// Output: 2
 }
 
-func ExampleGlideClient_BitCountWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitCountWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewBitCountOptions().
 		SetStart(1).
@@ -108,8 +108,8 @@ func ExampleGlideClient_BitCountWithOptions() {
 	// Output: 0
 }
 
-func ExampleGlideClusterClient_BitCountWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitCountWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewBitCountOptions().
 		SetStart(1).
@@ -124,8 +124,8 @@ func ExampleGlideClusterClient_BitCountWithOptions() {
 	// Output: 0
 }
 
-func ExampleGlideClient_BitField() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitField() {
+	var client *Client = getExampleClient() // example helper function
 
 	commands := []options.BitFieldSubCommands{
 		options.NewBitFieldGet(options.SignedInt, 8, 16),
@@ -142,8 +142,8 @@ func ExampleGlideClient_BitField() {
 	// output: [{0 false} {0 false} {1 false}]
 }
 
-func ExampleGlideClusterClient_BitField() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitField() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	commands := []options.BitFieldSubCommands{
 		options.NewBitFieldGet(options.SignedInt, 8, 16),
@@ -160,8 +160,8 @@ func ExampleGlideClusterClient_BitField() {
 	// output: [{0 false} {0 false} {1 false}]
 }
 
-func ExampleGlideClient_BitFieldRO() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitFieldRO() {
+	var client *Client = getExampleClient() // example helper function
 	key := "mykey"
 
 	bfcommands := []options.BitFieldSubCommands{
@@ -181,8 +181,8 @@ func ExampleGlideClient_BitFieldRO() {
 	// output: [{24 false}]
 }
 
-func ExampleGlideClusterClient_BitFieldRO() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitFieldRO() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "mykey"
 
 	bfcommands := []options.BitFieldSubCommands{
@@ -202,8 +202,8 @@ func ExampleGlideClusterClient_BitFieldRO() {
 	// output: [{24 false}]
 }
 
-func ExampleGlideClient_BitOp() {
-	var client *GlideClient = getExampleGlideClient()
+func ExampleClient_BitOp() {
+	var client *Client = getExampleClient()
 
 	bitopkey1 := "{bitop_test}key1"
 	bitopkey2 := "{bitop_test}key2"
@@ -252,8 +252,8 @@ func ExampleGlideClient_BitOp() {
 	// BitOp NOT Result: 6
 }
 
-func ExampleGlideClusterClient_BitOp() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitOp() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	bitopkey1 := "{bitop_test}key1"
 	bitopkey2 := "{bitop_test}key2"
@@ -302,8 +302,8 @@ func ExampleGlideClusterClient_BitOp() {
 	// BitOp NOT Result: 6
 }
 
-func ExampleGlideClient_BitPos() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitPos() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 7, 1)
 
@@ -316,8 +316,8 @@ func ExampleGlideClient_BitPos() {
 	// Output: 7
 }
 
-func ExampleGlideClusterClient_BitPos() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitPos() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.SetBit(context.Background(), "my_key", 7, 1)
 
@@ -330,8 +330,8 @@ func ExampleGlideClusterClient_BitPos() {
 	// Output: 7
 }
 
-func ExampleGlideClient_BitPosWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_BitPosWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "\x00\x01\x00")
 
@@ -348,8 +348,8 @@ func ExampleGlideClient_BitPosWithOptions() {
 	// Output: 15
 }
 
-func ExampleGlideClusterClient_BitPosWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_BitPosWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "\x00\x10\x00")
 

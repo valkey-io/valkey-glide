@@ -1,11 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // GeoSpatialCommands supports commands and transactions for the "Geo Spatial Commands" group
@@ -28,15 +30,15 @@ type GeoSpatialCommands interface {
 
 	GeoPos(ctx context.Context, key string, members []string) ([][]float64, error)
 
-	GeoDist(ctx context.Context, key string, member1 string, member2 string) (Result[float64], error)
+	GeoDist(ctx context.Context, key string, member1 string, member2 string) (models.Result[float64], error)
 
 	GeoDistWithUnit(
 		ctx context.Context,
 		key string,
 		member1 string,
 		member2 string,
-		unit options.GeoUnit,
-	) (Result[float64], error)
+		unit constants.GeoUnit,
+	) (models.Result[float64], error)
 
 	GeoSearch(
 		ctx context.Context,

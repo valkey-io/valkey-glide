@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
 	"fmt"
@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
 
 func TestDefaultStandaloneConfig(t *testing.T) {
-	config := NewGlideClientConfiguration()
+	config := NewClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: false,
@@ -28,14 +28,14 @@ func TestDefaultStandaloneConfig(t *testing.T) {
 }
 
 func TestDefaultClusterConfig(t *testing.T) {
-	config := NewGlideClusterClientConfiguration()
+	config := NewClusterClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: true,
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result, err := config.toProtobuf()
+	result, err := config.ToProtobuf()
 	if err != nil {
 		t.Fatalf("Failed to convert config to protobuf: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 	retries, factor, base := 5, 10, 50
 	databaseId := 1
 
-	config := NewGlideClientConfiguration().
+	config := NewClientConfiguration().
 		WithUseTLS(true).
 		WithReadFrom(PreferReplica).
 		WithCredentials(NewServerCredentials(username, password)).
@@ -86,7 +86,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		)
 	}
 
-	result, err := config.toProtobuf()
+	result, err := config.ToProtobuf()
 	if err != nil {
 		t.Fatalf("Failed to convert config to protobuf: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestConfig_AzAffinity(t *testing.T) {
 	clientName := "client name"
 	az := "us-east-1a"
 
-	config := NewGlideClientConfiguration().
+	config := NewClientConfiguration().
 		WithUseTLS(true).
 		WithReadFrom(AzAffinity).
 		WithClientName(clientName).

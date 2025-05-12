@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func ExampleGlideClient_PfAdd() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PfAdd() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.PfAdd(context.Background(), uuid.New().String(), []string{"value1", "value2", "value3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -20,8 +20,8 @@ func ExampleGlideClient_PfAdd() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_PfAdd() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PfAdd() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.PfAdd(context.Background(), uuid.New().String(), []string{"value1", "value2", "value3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -31,8 +31,8 @@ func ExampleGlideClusterClient_PfAdd() {
 	// Output: 1
 }
 
-func ExampleGlideClient_PfCount() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PfCount() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.New().String()
 	result, err := client.PfAdd(context.Background(), key, []string{"value1", "value2", "value3"})
 	result1, err := client.PfCount(context.Background(), []string{key})
@@ -47,8 +47,8 @@ func ExampleGlideClient_PfCount() {
 	// 3
 }
 
-func ExampleGlideClusterClient_PfCount() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PfCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.New().String()
 	result, err := client.PfAdd(context.Background(), key, []string{"value1", "value2", "value3"})
 	result1, err := client.PfCount(context.Background(), []string{key})
@@ -63,8 +63,8 @@ func ExampleGlideClusterClient_PfCount() {
 	// 3
 }
 
-func ExampleGlideClient_PfMerge() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PfMerge() {
+	var client *Client = getExampleClient() // example helper function
 
 	// Create source keys with some values
 	sourceKey1 := uuid.New().String() + "{group}"
@@ -95,8 +95,8 @@ func ExampleGlideClient_PfMerge() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_PfMerge() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PfMerge() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	// Create source keys with some values
 	sourceKey1 := uuid.New().String() + "{group}"

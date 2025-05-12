@@ -1,11 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // SortedSetCommands supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster clients.
@@ -23,7 +25,7 @@ type SortedSetCommands interface {
 		opts options.ZAddOptions,
 	) (int64, error)
 
-	ZAddIncr(ctx context.Context, key string, member string, increment float64) (Result[float64], error)
+	ZAddIncr(ctx context.Context, key string, member string, increment float64) (models.Result[float64], error)
 
 	ZAddIncrWithOptions(
 		ctx context.Context,
@@ -31,7 +33,7 @@ type SortedSetCommands interface {
 		member string,
 		increment float64,
 		opts options.ZAddOptions,
-	) (Result[float64], error)
+	) (models.Result[float64], error)
 
 	ZIncrBy(ctx context.Context, key string, increment float64, member string) (float64, error)
 
@@ -47,49 +49,49 @@ type SortedSetCommands interface {
 
 	ZCard(ctx context.Context, key string) (int64, error)
 
-	BZPopMin(ctx context.Context, keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMin(ctx context.Context, keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
 	BZMPop(
 		ctx context.Context,
 		keys []string,
-		scoreFilter options.ScoreFilter,
+		scoreFilter constants.ScoreFilter,
 		timeoutSecs float64,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		ctx context.Context,
 		keys []string,
-		scoreFilter options.ScoreFilter,
+		scoreFilter constants.ScoreFilter,
 		timeoutSecs float64,
 		options options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(ctx context.Context, key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	BZPopMax(ctx context.Context, keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMax(ctx context.Context, keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
-	ZMPop(ctx context.Context, keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
+	ZMPop(ctx context.Context, keys []string, scoreFilter constants.ScoreFilter) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZMPopWithOptions(
 		ctx context.Context,
 		keys []string,
-		scoreFilter options.ScoreFilter,
+		scoreFilter constants.ScoreFilter,
 		opts options.ZPopOptions,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
-	ZRangeWithScores(ctx context.Context, key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
+	ZRangeWithScores(ctx context.Context, key string, rangeQuery options.ZRangeQueryWithScores) ([]models.MemberAndScore, error)
 
 	ZRangeStore(ctx context.Context, destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 
-	ZRank(ctx context.Context, key string, member string) (Result[int64], error)
+	ZRank(ctx context.Context, key string, member string) (models.Result[int64], error)
 
-	ZRankWithScore(ctx context.Context, key string, member string) (Result[int64], Result[float64], error)
+	ZRankWithScore(ctx context.Context, key string, member string) (models.Result[int64], models.Result[float64], error)
 
-	ZRevRank(ctx context.Context, key string, member string) (Result[int64], error)
+	ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error)
 
-	ZRevRankWithScore(ctx context.Context, key string, member string) (Result[int64], Result[float64], error)
+	ZRevRankWithScore(ctx context.Context, key string, member string) (models.Result[int64], models.Result[float64], error)
 
-	ZScore(ctx context.Context, key string, member string) (Result[float64], error)
+	ZScore(ctx context.Context, key string, member string) (models.Result[float64], error)
 
 	ZCount(ctx context.Context, key string, rangeOptions options.ZCountRange) (int64, error)
 
@@ -105,15 +107,15 @@ type SortedSetCommands interface {
 
 	ZDiff(ctx context.Context, keys []string) ([]string, error)
 
-	ZDiffWithScores(ctx context.Context, keys []string) ([]MemberAndScore, error)
+	ZDiffWithScores(ctx context.Context, keys []string) ([]models.MemberAndScore, error)
 
-	ZRandMember(ctx context.Context, key string) (Result[string], error)
+	ZRandMember(ctx context.Context, key string) (models.Result[string], error)
 
 	ZRandMemberWithCount(ctx context.Context, key string, count int64) ([]string, error)
 
-	ZRandMemberWithCountWithScores(ctx context.Context, key string, count int64) ([]MemberAndScore, error)
+	ZRandMemberWithCountWithScores(ctx context.Context, key string, count int64) ([]models.MemberAndScore, error)
 
-	ZMScore(ctx context.Context, key string, members []string) ([]Result[float64], error)
+	ZMScore(ctx context.Context, key string, members []string) ([]models.Result[float64], error)
 
 	ZDiffStore(ctx context.Context, destination string, keys []string) (int64, error)
 
@@ -123,7 +125,7 @@ type SortedSetCommands interface {
 		ctx context.Context,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		options options.ZInterOptions,
-	) ([]MemberAndScore, error)
+	) ([]models.MemberAndScore, error)
 
 	ZInterStore(ctx context.Context, destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
@@ -140,7 +142,7 @@ type SortedSetCommands interface {
 		ctx context.Context,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		options *options.ZUnionOptions,
-	) ([]MemberAndScore, error)
+	) ([]models.MemberAndScore, error)
 
 	ZUnionStore(ctx context.Context, destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 

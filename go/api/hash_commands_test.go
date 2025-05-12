@@ -1,16 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_HGet() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HGet() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -33,8 +33,8 @@ func ExampleGlideClient_HGet() {
 	// true
 }
 
-func ExampleGlideClusterClient_HGet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HGet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -57,8 +57,8 @@ func ExampleGlideClusterClient_HGet() {
 	// true
 }
 
-func ExampleGlideClient_HGetAll() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HGetAll() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -81,8 +81,8 @@ func ExampleGlideClient_HGetAll() {
 	// someOtherValue
 }
 
-func ExampleGlideClusterClient_HGetAll() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HGetAll() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -105,8 +105,8 @@ func ExampleGlideClusterClient_HGetAll() {
 	// someOtherValue
 }
 
-func ExampleGlideClient_HMGet() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HMGet() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -128,8 +128,8 @@ func ExampleGlideClient_HMGet() {
 	// {someOtherValue false}
 }
 
-func ExampleGlideClusterClient_HMGet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HMGet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -151,8 +151,8 @@ func ExampleGlideClusterClient_HMGet() {
 	// {someOtherValue false}
 }
 
-func ExampleGlideClient_HSet() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HSet() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -172,8 +172,8 @@ func ExampleGlideClient_HSet() {
 	// {someValue false}
 }
 
-func ExampleGlideClusterClient_HSet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HSet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -193,8 +193,8 @@ func ExampleGlideClusterClient_HSet() {
 	// {someValue false}
 }
 
-func ExampleGlideClient_HSetNX() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HSetNX() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -217,8 +217,8 @@ func ExampleGlideClient_HSetNX() {
 	// {value false}
 }
 
-func ExampleGlideClusterClient_HSetNX() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HSetNX() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -241,8 +241,8 @@ func ExampleGlideClusterClient_HSetNX() {
 	// {value false}
 }
 
-func ExampleGlideClient_HDel() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HDel() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -262,8 +262,8 @@ func ExampleGlideClient_HDel() {
 	// 2
 }
 
-func ExampleGlideClusterClient_HDel() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HDel() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -283,8 +283,8 @@ func ExampleGlideClusterClient_HDel() {
 	// 2
 }
 
-func ExampleGlideClient_HLen() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HLen() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -304,8 +304,8 @@ func ExampleGlideClient_HLen() {
 	// 2
 }
 
-func ExampleGlideClusterClient_HLen() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HLen() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -325,8 +325,8 @@ func ExampleGlideClusterClient_HLen() {
 	// 2
 }
 
-func ExampleGlideClient_HVals() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HVals() {
+	var client *Client = getExampleClient() // example helper function
 
 	// For this example, we only use 1 field for consistent output
 	fields := map[string]string{
@@ -347,8 +347,8 @@ func ExampleGlideClient_HVals() {
 	// [someValue]
 }
 
-func ExampleGlideClusterClient_HVals() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HVals() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	// For this example, we only use 1 field for consistent output
 	fields := map[string]string{
@@ -369,8 +369,8 @@ func ExampleGlideClusterClient_HVals() {
 	// [someValue]
 }
 
-func ExampleGlideClient_HExists() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HExists() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -390,8 +390,8 @@ func ExampleGlideClient_HExists() {
 	// true
 }
 
-func ExampleGlideClusterClient_HExists() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HExists() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -411,8 +411,8 @@ func ExampleGlideClusterClient_HExists() {
 	// true
 }
 
-func ExampleGlideClient_HKeys() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HKeys() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -428,8 +428,8 @@ func ExampleGlideClient_HKeys() {
 	// Output: [field1]
 }
 
-func ExampleGlideClusterClient_HKeys() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HKeys() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -445,8 +445,8 @@ func ExampleGlideClusterClient_HKeys() {
 	// Output: [field1]
 }
 
-func ExampleGlideClient_HStrLen() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HStrLen() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -466,8 +466,8 @@ func ExampleGlideClient_HStrLen() {
 	// 9
 }
 
-func ExampleGlideClusterClient_HStrLen() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HStrLen() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -487,8 +487,8 @@ func ExampleGlideClusterClient_HStrLen() {
 	// 9
 }
 
-func ExampleGlideClient_HIncrBy() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HIncrBy() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "10",
@@ -508,8 +508,8 @@ func ExampleGlideClient_HIncrBy() {
 	// 11
 }
 
-func ExampleGlideClusterClient_HIncrBy() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HIncrBy() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "10",
@@ -529,8 +529,8 @@ func ExampleGlideClusterClient_HIncrBy() {
 	// 11
 }
 
-func ExampleGlideClient_HIncrByFloat() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HIncrByFloat() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "10",
@@ -550,8 +550,8 @@ func ExampleGlideClient_HIncrByFloat() {
 	// 11.5
 }
 
-func ExampleGlideClusterClient_HIncrByFloat() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HIncrByFloat() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "10",
@@ -571,8 +571,8 @@ func ExampleGlideClusterClient_HIncrByFloat() {
 	// 11.5
 }
 
-func ExampleGlideClient_HScan() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HScan() {
+	var client *Client = getExampleClient() // example helper function
 
 	// For this example we only use 1 field to ensure a consistent output
 	fields := map[string]string{
@@ -595,8 +595,8 @@ func ExampleGlideClient_HScan() {
 	// [field1 someValue]
 }
 
-func ExampleGlideClusterClient_HScan() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HScan() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	// For this example we only use 1 field to ensure a consistent output
 	fields := map[string]string{
@@ -619,8 +619,8 @@ func ExampleGlideClusterClient_HScan() {
 	// [field1 someValue]
 }
 
-func ExampleGlideClient_HRandField() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HRandField() {
+	var client *Client = getExampleClient() // example helper function
 
 	// For this example we only use 1 field to ensure consistent output
 	fields := map[string]string{
@@ -638,8 +638,8 @@ func ExampleGlideClient_HRandField() {
 	// Output: {field1 false}
 }
 
-func ExampleGlideClusterClient_HRandField() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HRandField() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	// For this example we only use 1 field to ensure consistent output
 	fields := map[string]string{
@@ -657,8 +657,8 @@ func ExampleGlideClusterClient_HRandField() {
 	// Output: {field1 false}
 }
 
-func ExampleGlideClient_HRandFieldWithCount() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HRandFieldWithCount() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -675,8 +675,8 @@ func ExampleGlideClient_HRandFieldWithCount() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_HRandFieldWithCount() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HRandFieldWithCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -693,8 +693,8 @@ func ExampleGlideClusterClient_HRandFieldWithCount() {
 	// Output: true
 }
 
-func ExampleGlideClient_HRandFieldWithCountWithValues() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HRandFieldWithCountWithValues() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -710,8 +710,8 @@ func ExampleGlideClient_HRandFieldWithCountWithValues() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_HRandFieldWithCountWithValues() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HRandFieldWithCountWithValues() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"field1": "someValue",
@@ -728,8 +728,8 @@ func ExampleGlideClusterClient_HRandFieldWithCountWithValues() {
 	// Output: true
 }
 
-func ExampleGlideClient_HScanWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_HScanWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	fields := map[string]string{
 		"a": "1",
@@ -754,8 +754,8 @@ func ExampleGlideClient_HScanWithOptions() {
 	// [a 1]
 }
 
-func ExampleGlideClusterClient_HScanWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_HScanWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	fields := map[string]string{
 		"a": "1",

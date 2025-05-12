@@ -1,14 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 var (
@@ -19,8 +21,8 @@ redis.register_function{ function_name = 'myfunc', callback = function(keys, arg
 )
 
 // FunctionLoad Examples
-func ExampleGlideClient_FunctionLoad() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionLoad() {
+	client := getExampleClient()
 
 	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
@@ -33,8 +35,8 @@ func ExampleGlideClient_FunctionLoad() {
 	// mylib
 }
 
-func ExampleGlideClusterClient_FunctionLoad() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionLoad() {
+	client := getExampleClusterClient()
 
 	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
@@ -47,8 +49,8 @@ func ExampleGlideClusterClient_FunctionLoad() {
 	// mylib
 }
 
-func ExampleGlideClusterClient_FunctionLoadWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionLoadWithRoute() {
+	client := getExampleClusterClient()
 
 	route := config.Route(config.AllPrimaries)
 	opts := options.RouteOption{
@@ -66,8 +68,8 @@ func ExampleGlideClusterClient_FunctionLoadWithRoute() {
 }
 
 // FunctionFlush Examples
-func ExampleGlideClient_FunctionFlush() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionFlush() {
+	client := getExampleClient()
 
 	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
@@ -80,8 +82,8 @@ func ExampleGlideClient_FunctionFlush() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionFlush() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionFlush() {
+	client := getExampleClusterClient()
 
 	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
@@ -94,8 +96,8 @@ func ExampleGlideClusterClient_FunctionFlush() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionFlushWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionFlushWithRoute() {
+	client := getExampleClusterClient()
 
 	route := config.Route(config.AllPrimaries)
 	opts := options.RouteOption{
@@ -112,8 +114,8 @@ func ExampleGlideClusterClient_FunctionFlushWithRoute() {
 	// OK
 }
 
-func ExampleGlideClient_FunctionFlushSync() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionFlushSync() {
+	client := getExampleClient()
 
 	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
@@ -126,8 +128,8 @@ func ExampleGlideClient_FunctionFlushSync() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionFlushSync() {
-	client := getExampleGlideClient()
+func ExampleClusterClient_FunctionFlushSync() {
+	client := getExampleClient()
 
 	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
@@ -140,8 +142,8 @@ func ExampleGlideClusterClient_FunctionFlushSync() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionFlushSyncWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionFlushSyncWithRoute() {
+	client := getExampleClusterClient()
 
 	route := config.Route(config.AllPrimaries)
 	opts := options.RouteOption{
@@ -158,8 +160,8 @@ func ExampleGlideClusterClient_FunctionFlushSyncWithRoute() {
 	// OK
 }
 
-func ExampleGlideClient_FunctionFlushAsync() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionFlushAsync() {
+	client := getExampleClient()
 
 	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
@@ -172,8 +174,8 @@ func ExampleGlideClient_FunctionFlushAsync() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionFlushAsync() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionFlushAsync() {
+	client := getExampleClusterClient()
 
 	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
@@ -183,8 +185,8 @@ func ExampleGlideClusterClient_FunctionFlushAsync() {
 	fmt.Println(result)
 }
 
-func ExampleGlideClusterClient_FunctionFlushAsyncWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionFlushAsyncWithRoute() {
+	client := getExampleClusterClient()
 
 	route := config.Route(config.AllPrimaries)
 	opts := options.RouteOption{
@@ -202,8 +204,8 @@ func ExampleGlideClusterClient_FunctionFlushAsyncWithRoute() {
 }
 
 // FCall Examples
-func ExampleGlideClient_FCall() {
-	client := getExampleGlideClient()
+func ExampleClient_FCall() {
+	client := getExampleClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -223,8 +225,8 @@ func ExampleGlideClient_FCall() {
 	// 42
 }
 
-func ExampleGlideClusterClient_FCall() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCall() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -244,8 +246,8 @@ func ExampleGlideClusterClient_FCall() {
 	// 42
 }
 
-func ExampleGlideClusterClient_FCallWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load function
 	route := config.Route(config.AllPrimaries)
@@ -272,8 +274,8 @@ func ExampleGlideClusterClient_FCallWithRoute() {
 	// 42
 }
 
-func ExampleGlideClient_FCallWithKeysAndArgs() {
-	client := getExampleGlideClient()
+func ExampleClient_FCallWithKeysAndArgs() {
+	client := getExampleClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -295,8 +297,8 @@ func ExampleGlideClient_FCallWithKeysAndArgs() {
 	// 3
 }
 
-func ExampleGlideClusterClient_FCallWithKeysAndArgs() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallWithKeysAndArgs() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -318,8 +320,8 @@ func ExampleGlideClusterClient_FCallWithKeysAndArgs() {
 	// 3
 }
 
-func ExampleGlideClusterClient_FCallWithArgs() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallWithArgs() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -339,8 +341,8 @@ func ExampleGlideClusterClient_FCallWithArgs() {
 	// 1
 }
 
-func ExampleGlideClusterClient_FCallWithArgsWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallWithArgsWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load function
 	route := config.Route(config.AllPrimaries)
@@ -367,8 +369,8 @@ func ExampleGlideClusterClient_FCallWithArgsWithRoute() {
 	// 1
 }
 
-func ExampleGlideClient_FCallReadOnly() {
-	client := getExampleGlideClient()
+func ExampleClient_FCallReadOnly() {
+	client := getExampleClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -388,8 +390,8 @@ func ExampleGlideClient_FCallReadOnly() {
 	// 42
 }
 
-func ExampleGlideClusterClient_FCallReadOnly() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallReadOnly() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -409,8 +411,8 @@ func ExampleGlideClusterClient_FCallReadOnly() {
 	// 42
 }
 
-func ExampleGlideClusterClient_FCallReadOnlyWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallReadOnlyWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load function
 	route := config.Route(config.AllPrimaries)
@@ -437,8 +439,8 @@ func ExampleGlideClusterClient_FCallReadOnlyWithRoute() {
 	// 42
 }
 
-func ExampleGlideClient_FCallReadOnlyWithKeysAndArgs() {
-	client := getExampleGlideClient()
+func ExampleClient_FCallReadOnlyWithKeysAndArgs() {
+	client := getExampleClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -465,8 +467,8 @@ func ExampleGlideClient_FCallReadOnlyWithKeysAndArgs() {
 	// 3
 }
 
-func ExampleGlideClusterClient_FCallReadOnlyWithKeysAndArgs() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallReadOnlyWithKeysAndArgs() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -493,8 +495,8 @@ func ExampleGlideClusterClient_FCallReadOnlyWithKeysAndArgs() {
 	// 3
 }
 
-func ExampleGlideClusterClient_FCallReadOnlyWithArgs() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallReadOnlyWithArgs() {
+	client := getExampleClusterClient()
 
 	// Load function
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
@@ -514,8 +516,8 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgs() {
 	// 1
 }
 
-func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FCallReadOnlyWithArgsWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load function
 	route := config.Route(config.AllPrimaries)
@@ -542,8 +544,8 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
 	// 1
 }
 
-func ExampleGlideClient_FunctionStats() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionStats() {
+	client := getExampleClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -573,8 +575,8 @@ func ExampleGlideClient_FunctionStats() {
 	//   Engine LUA: 1 functions, 1 libraries
 }
 
-func ExampleGlideClusterClient_FunctionStats() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionStats() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -607,8 +609,8 @@ func ExampleGlideClusterClient_FunctionStats() {
 	//   Engine LUA: 1 functions, 1 libraries
 }
 
-func ExampleGlideClusterClient_FunctionStatsWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionStatsWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	route := config.Route(config.AllPrimaries)
@@ -645,8 +647,8 @@ func ExampleGlideClusterClient_FunctionStatsWithRoute() {
 	//   Engine LUA: 1 functions, 1 libraries
 }
 
-func ExampleGlideClient_FunctionDelete() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionDelete() {
+	client := getExampleClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -667,8 +669,8 @@ func ExampleGlideClient_FunctionDelete() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionDelete() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionDelete() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -689,8 +691,8 @@ func ExampleGlideClusterClient_FunctionDelete() {
 	// OK
 }
 
-func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionDeleteWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	route := config.Route(config.AllPrimaries)
@@ -715,8 +717,8 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	// OK
 }
 
-func ExampleGlideClient_FunctionKill() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionKill() {
+	client := getExampleClient()
 
 	// Try to kill when no function is running
 	_, err := client.FunctionKill(context.Background())
@@ -728,8 +730,8 @@ func ExampleGlideClient_FunctionKill() {
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
 
-func ExampleGlideClusterClient_FunctionKill() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionKill() {
+	client := getExampleClusterClient()
 
 	// Try to kill when no function is running
 	_, err := client.FunctionKill(context.Background())
@@ -741,8 +743,8 @@ func ExampleGlideClusterClient_FunctionKill() {
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
 
-func ExampleGlideClusterClient_FunctionKillWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionKillWithRoute() {
+	client := getExampleClusterClient()
 
 	// Try to kill with route when no function is running
 	route := config.Route(config.AllPrimaries)
@@ -758,8 +760,8 @@ func ExampleGlideClusterClient_FunctionKillWithRoute() {
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
 
-func ExampleGlideClient_FunctionList() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionList() {
+	client := getExampleClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -768,7 +770,7 @@ func ExampleGlideClient_FunctionList() {
 		return
 	}
 
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		LibraryName: "mylib",
 		WithCode:    true,
 	}
@@ -791,8 +793,8 @@ func ExampleGlideClient_FunctionList() {
 	//    1) function 'myfunc'
 }
 
-func ExampleGlideClusterClient_FunctionList() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionList() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
@@ -801,7 +803,7 @@ func ExampleGlideClusterClient_FunctionList() {
 		return
 	}
 
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		LibraryName: "mylib",
 		WithCode:    true,
 	}
@@ -824,8 +826,8 @@ func ExampleGlideClusterClient_FunctionList() {
 	//    1) function 'myfunc'
 }
 
-func ExampleGlideClusterClient_FunctionListWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionListWithRoute() {
+	client := getExampleClusterClient()
 
 	// Load a function first
 	route := config.Route(config.AllPrimaries)
@@ -839,7 +841,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	}
 
 	// List functions with route
-	query := FunctionListQuery{
+	query := models.FunctionListQuery{
 		WithCode: true,
 	}
 	result, err := client.FunctionListWithRoute(context.Background(), query, opts)

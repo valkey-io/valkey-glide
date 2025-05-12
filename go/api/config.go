@@ -1,12 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package config
 
 import (
 	"errors"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/protobuf"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
 
 const (
@@ -199,21 +199,21 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 	return protoStrategy
 }
 
-// GlideClientConfiguration represents the configuration settings for a Standalone client.
-type GlideClientConfiguration struct {
+// ClientConfiguration represents the configuration settings for a Standalone client.
+type ClientConfiguration struct {
 	baseClientConfiguration
 	databaseId         int
 	subscriptionConfig *StandaloneSubscriptionConfig
-	AdvancedGlideClientConfiguration
+	AdvancedClientConfiguration
 }
 
-// NewGlideClientConfiguration returns a [GlideClientConfiguration] with default configuration settings. For further
-// configuration, use the [GlideClientConfiguration] With* methods.
-func NewGlideClientConfiguration() *GlideClientConfiguration {
-	return &GlideClientConfiguration{}
+// NewClientConfiguration returns a [ClientConfiguration] with default configuration settings. For further
+// configuration, use the [ClientConfiguration] With* methods.
+func NewClientConfiguration() *ClientConfiguration {
+	return &ClientConfiguration{}
 }
 
-func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
 		return nil, err
@@ -227,8 +227,8 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 
-	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
-		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
+	if config.AdvancedClientConfiguration.connectionTimeout != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedClientConfiguration.connectionTimeout)
 	}
 
 	return request, nil
@@ -246,7 +246,7 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
-func (config *GlideClientConfiguration) WithAddress(address *NodeAddress) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithAddress(address *NodeAddress) *ClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
 }
@@ -254,20 +254,20 @@ func (config *GlideClientConfiguration) WithAddress(address *NodeAddress) *Glide
 // WithUseTLS configures the TLS settings for this configuration. Set to true if communication with the cluster should use
 // Transport Level Security. This setting should match the TLS configuration of the server/cluster, otherwise the connection
 // attempt will fail.
-func (config *GlideClientConfiguration) WithUseTLS(useTLS bool) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithUseTLS(useTLS bool) *ClientConfiguration {
 	config.useTLS = useTLS
 	return config
 }
 
 // WithCredentials sets the credentials for the authentication process. If none are set, the client will not authenticate
 // itself with the server.
-func (config *GlideClientConfiguration) WithCredentials(credentials *ServerCredentials) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithCredentials(credentials *ServerCredentials) *ClientConfiguration {
 	config.credentials = credentials
 	return config
 }
 
 // WithReadFrom sets the client's [ReadFrom] strategy. If not set, [Primary] will be used.
-func (config *GlideClientConfiguration) WithReadFrom(readFrom ReadFrom) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClientConfiguration {
 	config.readFrom = readFrom
 	return config
 }
@@ -276,80 +276,91 @@ func (config *GlideClientConfiguration) WithReadFrom(readFrom ReadFrom) *GlideCl
 // encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *GlideClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
 
 // WithClientName sets the client name to be used for the client. Will be used with CLIENT SETNAME command during connection
 // establishment.
-func (config *GlideClientConfiguration) WithClientName(clientName string) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithClientName(clientName string) *ClientConfiguration {
 	config.clientName = clientName
 	return config
 }
 
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
-func (config *GlideClientConfiguration) WithClientAZ(clientAZ string) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfiguration {
 	config.clientAZ = clientAZ
 	return config
 }
 
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
-func (config *GlideClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *ClientConfiguration {
 	config.reconnectStrategy = strategy
 	return config
 }
 
 // WithDatabaseId sets the index of the logical database to connect to.
-func (config *GlideClientConfiguration) WithDatabaseId(id int) *GlideClientConfiguration {
+func (config *ClientConfiguration) WithDatabaseId(id int) *ClientConfiguration {
 	config.databaseId = id
 	return config
 }
 
 // WithAdvancedConfiguration sets the advanced configuration settings for the client.
-func (config *GlideClientConfiguration) WithAdvancedConfiguration(
-	advancedConfig *AdvancedGlideClientConfiguration,
-) *GlideClientConfiguration {
-	config.AdvancedGlideClientConfiguration = *advancedConfig
+func (config *ClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedClientConfiguration,
+) *ClientConfiguration {
+	config.AdvancedClientConfiguration = *advancedConfig
 	return config
 }
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
-func (config *GlideClientConfiguration) WithSubscriptionConfig(
+func (config *ClientConfiguration) WithSubscriptionConfig(
 	subscriptionConfig *StandaloneSubscriptionConfig,
-) *GlideClientConfiguration {
+) *ClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
 }
 
-// GlideClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
-// Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
-// used.
-type GlideClusterClientConfiguration struct {
-	baseClientConfiguration
-	subscriptionConfig *ClusterSubscriptionConfig
-	AdvancedGlideClusterClientConfiguration
+func (config *ClientConfiguration) HasSubscription() bool {
+	return config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0
 }
 
-// NewGlideClusterClientConfiguration returns a [GlideClusterClientConfiguration] with default configuration settings. For
-// further configuration, use the [GlideClientConfiguration] With* methods.
-func NewGlideClusterClientConfiguration() *GlideClusterClientConfiguration {
-	return &GlideClusterClientConfiguration{
-		baseClientConfiguration:                 baseClientConfiguration{},
-		AdvancedGlideClusterClientConfiguration: AdvancedGlideClusterClientConfiguration{},
+func (config *ClientConfiguration) GetSubscription() *StandaloneSubscriptionConfig {
+	if config.HasSubscription() {
+		return config.subscriptionConfig
+	}
+	return nil
+}
+
+// ClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
+// Note: Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff with fixed values is
+// used.
+type ClusterClientConfiguration struct {
+	baseClientConfiguration
+	subscriptionConfig *ClusterSubscriptionConfig
+	AdvancedClusterClientConfiguration
+}
+
+// NewClusterClientConfiguration returns a [ClusterClientConfiguration] with default configuration settings. For
+// further configuration, use the [ClientConfiguration] With* methods.
+func NewClusterClientConfiguration() *ClusterClientConfiguration {
+	return &ClusterClientConfiguration{
+		baseClientConfiguration:            baseClientConfiguration{},
+		AdvancedClusterClientConfiguration: AdvancedClusterClientConfiguration{},
 	}
 }
 
-func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
 		return nil, err
 	}
 
 	request.ClusterModeEnabled = true
-	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
-		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
+	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
+		request.ConnectionTimeout = uint32(config.AdvancedClusterClientConfiguration.connectionTimeout)
 	}
 	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
@@ -369,7 +380,7 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0002.use1.cache.amazonaws.com", Port: api.DefaultPort})
-func (config *GlideClusterClientConfiguration) WithAddress(address *NodeAddress) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithAddress(address *NodeAddress) *ClusterClientConfiguration {
 	config.addresses = append(config.addresses, *address)
 	return config
 }
@@ -377,89 +388,92 @@ func (config *GlideClusterClientConfiguration) WithAddress(address *NodeAddress)
 // WithUseTLS configures the TLS settings for this configuration. Set to true if communication with the cluster should use
 // Transport Level Security. This setting should match the TLS configuration of the server/cluster, otherwise the connection
 // attempt will fail.
-func (config *GlideClusterClientConfiguration) WithUseTLS(useTLS bool) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithUseTLS(useTLS bool) *ClusterClientConfiguration {
 	config.useTLS = useTLS
 	return config
 }
 
 // WithCredentials sets the credentials for the authentication process. If none are set, the client will not authenticate
 // itself with the server.
-func (config *GlideClusterClientConfiguration) WithCredentials(
+func (config *ClusterClientConfiguration) WithCredentials(
 	credentials *ServerCredentials,
-) *GlideClusterClientConfiguration {
+) *ClusterClientConfiguration {
 	config.credentials = credentials
 	return config
 }
 
 // WithReadFrom sets the client's [ReadFrom] strategy. If not set, [Primary] will be used.
-func (config *GlideClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClusterClientConfiguration {
 	config.readFrom = readFrom
 	return config
 }
 
 // WithRequestTimeout sets the duration that the client should wait for a request to complete. This duration
-// encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
+// encompasses sending the request, awaiting a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *GlideClusterClientConfiguration) WithRequestTimeout(
-	requestTimeout time.Duration,
-) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
 
 // WithClientName sets the client name to be used for the client. Will be used with CLIENT SETNAME command during connection
 // establishment.
-func (config *GlideClusterClientConfiguration) WithClientName(clientName string) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithClientName(clientName string) *ClusterClientConfiguration {
 	config.clientName = clientName
 	return config
 }
 
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
-func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
 	config.clientAZ = clientAZ
 	return config
 }
 
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
-func (config *GlideClusterClientConfiguration) WithReconnectStrategy(
+func (config *ClusterClientConfiguration) WithReconnectStrategy(
 	strategy *BackoffStrategy,
-) *GlideClusterClientConfiguration {
+) *ClusterClientConfiguration {
 	config.reconnectStrategy = strategy
 	return config
 }
 
 // WithAdvancedConfiguration sets the advanced configuration settings for the client.
-func (config *GlideClusterClientConfiguration) WithAdvancedConfiguration(
-	advancedConfig *AdvancedGlideClusterClientConfiguration,
-) *GlideClusterClientConfiguration {
-	config.AdvancedGlideClusterClientConfiguration = *advancedConfig
+func (config *ClusterClientConfiguration) WithAdvancedConfiguration(
+	advancedConfig *AdvancedClusterClientConfiguration,
+) *ClusterClientConfiguration {
+	config.AdvancedClusterClientConfiguration = *advancedConfig
 	return config
 }
 
 // WithSubscriptionConfig sets the subscription configuration for the client.
-func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
+func (config *ClusterClientConfiguration) WithSubscriptionConfig(
 	subscriptionConfig *ClusterSubscriptionConfig,
-) *GlideClusterClientConfiguration {
+) *ClusterClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
 }
 
-// Advanced configuration settings class for creating a client. Shared settings for standalone and
-// cluster clients.
-type AdvancedBaseClientConfiguration struct {
+func (config *ClusterClientConfiguration) HasSubscription() bool {
+	return config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0
+}
+
+func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
+	if config.HasSubscription() {
+		return config.subscriptionConfig
+	connectionTimeout int
+	return nil
+}
+
+// Represents advanced configuration settings for a Standalone [Client] used in [ClientConfiguration].
+type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
 }
 
-// Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
-type AdvancedGlideClientConfiguration struct {
-	AdvancedBaseClientConfiguration
-}
-
-// NewAdvancedGlideClientConfiguration returns a new [AdvancedGlideClientConfiguration] with default settings.
-func NewAdvancedGlideClientConfiguration() *AdvancedGlideClientConfiguration {
-	return &AdvancedGlideClientConfiguration{}
+// NewAdvancedGlideClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
+func NewAdvancedGlideClientConfiguration() *AdvancedClientConfiguration {
+	return &AdvancedClientConfiguration{}
 }
 
 // WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
@@ -467,28 +481,28 @@ func NewAdvancedGlideClientConfiguration() *AdvancedGlideClientConfiguration {
 // during initial client creation and any reconnections that may occur during request processing.
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
 // pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
-func (config *AdvancedGlideClientConfiguration) WithConnectionTimeout(
+func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
-) *AdvancedGlideClientConfiguration {
+) *AdvancedClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config
 }
 
-// Represents advanced configuration settings for a Standalone [GlideClusterClient] used in
-// [GlideClusterClientConfiguration].
-type AdvancedGlideClusterClientConfiguration struct {
-	AdvancedBaseClientConfiguration
+// Represents advanced configuration settings for a Standalone [ClusterClient] used in
+// [ClusterClientConfiguration].
+type AdvancedClusterClientConfiguration struct {
+	connectionTimeout time.Duration
 }
 
-// NewAdvancedGlideClusterClientConfiguration returns a new [AdvancedGlideClusterClientConfiguration] with default settings.
-func NewAdvancedGlideClusterClientConfiguration() *AdvancedGlideClusterClientConfiguration {
-	return &AdvancedGlideClusterClientConfiguration{}
+// NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
+func NewAdvancedClusterClientConfiguration() *AdvancedClusterClientConfiguration {
+	return &AdvancedClusterClientConfiguration{}
 }
 
 // WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
-func (config *AdvancedGlideClusterClientConfiguration) WithConnectionTimeout(
+func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
-) *AdvancedGlideClusterClientConfiguration {
+) *AdvancedClusterClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config
 }

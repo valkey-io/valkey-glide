@@ -1,18 +1,19 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/google/uuid"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_CustomCommand() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_CustomCommand() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.CustomCommand(context.Background(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -22,8 +23,8 @@ func ExampleGlideClient_CustomCommand() {
 	// Output: PONG
 }
 
-func ExampleGlideClient_Move() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Move() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.New().String()
 	_, err := client.Set(context.Background(), key, "hello")
 	if err != nil {
@@ -38,8 +39,8 @@ func ExampleGlideClient_Move() {
 	// Output: true
 }
 
-func ExampleGlideClient_Scan() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Scan() {
+	var client *Client = getExampleClient() // example helper function
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
 	client.Set(context.Background(), "key1", "hello")
 	resCursor, resCollection, err := client.Scan(context.Background(), 0)
@@ -54,9 +55,9 @@ func ExampleGlideClient_Scan() {
 	// Collection: [key1]
 }
 
-func ExampleGlideClient_ScanWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
-	opts := options.NewScanOptions().SetCount(10).SetType(options.ObjectTypeList)
+func ExampleClient_ScanWithOptions() {
+	var client *Client = getExampleClient() // example helper function
+	opts := options.NewScanOptions().SetCount(10).SetType(constants.ObjectTypeList)
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
 	client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
 	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
@@ -71,8 +72,8 @@ func ExampleGlideClient_ScanWithOptions() {
 	// Collection: [key1]
 }
 
-func ExampleGlideClient_RandomKey() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_RandomKey() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.New().String()
 	client.Set(context.Background(), key, "Hello")
 	result, err := client.RandomKey(context.Background())

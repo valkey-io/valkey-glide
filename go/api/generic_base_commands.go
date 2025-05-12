@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
-
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Generic Commands" group for standalone and cluster clients.
@@ -20,7 +21,7 @@ type GenericBaseCommands interface {
 
 	Expire(ctx context.Context, key string, seconds int64) (bool, error)
 
-	ExpireWithOptions(ctx context.Context, key string, seconds int64, expireCondition options.ExpireCondition) (bool, error)
+	ExpireWithOptions(ctx context.Context, key string, seconds int64, expireCondition constants.ExpireCondition) (bool, error)
 
 	ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error)
 
@@ -28,7 +29,7 @@ type GenericBaseCommands interface {
 		ctx context.Context,
 		key string,
 		unixTimestampInSeconds int64,
-		expireCondition options.ExpireCondition,
+		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
 	PExpire(ctx context.Context, key string, milliseconds int64) (bool, error)
@@ -37,7 +38,7 @@ type GenericBaseCommands interface {
 		ctx context.Context,
 		key string,
 		milliseconds int64,
-		expireCondition options.ExpireCondition,
+		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
 	PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error)
@@ -46,7 +47,7 @@ type GenericBaseCommands interface {
 		ctx context.Context,
 		key string,
 		unixTimestampInMilliSeconds int64,
-		expireCondition options.ExpireCondition,
+		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
 	ExpireTime(ctx context.Context, key string) (int64, error)
@@ -73,27 +74,27 @@ type GenericBaseCommands interface {
 
 	RestoreWithOptions(ctx context.Context, key string, ttl int64, value string, option options.RestoreOptions) (string, error)
 
-	ObjectEncoding(ctx context.Context, key string) (Result[string], error)
+	ObjectEncoding(ctx context.Context, key string) (models.Result[string], error)
 
-	Dump(ctx context.Context, key string) (Result[string], error)
+	Dump(ctx context.Context, key string) (models.Result[string], error)
 
-	ObjectFreq(ctx context.Context, key string) (Result[int64], error)
+	ObjectFreq(ctx context.Context, key string) (models.Result[int64], error)
 
-	ObjectIdleTime(ctx context.Context, key string) (Result[int64], error)
+	ObjectIdleTime(ctx context.Context, key string) (models.Result[int64], error)
 
-	ObjectRefCount(ctx context.Context, key string) (Result[int64], error)
+	ObjectRefCount(ctx context.Context, key string) (models.Result[int64], error)
 
-	Sort(ctx context.Context, key string) ([]Result[string], error)
+	Sort(ctx context.Context, key string) ([]models.Result[string], error)
 
-	SortWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]models.Result[string], error)
 
 	SortStore(ctx context.Context, key string, destination string) (int64, error)
 
 	SortStoreWithOptions(ctx context.Context, key string, destination string, sortOptions options.SortOptions) (int64, error)
 
-	SortReadOnly(ctx context.Context, key string) ([]Result[string], error)
+	SortReadOnly(ctx context.Context, key string) ([]models.Result[string], error)
 
-	SortReadOnlyWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]models.Result[string], error)
 
 	Wait(ctx context.Context, numberOfReplicas int64, timeout int64) (int64, error)
 

@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Stream" group of commands for standalone and cluster clients.
@@ -14,9 +15,9 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#stream
 type StreamCommands interface {
-	XAdd(ctx context.Context, key string, values [][]string) (Result[string], error)
+	XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error)
 
-	XAddWithOptions(ctx context.Context, key string, values [][]string, options options.XAddOptions) (Result[string], error)
+	XAddWithOptions(ctx context.Context, key string, values [][]string, options options.XAddOptions) (models.Result[string], error)
 
 	XTrim(ctx context.Context, key string, options options.XTrimOptions) (int64, error)
 
@@ -29,7 +30,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		start string,
-	) (XAutoClaimResponse, error)
+	) (models.XAutoClaimResponse, error)
 
 	XAutoClaimWithOptions(
 		ctx context.Context,
@@ -39,7 +40,7 @@ type StreamCommands interface {
 		minIdleTime int64,
 		start string,
 		options options.XAutoClaimOptions,
-	) (XAutoClaimResponse, error)
+	) (models.XAutoClaimResponse, error)
 
 	XAutoClaimJustId(
 		ctx context.Context,
@@ -48,7 +49,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		start string,
-	) (XAutoClaimJustIdResponse, error)
+	) (models.XAutoClaimJustIdResponse, error)
 
 	XAutoClaimJustIdWithOptions(
 		ctx context.Context,
@@ -58,7 +59,7 @@ type StreamCommands interface {
 		minIdleTime int64,
 		start string,
 		options options.XAutoClaimOptions,
-	) (XAutoClaimJustIdResponse, error)
+	) (models.XAutoClaimJustIdResponse, error)
 
 	XReadGroup(
 		ctx context.Context,
@@ -85,14 +86,14 @@ type StreamCommands interface {
 
 	XDel(ctx context.Context, key string, ids []string) (int64, error)
 
-	XPending(ctx context.Context, key string, group string) (XPendingSummary, error)
+	XPending(key string, group string) (XPendingSummary, error)
 
-	XPendingWithOptions(
+	XPendingWithOptions(key string, group string, options options.XPendingOptions) ([]XPendingDetail, error)
 		ctx context.Context,
 		key string,
 		group string,
 		options options.XPendingOptions,
-	) ([]XPendingDetail, error)
+	) ([]models.XPendingDetail, error)
 
 	XGroupSetId(ctx context.Context, key string, group string, id string) (string, error)
 
@@ -164,11 +165,11 @@ type StreamCommands interface {
 
 	XInfoStreamFullWithOptions(ctx context.Context, key string, options *options.XInfoStreamOptions) (map[string]any, error)
 
-	XInfoConsumers(ctx context.Context, key string, group string) ([]XInfoConsumerInfo, error)
+	XInfoConsumers(ctx context.Context, key string, group string) ([]models.XInfoConsumerInfo, error)
 
-	XInfoGroups(ctx context.Context, key string) ([]XInfoGroupInfo, error)
+	XInfoGroups(ctx context.Context, key string) ([]models.XInfoGroupInfo, error)
 
-	XRange(ctx context.Context, key string, start options.StreamBoundary, end options.StreamBoundary) ([]XRangeResponse, error)
+	XRange(ctx context.Context, key string, start options.StreamBoundary, end options.StreamBoundary) ([]models.XRangeResponse, error)
 
 	XRangeWithOptions(
 		ctx context.Context,
@@ -176,14 +177,14 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]XRangeResponse, error)
+	) ([]models.XRangeResponse, error)
 
 	XRevRange(
 		ctx context.Context,
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-	) ([]XRangeResponse, error)
+	) ([]models.XRangeResponse, error)
 
 	XRevRangeWithOptions(
 		ctx context.Context,
@@ -191,5 +192,5 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]XRangeResponse, error)
+	) ([]models.XRangeResponse, error)
 }

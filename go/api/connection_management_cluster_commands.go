@@ -1,11 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
-
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Connection Management" group of commands for cluster client.
@@ -18,15 +18,15 @@ type ConnectionManagementClusterCommands interface {
 
 	PingWithOptions(ctx context.Context, pingOptions options.ClusterPingOptions) (string, error)
 
-	Echo(ctx context.Context, message string) (Result[string], error)
+	Echo(ctx context.Context, message string) (models.Result[string], error)
 
-	EchoWithOptions(ctx context.Context, message string, routeOptions options.RouteOption) (ClusterValue[string], error)
+	EchoWithOptions(ctx context.Context, message string, routeOptions options.RouteOption) (models.ClusterValue[string], error)
 
-	ClientId(ctx context.Context) (ClusterValue[int64], error)
+	ClientId(ctx context.Context) (models.ClusterValue[int64], error)
 
-	ClientIdWithOptions(ctx context.Context, routeOptions options.RouteOption) (ClusterValue[int64], error)
+	ClientIdWithOptions(ctx context.Context, routeOptions options.RouteOption) (models.ClusterValue[int64], error)
 
-	ClientSetName(ctx context.Context, connectionName string) (ClusterValue[string], error)
+	ClientSetName(ctx context.Context, connectionName string) (models.ClusterValue[string], error)
 
 	ClientSetNameWithOptions(
 		ctx context.Context,
@@ -34,7 +34,7 @@ type ConnectionManagementClusterCommands interface {
 		routeOptions options.RouteOption,
 	) (ClusterValue[string], error)
 
-	ClientGetName(ctx context.Context) (ClusterValue[string], error)
+	ClientGetName(ctx context.Context) (models.ClusterValue[string], error)
 
-	ClientGetNameWithOptions(ctx context.Context, routeOptions options.RouteOption) (ClusterValue[string], error)
+	ClientGetNameWithOptions(ctx context.Context, routeOptions options.RouteOption) (models.ClusterValue[string], error)
 }

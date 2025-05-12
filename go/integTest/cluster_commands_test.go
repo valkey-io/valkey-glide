@@ -9,12 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
@@ -97,9 +99,9 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 
 	// info with option or with multiple options without route
-	sections := []options.Section{options.Cpu}
+	sections := []constants.Section{constants.Cpu}
 	if suite.serverVersion >= "7.0.0" {
-		sections = append(sections, options.Memory)
+		sections = append(sections, constants.Memory)
 	}
 	opts := options.ClusterInfoOptions{
 		InfoOptions: &options.InfoOptions{Sections: sections},
@@ -452,7 +454,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	assert.NoError(t, err)
 
 	cursor = *options.NewClusterScanCursor()
-	opts = options.NewClusterScanOptions().SetType(options.ObjectTypeSet)
+	opts = options.NewClusterScanOptions().SetType(constants.ObjectTypeSet)
 	matchedTypeKeys := []string{}
 
 	for !cursor.HasFinished() {
@@ -539,7 +541,7 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	}
 
 	cursor := *options.NewClusterScanCursor()
-	opts := options.NewClusterScanOptions().SetMatch("key-*").SetType(options.ObjectTypeString)
+	opts := options.NewClusterScanOptions().SetMatch("key-*").SetType(constants.ObjectTypeString)
 	allKeys := make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
@@ -729,7 +731,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		var keys []string
 		cursor, keys, err = client.ScanWithOptions(context.Background(),
 			cursor,
-			*options.NewClusterScanOptions().SetType(options.ObjectTypeList),
+			*options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
 		)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
@@ -1348,7 +1350,7 @@ func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	opts := options.ClusterInfoOptions{
-		InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
 	}
 	res, err := client.InfoWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
@@ -1372,7 +1374,7 @@ func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
-	sections := []options.Section{options.Server}
+	sections := []constants.Section{constants.Server}
 
 	// info with option or with multiple options without route
 	opts := options.ClusterInfoOptions{
@@ -1512,7 +1514,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 	}
 
 	// Test FunctionList with WithCode and query for all libraries
-	query := api.FunctionListQuery{
+	query := models.FunctionListQuery{
 		WithCode: true,
 	}
 	functionList, err := client.FunctionListWithRoute(context.Background(), query, route)

@@ -1,40 +1,41 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 	"time"
+	config2 "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
-func ExampleNewGlideClient() {
-	config := NewGlideClientConfiguration().
+func ExampleNewClient() {
+	config := config2.NewClientConfiguration().
 		WithAddress(&getStandaloneAddresses()[0]).
 		WithUseTLS(false).
-		WithReconnectStrategy(NewBackoffStrategy(5, 1000, 2)).
+		WithReconnectStrategy(config2.NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
-	client, err := NewGlideClient(context.Background(), config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
 	fmt.Printf("Client created and connected: %T", client)
 
 	// Output:
-	// Client created and connected: *api.GlideClient
+	// Client created and connected: *glide.Client
 }
 
-func ExampleNewGlideClusterClient() {
-	config := NewGlideClusterClientConfiguration().
+func ExampleNewClusterClient() {
+	config := config2.NewClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5 * time.Second).
 		WithUseTLS(false)
-	client, err := NewGlideClusterClient(context.Background(), config)
+	client, err := NewClusterClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
 	fmt.Printf("Client created and connected: %T", client)
 
 	// Output:
-	// Client created and connected: *api.GlideClusterClient
+	// Client created and connected: *glide.ClusterClient
 }

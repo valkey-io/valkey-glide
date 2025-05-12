@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "String" group of commands for standalone and cluster clients.
@@ -16,17 +17,17 @@ import (
 type StringCommands interface {
 	Set(ctx context.Context, key string, value string) (string, error)
 
-	SetWithOptions(ctx context.Context, key string, value string, options options.SetOptions) (Result[string], error)
+	SetWithOptions(ctx context.Context, key string, value string, options options.SetOptions) (models.Result[string], error)
 
-	Get(ctx context.Context, key string) (Result[string], error)
+	Get(ctx context.Context, key string) (models.Result[string], error)
 
-	GetEx(ctx context.Context, key string) (Result[string], error)
+	GetEx(ctx context.Context, key string) (models.Result[string], error)
 
-	GetExWithOptions(ctx context.Context, key string, options options.GetExOptions) (Result[string], error)
+	GetExWithOptions(ctx context.Context, key string, options options.GetExOptions) (models.Result[string], error)
 
 	MSet(ctx context.Context, keyValueMap map[string]string) (string, error)
 
-	MGet(ctx context.Context, keys []string) ([]Result[string], error)
+	MGet(ctx context.Context, keys []string) ([]models.Result[string], error)
 
 	MSetNX(ctx context.Context, keyValueMap map[string]string) (bool, error)
 
@@ -52,7 +53,7 @@ type StringCommands interface {
 
 	LCSLen(ctx context.Context, key1 string, key2 string) (int64, error)
 
-	LCSWithOptions(ctx context.Context, key1, key2 string, opts options.LCSIdxOptions) (map[string]interface{}, error)
+	LCSWithOptions(ctx context.Context, key1, key2 string, opts options.LCSIdxOptions) (map[string]any, error)
 
-	GetDel(ctx context.Context, key string) (Result[string], error)
+	GetDel(ctx context.Context, key string) (models.Result[string], error)
 }

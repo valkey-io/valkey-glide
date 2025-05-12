@@ -1,14 +1,14 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 )
 
-func ExampleGlideClient_UpdateConnectionPassword() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_UpdateConnectionPassword() {
+	var client *Client = getExampleClient() // example helper function
 	response, err := client.UpdateConnectionPassword(context.Background(), "", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -18,8 +18,8 @@ func ExampleGlideClient_UpdateConnectionPassword() {
 	// Output: OK
 }
 
-func ExampleGlideClient_ResetConnectionPassword() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_ResetConnectionPassword() {
+	var client *Client = getExampleClient() // example helper function
 	response, err := client.ResetConnectionPassword(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -29,8 +29,8 @@ func ExampleGlideClient_ResetConnectionPassword() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_UpdateConnectionPassword() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_UpdateConnectionPassword() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	response, err := client.UpdateConnectionPassword(context.Background(), "", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -40,8 +40,8 @@ func ExampleGlideClusterClient_UpdateConnectionPassword() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_ResetConnectionPassword() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_ResetConnectionPassword() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	response, err := client.ResetConnectionPassword(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

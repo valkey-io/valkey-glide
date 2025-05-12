@@ -1,17 +1,21 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_GeoAdd() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoAdd() {
+	client := getExampleClient()
 
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
@@ -29,8 +33,8 @@ func ExampleGlideClient_GeoAdd() {
 	// 2
 }
 
-func ExampleGlideClusterClient_GeoAdd() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoAdd() {
+	client := getExampleClusterClient()
 
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
@@ -48,8 +52,8 @@ func ExampleGlideClusterClient_GeoAdd() {
 	// 2
 }
 
-func ExampleGlideClient_GeoHash() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoHash() {
+	client := getExampleClient()
 	key := uuid.New().String()
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
@@ -73,8 +77,8 @@ func ExampleGlideClient_GeoHash() {
 	// [sqc8b49rny0 sqdtr74hyu0]
 }
 
-func ExampleGlideClusterClient_GeoHash() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoHash() {
+	client := getExampleClusterClient()
 	key := uuid.New().String()
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
@@ -98,8 +102,8 @@ func ExampleGlideClusterClient_GeoHash() {
 	// [sqc8b49rny0 sqdtr74hyu0]
 }
 
-func ExampleGlideClient_GeoPos() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoPos() {
+	client := getExampleClient()
 
 	key := uuid.New().String()
 	_, err := client.GeoAdd(context.Background(), key, map[string]options.GeospatialData{
@@ -121,8 +125,8 @@ func ExampleGlideClient_GeoPos() {
 	// [[13.361389338970184 38.1155563954963] [15.087267458438873 37.50266842333162]]
 }
 
-func ExampleGlideClusterClient_GeoPos() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoPos() {
+	client := getExampleClusterClient()
 
 	key := uuid.New().String()
 	_, err := client.GeoAdd(context.Background(), key, map[string]options.GeospatialData{
@@ -144,8 +148,8 @@ func ExampleGlideClusterClient_GeoPos() {
 	// [[13.361389338970184 38.1155563954963] [15.087267458438873 37.50266842333162]]
 }
 
-func ExampleGlideClient_GeoDist() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoDist() {
+	client := getExampleClient()
 	key := uuid.New().String()
 	member1 := "Palermo"
 	member2 := "Catania"
@@ -171,8 +175,8 @@ func ExampleGlideClient_GeoDist() {
 	// 166274.1516
 }
 
-func ExampleGlideClusterClient_GeoDist() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoDist() {
+	client := getExampleClusterClient()
 	key := uuid.New().String()
 	member1 := "Palermo"
 	member2 := "Catania"
@@ -197,8 +201,8 @@ func ExampleGlideClusterClient_GeoDist() {
 	// 166274.1516
 }
 
-func ExampleGlideClient_GeoSearch() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearch() {
+	client := getExampleClient()
 
 	key := uuid.New().String()
 
@@ -207,7 +211,7 @@ func ExampleGlideClient_GeoSearch() {
 	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -219,8 +223,8 @@ func ExampleGlideClient_GeoSearch() {
 	// [Palermo]
 }
 
-func ExampleGlideClusterClient_GeoSearch() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearch() {
+	client := getExampleClusterClient()
 
 	key := uuid.New().String()
 
@@ -229,7 +233,7 @@ func ExampleGlideClusterClient_GeoSearch() {
 	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -241,8 +245,8 @@ func ExampleGlideClusterClient_GeoSearch() {
 	// [Palermo]
 }
 
-func ExampleGlideClient_GeoSearchWithResultOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchWithResultOptions() {
+	client := getExampleClient()
 
 	key := uuid.New().String()
 
@@ -251,7 +255,7 @@ func ExampleGlideClient_GeoSearchWithResultOptions() {
 	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
@@ -264,8 +268,8 @@ func ExampleGlideClient_GeoSearchWithResultOptions() {
 	// [Palermo]
 }
 
-func ExampleGlideClusterClient_GeoSearchWithResultOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchWithResultOptions() {
+	client := getExampleClusterClient()
 
 	key := uuid.New().String()
 
@@ -274,7 +278,7 @@ func ExampleGlideClusterClient_GeoSearchWithResultOptions() {
 	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
@@ -287,8 +291,8 @@ func ExampleGlideClusterClient_GeoSearchWithResultOptions() {
 	// [Palermo]
 }
 
-func ExampleGlideClient_GeoSearchWithFullOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchWithFullOptions() {
+	client := getExampleClient()
 
 	key := uuid.New().String()
 
@@ -297,7 +301,7 @@ func ExampleGlideClient_GeoSearchWithFullOptions() {
 	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
 		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
@@ -311,8 +315,8 @@ func ExampleGlideClient_GeoSearchWithFullOptions() {
 	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
-func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchWithFullOptions() {
+	client := getExampleClusterClient()
 
 	key := uuid.New().String()
 
@@ -321,7 +325,7 @@ func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
 	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
 		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
@@ -335,8 +339,8 @@ func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
 	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
-func ExampleGlideClient_GeoSearchWithInfoOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchWithInfoOptions() {
+	client := getExampleClient()
 
 	key := uuid.New().String()
 
@@ -345,7 +349,7 @@ func ExampleGlideClient_GeoSearchWithInfoOptions() {
 	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
@@ -358,8 +362,8 @@ func ExampleGlideClient_GeoSearchWithInfoOptions() {
 	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
-func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchWithInfoOptions() {
+	client := getExampleClusterClient()
 
 	key := uuid.New().String()
 
@@ -368,7 +372,7 @@ func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
 	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
@@ -381,8 +385,8 @@ func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
 	// [{Palermo {38.1155563954963 13.361389338970184} 0 3479099956230698}]
 }
 
-func ExampleGlideClient_GeoSearchStore() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchStore() {
+	client := getExampleClient()
 
 	source := uuid.New().String()
 	destination := uuid.New().String()
@@ -393,7 +397,7 @@ func ExampleGlideClient_GeoSearchStore() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -405,8 +409,8 @@ func ExampleGlideClient_GeoSearchStore() {
 	// 1
 }
 
-func ExampleGlideClusterClient_GeoSearchStore() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchStore() {
+	client := getExampleClusterClient()
 
 	source := "{key-}" + uuid.New().String()
 	destination := "{key-}" + uuid.New().String()
@@ -417,7 +421,7 @@ func ExampleGlideClusterClient_GeoSearchStore() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -429,8 +433,8 @@ func ExampleGlideClusterClient_GeoSearchStore() {
 	// 1
 }
 
-func ExampleGlideClient_GeoSearchStoreWithInfoOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchStoreWithInfoOptions() {
+	client := getExampleClient()
 
 	source := uuid.New().String()
 	destination := uuid.New().String()
@@ -441,7 +445,7 @@ func ExampleGlideClient_GeoSearchStoreWithInfoOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
@@ -454,8 +458,8 @@ func ExampleGlideClient_GeoSearchStoreWithInfoOptions() {
 	// 1
 }
 
-func ExampleGlideClusterClient_GeoSearchStoreWithInfoOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchStoreWithInfoOptions() {
+	client := getExampleClusterClient()
 
 	source := "{key-}" + uuid.New().String()
 	destination := "{key-}" + uuid.New().String()
@@ -466,7 +470,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithInfoOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
@@ -479,8 +483,8 @@ func ExampleGlideClusterClient_GeoSearchStoreWithInfoOptions() {
 	// 1
 }
 
-func ExampleGlideClient_GeoSearchStoreWithResultOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchStoreWithResultOptions() {
+	client := getExampleClient()
 
 	source := uuid.New().String()
 	destination := uuid.New().String()
@@ -491,7 +495,7 @@ func ExampleGlideClient_GeoSearchStoreWithResultOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
@@ -504,8 +508,8 @@ func ExampleGlideClient_GeoSearchStoreWithResultOptions() {
 	// 1
 }
 
-func ExampleGlideClusterClient_GeoSearchStoreWithResultOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchStoreWithResultOptions() {
+	client := getExampleClusterClient()
 
 	source := "{key-}" + uuid.New().String()
 	destination := "{key-}" + uuid.New().String()
@@ -516,7 +520,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithResultOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
@@ -529,8 +533,8 @@ func ExampleGlideClusterClient_GeoSearchStoreWithResultOptions() {
 	// 1
 }
 
-func ExampleGlideClient_GeoSearchStoreWithFullOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_GeoSearchStoreWithFullOptions() {
+	client := getExampleClient()
 
 	source := uuid.New().String()
 	destination := uuid.New().String()
@@ -541,7 +545,7 @@ func ExampleGlideClient_GeoSearchStoreWithFullOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
@@ -555,8 +559,8 @@ func ExampleGlideClient_GeoSearchStoreWithFullOptions() {
 	// 1
 }
 
-func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_GeoSearchStoreWithFullOptions() {
+	client := getExampleClusterClient()
 
 	source := "{key-}" + uuid.New().String()
 	destination := "{key-}" + uuid.New().String()
@@ -567,7 +571,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
+		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
@@ -581,7 +585,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
 	// 1
 }
 
-func AddInitialGeoData(client BaseClient, key string) {
+func AddInitialGeoData(client interfaces.BaseClientCommands, key string) {
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 	}

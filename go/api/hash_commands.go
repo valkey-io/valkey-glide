@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Hash" group of commands for standalone and cluster clients.
@@ -14,11 +15,11 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#hash
 type HashCommands interface {
-	HGet(ctx context.Context, key string, field string) (Result[string], error)
+	HGet(ctx context.Context, key string, field string) (models.Result[string], error)
 
 	HGetAll(ctx context.Context, key string) (map[string]string, error)
 
-	HMGet(ctx context.Context, key string, fields []string) ([]Result[string], error)
+	HMGet(ctx context.Context, key string, fields []string) ([]models.Result[string], error)
 
 	HSet(ctx context.Context, key string, values map[string]string) (int64, error)
 
@@ -42,7 +43,7 @@ type HashCommands interface {
 
 	HScan(ctx context.Context, key string, cursor string) (string, []string, error)
 
-	HRandField(ctx context.Context, key string) (Result[string], error)
+	HRandField(ctx context.Context, key string) (models.Result[string], error)
 
 	HRandFieldWithCount(ctx context.Context, key string, count int64) ([]string, error)
 

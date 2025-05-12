@@ -1,20 +1,22 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
-func ExampleGlideClient_Publish() {
-	var publisher *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Publish() {
+	var publisher *Client = getExampleClient() // example helper function
 	defer closeAllClients()
 
 	// Create a subscriber with subscription
-	subscriber := getExampleGlideClientWithSubscription(ExactChannelMode, "my_channel")
+	subscriber := getExampleClientWithSubscription(config.ExactChannelMode, "my_channel")
 	queue, err := subscriber.GetQueue()
 	if err != nil {
 		fmt.Println("Failed to get queue: ", err)
@@ -40,12 +42,12 @@ func ExampleGlideClient_Publish() {
 	// Hello, World!
 }
 
-func ExampleGlideClusterClient_Publish() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Publish() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create a subscriber with subscription
-	subscriber := getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "my_channel")
+	subscriber := getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "my_channel")
 	queue, err := subscriber.GetQueue()
 	if err != nil {
 		fmt.Println("Failed to get queue: ", err)
@@ -71,12 +73,12 @@ func ExampleGlideClusterClient_Publish() {
 	// Hello, World!
 }
 
-func ExampleGlideClient_PubSubChannels() {
-	var publisher *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PubSubChannels() {
+	var publisher *Client = getExampleClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions
-	getExampleGlideClientWithSubscription(ExactChannelMode, "channel1")
+	getExampleClientWithSubscription(config.ExactChannelMode, "channel1")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -90,12 +92,12 @@ func ExampleGlideClient_PubSubChannels() {
 	// Output: [channel1]
 }
 
-func ExampleGlideClusterClient_PubSubChannels() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubChannels() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "channel1")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "channel1")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -109,14 +111,14 @@ func ExampleGlideClusterClient_PubSubChannels() {
 	// Output: [channel1]
 }
 
-func ExampleGlideClient_PubSubChannelsWithPattern() {
-	var publisher *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PubSubChannelsWithPattern() {
+	var publisher *Client = getExampleClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.sports")
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
-	getExampleGlideClientWithSubscription(ExactChannelMode, "events.local")
+	getExampleClientWithSubscription(config.ExactChannelMode, "news.sports")
+	getExampleClientWithSubscription(config.ExactChannelMode, "news.weather")
+	getExampleClientWithSubscription(config.ExactChannelMode, "events.local")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -133,14 +135,14 @@ func ExampleGlideClient_PubSubChannelsWithPattern() {
 	// Output: [news.sports news.weather]
 }
 
-func ExampleGlideClusterClient_PubSubChannelsWithPattern() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubChannelsWithPattern() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.sports")
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "events.local")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "news.sports")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "events.local")
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
@@ -156,12 +158,12 @@ func ExampleGlideClusterClient_PubSubChannelsWithPattern() {
 	// Output: [news.sports news.weather]
 }
 
-func ExampleGlideClusterClient_PubSubShardChannels() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubShardChannels() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "channel1")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "channel1")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -175,14 +177,14 @@ func ExampleGlideClusterClient_PubSubShardChannels() {
 	// Output: [channel1]
 }
 
-func ExampleGlideClusterClient_PubSubShardChannelsWithPattern() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubShardChannelsWithPattern() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.sports")
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "events.local")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "news.sports")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "events.local")
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
@@ -198,13 +200,13 @@ func ExampleGlideClusterClient_PubSubShardChannelsWithPattern() {
 	// Output: [news.sports news.weather]
 }
 
-func ExampleGlideClient_PubSubNumPat() {
-	var publisher *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PubSubNumPat() {
+	var publisher *Client = getExampleClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions
-	getExampleGlideClientWithSubscription(PatternChannelMode, "news.*")
-	getExampleGlideClientWithSubscription(PatternChannelMode, "events.*")
+	getExampleClientWithSubscription(config.PatternChannelMode, "news.*")
+	getExampleClientWithSubscription(config.PatternChannelMode, "events.*")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -218,13 +220,13 @@ func ExampleGlideClient_PubSubNumPat() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_PubSubNumPat() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubNumPat() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions
-	getExampleGlideClusterClientWithSubscription(PatternClusterChannelMode, "news.*")
-	getExampleGlideClusterClientWithSubscription(PatternClusterChannelMode, "events.*")
+	getExampleClusterClientWithSubscription(config.PatternClusterChannelMode, "news.*")
+	getExampleClusterClientWithSubscription(config.PatternClusterChannelMode, "events.*")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -238,16 +240,16 @@ func ExampleGlideClusterClient_PubSubNumPat() {
 	// Output: 2
 }
 
-func ExampleGlideClient_PubSubNumSub() {
-	var publisher *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PubSubNumSub() {
+	var publisher *Client = getExampleClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.sports")
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
+	getExampleClientWithSubscription(config.ExactChannelMode, "news.sports")
+	getExampleClientWithSubscription(config.ExactChannelMode, "news.weather")
 	// Second subscriber to same channel
-	getExampleGlideClientWithSubscription(ExactChannelMode, "news.weather")
-	getExampleGlideClientWithSubscription(ExactChannelMode, "events.local")
+	getExampleClientWithSubscription(config.ExactChannelMode, "news.weather")
+	getExampleClientWithSubscription(config.ExactChannelMode, "events.local")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -276,16 +278,16 @@ func ExampleGlideClient_PubSubNumSub() {
 	// news.weather: 2
 }
 
-func ExampleGlideClusterClient_PubSubNumSub() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubNumSub() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.sports")
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "news.sports")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "news.weather")
 	// Second subscriber to same channel
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "news.weather")
-	getExampleGlideClusterClientWithSubscription(ExactClusterChannelMode, "events.local")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ExactClusterChannelMode, "events.local")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
@@ -314,16 +316,16 @@ func ExampleGlideClusterClient_PubSubNumSub() {
 	// news.weather: 2
 }
 
-func ExampleGlideClusterClient_PubSubShardNumSub() {
-	var publisher *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_PubSubShardNumSub() {
+	var publisher *ClusterClient = getExampleClusterClient() // example helper function
 	defer closeAllClients()
 
 	// Create subscribers with subscriptions to different channels
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.sports")
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "news.sports")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "news.weather")
 	// Second subscriber to same channel
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "news.weather")
-	getExampleGlideClusterClientWithSubscription(ShardedClusterChannelMode, "events.local")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "news.weather")
+	getExampleClusterClientWithSubscription(config.ShardedClusterChannelMode, "events.local")
 
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)

@@ -1,16 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_SAdd() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SAdd() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -22,8 +22,8 @@ func ExampleGlideClient_SAdd() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_SAdd() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SAdd() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -35,8 +35,8 @@ func ExampleGlideClusterClient_SAdd() {
 	// Output: 2
 }
 
-func ExampleGlideClient_SRem() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SRem() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -49,8 +49,8 @@ func ExampleGlideClient_SRem() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_SRem() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SRem() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4", "member5"})
@@ -63,8 +63,8 @@ func ExampleGlideClusterClient_SRem() {
 	// Output: 2
 }
 
-func ExampleGlideClient_SMembers() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SMembers() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -78,8 +78,8 @@ func ExampleGlideClient_SMembers() {
 	// Output: map[member1:{} member2:{}]
 }
 
-func ExampleGlideClusterClient_SMembers() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SMembers() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -93,8 +93,8 @@ func ExampleGlideClusterClient_SMembers() {
 	// Output: map[member1:{} member2:{}]
 }
 
-func ExampleGlideClient_SCard() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SCard() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -107,8 +107,8 @@ func ExampleGlideClient_SCard() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_SCard() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SCard() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -121,8 +121,8 @@ func ExampleGlideClusterClient_SCard() {
 	// Output: 2
 }
 
-func ExampleGlideClient_SIsMember() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SIsMember() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -135,8 +135,8 @@ func ExampleGlideClient_SIsMember() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_SIsMember() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SIsMember() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -149,8 +149,8 @@ func ExampleGlideClusterClient_SIsMember() {
 	// Output: true
 }
 
-func ExampleGlideClient_SDiff() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SDiff() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
@@ -165,8 +165,8 @@ func ExampleGlideClient_SDiff() {
 	// Output: map[member1:{}]
 }
 
-func ExampleGlideClusterClient_SDiff() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SDiff() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 
@@ -181,8 +181,8 @@ func ExampleGlideClusterClient_SDiff() {
 	// Output: map[member1:{}]
 }
 
-func ExampleGlideClient_SDiffStore() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SDiffStore() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 	destination := "my_set_diff"
@@ -198,8 +198,8 @@ func ExampleGlideClient_SDiffStore() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_SDiffStore() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SDiffStore() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 	destination := "{set}3"
@@ -215,8 +215,8 @@ func ExampleGlideClusterClient_SDiffStore() {
 	// Output: 1
 }
 
-func ExampleGlideClient_SInter() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SInter() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
@@ -231,8 +231,8 @@ func ExampleGlideClient_SInter() {
 	// Output: map[member2:{}]
 }
 
-func ExampleGlideClusterClient_SInter() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SInter() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 
@@ -247,8 +247,8 @@ func ExampleGlideClusterClient_SInter() {
 	// Output: map[member2:{}]
 }
 
-func ExampleGlideClient_SInterStore() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SInterStore() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 	destination := "my_set_inter"
@@ -264,8 +264,8 @@ func ExampleGlideClient_SInterStore() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_SInterStore() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SInterStore() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 	destination := "{set}3"
@@ -281,8 +281,8 @@ func ExampleGlideClusterClient_SInterStore() {
 	// Output: 1
 }
 
-func ExampleGlideClient_SInterCard() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SInterCard() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
@@ -297,8 +297,8 @@ func ExampleGlideClient_SInterCard() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_SInterCard() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SInterCard() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 
@@ -313,8 +313,8 @@ func ExampleGlideClusterClient_SInterCard() {
 	// Output: 1
 }
 
-func ExampleGlideClient_SInterCardLimit() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SInterCardLimit() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 	limit := int64(1)
@@ -330,8 +330,8 @@ func ExampleGlideClient_SInterCardLimit() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_SInterCardLimit() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SInterCardLimit() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 	limit := int64(1)
@@ -347,8 +347,8 @@ func ExampleGlideClusterClient_SInterCardLimit() {
 	// Output: 1
 }
 
-func ExampleGlideClient_SRandMember() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SRandMember() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -362,8 +362,8 @@ func ExampleGlideClient_SRandMember() {
 	// Output: false
 }
 
-func ExampleGlideClusterClient_SRandMember() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SRandMember() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -377,8 +377,8 @@ func ExampleGlideClusterClient_SRandMember() {
 	// Output: false
 }
 
-func ExampleGlideClient_SPop() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SPop() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -391,8 +391,8 @@ func ExampleGlideClient_SPop() {
 	// Output: false
 }
 
-func ExampleGlideClusterClient_SPop() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SPop() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
@@ -405,8 +405,8 @@ func ExampleGlideClusterClient_SPop() {
 	// Output: false
 }
 
-func ExampleGlideClient_SMIsMember() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SMIsMember() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
 	members := []string{"member1", "member2"}
@@ -421,8 +421,8 @@ func ExampleGlideClient_SMIsMember() {
 	// Output: [true true false]
 }
 
-func ExampleGlideClusterClient_SMIsMember() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SMIsMember() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
 	members := []string{"member1", "member2"}
@@ -437,8 +437,8 @@ func ExampleGlideClusterClient_SMIsMember() {
 	// Output: [true true false]
 }
 
-func ExampleGlideClient_SUnionStore() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SUnionStore() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 	destination := "my_set_union"
@@ -454,8 +454,8 @@ func ExampleGlideClient_SUnionStore() {
 	// Output: 3
 }
 
-func ExampleGlideClusterClient_SUnionStore() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SUnionStore() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 	destination := "{set}3"
@@ -471,8 +471,8 @@ func ExampleGlideClusterClient_SUnionStore() {
 	// Output: 3
 }
 
-func ExampleGlideClient_SUnion() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SUnion() {
+	var client *Client = getExampleClient() // example helper function
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
@@ -487,8 +487,8 @@ func ExampleGlideClient_SUnion() {
 	// Output: map[member1:{} member2:{} member3:{}]
 }
 
-func ExampleGlideClusterClient_SUnion() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SUnion() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key1 := "{set}1"
 	key2 := "{set}2"
 
@@ -503,8 +503,8 @@ func ExampleGlideClusterClient_SUnion() {
 	// Output: map[member1:{} member2:{} member3:{}]
 }
 
-func ExampleGlideClient_SScan() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SScan() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	cursor := "0"
@@ -516,8 +516,8 @@ func ExampleGlideClient_SScan() {
 	// Output: 0 2
 }
 
-func ExampleGlideClusterClient_SScan() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SScan() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	cursor := "0"
@@ -529,8 +529,8 @@ func ExampleGlideClusterClient_SScan() {
 	// Output: 0 2
 }
 
-func ExampleGlideClient_SScanWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SScanWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
@@ -543,8 +543,8 @@ func ExampleGlideClient_SScanWithOptions() {
 	// Output: 0 2
 }
 
-func ExampleGlideClusterClient_SScanWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SScanWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
@@ -557,8 +557,8 @@ func ExampleGlideClusterClient_SScanWithOptions() {
 	// Output: 0 2
 }
 
-func ExampleGlideClient_SMove() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SMove() {
+	var client *Client = getExampleClient() // example helper function
 	source := "my_set_1"
 	destination := "my_set_2"
 	member := "member1"
@@ -573,8 +573,8 @@ func ExampleGlideClient_SMove() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_SMove() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SMove() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	source := "{set}1"
 	destination := "{set}2"
 	member := "member1"

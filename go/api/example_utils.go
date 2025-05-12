@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 var (
@@ -21,14 +21,14 @@ var (
 )
 
 var (
-	clusterClients      []*GlideClusterClient
+	clusterClients      []*ClusterClient
 	clusterOnce         sync.Once
 	clusterSubOnce      sync.Once
-	clusterAddresses    []NodeAddress
-	standaloneClients   []*GlideClient
+	clusterAddresses    []config.NodeAddress
+	standaloneClients   []*Client
 	standaloneOnce      sync.Once
 	standaloneSubOnce   sync.Once
-	standaloneAddresses []NodeAddress
+	standaloneAddresses []config.NodeAddress
 	initOnce            sync.Once
 )
 
@@ -42,134 +42,133 @@ func initFlags() {
 	})
 }
 
-func getStandaloneAddresses() []NodeAddress {
+func getStandaloneAddresses() []config.NodeAddress {
 	initFlags()
 	return standaloneAddresses
 }
 
-func getClusterAddresses() []NodeAddress {
+func getClusterAddresses() []config.NodeAddress {
 	initFlags()
 	return clusterAddresses
 }
 
-// getExampleGlideClient returns a GlideClient instance for testing purposes.
-// This function is used in the examples of the GlideClient methods.
-func getExampleGlideClient() *GlideClient {
+// getExampleClient returns a Client instance for testing purposes.
+// This function is used in the examples of the Client methods.
+func getExampleClient() *Client {
 	standaloneOnce.Do(func() {
 		initFlags()
 	})
-	config := NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
-	client, err := NewGlideClient(context.Background(), config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
 
-	thisClient := client.(*GlideClient)
-	standaloneClients = append(standaloneClients, thisClient)
+	standaloneClients = append(standaloneClients, client)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = thisClient.FlushAllWithOptions(context.Background(), options.SYNC)
+	_, err = client.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return thisClient
+	return client
 }
 
-func getExampleGlideClusterClient() *GlideClusterClient {
+func getExampleClusterClient() *ClusterClient {
 	clusterOnce.Do(func() {
 		initFlags()
 	})
-	cConfig := NewGlideClusterClientConfiguration().
+	cConfig := config.NewClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
 		WithRequestTimeout(5 * time.Second)
 
-	client, err := NewGlideClusterClient(context.Background(), cConfig)
+	client, err := NewClusterClient(context.Background(), cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
 
-	thisClient := client.(*GlideClusterClient)
-	clusterClients = append(clusterClients, thisClient)
+	clusterClients = append(clusterClients, client)
 
 	// Flush the database before each test to ensure a clean state.
 	mode := options.SYNC
-	_, err = thisClient.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return thisClient
+	return client
 }
 
-func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPattern string) *GlideClient {
+func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPattern string) *Client {
 	standaloneSubOnce.Do(func() {
 		initFlags()
 	})
-	sConfig := NewStandaloneSubscriptionConfig().
+	sConfig := config.NewStandaloneSubscriptionConfig().
 		WithSubscription(mode, channelOrPattern)
 
-	config := NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
-	client, err := NewGlideClient(context.Background(), config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
 
-	thisClient := client.(*GlideClient)
-	standaloneClients = append(standaloneClients, thisClient)
+	standaloneClients = append(standaloneClients, client)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = thisClient.FlushAllWithOptions(context.Background(), options.SYNC)
+	_, err = client.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return thisClient
+	return client
 }
 
-func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode, channelOrPattern string) *GlideClusterClient {
+func getExampleClusterClientWithSubscription(
+	mode config.PubSubClusterChannelMode,
+	channelOrPattern string,
+) *ClusterClient {
 	clusterSubOnce.Do(func() {
 		initFlags()
 	})
-	cConfig := NewClusterSubscriptionConfig().
+	cConfig := config.NewClusterSubscriptionConfig().
 		WithSubscription(mode, channelOrPattern)
 
-	ccConfig := NewGlideClusterClientConfiguration().
+	ccConfig := config.NewClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
-	client, err := NewGlideClusterClient(context.Background(), ccConfig)
+	client, err := NewClusterClient(context.Background(), ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
 
-	thisClient := client.(*GlideClusterClient)
-	clusterClients = append(clusterClients, thisClient)
+	clusterClients = append(clusterClients, client)
 
 	// Flush the database before each test to ensure a clean state.
 	syncmode := options.SYNC
-	_, err = thisClient.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return thisClient
+	return client
 }
 
-func parseHosts(addresses string) []NodeAddress {
-	var result []NodeAddress
+func parseHosts(addresses string) []config.NodeAddress {
+	var result []config.NodeAddress
 
 	if addresses == "" {
-		result = append(result, *new(NodeAddress))
+		result = append(result, *new(config.NodeAddress))
 	} else {
 		addressList := strings.Split(addresses, ",")
 		for _, address := range addressList {
@@ -180,7 +179,7 @@ func parseHosts(addresses string) []NodeAddress {
 				continue
 			}
 
-			result = append(result, NodeAddress{Host: parts[0], Port: port})
+			result = append(result, config.NodeAddress{Host: parts[0], Port: port})
 		}
 	}
 	return result

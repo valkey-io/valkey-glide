@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
@@ -36,9 +37,9 @@ type SetCommands interface {
 
 	SInterCardLimit(ctx context.Context, keys []string, limit int64) (int64, error)
 
-	SRandMember(ctx context.Context, key string) (Result[string], error)
+	SRandMember(ctx context.Context, key string) (models.Result[string], error)
 
-	SPop(ctx context.Context, key string) (Result[string], error)
+	SPop(ctx context.Context, key string) (models.Result[string], error)
 
 	SMIsMember(ctx context.Context, key string, members []string) ([]bool, error)
 

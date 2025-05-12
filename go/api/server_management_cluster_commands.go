@@ -1,11 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // ServerManagementCommands supports commands for the "Server Management" group for a cluster client.
@@ -16,9 +17,9 @@ import (
 type ServerManagementClusterCommands interface {
 	Info(ctx context.Context) (map[string]string, error)
 
-	InfoWithOptions(ctx context.Context, options options.ClusterInfoOptions) (ClusterValue[string], error)
+	InfoWithOptions(ctx context.Context, options options.ClusterInfoOptions) (models.ClusterValue[string], error)
 
-	TimeWithOptions(ctx context.Context, routeOption options.RouteOption) (ClusterValue[[]string], error)
+	TimeWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[[]string], error)
 
 	DBSizeWithOptions(ctx context.Context, routeOption options.RouteOption) (int64, error)
 
@@ -32,11 +33,11 @@ type ServerManagementClusterCommands interface {
 
 	Lolwut(ctx context.Context) (string, error)
 
-	LolwutWithOptions(ctx context.Context, lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error)
+	LolwutWithOptions(ctx context.Context, lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error)
 
-	LastSave(ctx context.Context) (ClusterValue[int64], error)
+	LastSave(ctx context.Context) (models.ClusterValue[int64], error)
 
-	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (ClusterValue[int64], error)
+	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
 	ConfigResetStat(ctx context.Context) (string, error)
 
@@ -52,7 +53,7 @@ type ServerManagementClusterCommands interface {
 		ctx context.Context,
 		parameters []string,
 		routeOption options.RouteOption,
-	) (ClusterValue[map[string]string], error)
+	) (models.ClusterValue[map[string]string], error)
 
 	ConfigRewrite(ctx context.Context) (string, error)
 

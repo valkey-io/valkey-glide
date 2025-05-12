@@ -1,11 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
@@ -33,7 +33,7 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FunctionKill(ctx context.Context) (string, error)
 
-	FunctionList(ctx context.Context, query FunctionListQuery) ([]LibraryInfo, error)
+	FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error)
 
 	FunctionDump(ctx context.Context) (string, error)
 

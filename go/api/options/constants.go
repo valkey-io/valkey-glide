@@ -1,6 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package options
+package constants
+
+import "github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 
 const (
 	CountKeyword      string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
@@ -50,7 +52,7 @@ const (
 	NegativeInfinity InfBoundary = "-"
 )
 
-const returnOldValue = "GET"
+const ReturnOldValue = "GET"
 
 // A ConditionalSet defines whether a new value should be set or not.
 type ConditionalSet string
@@ -79,6 +81,21 @@ const (
 	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
 	NewExpiryLessThanCurrent ExpireCondition = "LT"
 )
+
+func (expireCondition ExpireCondition) ToString() (string, error) {
+	switch expireCondition {
+	case HasExistingExpiry:
+		return string(HasExistingExpiry), nil
+	case HasNoExpiry:
+		return string(HasNoExpiry), nil
+	case NewExpiryGreaterThanCurrent:
+		return string(NewExpiryGreaterThanCurrent), nil
+	case NewExpiryLessThanCurrent:
+		return string(NewExpiryLessThanCurrent), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid expire condition"}
+	}
+}
 
 // An ExpiryType is used to configure the type of expiration for a value.
 type ExpiryType string
@@ -112,6 +129,17 @@ const (
 	After InsertPosition = "AFTER"
 )
 
+func (insertPosition InsertPosition) ToString() (string, error) {
+	switch insertPosition {
+	case Before:
+		return string(Before), nil
+	case After:
+		return string(After), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid insert position"}
+	}
+}
+
 // Enumeration representing element popping or adding direction for the [api.ListCommands].
 type ListDirection string
 
@@ -121,6 +149,17 @@ const (
 	// Represents the option that elements should be popped from or added to the right side of a list.
 	Right ListDirection = "RIGHT"
 )
+
+func (listDirection ListDirection) ToString() (string, error) {
+	switch listDirection {
+	case Left:
+		return string(Left), nil
+	case Right:
+		return string(Right), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid list direction"}
+	}
+}
 
 // Mandatory parameter for [ZMPop] and for [BZMPop].
 // Defines which elements to pop from the sorted set.
@@ -132,6 +171,17 @@ const (
 	// Pop elements with the lowest scores.
 	MIN ScoreFilter = "MIN"
 )
+
+func (scoreFilter ScoreFilter) ToString() (string, error) {
+	switch scoreFilter {
+	case MAX:
+		return string(MAX), nil
+	case MIN:
+		return string(MIN), nil
+	default:
+		return "", &errors.RequestError{Msg: "Invalid score filter"}
+	}
+}
 
 type EvictionType string
 

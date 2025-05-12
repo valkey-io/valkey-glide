@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
-// #include "../lib.h"
+// #include "lib.h"
 import "C"
 
 import (
@@ -10,7 +10,8 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/api/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 // Registry to track clients by their pointer address
@@ -72,14 +73,14 @@ func pubSubCallback(
 
 	msg := string(C.GoBytes(message, message_len))
 	cha := string(C.GoBytes(channel, channel_len))
-	pat := CreateNilStringResult()
+	pat := models.CreateNilStringResult()
 	if pattern_len > 0 && pattern != nil {
-		pat = CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
+		pat = models.CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
 	}
 
 	go func() {
 		// Process different types of push messages
-		message := NewPubSubMessageWithPattern(msg, cha, pat)
+		message := models.NewPubSubMessageWithPattern(msg, cha, pat)
 
 		if clientPtr != nil {
 			// Look up the client in our registry using the pointer address

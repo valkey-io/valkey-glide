@@ -1,16 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 // #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
-// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-apple-darwin
-// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-apple-darwin
-// #include "../lib.h"
+// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-gnu
+// #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-apple-darwin
+// #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-apple-darwin
+// #include "lib.h"
 //
 // void successCallback(void *channelPtr, struct CommandResponse *message);
 // void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
@@ -28,32 +28,16 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/protobuf"
-	"github.com/valkey-io/valkey-glide/go/utils"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"google.golang.org/protobuf/proto"
 )
-
-// BaseClient defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
-type BaseClient interface {
-	StringCommands
-	HashCommands
-	ListCommands
-	SetCommands
-	StreamCommands
-	SortedSetCommands
-	HyperLogLogCommands
-	GenericBaseCommands
-	BitmapCommands
-	GeoSpatialCommands
-	ScriptingAndFunctionBaseCommands
-	PubSubCommands
-	PubSubHandler
-	// Close terminates the client by closing all associated resources.
-	Close()
-}
 
 const OK = "OK"
 
@@ -63,7 +47,7 @@ type payload struct {
 }
 
 type clientConfiguration interface {
-	toProtobuf() (*protobuf.ConnectionRequest, error)
+	ToProtobuf() (*protobuf.ConnectionRequest, error)
 }
 
 type baseClient struct {
@@ -148,7 +132,7 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
 func createClient(config clientConfiguration) (*baseClient, error) {
-	request, err := config.toProtobuf()
+	request, err := config.ToProtobuf()
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +411,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return models.DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -460,7 +444,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	client.mu.Unlock()
 
 	if payload.error != nil {
-		return DefaultStringResponse, payload.error
+		return models.DefaultStringResponse, payload.error
 	}
 
 	return handleOkResponse(payload.value)
@@ -484,8 +468,8 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 //	ctx - The context for controlling the command execution.
 //	password - The new password to update the connection with.
 //	immediateAuth - immediateAuth A boolean flag. If true, the client will authenticate immediately with the new password
-//					against all connections, Using AUTH command. If password supplied is an empty string, the client will
-//					not perform auth and a warning will be returned. The default is `false`.
+//	against all connections, Using AUTH command. If password supplied is an empty string, the client will
+//	not perform auth and a warning will be returned. The default is `false`.
 //
 // Return value:
 //
@@ -536,7 +520,7 @@ func (client *baseClient) ResetConnectionPassword(ctx context.Context) (string, 
 func (client *baseClient) Set(ctx context.Context, key string, value string) (string, error) {
 	result, err := client.executeCommand(ctx, C.Set, []string{key, value})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -544,7 +528,7 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
 // passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
-// [OnlyIfDoesNotExist] conditions, api.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
+// [OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
 // set, the old value is returned.
 //
 // See [valkey.io] for details.
@@ -554,13 +538,13 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 //	ctx     - The context for controlling the command execution.
 //	key     - The key to store.
 //	value   - The value to store with the given key.
-//	options - The [api.SetOptions].
+//	options - The [options.SetOptions].
 //
 // Return value:
 //
-//	If the value is successfully set, return api.Result[string] containing "OK".
+//	If the value is successfully set, return models.Result[string] containing "OK".
 //	If value isn't set because of ConditionalSet.OnlyIfExists or ConditionalSet.OnlyIfDoesNotExist
-//	or ConditionalSet.OnlyIfEquals conditions, return api.CreateNilStringResult().
+//	or ConditionalSet.OnlyIfEquals conditions, return models.CreateNilStringResult().
 //	If SetOptions.returnOldValue is set, return the old value as a String.
 //
 // [valkey.io]: https://valkey.io/commands/set/
@@ -569,21 +553,21 @@ func (client *baseClient) SetWithOptions(
 	key string,
 	value string,
 	options options.SetOptions,
-) (Result[string], error) {
+) (models.Result[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	result, err := client.executeCommand(ctx, C.Set, append([]string{key, value}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleOkOrStringOrNilResponse(result)
 }
 
-// Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such key
+// Get string value associated with the given key, or models.CreateNilStringResult() is returned if no such key
 // exists.
 //
 // See [valkey.io] for details.
@@ -595,19 +579,19 @@ func (client *baseClient) SetWithOptions(
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a String. Otherwise, return [api.CreateNilStringResult()].
+//	If key exists, returns the value of key as a String. Otherwise, return [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/get/
-func (client *baseClient) Get(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) Get(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.Get, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
 }
 
-// Get string value associated with the given key, or an empty string is returned [api.CreateNilStringResult()] if no such
+// Get string value associated with the given key, or an empty string is returned [models.CreateNilStringResult()] if no such
 // value exists.
 //
 // See [valkey.io] for details.
@@ -619,13 +603,13 @@ func (client *baseClient) Get(ctx context.Context, key string) (Result[string], 
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+//	If key exists, returns the value of key as a models.Result[string]. Otherwise, return [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/getex/
-func (client *baseClient) GetEx(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) GetEx(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.GetEx, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -643,22 +627,22 @@ func (client *baseClient) GetEx(ctx context.Context, key string) (Result[string]
 //
 // Return value:
 //
-//	If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+//	If key exists, returns the value of key as a models.Result[string]. Otherwise, return [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/getex/
 func (client *baseClient) GetExWithOptions(
 	ctx context.Context,
 	key string,
 	options options.GetExOptions,
-) (Result[string], error) {
+) (models.Result[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	result, err := client.executeCommand(ctx, C.GetEx, append([]string{key}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -688,7 +672,7 @@ func (client *baseClient) GetExWithOptions(
 func (client *baseClient) MSet(ctx context.Context, keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(ctx, C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -719,7 +703,7 @@ func (client *baseClient) MSet(ctx context.Context, keyValueMap map[string]strin
 func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -744,10 +728,10 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 // Return value:
 //
 //	An array of values corresponding to the provided keys.
-//	If a key is not found, its corresponding value in the list will be a [api.CreateNilStringResult()]
+//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()]
 //
 // [valkey.io]: https://valkey.io/commands/mget/
-func (client *baseClient) MGet(ctx context.Context, keys []string) ([]Result[string], error) {
+func (client *baseClient) MGet(keys []string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.MGet, keys)
 	if err != nil {
 		return nil, err
@@ -773,7 +757,7 @@ func (client *baseClient) MGet(ctx context.Context, keys []string) ([]Result[str
 func (client *baseClient) Incr(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Incr, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -797,7 +781,7 @@ func (client *baseClient) Incr(ctx context.Context, key string) (int64, error) {
 func (client *baseClient) IncrBy(ctx context.Context, key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.IncrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -826,7 +810,7 @@ func (client *baseClient) IncrByFloat(ctx context.Context, key string, amount fl
 		[]string{key, utils.FloatToString(amount)},
 	)
 	if err != nil {
-		return defaultFloatResponse, err
+		return models.DefaultFloatResponse, err
 	}
 
 	return handleFloatResponse(result)
@@ -849,7 +833,7 @@ func (client *baseClient) IncrByFloat(ctx context.Context, key string, amount fl
 func (client *baseClient) Decr(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Decr, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -873,7 +857,7 @@ func (client *baseClient) Decr(ctx context.Context, key string) (int64, error) {
 func (client *baseClient) DecrBy(ctx context.Context, key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.DecrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -897,7 +881,7 @@ func (client *baseClient) DecrBy(ctx context.Context, key string, amount int64) 
 func (client *baseClient) Strlen(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Strlen, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -925,7 +909,7 @@ func (client *baseClient) Strlen(ctx context.Context, key string) (int64, error)
 func (client *baseClient) SetRange(ctx context.Context, key string, offset int, value string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SetRange, []string{key, strconv.Itoa(offset), value})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -953,7 +937,7 @@ func (client *baseClient) SetRange(ctx context.Context, key string, offset int, 
 func (client *baseClient) GetRange(ctx context.Context, key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(ctx, C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -978,7 +962,7 @@ func (client *baseClient) GetRange(ctx context.Context, key string, start int, e
 func (client *baseClient) Append(ctx context.Context, key string, value string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Append, []string{key, value})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1014,7 +998,7 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1044,7 +1028,7 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (st
 func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2, options.LCSLenCommand})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1082,7 +1066,7 @@ func (client *baseClient) LCSWithOptions(
 	ctx context.Context,
 	key1, key2 string,
 	opts options.LCSIdxOptions,
-) (map[string]interface{}, error) {
+) (map[string]any, error) {
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -1104,17 +1088,17 @@ func (client *baseClient) LCSWithOptions(
 // Return value:
 //
 //	If key exists, returns the value of the key as a String and deletes the key.
-//	If key does not exist, returns a [api.NilResult[string]] (api.CreateNilStringResult()).
+//	If key does not exist, returns a [models.Result[string]](models.CreateNilStringResult()).
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
-func (client *baseClient) GetDel(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) GetDel(ctx context.Context, key string) (models.Result[string], error) {
 	if key == "" {
-		return CreateNilStringResult(), &errors.RequestError{Msg: "key is required"}
+		return models.CreateNilStringResult(), &errors.RequestError{Msg: "key is required"}
 	}
 
 	result, err := client.executeCommand(ctx, C.GetDel, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -1132,14 +1116,17 @@ func (client *baseClient) GetDel(ctx context.Context, key string) (Result[string
 //
 // Return value:
 //
-//	The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
+//	The models.Result[string] associated with field, or [models.Result[string]](models.CreateNilStringResult()) when
+//
+// field is not
+//
 //	present in the hash or key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hget/
-func (client *baseClient) HGet(ctx context.Context, key string, field string) (Result[string], error) {
+func (client *baseClient) HGet(ctx context.Context, key string, field string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.HGet, []string{key, field})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -1156,7 +1143,7 @@ func (client *baseClient) HGet(ctx context.Context, key string, field string) (R
 //
 // Return value:
 //
-//	A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
+//	A map of all fields and their values as models.Result[string] in the hash, or an empty map when key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
@@ -1180,15 +1167,15 @@ func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]s
 //
 // Return value:
 //
-//	An array of Result[string]s associated with the given fields, in the same order as they are requested.
+//	An array of models.Result[string]s associated with the given fields, in the same order as they are requested.
 //
-//	For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
+//	For every field that does not exist in the hash, a [models.Result[string]](models.CreateNilStringResult()) is
 //	returned.
 //
 //	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
-func (client *baseClient) HMGet(ctx context.Context, key string, fields []string) ([]Result[string], error) {
+func (client *baseClient) HMGet(ctx context.Context, key string, fields []string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.HMGet, append([]string{key}, fields...))
 	if err != nil {
 		return nil, err
@@ -1217,7 +1204,7 @@ func (client *baseClient) HMGet(ctx context.Context, key string, fields []string
 func (client *baseClient) HSet(ctx context.Context, key string, values map[string]string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.HSet, utils.ConvertMapToKeyValueStringArray(key, values))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1245,7 +1232,7 @@ func (client *baseClient) HSet(ctx context.Context, key string, values map[strin
 func (client *baseClient) HSetNX(ctx context.Context, key string, field string, value string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.HSetNX, []string{key, field, value})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -1271,7 +1258,7 @@ func (client *baseClient) HSetNX(ctx context.Context, key string, field string, 
 func (client *baseClient) HDel(ctx context.Context, key string, fields []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.HDel, append([]string{key}, fields...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1295,7 +1282,7 @@ func (client *baseClient) HDel(ctx context.Context, key string, fields []string)
 func (client *baseClient) HLen(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.HLen, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1343,7 +1330,7 @@ func (client *baseClient) HVals(ctx context.Context, key string) ([]string, erro
 func (client *baseClient) HExists(ctx context.Context, key string, field string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.HExists, []string{key, field})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -1391,7 +1378,7 @@ func (client *baseClient) HKeys(ctx context.Context, key string) ([]string, erro
 func (client *baseClient) HStrLen(ctx context.Context, key string, field string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.HStrlen, []string{key, field})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1418,7 +1405,7 @@ func (client *baseClient) HStrLen(ctx context.Context, key string, field string)
 func (client *baseClient) HIncrBy(ctx context.Context, key string, field string, increment int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.HIncrBy, []string{key, field, utils.IntToString(increment)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1445,7 +1432,7 @@ func (client *baseClient) HIncrBy(ctx context.Context, key string, field string,
 func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field string, increment float64) (float64, error) {
 	result, err := client.executeCommand(ctx, C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
 	if err != nil {
-		return defaultFloatResponse, err
+		return models.DefaultFloatResponse, err
 	}
 
 	return handleFloatResponse(result)
@@ -1474,7 +1461,7 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 func (client *baseClient) HScan(ctx context.Context, key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor})
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1508,12 +1495,12 @@ func (client *baseClient) HScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -1540,7 +1527,7 @@ func (client *baseClient) HScanWithOptions(
 func (client *baseClient) HRandField(ctx context.Context, key string) (Result[string], error) {
 	result, err := client.executeCommand(ctx, C.HRandField, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -1558,8 +1545,8 @@ func (client *baseClient) HRandField(ctx context.Context, key string) (Result[st
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//		    If `count` is positive, returns unique elements.
-//			If negative, allows for duplicates.
+//		If `count` is positive, returns unique elements.
+//		If negative, allows for duplicates.
 //
 // Return value:
 //
@@ -1589,8 +1576,8 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  		If `count` is positive, returns unique elements.
-//			If negative, allows for duplicates.
+//	  	If `count` is positive, returns unique elements.
+//		If negative, allows for duplicates.
 //
 // Return value:
 //
@@ -1600,7 +1587,7 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error) {
-	result, err := client.executeCommand(ctx, C.HRandField, []string{key, utils.IntToString(count), options.WithValuesKeyword})
+	result, err := client.executeCommand(ctx, C.HRandField, []string{key, utils.IntToString(count), constants.WithValuesKeyword})
 	if err != nil {
 		return nil, err
 	}
@@ -1627,7 +1614,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 func (client *baseClient) LPush(ctx context.Context, key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.LPush, append([]string{key}, elements...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1645,14 +1632,14 @@ func (client *baseClient) LPush(ctx context.Context, key string, elements []stri
 //
 // Return value:
 //
-//	The Result[string] containing the value of the first element.
-//	If key does not exist, [api.CreateNilStringResult()] will be returned.
+//	The models.Result[string] containing the value of the first element.
+//	If key does not exist, [models.CreateNilStringResult()] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/lpop/
-func (client *baseClient) LPop(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) LPop(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.LPop, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -1684,7 +1671,7 @@ func (client *baseClient) LPopCount(ctx context.Context, key string, count int64
 }
 
 // Returns the index of the first occurrence of element inside the list specified by key. If no match is found,
-// [api.CreateNilInt64Result()] is returned.
+// [models.CreateNilInt64Result()] is returned.
 //
 // See [valkey.io] for details.
 //
@@ -1696,21 +1683,21 @@ func (client *baseClient) LPopCount(ctx context.Context, key string, count int64
 //
 // Return value:
 //
-//	The Result[int64] containing the index of the first occurrence of element, or [api.CreateNilInt64Result()] if element is
-//	not in the list.
+//	The models.Result[int64] containing the index of the first occurrence of element, or [models.CreateNilInt64Result()] if
+// element is not in the list.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *baseClient) LPos(ctx context.Context, key string, element string) (Result[int64], error) {
+func (client *baseClient) LPos(ctx context.Context, key string, element string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.LPos, []string{key, element})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 
 	return handleIntOrNilResponse(result)
 }
 
 // Returns the index of an occurrence of element within a list based on the given options. If no match is found,
-// [api.CreateNilInt64Result()] is returned.
+// [models.CreateNilInt64Result()] is returned.
 //
 // See [valkey.io] for details.
 //
@@ -1723,7 +1710,7 @@ func (client *baseClient) LPos(ctx context.Context, key string, element string) 
 //
 // Return value:
 //
-//	The Result[int64] containing the index of element, or [api.CreateNilInt64Result()] if element is not in the list.
+//	The models.Result[int64] containing the index of element, or [models.CreateNilInt64Result()] if element is not in the list.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosWithOptions(
@@ -1731,14 +1718,14 @@ func (client *baseClient) LPosWithOptions(
 	key string,
 	element string,
 	options options.LPosOptions,
-) (Result[int64], error) {
+) (models.Result[int64], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	result, err := client.executeCommand(ctx, C.LPos, append([]string{key, element}, optionArgs...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 
 	return handleIntOrNilResponse(result)
@@ -1761,7 +1748,7 @@ func (client *baseClient) LPosWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCount(ctx context.Context, key string, element string, count int64) ([]int64, error) {
-	result, err := client.executeCommand(ctx, C.LPos, []string{key, element, options.CountKeyword, utils.IntToString(count)})
+	result, err := client.executeCommand(C.LPos, []string{key, element, constants.CountKeyword, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
@@ -1800,7 +1787,7 @@ func (client *baseClient) LPosCountWithOptions(
 	}
 	result, err := client.executeCommand(ctx,
 		C.LPos,
-		append([]string{key, element, options.CountKeyword, utils.IntToString(count)}, optionArgs...),
+		append([]string{key, element, constants.CountKeyword, utils.IntToString(count)}, optionArgs...),
 	)
 	if err != nil {
 		return nil, err
@@ -1829,7 +1816,7 @@ func (client *baseClient) LPosCountWithOptions(
 func (client *baseClient) RPush(ctx context.Context, key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.RPush, append([]string{key}, elements...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1853,7 +1840,7 @@ func (client *baseClient) RPush(ctx context.Context, key string, elements []stri
 func (client *baseClient) SAdd(ctx context.Context, key string, members []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SAdd, append([]string{key}, members...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1877,7 +1864,7 @@ func (client *baseClient) SAdd(ctx context.Context, key string, members []string
 func (client *baseClient) SRem(ctx context.Context, key string, members []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SRem, append([]string{key}, members...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1903,7 +1890,7 @@ func (client *baseClient) SRem(ctx context.Context, key string, members []string
 func (client *baseClient) SUnionStore(ctx context.Context, destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SUnionStore, append([]string{destination}, keys...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1950,7 +1937,7 @@ func (client *baseClient) SMembers(ctx context.Context, key string) (map[string]
 func (client *baseClient) SCard(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SCard, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -1975,7 +1962,7 @@ func (client *baseClient) SCard(ctx context.Context, key string) (int64, error) 
 func (client *baseClient) SIsMember(ctx context.Context, key string, member string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.SIsMember, []string{key, member})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -2028,7 +2015,7 @@ func (client *baseClient) SDiff(ctx context.Context, keys []string) (map[string]
 func (client *baseClient) SDiffStore(ctx context.Context, destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SDiffStore, append([]string{destination}, keys...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2080,7 +2067,7 @@ func (client *baseClient) SInter(ctx context.Context, keys []string) (map[string
 func (client *baseClient) SInterStore(ctx context.Context, destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SInterStore, append([]string{destination}, keys...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2109,7 +2096,7 @@ func (client *baseClient) SInterStore(ctx context.Context, destination string, k
 func (client *baseClient) SInterCard(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2142,12 +2129,12 @@ func (client *baseClient) SInterCardLimit(ctx context.Context, keys []string, li
 	args := utils.Concat(
 		[]string{utils.IntToString(int64(len(keys)))},
 		keys,
-		[]string{options.LimitKeyword, utils.IntToString(limit)},
+		[]string{constants.LimitKeyword, utils.IntToString(limit)},
 	)
 
 	result, err := client.executeCommand(ctx, C.SInterCard, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2164,14 +2151,14 @@ func (client *baseClient) SInterCardLimit(ctx context.Context, keys []string, li
 //
 // Return value:
 //
-//	A Result[string] containing a random element from the set.
-//	Returns api.CreateNilStringResult() if key does not exist.
+//	A models.Result[string] containing a random element from the set.
+//	Returns models.CreateNilStringResult() if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/srandmember/
-func (client *baseClient) SRandMember(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) SRandMember(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.SRandMember, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -2188,14 +2175,14 @@ func (client *baseClient) SRandMember(ctx context.Context, key string) (Result[s
 //
 // Return value:
 //
-//	A Result[string] containing the value of the popped member.
+//	A models.Result[string] containing the value of the popped member.
 //	Returns a NilResult if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/spop/
 func (client *baseClient) SPop(ctx context.Context, key string) (Result[string], error) {
 	result, err := client.executeCommand(ctx, C.SPop, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -2274,7 +2261,7 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 func (client *baseClient) SScan(ctx context.Context, key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor})
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2309,12 +2296,12 @@ func (client *baseClient) SScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2341,7 +2328,7 @@ func (client *baseClient) SScanWithOptions(
 func (client *baseClient) SMove(ctx context.Context, source string, destination string, member string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.SMove, []string{source, destination, member})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -2362,7 +2349,7 @@ func (client *baseClient) SMove(ctx context.Context, source string, destination 
 //
 // Return value:
 //
-//	Array of elements as Result[string] in the specified range.
+//	Array of elements as models.Result[string] in the specified range.
 //	If start exceeds the end of the list, or if start is greater than end, an empty array will be returned.
 //	If end exceeds the actual end of the list, the range will stop at the actual end of the list.
 //	If key does not exist an empty array will be returned.
@@ -2392,14 +2379,14 @@ func (client *baseClient) LRange(ctx context.Context, key string, start int64, e
 //
 // Return value:
 //
-//	The Result[string] containing element at index in the list stored at key.
-//	If index is out of range or if key does not exist, [api.CreateNilStringResult()] is returned.
+//	The models.Result[string] containing element at index in the list stored at key.
+//	If index is out of range or if key does not exist, [models.CreateNilStringResult()] is returned.
 //
 // [valkey.io]: https://valkey.io/commands/lindex/
-func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (Result[string], error) {
+func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.LIndex, []string{key, utils.IntToString(index)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -2431,7 +2418,7 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 func (client *baseClient) LTrim(ctx context.Context, key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(ctx, C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -2455,7 +2442,7 @@ func (client *baseClient) LTrim(ctx context.Context, key string, start int64, en
 func (client *baseClient) LLen(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.LLen, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2485,7 +2472,7 @@ func (client *baseClient) LLen(ctx context.Context, key string) (int64, error) {
 func (client *baseClient) LRem(ctx context.Context, key string, count int64, element string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.LRem, []string{key, utils.IntToString(count), element})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2503,14 +2490,14 @@ func (client *baseClient) LRem(ctx context.Context, key string, count int64, ele
 //
 // Return value:
 //
-//	The Result[string] containing the value of the last element.
-//	If key does not exist, [api.CreateNilStringResult()] will be returned.
+//	The models.Result[string] containing the value of the last element.
+//	If key does not exist, [models.CreateNilStringResult()] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/rpop/
-func (client *baseClient) RPop(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) RPop(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.RPop, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -2563,13 +2550,13 @@ func (client *baseClient) RPopCount(ctx context.Context, key string, count int64
 func (client *baseClient) LInsert(
 	ctx context.Context,
 	key string,
-	insertPosition options.InsertPosition,
+	insertPosition constants.InsertPosition,
 	pivot string,
 	element string,
 ) (int64, error) {
 	insertPositionStr, err := insertPosition.ToString()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	result, err := client.executeCommand(ctx,
@@ -2577,7 +2564,7 @@ func (client *baseClient) LInsert(
 		[]string{key, insertPositionStr, pivot, element},
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2668,7 +2655,7 @@ func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs 
 func (client *baseClient) RPushX(ctx context.Context, key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.RPushX, append([]string{key}, elements...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2693,7 +2680,7 @@ func (client *baseClient) RPushX(ctx context.Context, key string, elements []str
 func (client *baseClient) LPushX(ctx context.Context, key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.LPushX, append([]string{key}, elements...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -2726,7 +2713,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 func (client *baseClient) LMPop(
 	ctx context.Context,
 	keys []string,
-	listDirection options.ListDirection,
+	listDirection constants.ListDirection,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -2775,7 +2762,7 @@ func (client *baseClient) LMPop(
 func (client *baseClient) LMPopCount(
 	ctx context.Context,
 	keys []string,
-	listDirection options.ListDirection,
+	listDirection constants.ListDirection,
 	count int64,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
@@ -2792,7 +2779,7 @@ func (client *baseClient) LMPopCount(
 	args := make([]string, 0, len(keys)+4)
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	args = append(args, listDirectionStr, options.CountKeyword, utils.IntToString(count))
+	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(ctx, C.LMPop, args)
 	if err != nil {
 		return nil, err
@@ -2802,7 +2789,7 @@ func (client *baseClient) LMPopCount(
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys. BLMPop is the
-// blocking variant of [api.LMPop].
+// blocking variant of [glide.LMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -2831,7 +2818,7 @@ func (client *baseClient) LMPopCount(
 func (client *baseClient) BLMPop(
 	ctx context.Context,
 	keys []string,
-	listDirection options.ListDirection,
+	listDirection constants.ListDirection,
 	timeoutSecs float64,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
@@ -2858,7 +2845,7 @@ func (client *baseClient) BLMPop(
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
-// BLMPopCount is the blocking variant of [api.LMPopCount].
+// BLMPopCount is the blocking variant of [glide.LMPopCount].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -2890,7 +2877,7 @@ func (client *baseClient) BLMPop(
 func (client *baseClient) BLMPopCount(
 	ctx context.Context,
 	keys []string,
-	listDirection options.ListDirection,
+	listDirection constants.ListDirection,
 	count int64,
 	timeoutSecs float64,
 ) (map[string][]string, error) {
@@ -2908,7 +2895,7 @@ func (client *baseClient) BLMPopCount(
 	args := make([]string, 0, len(keys)+5)
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	args = append(args, listDirectionStr, options.CountKeyword, utils.IntToString(count))
+	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
 	if err != nil {
 		return nil, err
@@ -2939,7 +2926,7 @@ func (client *baseClient) BLMPopCount(
 func (client *baseClient) LSet(ctx context.Context, key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(ctx, C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -2960,28 +2947,28 @@ func (client *baseClient) LSet(ctx context.Context, key string, index int64, ele
 //
 // Return value:
 //
-//	A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist.
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/lmove/
 func (client *baseClient) LMove(
 	ctx context.Context,
 	source string,
 	destination string,
-	whereFrom options.ListDirection,
-	whereTo options.ListDirection,
-) (Result[string], error) {
+	whereFrom constants.ListDirection,
+	whereTo constants.ListDirection,
+) (models.Result[string], error) {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	whereToStr, err := whereTo.ToString()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	result, err := client.executeCommand(ctx, C.LMove, []string{source, destination, whereFromStr, whereToStr})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -2990,7 +2977,7 @@ func (client *baseClient) LMove(
 // Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
 // depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
 // wherefrom.
-// BLMove is the blocking variant of [api.LMove].
+// BLMove is the blocking variant of [glide.LMove].
 //
 // Note:
 //   - When in cluster mode, all source and destination must map to the same hash slot.
@@ -3013,7 +3000,7 @@ func (client *baseClient) LMove(
 //
 // Return value:
 //
-//	A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist or if the
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist or if the
 //	operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
@@ -3022,17 +3009,17 @@ func (client *baseClient) BLMove(
 	ctx context.Context,
 	source string,
 	destination string,
-	whereFrom options.ListDirection,
-	whereTo options.ListDirection,
+	whereFrom constants.ListDirection,
+	whereTo constants.ListDirection,
 	timeoutSecs float64,
-) (Result[string], error) {
+) (models.Result[string], error) {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	whereToStr, err := whereTo.ToString()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	result, err := client.executeCommand(ctx,
@@ -3040,7 +3027,7 @@ func (client *baseClient) BLMove(
 		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
 	)
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 
 	return handleStringOrNilResponse(result)
@@ -3070,7 +3057,7 @@ func (client *baseClient) BLMove(
 func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Del, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3100,7 +3087,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Exists, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3127,7 +3114,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 func (client *baseClient) Expire(ctx context.Context, key string, seconds int64) (bool, error) {
 	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds)})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -3156,15 +3143,15 @@ func (client *baseClient) ExpireWithOptions(
 	ctx context.Context,
 	key string,
 	seconds int64,
-	expireCondition options.ExpireCondition,
+	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3193,7 +3180,7 @@ func (client *baseClient) ExpireWithOptions(
 func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error) {
 	result, err := client.executeCommand(ctx, C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
 	return handleBoolResponse(result)
@@ -3225,18 +3212,18 @@ func (client *baseClient) ExpireAtWithOptions(
 	ctx context.Context,
 	key string,
 	unixTimestampInSeconds int64,
-	expireCondition options.ExpireCondition,
+	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	result, err := client.executeCommand(ctx,
 		C.ExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3261,7 +3248,7 @@ func (client *baseClient) ExpireAtWithOptions(
 func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3288,15 +3275,15 @@ func (client *baseClient) PExpireWithOptions(
 	ctx context.Context,
 	key string,
 	milliseconds int64,
-	expireCondition options.ExpireCondition,
+	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds), expireConditionStr})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3324,7 +3311,7 @@ func (client *baseClient) PExpireWithOptions(
 func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(ctx, C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3353,18 +3340,18 @@ func (client *baseClient) PExpireAtWithOptions(
 	ctx context.Context,
 	key string,
 	unixTimestampInMilliSeconds int64,
-	expireCondition options.ExpireCondition,
+	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	result, err := client.executeCommand(ctx,
 		C.PExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3386,7 +3373,7 @@ func (client *baseClient) PExpireAtWithOptions(
 func (client *baseClient) ExpireTime(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.ExpireTime, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3409,7 +3396,7 @@ func (client *baseClient) ExpireTime(ctx context.Context, key string) (int64, er
 func (client *baseClient) PExpireTime(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.PExpireTime, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3431,7 +3418,7 @@ func (client *baseClient) PExpireTime(ctx context.Context, key string) (int64, e
 func (client *baseClient) TTL(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.TTL, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3453,7 +3440,7 @@ func (client *baseClient) TTL(ctx context.Context, key string) (int64, error) {
 func (client *baseClient) PTTL(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.PTTL, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3479,7 +3466,7 @@ func (client *baseClient) PTTL(ctx context.Context, key string) (int64, error) {
 func (client *baseClient) PfAdd(ctx context.Context, key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.PfAdd, append([]string{key}, elements...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3511,7 +3498,7 @@ func (client *baseClient) PfAdd(ctx context.Context, key string, elements []stri
 func (client *baseClient) PfCount(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.PfCount, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3539,7 +3526,7 @@ func (client *baseClient) PfCount(ctx context.Context, keys []string) (int64, er
 func (client *baseClient) PfMerge(ctx context.Context, destination string, sourceKeys []string) (string, error) {
 	result, err := client.executeCommand(ctx, C.PfMerge, append([]string{destination}, sourceKeys...))
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 
 	return handleOkResponse(result)
@@ -3570,7 +3557,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 func (client *baseClient) Unlink(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Unlink, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3592,7 +3579,7 @@ func (client *baseClient) Unlink(ctx context.Context, keys []string) (int64, err
 func (client *baseClient) Type(ctx context.Context, key string) (string, error) {
 	result, err := client.executeCommand(ctx, C.Type, []string{key})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -3621,7 +3608,7 @@ func (client *baseClient) Type(ctx context.Context, key string) (string, error) 
 func (client *baseClient) Touch(ctx context.Context, keys []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.Touch, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3649,7 +3636,7 @@ func (client *baseClient) Touch(ctx context.Context, keys []string) (int64, erro
 func (client *baseClient) Rename(ctx context.Context, key string, newKey string) (string, error) {
 	result, err := client.executeCommand(ctx, C.Rename, []string{key, newKey})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -3674,7 +3661,7 @@ func (client *baseClient) Rename(ctx context.Context, key string, newKey string)
 func (client *baseClient) RenameNX(ctx context.Context, key string, newKey string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.RenameNX, []string{key, newKey})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -3694,7 +3681,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (Result[string], error) {
+func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error) {
 	return client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
 }
 
@@ -3720,17 +3707,17 @@ func (client *baseClient) XAddWithOptions(
 	key string,
 	values [][]string,
 	options options.XAddOptions,
-) (Result[string], error) {
+) (models.Result[string], error) {
 	args := []string{}
 	args = append(args, key)
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
 		if len(pair) != 2 {
-			return CreateNilStringResult(), fmt.Errorf(
+			return models.CreateNilStringResult(), fmt.Errorf(
 				"array entry had the wrong length. Expected length 2 but got length %d",
 				len(pair),
 			)
@@ -3740,7 +3727,7 @@ func (client *baseClient) XAddWithOptions(
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -3865,7 +3852,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	keysAndIds map[string]string,
 	opts options.XReadGroupOptions,
 ) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs([]string{options.GroupKeyword, group, consumer}, keysAndIds, &opts)
+	args, err := createStreamCommandArgs([]string{constants.GroupKeyword, group, consumer}, keysAndIds, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -3896,7 +3883,7 @@ func createStreamCommandArgs(
 		keys = append(keys, key)
 		values = append(values, keysAndIds[key])
 	}
-	args = append(args, options.StreamsKeyword)
+	args = append(args, constants.StreamsKeyword)
 	args = append(args, keys...)
 	args = append(args, values...)
 	return args, nil
@@ -3927,7 +3914,7 @@ func (client *baseClient) ZAdd(
 		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -3957,7 +3944,7 @@ func (client *baseClient) ZAddWithOptions(
 ) (int64, error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	commandArgs := append([]string{key}, optionArgs...)
 	result, err := client.executeCommand(ctx,
@@ -3965,21 +3952,21 @@ func (client *baseClient) ZAddWithOptions(
 		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) zAddIncrBase(ctx context.Context, key string, opts *options.ZAddOptions) (Result[float64], error) {
+func (client *baseClient) zAddIncrBase(ctx context.Context, key string, opts *options.ZAddOptions) (models.Result[float64], error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 
 	result, err := client.executeCommand(ctx, C.ZAdd, append([]string{key}, optionArgs...))
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 
 	return handleFloatOrNilResponse(result)
@@ -4004,7 +3991,7 @@ func (client *baseClient) zAddIncrBase(ctx context.Context, key string, opts *op
 //
 // Return value:
 //
-//	The new score of the member.
+//	models.Result[float64] - The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -4012,10 +3999,10 @@ func (client *baseClient) ZAddIncr(
 	key string,
 	member string,
 	increment float64,
-) (Result[float64], error) {
+) (models.Result[float64], error) {
 	options, err := options.NewZAddOptions().SetIncr(true, increment, member)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 
 	return client.zAddIncrBase(ctx, key, options)
@@ -4051,10 +4038,10 @@ func (client *baseClient) ZAddIncrWithOptions(
 	member string,
 	increment float64,
 	opts options.ZAddOptions,
-) (Result[float64], error) {
+) (models.Result[float64], error) {
 	incrOpts, err := opts.SetIncr(true, increment, member)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 
 	return client.zAddIncrBase(ctx, key, incrOpts)
@@ -4082,7 +4069,7 @@ func (client *baseClient) ZAddIncrWithOptions(
 func (client *baseClient) ZIncrBy(ctx context.Context, key string, increment float64, member string) (float64, error) {
 	result, err := client.executeCommand(ctx, C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
 	if err != nil {
-		return defaultFloatResponse, err
+		return models.DefaultFloatResponse, err
 	}
 
 	return handleFloatResponse(result)
@@ -4226,7 +4213,7 @@ func (client *baseClient) ZPopMaxWithOptions(
 func (client *baseClient) ZRem(ctx context.Context, key string, members []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.ZRem, append([]string{key}, members...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -4250,7 +4237,7 @@ func (client *baseClient) ZRem(ctx context.Context, key string, members []string
 func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.ZCard, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -4276,7 +4263,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 // Return value:
 //
-//	A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
+//	A `models.KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
 //	itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
@@ -4286,10 +4273,10 @@ func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
 	timeoutSecs float64,
-) (Result[KeyWithMemberAndScore], error) {
+) (models.Result[KeyWithMemberAndScore], error) {
 	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
-		return CreateNilKeyWithMemberAndScoreResult(), err
+		return models.CreateNilKeyWithMemberAndScoreResult(), err
 	}
 
 	return handleKeyWithMemberAndScoreResponse(result)
@@ -4330,17 +4317,17 @@ func (client *baseClient) BZPopMin(
 func (client *baseClient) BZMPop(
 	ctx context.Context,
 	keys []string,
-	scoreFilter options.ScoreFilter,
+	scoreFilter constants.ScoreFilter,
 	timeoutSecs float64,
-) (Result[KeyWithArrayOfMembersAndScores], error) {
+) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
 			Msg: "Length overflow for the provided keys",
 		}
 	}
@@ -4352,7 +4339,7 @@ func (client *baseClient) BZMPop(
 	args = append(args, scoreFilterStr)
 	result, err := client.executeCommand(ctx, C.BZMPop, args)
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 	return handleKeyWithArrayOfMembersAndScoresResponse(result)
 }
@@ -4394,18 +4381,18 @@ func (client *baseClient) BZMPop(
 func (client *baseClient) BZMPopWithOptions(
 	ctx context.Context,
 	keys []string,
-	scoreFilter options.ScoreFilter,
+	scoreFilter constants.ScoreFilter,
 	timeoutSecs float64,
 	opts options.ZMPopOptions,
-) (Result[KeyWithArrayOfMembersAndScores], error) {
+) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
 			Msg: "Length overflow for the provided keys",
 		}
 	}
@@ -4417,12 +4404,12 @@ func (client *baseClient) BZMPopWithOptions(
 	args = append(args, scoreFilterStr)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.BZMPop, args)
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	return handleKeyWithArrayOfMembersAndScoresResponse(result)
@@ -4489,7 +4476,7 @@ func (client *baseClient) ZRangeWithScores(
 	ctx context.Context,
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
-) ([]MemberAndScore, error) {
+) ([]models.MemberAndScore, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	queryArgs, err := rangeQuery.ToArgs()
@@ -4497,7 +4484,7 @@ func (client *baseClient) ZRangeWithScores(
 		return nil, err
 	}
 	args = append(args, queryArgs...)
-	args = append(args, options.WithScoresKeyword)
+	args = append(args, constants.WithScoresKeyword)
 	result, err := client.executeCommand(ctx, C.ZRange, args)
 	if err != nil {
 		return nil, err
@@ -4550,12 +4537,12 @@ func (client *baseClient) ZRangeStore(
 	args = append(args, key)
 	rqArgs, err := rangeQuery.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, rqArgs...)
 	result, err := client.executeCommand(ctx, C.ZRangeStore, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 
 	return handleIntResponse(result)
@@ -4577,7 +4564,7 @@ func (client *baseClient) ZRangeStore(
 func (client *baseClient) Persist(ctx context.Context, key string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.Persist, []string{key})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -4602,11 +4589,11 @@ func (client *baseClient) Persist(ctx context.Context, key string) (bool, error)
 func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions options.ZCountRange) (int64, error) {
 	zCountRangeArgs, err := rangeOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.ZCount, append([]string{key}, zCountRangeArgs...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -4630,10 +4617,10 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 //	`nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
-func (client *baseClient) ZRank(ctx context.Context, key string, member string) (Result[int64], error) {
+func (client *baseClient) ZRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
 }
@@ -4660,10 +4647,10 @@ func (client *baseClient) ZRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (Result[int64], Result[float64], error) {
-	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, options.WithScoreKeyword})
+) (models.Result[int64], models.Result[float64], error) {
+	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
 }
@@ -4688,10 +4675,10 @@ func (client *baseClient) ZRankWithScore(
 //	`nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
-func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (Result[int64], error) {
+func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
 }
@@ -4719,10 +4706,10 @@ func (client *baseClient) ZRevRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (Result[int64], Result[float64], error) {
-	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, options.WithScoreKeyword})
+) (models.Result[int64], models.Result[float64], error) {
+	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
 	}
 	return handleLongAndDoubleOrNullResponse(result)
 }
@@ -4745,11 +4732,11 @@ func (client *baseClient) ZRevRankWithScore(
 func (client *baseClient) XTrim(ctx context.Context, key string, options options.XTrimOptions) (int64, error) {
 	xTrimArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.XTrim, append([]string{key}, xTrimArgs...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -4771,7 +4758,7 @@ func (client *baseClient) XTrim(ctx context.Context, key string, options options
 func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.XLen, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -4812,7 +4799,7 @@ func (client *baseClient) XAutoClaim(
 	consumer string,
 	minIdleTime int64,
 	start string,
-) (XAutoClaimResponse, error) {
+) (models.XAutoClaimResponse, error) {
 	return client.XAutoClaimWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
@@ -4854,16 +4841,16 @@ func (client *baseClient) XAutoClaimWithOptions(
 	minIdleTime int64,
 	start string,
 	options options.XAutoClaimOptions,
-) (XAutoClaimResponse, error) {
+) (models.XAutoClaimResponse, error) {
 	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
 	optArgs, err := options.ToArgs()
 	if err != nil {
-		return XAutoClaimResponse{}, err
+		return models.XAutoClaimResponse{}, err
 	}
 	args = append(args, optArgs...)
 	result, err := client.executeCommand(ctx, C.XAutoClaim, args)
 	if err != nil {
-		return XAutoClaimResponse{}, err
+		return models.XAutoClaimResponse{}, err
 	}
 	return handleXAutoClaimResponse(result)
 }
@@ -4904,7 +4891,7 @@ func (client *baseClient) XAutoClaimJustId(
 	consumer string,
 	minIdleTime int64,
 	start string,
-) (XAutoClaimJustIdResponse, error) {
+) (models.XAutoClaimJustIdResponse, error) {
 	return client.XAutoClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
@@ -4946,17 +4933,17 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 	minIdleTime int64,
 	start string,
 	opts options.XAutoClaimOptions,
-) (XAutoClaimJustIdResponse, error) {
+) (models.XAutoClaimJustIdResponse, error) {
 	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
 	optArgs, err := opts.ToArgs()
 	if err != nil {
-		return XAutoClaimJustIdResponse{}, err
+		return models.XAutoClaimJustIdResponse{}, err
 	}
 	args = append(args, optArgs...)
-	args = append(args, options.JustIdKeyword)
+	args = append(args, constants.JustIdKeyword)
 	result, err := client.executeCommand(ctx, C.XAutoClaim, args)
 	if err != nil {
-		return XAutoClaimJustIdResponse{}, err
+		return models.XAutoClaimJustIdResponse{}, err
 	}
 	return handleXAutoClaimJustIdResponse(result)
 }
@@ -4980,7 +4967,7 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 func (client *baseClient) XDel(ctx context.Context, key string, ids []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.XDel, append([]string{key}, ids...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5001,10 +4988,10 @@ func (client *baseClient) XDel(ctx context.Context, key string, ids []string) (i
 //	If `key` does not exist, `nil` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/zscore/
-func (client *baseClient) ZScore(ctx context.Context, key string, member string) (Result[float64], error) {
+func (client *baseClient) ZScore(ctx context.Context, key string, member string) (models.Result[float64], error) {
 	result, err := client.executeCommand(ctx, C.ZScore, []string{key, member})
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
 }
@@ -5032,7 +5019,7 @@ func (client *baseClient) ZScore(ctx context.Context, key string, member string)
 func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor})
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -5065,12 +5052,12 @@ func (client *baseClient) ZScanWithOptions(
 ) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 
 	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return DefaultStringResponse, nil, err
+		return models.DefaultStringResponse, nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -5087,7 +5074,7 @@ func (client *baseClient) ZScanWithOptions(
 //
 // Return value:
 //
-// An XPendingSummary struct that includes a summary with the following fields:
+// An models.XPendingSummary struct that includes a summary with the following fields:
 //
 //	NumOfMessages - The total number of pending messages for this consumer group.
 //	StartId - The smallest ID among the pending messages or nil if no pending messages exist.
@@ -5097,10 +5084,10 @@ func (client *baseClient) ZScanWithOptions(
 //	MessageCount - The number of pending messages for this consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
-func (client *baseClient) XPending(ctx context.Context, key string, group string) (XPendingSummary, error) {
+func (client *baseClient) XPending(ctx context.Context, key string, group string) (models.XPendingSummary, error) {
 	result, err := client.executeCommand(ctx, C.XPending, []string{key, group})
 	if err != nil {
-		return XPendingSummary{}, err
+		return models.XPendingSummary{}, err
 	}
 
 	return handleXPendingSummaryResponse(result)
@@ -5119,7 +5106,7 @@ func (client *baseClient) XPending(ctx context.Context, key string, group string
 //
 // Return value:
 //
-// A slice of XPendingDetail structs, where each detail struct includes the following fields:
+// A slice of models.XPendingDetail structs, where each detail struct includes the following fields:
 //
 //	Id - The ID of the pending message.
 //	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
@@ -5132,7 +5119,7 @@ func (client *baseClient) XPendingWithOptions(
 	key string,
 	group string,
 	opts options.XPendingOptions,
-) ([]XPendingDetail, error) {
+) ([]models.XPendingDetail, error) {
 	optionArgs, _ := opts.ToArgs()
 	args := append([]string{key, group}, optionArgs...)
 
@@ -5193,7 +5180,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XGroupCreate, args)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -5238,14 +5225,14 @@ func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, tt
 ) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.Restore, append([]string{
 		key,
 		utils.IntToString(ttl), value,
 	}, optionArgs...))
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -5263,10 +5250,10 @@ func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, tt
 //	If key does not exist, null will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/dump/
-func (client *baseClient) Dump(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) Dump(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.Dump, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -5288,18 +5275,18 @@ func (client *baseClient) Dump(ctx context.Context, key string) (Result[string],
 //	key as a String. Otherwise, returns `null`.
 //
 // [valkey.io]: https://valkey.io/commands/object-encoding/
-func (client *baseClient) ObjectEncoding(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) ObjectEncoding(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.ObjectEncoding, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) echo(ctx context.Context, message string) (Result[string], error) {
+func (client *baseClient) echo(ctx context.Context, message string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.Echo, []string{message})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -5322,7 +5309,7 @@ func (client *baseClient) echo(ctx context.Context, message string) (Result[stri
 func (client *baseClient) XGroupDestroy(ctx context.Context, key string, group string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.XGroupDestroy, []string{key, group})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -5375,7 +5362,7 @@ func (client *baseClient) XGroupSetIdWithOptions(
 	args := append([]string{key, group, id}, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XGroupSetId, args)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -5401,12 +5388,12 @@ func (client *baseClient) XGroupSetIdWithOptions(
 func (client *baseClient) ZRemRangeByLex(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error) {
 	queryArgs, err := rangeQuery.ToArgsRemRange()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	result, err := client.executeCommand(ctx,
 		C.ZRemRangeByLex, append([]string{key}, queryArgs...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5436,7 +5423,7 @@ func (client *baseClient) ZRemRangeByRank(ctx context.Context, key string, start
 		[]string{key, utils.IntToString(start), utils.IntToString(stop)},
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5462,11 +5449,11 @@ func (client *baseClient) ZRemRangeByRank(ctx context.Context, key string, start
 func (client *baseClient) ZRemRangeByScore(ctx context.Context, key string, rangeQuery options.RangeByScore) (int64, error) {
 	queryArgs, err := rangeQuery.ToArgsRemRange()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.ZRemRangeByScore, append([]string{key}, queryArgs...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5486,10 +5473,10 @@ func (client *baseClient) ZRemRangeByScore(ctx context.Context, key string, rang
 //	If the sorted set does not exist or is empty, the response will be `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
-func (client *baseClient) ZRandMember(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) ZRandMember(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.ZRandMember, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return models.CreateNilStringResult(), err
 	}
 	return handleStringOrNilResponse(result)
 }
@@ -5532,7 +5519,7 @@ func (client *baseClient) ZRandMemberWithCount(ctx context.Context, key string, 
 //
 // Return value:
 //
-//	An array of `MemberAndScore` objects, which store member names and their respective scores.
+//	An array of `models.MemberAndScore` objects, which store member names and their respective scores.
 //	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
@@ -5540,11 +5527,11 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 	ctx context.Context,
 	key string,
 	count int64,
-) ([]MemberAndScore, error) {
+) ([]models.MemberAndScore, error) {
 	result, err := client.executeCommand(
 		ctx,
 		C.ZRandMember,
-		[]string{key, utils.IntToString(count), options.WithScoresKeyword},
+		[]string{key, utils.IntToString(count), constants.WithScoresKeyword},
 	)
 	if err != nil {
 		return nil, err
@@ -5570,7 +5557,7 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 //	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/zmscore/
-func (client *baseClient) ZMScore(ctx context.Context, key string, members []string) ([]Result[float64], error) {
+func (client *baseClient) ZMScore(ctx context.Context, key string, members []string) ([]models.Result[float64], error) {
 	response, err := client.executeCommand(ctx, C.ZMScore, append([]string{key}, members...))
 	if err != nil {
 		return nil, err
@@ -5591,10 +5578,10 @@ func (client *baseClient) ZMScore(ctx context.Context, key string, members []str
 //	object stored at key as a long. Otherwise, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/object-freq/
-func (client *baseClient) ObjectFreq(ctx context.Context, key string) (Result[int64], error) {
+func (client *baseClient) ObjectFreq(ctx context.Context, key string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.ObjectFreq, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
 }
@@ -5611,10 +5598,10 @@ func (client *baseClient) ObjectFreq(ctx context.Context, key string) (Result[in
 //	If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/object-idletime/
-func (client *baseClient) ObjectIdleTime(ctx context.Context, key string) (Result[int64], error) {
+func (client *baseClient) ObjectIdleTime(ctx context.Context, key string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.ObjectIdleTime, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
 }
@@ -5632,10 +5619,10 @@ func (client *baseClient) ObjectIdleTime(ctx context.Context, key string) (Resul
 //	Otherwise, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/object-refcount/
-func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (Result[int64], error) {
+func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (models.Result[int64], error) {
 	result, err := client.executeCommand(ctx, C.ObjectRefCount, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return models.CreateNilInt64Result(), err
 	}
 	return handleIntOrNilResponse(result)
 }
@@ -5655,7 +5642,7 @@ func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (Resul
 //	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort/
-func (client *baseClient) Sort(ctx context.Context, key string) ([]Result[string], error) {
+func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.Sort, []string{key})
 	if err != nil {
 		return nil, err
@@ -5694,7 +5681,7 @@ func (client *baseClient) SortWithOptions(
 	ctx context.Context,
 	key string,
 	options options.SortOptions,
-) ([]Result[string], error) {
+) ([]models.Result[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return nil, err
@@ -5721,7 +5708,7 @@ func (client *baseClient) SortWithOptions(
 //	An Array of sorted elements.
 //
 // [valkey.io]: https://valkey.io/commands/sort_ro/
-func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]Result[string], error) {
+func (client *baseClient) SortReadOnly(ctx context.Context, key string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.SortReadOnly, []string{key})
 	if err != nil {
 		return nil, err
@@ -5760,7 +5747,7 @@ func (client *baseClient) SortReadOnlyWithOptions(
 	ctx context.Context,
 	key string,
 	options options.SortOptions,
-) ([]Result[string], error) {
+) ([]models.Result[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return nil, err
@@ -5800,9 +5787,9 @@ func (client *baseClient) SortReadOnlyWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (client *baseClient) SortStore(ctx context.Context, key string, destination string) (int64, error) {
-	result, err := client.executeCommand(ctx, C.Sort, []string{key, options.StoreKeyword, destination})
+	result, err := client.executeCommand(ctx, C.Sort, []string{key, constants.StoreKeyword, destination})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5846,11 +5833,11 @@ func (client *baseClient) SortStoreWithOptions(
 ) (int64, error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.Sort, append([]string{key, options.StoreKeyword, destination}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.Sort, append([]string{key, constants.StoreKeyword, destination}, optionArgs...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5909,7 +5896,7 @@ func (client *baseClient) XGroupDelConsumer(
 ) (int64, error) {
 	result, err := client.executeCommand(ctx, C.XGroupDelConsumer, []string{key, group, consumer})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5935,7 +5922,7 @@ func (client *baseClient) XGroupDelConsumer(
 func (client *baseClient) XAck(ctx context.Context, key string, group string, ids []string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.XAck, append([]string{key, group}, ids...))
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5962,7 +5949,7 @@ func (client *baseClient) XAck(ctx context.Context, key string, group string, id
 func (client *baseClient) SetBit(ctx context.Context, key string, offset int64, value int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.SetBit, []string{key, utils.IntToString(offset), utils.IntToString(value)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -5986,7 +5973,7 @@ func (client *baseClient) SetBit(ctx context.Context, key string, offset int64, 
 func (client *baseClient) GetBit(ctx context.Context, key string, offset int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.GetBit, []string{key, utils.IntToString(offset)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6014,7 +6001,7 @@ func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, time
 		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)},
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6035,7 +6022,7 @@ func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, time
 func (client *baseClient) BitCount(ctx context.Context, key string) (int64, error) {
 	result, err := client.executeCommand(ctx, C.BitCount, []string{key})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6066,15 +6053,15 @@ func (client *baseClient) BitOp(
 ) (int64, error) {
 	bitOp, err := options.NewBitOp(bitwiseOperation, destination, keys)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args, err := bitOp.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.BitOp, args)
 	if err != nil {
-		return defaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+		return models.DefaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
 	}
 	return handleIntResponse(result)
 }
@@ -6100,12 +6087,12 @@ func (client *baseClient) BitOp(
 func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, opts options.BitCountOptions) (int64, error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	commandArgs := append([]string{key}, optionArgs...)
 	result, err := client.executeCommand(ctx, C.BitCount, commandArgs)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6248,7 +6235,7 @@ func (client *baseClient) XClaimJustIdWithOptions(
 		return nil, err
 	}
 	args = append(args, optionArgs...)
-	args = append(args, options.JustIdKeyword)
+	args = append(args, constants.JustIdKeyword)
 	result, err := client.executeCommand(ctx, C.XClaim, args)
 	if err != nil {
 		return nil, err
@@ -6273,7 +6260,7 @@ func (client *baseClient) XClaimJustIdWithOptions(
 func (client *baseClient) BitPos(ctx context.Context, key string, bit int64) (int64, error) {
 	result, err := client.executeCommand(ctx, C.BitPos, []string{key, utils.IntToString(bit)})
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6301,12 +6288,12 @@ func (client *baseClient) BitPosWithOptions(
 ) (int64, error) {
 	optionArgs, err := bitposOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	commandArgs := append([]string{key, utils.IntToString(bit)}, optionArgs...)
 	result, err := client.executeCommand(ctx, C.BitPos, commandArgs)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6332,7 +6319,7 @@ func (client *baseClient) BitPosWithOptions(
 func (client *baseClient) Copy(ctx context.Context, source string, destination string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.Copy, []string{source, destination})
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -6365,13 +6352,13 @@ func (client *baseClient) CopyWithOptions(
 ) (bool, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	result, err := client.executeCommand(ctx, C.Copy, append([]string{
 		source, destination,
 	}, optionArgs...))
 	if err != nil {
-		return defaultBoolResponse, err
+		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
 }
@@ -6402,7 +6389,7 @@ func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]XRangeResponse, error) {
+) ([]models.XRangeResponse, error) {
 	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6435,7 +6422,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]XRangeResponse, error) {
+) ([]models.XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6476,7 +6463,7 @@ func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]XRangeResponse, error) {
+) ([]models.XRangeResponse, error) {
 	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6510,7 +6497,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]XRangeResponse, error) {
+) ([]models.XRangeResponse, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6538,7 +6525,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //	A stream information for the given `key`. See the example for a sample response.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[string]interface{}, error) {
+func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[string]any, error) {
 	result, err := client.executeCommand(ctx, C.XInfoStream, []string{key})
 	if err != nil {
 		return nil, err
@@ -6565,8 +6552,8 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
 	opts *options.XInfoStreamOptions,
-) (map[string]interface{}, error) {
-	args := []string{key, options.FullKeyword}
+) (map[string]any, error) {
+	args := []string{key, constants.FullKeyword}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
 		if err != nil {
@@ -6594,11 +6581,11 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 //
 // Return value:
 //
-//	An array of [api.XInfoConsumerInfo], where each element contains the attributes
+//	An array of [models.XInfoConsumerInfo], where each element contains the attributes
 //	of a consumer for the given consumer group of the stream at `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-consumers/
-func (client *baseClient) XInfoConsumers(ctx context.Context, key string, group string) ([]XInfoConsumerInfo, error) {
+func (client *baseClient) XInfoConsumers(ctx context.Context, key string, group string) ([]models.XInfoConsumerInfo, error) {
 	response, err := client.executeCommand(ctx, C.XInfoConsumers, []string{key, group})
 	if err != nil {
 		return nil, err
@@ -6617,11 +6604,11 @@ func (client *baseClient) XInfoConsumers(ctx context.Context, key string, group 
 //
 // Return value:
 //
-//	An array of [api.XInfoGroupInfo], where each element represents the
+//	An array of [models.XInfoGroupInfo], where each element represents the
 //	attributes of a consumer group for the stream at `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-groups/
-func (client *baseClient) XInfoGroups(ctx context.Context, key string) ([]XInfoGroupInfo, error) {
+func (client *baseClient) XInfoGroups(ctx context.Context, key string) ([]models.XInfoGroupInfo, error) {
 	response, err := client.executeCommand(ctx, C.XInfoGroups, []string{key})
 	if err != nil {
 		return nil, err
@@ -6663,7 +6650,7 @@ func (client *baseClient) BitField(
 	ctx context.Context,
 	key string,
 	subCommands []options.BitFieldSubCommands,
-) ([]Result[int64], error) {
+) ([]models.Result[int64], error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
@@ -6706,7 +6693,7 @@ func (client *baseClient) BitFieldRO(
 	ctx context.Context,
 	key string,
 	commands []options.BitFieldROCommands,
-) ([]Result[int64], error) {
+) ([]models.Result[int64], error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
@@ -6807,7 +6794,7 @@ func (client *baseClient) ZInterWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions options.ZInterOptions,
-) ([]MemberAndScore, error) {
+) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6817,7 +6804,7 @@ func (client *baseClient) ZInterWithScores(
 		return nil, err
 	}
 	args = append(args, optionsArgs...)
-	args = append(args, options.WithScoresKeyword)
+	args = append(args, constants.WithScoresKeyword)
 	result, err := client.executeCommand(ctx, C.ZInter, args)
 	if err != nil {
 		return nil, err
@@ -6890,17 +6877,17 @@ func (client *baseClient) ZInterStoreWithOptions(
 ) (int64, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append([]string{destination}, args...)
 	optionsArgs, err := zInterOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZInterStore, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -6955,10 +6942,10 @@ func (client *baseClient) ZDiff(ctx context.Context, keys []string) ([]string, e
 //	command returns an empty `Array`.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
-func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([]MemberAndScore, error) {
+func (client *baseClient) ZDiffWithScores(keys []string) ([]MemberAndScore, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	result, err := client.executeCommand(ctx, C.ZDiff, append(args, options.WithScoresKeyword))
+	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
@@ -6994,7 +6981,7 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7060,7 +7047,7 @@ func (client *baseClient) ZUnionWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zUnionOptions *options.ZUnionOptions,
-) ([]MemberAndScore, error) {
+) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -7070,7 +7057,7 @@ func (client *baseClient) ZUnionWithScores(
 		return nil, err
 	}
 	args = append(args, optionsArgs...)
-	args = append(args, options.WithScoresKeyword)
+	args = append(args, constants.WithScoresKeyword)
 	result, err := client.executeCommand(ctx, C.ZUnion, args)
 	if err != nil {
 		return nil, err
@@ -7147,19 +7134,19 @@ func (client *baseClient) ZUnionStoreWithOptions(
 ) (int64, error) {
 	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args := append([]string{destination}, keysArgs...)
 	if zUnionOptions != nil {
 		optionsArgs, err := zUnionOptions.ToArgs()
 		if err != nil {
-			return defaultIntResponse, err
+			return models.DefaultIntResponse, err
 		}
 		args = append(args, optionsArgs...)
 	}
 	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7208,13 +7195,13 @@ func (client *baseClient) ZInterCardWithOptions(
 	if options != nil {
 		optionsArgs, err := options.ToArgs()
 		if err != nil {
-			return defaultIntResponse, err
+			return models.DefaultIntResponse, err
 		}
 		args = append(args, optionsArgs...)
 	}
 	result, err := client.executeCommand(ctx, C.ZInterCard, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7241,7 +7228,7 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(ctx, C.ZLexCount, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7263,7 +7250,7 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 //
 // Return value:
 //
-//	A `KeyWithMemberAndScore` struct containing the key from which the member was popped,
+//	A `models.KeyWithMemberAndScore` struct containing the key from which the member was popped,
 //	the popped member, and its score. If no element could be popped and the timeout expired,
 //	returns `nil`.
 //
@@ -7272,12 +7259,12 @@ func (client *baseClient) BZPopMax(
 	ctx context.Context,
 	keys []string,
 	timeoutSecs float64,
-) (Result[KeyWithMemberAndScore], error) {
+) (models.Result[models.KeyWithMemberAndScore], error) {
 	args := append(keys, utils.FloatToString(timeoutSecs))
 
 	result, err := client.executeCommand(ctx, C.BZPopMax, args)
 	if err != nil {
-		return CreateNilKeyWithMemberAndScoreResult(), err
+		return models.CreateNilKeyWithMemberAndScoreResult(), err
 	}
 
 	return handleKeyWithMemberAndScoreResponse(result)
@@ -7298,24 +7285,24 @@ func (client *baseClient) BZPopMax(
 //
 // Return value:
 //
-//	A `Result` containing a `KeyWithArrayOfMembersAndScores` object.
+//	A `Result` containing a `models.KeyWithArrayOfMembersAndScores` object.
 //	If no elements could be popped from the provided keys, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/zmpop/
 func (client *baseClient) ZMPopWithOptions(
 	ctx context.Context,
 	keys []string,
-	scoreFilter options.ScoreFilter,
+	scoreFilter constants.ScoreFilter,
 	opts options.ZPopOptions,
-) (Result[KeyWithArrayOfMembersAndScores], error) {
+) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	optArgs, err := opts.ToArgs(true)
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
@@ -7324,7 +7311,7 @@ func (client *baseClient) ZMPopWithOptions(
 
 	result, err := client.executeCommand(ctx, C.ZMPop, args)
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	return handleKeyWithArrayOfMembersAndScoresResponse(result)
@@ -7339,11 +7326,11 @@ func (client *baseClient) ZMPopWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
-//	scoreFilter - Pop criteria - either [api.MIN] or [api.MAX] to pop members with the lowest/highest scores.
+//	scoreFilter - Pop criteria - either [constants.MIN] or [constants.MAX] to pop members with the lowest/highest scores.
 //
 // Return value:
 //
-//	 A `KeyWithArrayOfMembersAndScores` struct containing:
+//	 A `models.KeyWithArrayOfMembersAndScores` struct containing:
 //	- The key from which the elements were popped.
 //	- An array of member-score pairs of the popped elements.
 //	  Returns `nil` if no member could be popped.
@@ -7352,11 +7339,11 @@ func (client *baseClient) ZMPopWithOptions(
 func (client *baseClient) ZMPop(
 	ctx context.Context,
 	keys []string,
-	scoreFilter options.ScoreFilter,
-) (Result[KeyWithArrayOfMembersAndScores], error) {
+	scoreFilter constants.ScoreFilter,
+) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	args := make([]string, 0, len(keys)+3)
@@ -7366,7 +7353,7 @@ func (client *baseClient) ZMPop(
 
 	result, err := client.executeCommand(ctx, C.ZMPop, args)
 	if err != nil {
-		return CreateNilKeyWithArrayOfMembersAndScoresResult(), err
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), err
 	}
 
 	return handleKeyWithArrayOfMembersAndScoresResponse(result)
@@ -7399,7 +7386,7 @@ func (client *baseClient) GeoAdd(
 		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
 	)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7431,13 +7418,13 @@ func (client *baseClient) GeoAddWithOptions(
 	args := []string{key}
 	optionsArgs, err := geoAddOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, options.MapGeoDataToArray(membersToGeospatialData)...)
 	result, err := client.executeCommand(ctx, C.GeoAdd, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -7517,13 +7504,13 @@ func (client *baseClient) GeoPos(ctx context.Context, key string, members []stri
 //	unit is meters, see - [options.Meters]
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
-func (client *baseClient) GeoDist(ctx context.Context, key string, member1 string, member2 string) (Result[float64], error) {
+func (client *baseClient) GeoDist(ctx context.Context, key string, member1 string, member2 string) (models.Result[float64], error) {
 	result, err := client.executeCommand(ctx,
 		C.GeoDist,
 		[]string{key, member1, member2},
 	)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
 }
@@ -7552,14 +7539,14 @@ func (client *baseClient) GeoDistWithUnit(
 	key string,
 	member1 string,
 	member2 string,
-	unit options.GeoUnit,
-) (Result[float64], error) {
+	unit constants.GeoUnit,
+) (models.Result[float64], error) {
 	result, err := client.executeCommand(ctx,
 		C.GeoDist,
 		[]string{key, member1, member2, string(unit)},
 	)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return models.CreateNilFloat64Result(), err
 	}
 	return handleFloatOrNilResponse(result)
 }
@@ -7826,28 +7813,28 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 	args := []string{destinationKey, sourceKey}
 	searchFromArgs, err := searchFrom.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, searchFromArgs...)
 	searchByShapeArgs, err := searchByShape.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, searchByShapeArgs...)
 	resultOptionsArgs, err := resultOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, resultOptionsArgs...)
 	infoOptionsArgs, err := infoOptions.ToArgs()
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	args = append(args, infoOptionsArgs...)
 
 	result, err := client.executeCommand(ctx, C.GeoSearchStore, args)
 	if err != nil {
-		return defaultIntResponse, err
+		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(result)
 }
@@ -8026,12 +8013,12 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 func (client *baseClient) FunctionLoad(ctx context.Context, libraryCode string, replace bool) (string, error) {
 	args := []string{}
 	if replace {
-		args = append(args, options.ReplaceKeyword)
+		args = append(args, constants.ReplaceKeyword)
 	}
 	args = append(args, libraryCode)
 	result, err := client.executeCommand(ctx, C.FunctionLoad, args)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -8056,7 +8043,7 @@ func (client *baseClient) FunctionLoad(ctx context.Context, libraryCode string, 
 func (client *baseClient) FunctionFlush(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionFlush, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8081,7 +8068,7 @@ func (client *baseClient) FunctionFlush(ctx context.Context) (string, error) {
 func (client *baseClient) FunctionFlushSync(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionFlush, []string{string(options.SYNC)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8106,7 +8093,7 @@ func (client *baseClient) FunctionFlushSync(ctx context.Context) (string, error)
 func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionFlush, []string{string(options.ASYNC)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8387,7 +8374,7 @@ func (client *baseClient) PubSubNumSub(ctx context.Context, channels ...string) 
 func (client *baseClient) FunctionKill(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -8410,7 +8397,7 @@ func (client *baseClient) FunctionKill(ctx context.Context) (string, error) {
 //	A list of info about queried libraries and their functions.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
-func (client *baseClient) FunctionList(ctx context.Context, query FunctionListQuery) ([]LibraryInfo, error) {
+func (client *baseClient) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
 	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
 	if err != nil {
 		return nil, err

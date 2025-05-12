@@ -1,17 +1,18 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_Ping() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Ping() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -21,8 +22,8 @@ func ExampleGlideClient_Ping() {
 	// Output: PONG
 }
 
-func ExampleGlideClient_PingWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_PingWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	options := options.PingOptions{Message: "hello"}
 	result, err := client.PingWithOptions(context.Background(), options)
 	if err != nil {
@@ -33,8 +34,8 @@ func ExampleGlideClient_PingWithOptions() {
 	// Output: hello
 }
 
-func ExampleGlideClient_Echo() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Echo() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.Echo(context.Background(), "Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -44,8 +45,8 @@ func ExampleGlideClient_Echo() {
 	// Output: {Hello World false}
 }
 
-func ExampleGlideClient_ClientId() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_ClientId() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -56,8 +57,8 @@ func ExampleGlideClient_ClientId() {
 	// Output: true
 }
 
-func ExampleGlideClient_ClientSetName() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_ClientSetName() {
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.ClientSetName(context.Background(), "ConnectionName")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -67,8 +68,8 @@ func ExampleGlideClient_ClientSetName() {
 	// Output: OK
 }
 
-func ExampleGlideClient_ClientGetName() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_ClientGetName() {
+	var client *Client = getExampleClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
 	client.ClientSetName(context.Background(), connectionName)
 	result, err := client.ClientGetName(context.Background())

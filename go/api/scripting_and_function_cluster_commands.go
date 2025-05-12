@@ -1,12 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Scripting and Function" group for a cluster
@@ -24,31 +24,31 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionFlushAsyncWithRoute(ctx context.Context, route options.RouteOption) (string, error)
 
-	FCallWithRoute(ctx context.Context, function string, route options.RouteOption) (ClusterValue[any], error)
+	FCallWithRoute(ctx context.Context, function string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FCallReadOnlyWithRoute(ctx context.Context, function string, route options.RouteOption) (ClusterValue[any], error)
+	FCallReadOnlyWithRoute(ctx context.Context, function string, route options.RouteOption) (models.ClusterValue[any], error)
 
-	FCallWithArgs(ctx context.Context, function string, args []string) (ClusterValue[any], error)
+	FCallWithArgs(ctx context.Context, function string, args []string) (models.ClusterValue[any], error)
 
-	FCallReadOnlyWithArgs(ctx context.Context, function string, args []string) (ClusterValue[any], error)
+	FCallReadOnlyWithArgs(ctx context.Context, function string, args []string) (models.ClusterValue[any], error)
 
 	FCallWithArgsWithRoute(
 		ctx context.Context,
 		function string,
 		args []string,
 		route options.RouteOption,
-	) (ClusterValue[any], error)
+	) (models.ClusterValue[any], error)
 
 	FCallReadOnlyWithArgsWithRoute(
 		ctx context.Context,
 		function string,
 		args []string,
 		route options.RouteOption,
-	) (ClusterValue[any], error)
+	) (models.ClusterValue[any], error)
 
-	FunctionStats(ctx context.Context) (map[string]FunctionStatsResult, error)
+	FunctionStats(ctx context.Context) (map[string]models.FunctionStatsResult, error)
 
-	FunctionStatsWithRoute(ctx context.Context, route options.RouteOption) (ClusterValue[FunctionStatsResult], error)
+	FunctionStatsWithRoute(ctx context.Context, route options.RouteOption) (models.ClusterValue[models.FunctionStatsResult], error)
 
 	FunctionDelete(ctx context.Context, libName string) (string, error)
 
@@ -60,9 +60,9 @@ type ScriptingAndFunctionClusterCommands interface {
 		ctx context.Context,
 		query FunctionListQuery,
 		route options.RouteOption,
-	) (ClusterValue[[]LibraryInfo], error)
+	) (models.ClusterValue[[]models.LibraryInfo], error)
 
-	FunctionDumpWithRoute(ctx context.Context, route config.Route) (ClusterValue[string], error)
+	FunctionDumpWithRoute(ctx context.Context, route config.Route) (models.ClusterValue[string], error)
 
 	FunctionRestoreWithRoute(ctx context.Context, payload string, route config.Route) (string, error)
 
@@ -73,13 +73,13 @@ type ScriptingAndFunctionClusterCommands interface {
 		route config.Route,
 	) (string, error)
 
-	InvokeScriptWithRoute(ctx context.Context, script options.Script, route options.RouteOption) (ClusterValue[any], error)
+	InvokeScriptWithRoute(ctx context.Context, script options.Script, route options.RouteOption) (models.ClusterValue[any], error)
 
 	InvokeScriptWithClusterOptions(
 		ctx context.Context,
 		script options.Script,
 		clusterScriptOptions options.ClusterScriptOptions,
-	) (ClusterValue[any], error)
+	) (models.ClusterValue[any], error)
 
 	ScriptExists(ctx context.Context, sha1s []string) ([]bool, error)
 

@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
@@ -10,12 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_XAdd() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAdd() {
+	var client *Client = getExampleClient() // example helper function
 
 	result, err := client.XAdd(context.Background(), "mystream", [][]string{
 		{"key1", "value1"},
@@ -33,8 +36,8 @@ func ExampleGlideClient_XAdd() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_XAdd() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAdd() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.XAdd(context.Background(), "mystream", [][]string{
 		{"key1", "value1"},
@@ -52,8 +55,8 @@ func ExampleGlideClusterClient_XAdd() {
 	// Output: true
 }
 
-func ExampleGlideClient_XAddWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAddWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewXAddOptions().
 		SetId("1000-50")
@@ -70,8 +73,8 @@ func ExampleGlideClient_XAddWithOptions() {
 	// Output: 1000-50
 }
 
-func ExampleGlideClusterClient_XAddWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAddWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewXAddOptions().
 		SetId("1000-50")
@@ -88,8 +91,8 @@ func ExampleGlideClusterClient_XAddWithOptions() {
 	// Output: 1000-50
 }
 
-func ExampleGlideClient_XTrim() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XTrim() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	client.XAdd(context.Background(), "mystream", [][]string{{"field3", "foo4"}, {"field4", "bar4"}})
@@ -103,8 +106,8 @@ func ExampleGlideClient_XTrim() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_XTrim() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XTrim() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	client.XAdd(context.Background(), "mystream", [][]string{{"field3", "foo4"}, {"field4", "bar4"}})
@@ -118,8 +121,8 @@ func ExampleGlideClusterClient_XTrim() {
 	// Output: 2
 }
 
-func ExampleGlideClient_XLen() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XLen() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	count, err := client.XLen(context.Background(), "mystream")
@@ -131,8 +134,8 @@ func ExampleGlideClient_XLen() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_XLen() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XLen() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	count, err := client.XLen(context.Background(), "mystream")
@@ -144,8 +147,8 @@ func ExampleGlideClusterClient_XLen() {
 	// Output: 1
 }
 
-func ExampleGlideClient_XAutoClaim() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAutoClaim() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -174,8 +177,8 @@ func ExampleGlideClient_XAutoClaim() {
 	// {0-0 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]] 0-2:[[entry2_field1 entry2_value1]]] []}
 }
 
-func ExampleGlideClusterClient_XAutoClaim() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAutoClaim() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -204,8 +207,8 @@ func ExampleGlideClusterClient_XAutoClaim() {
 	// {0-0 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]] 0-2:[[entry2_field1 entry2_value1]]] []}
 }
 
-func ExampleGlideClient_XAutoClaimWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAutoClaimWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -234,8 +237,8 @@ func ExampleGlideClient_XAutoClaimWithOptions() {
 	// Output: {0-2 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]] []}
 }
 
-func ExampleGlideClusterClient_XAutoClaimWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAutoClaimWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -264,8 +267,8 @@ func ExampleGlideClusterClient_XAutoClaimWithOptions() {
 	// Output: {0-2 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]] []}
 }
 
-func ExampleGlideClient_XAutoClaimJustId() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAutoClaimJustId() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -293,8 +296,8 @@ func ExampleGlideClient_XAutoClaimJustId() {
 	// Output: {0-0 [0-1 0-2] []}
 }
 
-func ExampleGlideClusterClient_XAutoClaimJustId() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAutoClaimJustId() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -322,8 +325,8 @@ func ExampleGlideClusterClient_XAutoClaimJustId() {
 	// Output: {0-0 [0-1 0-2] []}
 }
 
-func ExampleGlideClient_XAutoClaimJustIdWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAutoClaimJustIdWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -352,8 +355,8 @@ func ExampleGlideClient_XAutoClaimJustIdWithOptions() {
 	// Output: {0-2 [0-1] []}
 }
 
-func ExampleGlideClusterClient_XAutoClaimJustIdWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAutoClaimJustIdWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := uuid.NewString()
 	consumer := uuid.NewString()
@@ -382,8 +385,8 @@ func ExampleGlideClusterClient_XAutoClaimJustIdWithOptions() {
 	// Output: {0-2 [0-1] []}
 }
 
-func ExampleGlideClient_XReadGroup() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XReadGroup() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := uuid.NewString()
@@ -406,8 +409,8 @@ func ExampleGlideClient_XReadGroup() {
 	// Output: map[12345:map[]]
 }
 
-func ExampleGlideClusterClient_XReadGroup() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XReadGroup() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := uuid.NewString()
@@ -430,8 +433,8 @@ func ExampleGlideClusterClient_XReadGroup() {
 	// Output: map[12345:map[]]
 }
 
-func ExampleGlideClient_XReadGroupWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XReadGroupWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := uuid.NewString()
@@ -455,8 +458,8 @@ func ExampleGlideClient_XReadGroupWithOptions() {
 	// Output: map[12345:map[12345-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]]]
 }
 
-func ExampleGlideClusterClient_XReadGroupWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XReadGroupWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := uuid.NewString()
@@ -480,8 +483,8 @@ func ExampleGlideClusterClient_XReadGroupWithOptions() {
 	// Output: map[12345:map[12345-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]]]
 }
 
-func ExampleGlideClient_XRead() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XRead() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 
@@ -500,8 +503,8 @@ func ExampleGlideClient_XRead() {
 	// Output: map[12345:map[12345-1:[[field1 value1] [field2 value2]]]]
 }
 
-func ExampleGlideClusterClient_XRead() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XRead() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 
@@ -520,8 +523,8 @@ func ExampleGlideClusterClient_XRead() {
 	// Output: map[12345:map[12345-1:[[field1 value1] [field2 value2]]]]
 }
 
-func ExampleGlideClient_XReadWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XReadWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streambase := 1
 
@@ -550,8 +553,8 @@ func ExampleGlideClient_XReadWithOptions() {
 	// Output: map[12345:map[12345-2:[[field3 value3] [field4 value4]]]]
 }
 
-func ExampleGlideClusterClient_XReadWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XReadWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streambase := 1
 
@@ -580,8 +583,8 @@ func ExampleGlideClusterClient_XReadWithOptions() {
 	// Output: map[12345:map[12345-2:[[field3 value3] [field4 value4]]]]
 }
 
-func ExampleGlideClient_XDel() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XDel() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
 	client.XAddWithOptions(context.Background(),
@@ -599,8 +602,8 @@ func ExampleGlideClient_XDel() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_XDel() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XDel() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
 	client.XAddWithOptions(context.Background(),
@@ -618,8 +621,8 @@ func ExampleGlideClusterClient_XDel() {
 	// Output: 1
 }
 
-func ExampleGlideClient_XPending() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XPending() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -644,8 +647,8 @@ func ExampleGlideClient_XPending() {
 	// Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
 }
 
-func ExampleGlideClusterClient_XPending() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XPending() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -670,8 +673,8 @@ func ExampleGlideClusterClient_XPending() {
 	// Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
 }
 
-func ExampleGlideClient_XPendingWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XPendingWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -712,8 +715,8 @@ func ExampleGlideClient_XPendingWithOptions() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_XPendingWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XPendingWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -754,8 +757,8 @@ func ExampleGlideClusterClient_XPendingWithOptions() {
 	// Output: true
 }
 
-func ExampleGlideClient_XGroupSetId() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupSetId() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -793,8 +796,8 @@ func ExampleGlideClient_XGroupSetId() {
 	// Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
 }
 
-func ExampleGlideClusterClient_XGroupSetId() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupSetId() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -832,8 +835,8 @@ func ExampleGlideClusterClient_XGroupSetId() {
 	// Output: {"NumOfMessages":1,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":1}]}
 }
 
-func ExampleGlideClient_XGroupSetIdWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupSetIdWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -884,8 +887,8 @@ func ExampleGlideClient_XGroupSetIdWithOptions() {
 	// Output: {"NumOfMessages":2,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":2}]}
 }
 
-func ExampleGlideClusterClient_XGroupSetIdWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupSetIdWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -936,8 +939,8 @@ func ExampleGlideClusterClient_XGroupSetIdWithOptions() {
 	// Output: {"NumOfMessages":2,"StartId":{},"EndId":{},"ConsumerMessages":[{"ConsumerName":"c12345","MessageCount":2}]}
 }
 
-func ExampleGlideClient_XGroupCreate() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupCreate() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -957,8 +960,8 @@ func ExampleGlideClient_XGroupCreate() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_XGroupCreate() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupCreate() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -978,8 +981,8 @@ func ExampleGlideClusterClient_XGroupCreate() {
 	// Output: OK
 }
 
-func ExampleGlideClient_XGroupCreateWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupCreateWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	group := "g12345"
 
@@ -999,8 +1002,8 @@ func ExampleGlideClient_XGroupCreateWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_XGroupCreateWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupCreateWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	group := "g12345"
 
@@ -1020,8 +1023,8 @@ func ExampleGlideClusterClient_XGroupCreateWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClient_XGroupDestroy() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupDestroy() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	group := "g12345"
 
@@ -1037,8 +1040,8 @@ func ExampleGlideClient_XGroupDestroy() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_XGroupDestroy() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupDestroy() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	group := "g12345"
 
@@ -1054,8 +1057,8 @@ func ExampleGlideClusterClient_XGroupDestroy() {
 	// Output: true
 }
 
-func ExampleGlideClient_XGroupCreateConsumer() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupCreateConsumer() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1072,8 +1075,8 @@ func ExampleGlideClient_XGroupCreateConsumer() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_XGroupCreateConsumer() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupCreateConsumer() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1090,8 +1093,8 @@ func ExampleGlideClusterClient_XGroupCreateConsumer() {
 	// Output: true
 }
 
-func ExampleGlideClient_XGroupDelConsumer() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XGroupDelConsumer() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1116,8 +1119,8 @@ func ExampleGlideClient_XGroupDelConsumer() {
 	// Consumer deleted. Messages pending: 1
 }
 
-func ExampleGlideClusterClient_XGroupDelConsumer() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XGroupDelConsumer() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1142,8 +1145,8 @@ func ExampleGlideClusterClient_XGroupDelConsumer() {
 	// Consumer deleted. Messages pending: 1
 }
 
-func ExampleGlideClient_XAck() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XAck() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1170,8 +1173,8 @@ func ExampleGlideClient_XAck() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_XAck() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XAck() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	group := "g12345"
 	consumer := "c12345"
@@ -1198,8 +1201,8 @@ func ExampleGlideClusterClient_XAck() {
 	// Output: 1
 }
 
-func ExampleGlideClient_XClaim() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XClaim() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1237,8 +1240,8 @@ func ExampleGlideClient_XClaim() {
 	// Output: Claimed 1 message
 }
 
-func ExampleGlideClusterClient_XClaim() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XClaim() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1276,8 +1279,8 @@ func ExampleGlideClusterClient_XClaim() {
 	// Output: Claimed 1 message
 }
 
-func ExampleGlideClient_XClaimWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XClaimWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1324,8 +1327,8 @@ func ExampleGlideClient_XClaimWithOptions() {
 	// Output: Claimed 1 message
 }
 
-func ExampleGlideClusterClient_XClaimWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XClaimWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1372,8 +1375,8 @@ func ExampleGlideClusterClient_XClaimWithOptions() {
 	// Output: Claimed 1 message
 }
 
-func ExampleGlideClient_XClaimJustId() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XClaimJustId() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1418,8 +1421,8 @@ func ExampleGlideClient_XClaimJustId() {
 	// Output: [12345-1]
 }
 
-func ExampleGlideClusterClient_XClaimJustId() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XClaimJustId() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1464,8 +1467,8 @@ func ExampleGlideClusterClient_XClaimJustId() {
 	// Output: [12345-1]
 }
 
-func ExampleGlideClient_XClaimJustIdWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XClaimJustIdWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1512,8 +1515,8 @@ func ExampleGlideClient_XClaimJustIdWithOptions() {
 	// Output: [12345-1]
 }
 
-func ExampleGlideClusterClient_XClaimJustIdWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XClaimJustIdWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId := "12345-1"
 	group := "g12345"
@@ -1560,16 +1563,16 @@ func ExampleGlideClusterClient_XClaimJustIdWithOptions() {
 	// Output: [12345-1]
 }
 
-func ExampleGlideClient_XRange() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XRange() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
 	client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
 	client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRange(context.Background(), key,
-		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1578,16 +1581,16 @@ func ExampleGlideClient_XRange() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_XRange() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XRange() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
 	client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
 	client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRange(context.Background(), key,
-		options.NewInfiniteStreamBoundary(options.NegativeInfinity),
-		options.NewInfiniteStreamBoundary(options.PositiveInfinity))
+		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
+		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1596,8 +1599,8 @@ func ExampleGlideClusterClient_XRange() {
 	// Output: 2
 }
 
-func ExampleGlideClient_XRangeWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XRangeWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
 	streamId1, _ := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
@@ -1615,8 +1618,8 @@ func ExampleGlideClient_XRangeWithOptions() {
 	// Output: 1
 }
 
-func ExampleGlideClusterClient_XRangeWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XRangeWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
 	streamId1, _ := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
@@ -1634,8 +1637,8 @@ func ExampleGlideClusterClient_XRangeWithOptions() {
 	// Output: 1
 }
 
-func ExampleGlideClient_XRevRange() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XRevRange() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -1664,8 +1667,8 @@ func ExampleGlideClient_XRevRange() {
 	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
-func ExampleGlideClusterClient_XRevRange() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XRevRange() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -1694,8 +1697,8 @@ func ExampleGlideClusterClient_XRevRange() {
 	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
-func ExampleGlideClient_XRevRangeWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XRevRangeWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -1725,8 +1728,8 @@ func ExampleGlideClient_XRevRangeWithOptions() {
 	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
-func ExampleGlideClusterClient_XRevRangeWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XRevRangeWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 	streamId2 := "12345-2"
@@ -1756,8 +1759,8 @@ func ExampleGlideClusterClient_XRevRangeWithOptions() {
 	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
 }
 
-func ExampleGlideClient_XInfoStream() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XInfoStream() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 
@@ -1801,8 +1804,8 @@ func ExampleGlideClient_XInfoStream() {
 	// }
 }
 
-func ExampleGlideClusterClient_XInfoStream() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XInfoStream() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 	streamId1 := "12345-1"
 
@@ -1846,8 +1849,8 @@ func ExampleGlideClusterClient_XInfoStream() {
 	// }
 }
 
-func ExampleGlideClient_XInfoStreamFullWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XInfoStreamFullWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
 	for i := 1; i <= 5; i++ {
@@ -1901,8 +1904,8 @@ func ExampleGlideClient_XInfoStreamFullWithOptions() {
 	// }
 }
 
-func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XInfoStreamFullWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
 	for i := 1; i <= 5; i++ {
@@ -1956,8 +1959,8 @@ func ExampleGlideClusterClient_XInfoStreamFullWithOptions() {
 	// }
 }
 
-func ExampleGlideClient_XInfoConsumers() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XInfoConsumers() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := "myGroup"
 
@@ -1998,8 +2001,8 @@ func ExampleGlideClient_XInfoConsumers() {
 	// Inactive > 0:   true
 }
 
-func ExampleGlideClusterClient_XInfoConsumers() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XInfoConsumers() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := "myGroup"
 	consumer := "myConsumer"
@@ -2047,8 +2050,8 @@ func ExampleGlideClusterClient_XInfoConsumers() {
 	// Inactive > 0:   true
 }
 
-func ExampleGlideClient_XInfoGroups() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XInfoGroups() {
+	var client *Client = getExampleClient() // example helper function
 	key := uuid.NewString()
 	group := "myGroup"
 
@@ -2093,8 +2096,8 @@ func ExampleGlideClient_XInfoGroups() {
 	// Lag:                    0
 }
 
-func ExampleGlideClusterClient_XInfoGroups() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_XInfoGroups() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.NewString()
 	group := "myGroup"
 

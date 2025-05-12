@@ -1,0 +1,27 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+package interfaces
+
+import (
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
+)
+
+// Supports commands and transactions for the "Connection Management" group of commands for standalone client.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/#connection
+type ConnectionManagementCommands interface {
+	Ping() (string, error)
+
+	PingWithOptions(pingOptions options.PingOptions) (string, error)
+
+	Echo(message string) (models.Result[string], error)
+
+	ClientId() (int64, error)
+
+	ClientGetName() (string, error)
+
+	ClientSetName(connectionName string) (string, error)
+}

@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 import "context"
 
@@ -28,8 +28,4 @@ type PubSubClusterCommands interface {
 	PubSubShardChannels(ctx context.Context) ([]string, error)
 	PubSubShardChannelsWithPattern(ctx context.Context, pattern string) ([]string, error)
 	PubSubShardNumSub(ctx context.Context, channels ...string) (map[string]int64, error)
-}
-
-type PubSubHandler interface {
-	GetQueue() (*PubSubMessageQueue, error)
 }

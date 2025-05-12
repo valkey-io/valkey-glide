@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
@@ -41,7 +41,7 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 
 	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
-		WithReadFrom(api.AzAffinity).
+		WithReadFrom(config.AzAffinity).
 		WithClientAZ(az))
 
 	for i := 0; i < GET_CALLS; i++ {
@@ -51,7 +51,7 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 
 	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server, options.Commandstats}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server, constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
 		},
 	)
@@ -119,13 +119,14 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	// Creating Client with AZ configuration for testing
 	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
-		WithReadFrom(api.AzAffinity).
+		WithReadFrom(config.AzAffinity).
 		WithClientAZ(az))
 
 	azGetResult, err := clientForTestingAz.ConfigGetWithOptions(context.Background(),
 		[]string{"availability-zone"}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	for _, value := range azGetResult.MultiValue() {
+		if valueMap, ok := value.(map[string]any); ok {
 		assert.Equal(suite.T(), az, value["availability-zone"])
 	}
 
@@ -137,7 +138,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 
 	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.All}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
 		},
 	)
@@ -162,11 +163,11 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 	const nReplicaCalls = 1
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nReplicaCalls)
 
-	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+	clientForTestingAz := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
-		WithReadFrom(api.AzAffinity).
+		WithReadFrom(config.AzAffinity).
 		WithClientAZ("non-existing-az"))
 
 	// Reset stats
@@ -182,7 +183,7 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 
 	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Commandstats}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
 		},
 	)
@@ -209,7 +210,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls)
 
 	// Create client for setting the configs
-	clientForConfigSet := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+	clientForConfigSet := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second))
@@ -242,11 +243,11 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	clientForConfigSet.Close()
 
 	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
-	clientForTestingAz := suite.clusterClient(api.NewGlideClusterClientConfiguration().
+	clientForTestingAz := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
-		WithReadFrom(api.AzAffinityReplicaAndPrimary).
+		WithReadFrom(config.AzAffinityReplicaAndPrimary).
 		WithClientAZ(az))
 
 	// Execute GET commands
@@ -257,7 +258,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 
 	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.All}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
 		},
 	)

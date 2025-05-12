@@ -1,16 +1,18 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-func ExampleGlideClient_Set() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Set() {
+	var client *Client = getExampleClient() // example helper function
 
 	result, err := client.Set(context.Background(), "my_key", "my_value")
 	if err != nil {
@@ -21,8 +23,8 @@ func ExampleGlideClient_Set() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_Set() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Set() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.Set(context.Background(), "my_key", "my_value")
 	if err != nil {
@@ -33,12 +35,12 @@ func ExampleGlideClusterClient_Set() {
 	// Output: OK
 }
 
-func ExampleGlideClient_SetWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SetWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(5))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
@@ -49,12 +51,12 @@ func ExampleGlideClient_SetWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_SetWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SetWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(uint64(5)))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
@@ -65,8 +67,8 @@ func ExampleGlideClusterClient_SetWithOptions() {
 	// Output: OK
 }
 
-func ExampleGlideClient_Get_keyexists() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Get_keyexists() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.Get(context.Background(), "my_key")
@@ -78,8 +80,8 @@ func ExampleGlideClient_Get_keyexists() {
 	// Output: my_value
 }
 
-func ExampleGlideClusterClient_Get_keyexists() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Get_keyexists() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.Get(context.Background(), "my_key")
@@ -91,8 +93,8 @@ func ExampleGlideClusterClient_Get_keyexists() {
 	// Output: my_value
 }
 
-func ExampleGlideClient_Get_keynotexists() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Get_keynotexists() {
+	var client *Client = getExampleClient() // example helper function
 
 	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
@@ -103,8 +105,8 @@ func ExampleGlideClient_Get_keynotexists() {
 	// Output: true
 }
 
-func ExampleGlideClusterClient_Get_keynotexists() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Get_keynotexists() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
@@ -115,8 +117,8 @@ func ExampleGlideClusterClient_Get_keynotexists() {
 	// Output: true
 }
 
-func ExampleGlideClient_GetEx() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetEx() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.GetEx(context.Background(), "my_key")
@@ -132,8 +134,8 @@ func ExampleGlideClient_GetEx() {
 	// -1
 }
 
-func ExampleGlideClusterClient_GetEx() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetEx() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.GetEx(context.Background(), "my_key")
@@ -149,13 +151,13 @@ func ExampleGlideClusterClient_GetEx() {
 	// -1
 }
 
-func ExampleGlideClient_GetExWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetExWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(5))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
@@ -170,13 +172,13 @@ func ExampleGlideClient_GetExWithOptions() {
 	// 5
 }
 
-func ExampleGlideClusterClient_GetExWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetExWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
-			SetType(options.Seconds).
+			SetType(constants.Seconds).
 			SetCount(uint64(5)))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
@@ -191,8 +193,8 @@ func ExampleGlideClusterClient_GetExWithOptions() {
 	// 5
 }
 
-func ExampleGlideClient_MSet() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_MSet() {
+	var client *Client = getExampleClient() // example helper function
 
 	keyValueMap := map[string]string{
 		"key1": "value1",
@@ -207,8 +209,8 @@ func ExampleGlideClient_MSet() {
 	// Output: OK
 }
 
-func ExampleGlideClusterClient_MSet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_MSet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	keyValueMap := map[string]string{
 		"key1": "value1",
@@ -223,8 +225,8 @@ func ExampleGlideClusterClient_MSet() {
 	// Output: OK
 }
 
-func ExampleGlideClient_MGet() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_MGet() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.MSet(
 		context.Background(),
@@ -245,8 +247,8 @@ func ExampleGlideClient_MGet() {
 	// my_value3
 }
 
-func ExampleGlideClusterClient_MGet() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_MGet() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.MSet(
 		context.Background(),
@@ -267,8 +269,8 @@ func ExampleGlideClusterClient_MGet() {
 	// my_value3
 }
 
-func ExampleGlideClient_MSetNX() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_MSetNX() {
+	var client *Client = getExampleClient() // example helper function
 
 	keyValueMap := map[string]string{"my_key1": "my_value1", "my_key2": "my_value2"}
 	result, err := client.MSetNX(context.Background(), keyValueMap)
@@ -285,8 +287,8 @@ func ExampleGlideClient_MSetNX() {
 	// false
 }
 
-func ExampleGlideClusterClient_MSetNX() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_MSetNX() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	keyValueMap := map[string]string{"{my_key}1": "my_value1", "{my_key}2": "my_value2"}
 	result, err := client.MSetNX(context.Background(), keyValueMap)
@@ -303,8 +305,8 @@ func ExampleGlideClusterClient_MSetNX() {
 	// false
 }
 
-func ExampleGlideClient_Incr() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Incr() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "1")
 	result, err := client.Incr(context.Background(), "my_key")
@@ -316,8 +318,8 @@ func ExampleGlideClient_Incr() {
 	// Output: 2
 }
 
-func ExampleGlideClusterClient_Incr() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Incr() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "1")
 	result, err := client.Incr(context.Background(), "my_key")
@@ -329,8 +331,8 @@ func ExampleGlideClusterClient_Incr() {
 	// Output: 2
 }
 
-func ExampleGlideClient_IncrBy() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_IncrBy() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "5")
 	result, err := client.IncrBy(context.Background(), "my_key", 5)
@@ -341,8 +343,8 @@ func ExampleGlideClient_IncrBy() {
 	// Output: 10
 }
 
-func ExampleGlideClusterClient_IncrBy() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_IncrBy() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "5")
 	result, err := client.IncrBy(context.Background(), "my_key", 5)
@@ -353,8 +355,8 @@ func ExampleGlideClusterClient_IncrBy() {
 	// Output: 10
 }
 
-func ExampleGlideClient_IncrByFloat() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_IncrByFloat() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "1")
 	result, err := client.IncrByFloat(context.Background(), "my_key", 5.5)
@@ -366,8 +368,8 @@ func ExampleGlideClient_IncrByFloat() {
 	// Output: 6.5
 }
 
-func ExampleGlideClusterClient_IncrByFloat() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_IncrByFloat() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "1")
 	result, err := client.IncrByFloat(context.Background(), "my_key", 5.5)
@@ -379,8 +381,8 @@ func ExampleGlideClusterClient_IncrByFloat() {
 	// Output: 6.5
 }
 
-func ExampleGlideClient_Decr() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Decr() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "0")
 	result, err := client.Decr(context.Background(), "my_key")
@@ -392,8 +394,8 @@ func ExampleGlideClient_Decr() {
 	// Output: -1
 }
 
-func ExampleGlideClusterClient_Decr() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Decr() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "0")
 	result, err := client.Decr(context.Background(), "my_key")
@@ -405,8 +407,8 @@ func ExampleGlideClusterClient_Decr() {
 	// Output: -1
 }
 
-func ExampleGlideClient_DecrBy() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_DecrBy() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "20")
 	result, err := client.DecrBy(context.Background(), "my_key", 5)
@@ -418,8 +420,8 @@ func ExampleGlideClient_DecrBy() {
 	// Output: 15
 }
 
-func ExampleGlideClusterClient_DecrBy() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_DecrBy() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "20")
 	result, err := client.DecrBy(context.Background(), "my_key", 5)
@@ -431,8 +433,8 @@ func ExampleGlideClusterClient_DecrBy() {
 	// Output: 15
 }
 
-func ExampleGlideClient_Strlen() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Strlen() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.Strlen(context.Background(), "my_key")
@@ -444,8 +446,8 @@ func ExampleGlideClient_Strlen() {
 	// Output: 8
 }
 
-func ExampleGlideClusterClient_Strlen() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Strlen() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.Strlen(context.Background(), "my_key")
@@ -457,8 +459,8 @@ func ExampleGlideClusterClient_Strlen() {
 	// Output: 8
 }
 
-func ExampleGlideClient_SetRange_one() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SetRange_one() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.SetRange(context.Background(), "my_key", 3, "example")
@@ -474,8 +476,8 @@ func ExampleGlideClient_SetRange_one() {
 	// my_example
 }
 
-func ExampleGlideClusterClient_SetRange_one() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SetRange_one() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.SetRange(context.Background(), "my_key", 3, "example")
@@ -491,8 +493,8 @@ func ExampleGlideClusterClient_SetRange_one() {
 	// my_example
 }
 
-func ExampleGlideClient_SetRange_two() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_SetRange_two() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
 	result, err := client.SetRange(context.Background(), "my_key", 1, "a")
@@ -504,8 +506,8 @@ func ExampleGlideClient_SetRange_two() {
 	// Output: 3
 }
 
-func ExampleGlideClusterClient_SetRange_two() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_SetRange_two() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
 	result, err := client.SetRange(context.Background(), "my_key", 1, "a")
@@ -517,8 +519,8 @@ func ExampleGlideClusterClient_SetRange_two() {
 	// Output: 3
 }
 
-func ExampleGlideClient_GetRange_one() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetRange_one() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "Welcome to Valkey Glide!")
 	result, err := client.GetRange(context.Background(), "my_key", 0, 7)
@@ -530,8 +532,8 @@ func ExampleGlideClient_GetRange_one() {
 	// Output: Welcome
 }
 
-func ExampleGlideClusterClient_GetRange_one() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetRange_one() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "Welcome to Valkey Glide!")
 	result, err := client.GetRange(context.Background(), "my_key", 0, 7)
@@ -543,8 +545,8 @@ func ExampleGlideClusterClient_GetRange_one() {
 	// Output: Welcome
 }
 
-func ExampleGlideClient_GetRange_two() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetRange_two() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "愛")
 	fmt.Println([]byte("愛")) // "愛" is a single character in UTF-8, but 3 bytes long
@@ -559,8 +561,8 @@ func ExampleGlideClient_GetRange_two() {
 	// [230 132]
 }
 
-func ExampleGlideClusterClient_GetRange_two() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetRange_two() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "愛")
 	fmt.Println([]byte("愛")) // "愛" is a single character in UTF-8, but 3 bytes long
@@ -575,8 +577,8 @@ func ExampleGlideClusterClient_GetRange_two() {
 	// [230 132]
 }
 
-func ExampleGlideClient_Append() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Append() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_valu")
 	result, err := client.Append(context.Background(), "my_key", "e")
@@ -592,8 +594,8 @@ func ExampleGlideClient_Append() {
 	// my_value
 }
 
-func ExampleGlideClusterClient_Append() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_Append() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_valu")
 	result, err := client.Append(context.Background(), "my_key", "e")
@@ -609,8 +611,8 @@ func ExampleGlideClusterClient_Append() {
 	// my_value
 }
 
-func ExampleGlideClient_LCS() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_LCS() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.MSet(context.Background(), map[string]string{"my_key1": "oh my gosh", "my_key2": "hello world"})
 	result, err := client.LCS(context.Background(), "my_key1", "my_key2")
@@ -623,8 +625,8 @@ func ExampleGlideClient_LCS() {
 	// Output: h o
 }
 
-func ExampleGlideClusterClient_LCS() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LCS() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.MSet(context.Background(), map[string]string{"{my_key}1": "oh my gosh", "{my_key}2": "hello world"})
 	result, err := client.LCS(context.Background(), "{my_key}1", "{my_key}2")
@@ -637,8 +639,8 @@ func ExampleGlideClusterClient_LCS() {
 	// Output: h o
 }
 
-func ExampleGlideClient_GetDel() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_GetDel() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.GetDel(context.Background(), "my_key") // return value and delete key
@@ -654,8 +656,8 @@ func ExampleGlideClient_GetDel() {
 	// true
 }
 
-func ExampleGlideClusterClient_GetDel() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_GetDel() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "my_key", "my_value")
 	result, err := client.GetDel(context.Background(), "my_key") // return value and delete key
@@ -671,8 +673,8 @@ func ExampleGlideClusterClient_GetDel() {
 	// true
 }
 
-func ExampleGlideClient_LCSLen() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_LCSLen() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key1", "ohmytext")
 	client.Set(context.Background(), "my_key2", "mynewtext")
@@ -687,8 +689,8 @@ func ExampleGlideClient_LCSLen() {
 	// Output: 3
 }
 
-func ExampleGlideClusterClient_LCSLen() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LCSLen() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "{my_key}1", "ohmytext")
 	client.Set(context.Background(), "{my_key}2", "mynewtext")
@@ -703,8 +705,8 @@ func ExampleGlideClusterClient_LCSLen() {
 	// Output: 3
 }
 
-func ExampleGlideClient_LCSWithOptions() {
-	var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_LCSWithOptions() {
+	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key1", "ohmytext")
 	client.Set(context.Background(), "my_key2", "mynewtext")
@@ -732,8 +734,8 @@ func ExampleGlideClient_LCSWithOptions() {
 	// With MinMatchLen 4: map[len:0 matches:[]]
 }
 
-func ExampleGlideClusterClient_LCSWithOptions() {
-	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
+func ExampleClusterClient_LCSWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.Set(context.Background(), "{my_key}1", "ohmytext")
 	client.Set(context.Background(), "{my_key}2", "mynewtext")
