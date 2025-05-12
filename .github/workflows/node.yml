@@ -233,6 +233,9 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Set default for SANITIZED_IMAGE
+              run: echo "SANITIZED_IMAGE=default" >> $GITHUB_ENV
+
             - name: Build Node.js wrapper
               if: ${{ matrix.host.TARGET != 'aarch64-unknown-linux-musl' }}
               run: |
