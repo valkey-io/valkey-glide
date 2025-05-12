@@ -26,6 +26,8 @@ Software Dependencies
 - openssl
 - openssl-dev
 - rustup
+- ziglang and zigbuild (for GNU Linux only)
+- valkey (for testing)
 
 **Valkey installation**
 
@@ -44,14 +46,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 ```
+
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for CentOS**
 
@@ -68,14 +65,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 ```
+
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for MacOS**
 
@@ -87,6 +79,14 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
+```
+
+**Install protobuf compiler**
+
+To install protobuf for MacOS, run:
+
+```bash
+brew install protobuf@3
 # Verify the Protobuf compiler installation
 protoc --version
 
@@ -94,6 +94,24 @@ protoc --version
 echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
 source /Users/$USER/.bash_profile
 protoc --version
+```
+
+For the remaining systems, do the following:
+
+```bash
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+protoc --version
+```
+
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
 ```
 
 #### Building and installation steps
