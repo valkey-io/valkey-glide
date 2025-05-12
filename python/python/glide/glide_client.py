@@ -301,7 +301,7 @@ class BaseClient(CoreCommands):
         for arg in args_list:
             encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
             encoded_args_list.append(encoded_arg)
-            args_size += sys.getsizeof(encoded_arg)
+            args_size += len(encoded_arg)
         return (encoded_args_list, args_size)
 
     async def _execute_command(
