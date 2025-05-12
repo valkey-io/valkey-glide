@@ -1,9 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import random
+import sys
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
+
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -20,7 +22,6 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
-
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -79,8 +80,8 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for standalone cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379
-                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --cluster-endpoints=127.0.0.1:6379
+                pytest -v --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
             """,
         default=None,
     )
@@ -91,8 +92,20 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for cluster mode cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379
-                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --standalone-endpoints=127.0.0.1:6379
+                pytest -v --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
+            """,
+        default=None,
+    )
+
+    parser.addoption(
+        "--async-backend",
+        action="append",
+        choices=("asyncio", "uvloop", "trio"),
+        help="""Async framework with which the tests will be run. By default, runs on asyncio and trio.
+            Example:
+                pytest -v --async-backend=trio
+                pytest -v --async-backend=uvloop --async-backend=trio
             """,
         default=None,
     )
@@ -163,6 +176,11 @@ def call_before_all_pytests(request):
     cluster_endpoints = request.config.getoption("--cluster-endpoints")
     standalone_endpoints = request.config.getoption("--standalone-endpoints")
 
+    # only run asyncio by default. trio is run in CI nightly
+    request.config.async_backends = request.config.getoption("--async-backend") or (
+        "asyncio",
+    )
+
     create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
 
 
@@ -213,6 +231,61 @@ def pytest_collection_modifyitems(config, items):
                             reason="Test skipped because cluster_mode=False and standalone endpoints weren't provided"
                         )
                     )
+
+
+@pytest.fixture(autouse=True)
+async def skip_if_version_below(request, anyio_backend):
+    """
+    Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
+
+    Example:
+        @pytest.mark.skip_if_version_below('7.0.0')
+        async def test_meow_meow(...):
+            ...
+    """
+    if request.node.get_closest_marker("skip_if_version_below"):
+        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
+        client = await create_client(request, False)
+        try:
+            if await check_if_server_version_lt(client, min_version):
+                pytest.skip(
+                    reason=f"This feature added in version {min_version}",
+                    allow_module_level=True,
+                )
+        finally:
+            await client.close()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            (("asyncio", {"use_uvloop": False}), "asyncio"),
+            id="asyncio",
+        ),
+        pytest.param(
+            (("asyncio", {"use_uvloop": True}), "uvloop"),
+            marks=[
+                pytest.mark.skipif(
+                    sys.platform == "win32",
+                    reason="uvloop is unavailabe on windows",
+                )
+            ],
+            id="uvloop",
+        ),
+        pytest.param(
+            (("trio", {"restrict_keyboard_interrupt_to_checkpoints": True}), "trio"),
+            id="trio",
+        ),
+    ]
+)
+def anyio_backend(request):
+    if request.param[1] not in request.config.async_backends:
+        pytest.skip(
+            reason=f"{request.param[1]} is excluded",
+            allow_module_level=True,
+        )
+
+    return request.param[0]
 
 
 @pytest.fixture(scope="function")
@@ -417,23 +490,3 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 await client.close()
         else:
             raise e
-
-
-@pytest.fixture(autouse=True)
-async def skip_if_version_below(request):
-    """
-    Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
-
-    Example:
-        @pytest.mark.skip_if_version_below('7.0.0')
-        async def test_meow_meow(...):
-            ...
-    """
-    if request.node.get_closest_marker("skip_if_version_below"):
-        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
-        client = await create_client(request, False)
-        if await check_if_server_version_lt(client, min_version):
-            pytest.skip(
-                reason=f"This feature added in version {min_version}",
-                allow_module_level=True,
-            )

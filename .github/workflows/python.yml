@@ -63,6 +63,10 @@ run-name:
     # Set custom name if job is started manually and name is given
     ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
+env:
+    # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+    RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+
 jobs:
     get-matrices:
         runs-on: ubuntu-latest
@@ -76,8 +80,7 @@ jobs:
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: python
-                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
 
     test-python:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -126,10 +129,17 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test with pytest
+            - name: Test with pytest (asyncio only)
+              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (full matrix)
+              if: ${{ env.RUN_FULL_MATRIX == 'true' }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
@@ -190,12 +200,17 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test pubsub with pytest
+            - name: Test pubsub with pytest (asyncio only)
+              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  pip install -r dev_requirements.txt
-                  pytest -v --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k test_pubsub --html=pytest_report.html --self-contained-html
+
+            - name: Test pubsub with pytest (full matrix)
+              if: ${{ env.RUN_FULL_MATRIX == 'true' }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args -k test_pubsub --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -241,7 +256,6 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install sphinx sphinx-rtd-theme
-                  pip install -r dev_requirements.txt
 
             - name: Build docs
               working-directory: ./python/docs
@@ -309,11 +323,17 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test with pytest
+            - name: Test with pytest (asyncio only)
+              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
-                  source .env/bin/activate
-                  pytest -v --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (full matrix)
+              if: ${{ env.RUN_FULL_MATRIX == 'true' }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
@@ -358,10 +378,17 @@ jobs:
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Test with pytest
+            - name: Test with pytest (asyncio only)
+              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (full matrix)
+              if: ${{ env.RUN_FULL_MATRIX == 'true' }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

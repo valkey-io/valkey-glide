@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
-import asyncio
 import functools
 import json
 import math
@@ -13,6 +12,7 @@ from pathlib import Path
 from statistics import mean
 from typing import List
 
+import anyio
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
 from glide import (
@@ -88,14 +88,23 @@ arguments_parser.add_argument(
 arguments_parser.add_argument(
     "--minimal", help="Should run a minimal benchmark", action="store_true"
 )
+arguments_parser.add_argument(
+    "--backend",
+    help="Async backend to use",
+    required=False,
+    default="asyncio",
+    choices=["asyncio", "trio"],
+)
 args = arguments_parser.parse_args()
+
+if args.backend == "trio" and args.clients != "glide":
+    raise ValueError("Trio backend is only supported on the 'glide' client")
 
 PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
 started_tasks_counter = 0
-running_tasks = set()
 bench_json_results: List[str] = []
 
 
@@ -173,16 +182,17 @@ async def create_and_run_concurrent_tasks(
     clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
 ):
     global started_tasks_counter
-    global get_latency
-    global set_latency
     started_tasks_counter = 0
-    for _ in range(num_of_concurrent_tasks):
-        task = asyncio.create_task(
-            execute_commands(clients, total_commands, data_size, action_latencies)
-        )
-        running_tasks.add(task)
-        task.add_done_callback(running_tasks.discard)
-    await asyncio.gather(*(list(running_tasks)))
+
+    async with anyio.create_task_group() as tg:
+        for _ in range(num_of_concurrent_tasks):
+            tg.start_soon(
+                execute_commands,
+                clients,
+                total_commands,
+                data_size,
+                action_latencies,
+            )
 
 
 def latency_results(prefix, latencies):
@@ -343,18 +353,18 @@ if __name__ == "__main__":
         iterations = (
             1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
         )
-        asyncio.run(
-            main(
-                "asyncio",
-                iterations,
-                num_of_concurrent_tasks,
-                data_size,
-                clients_to_run,
-                host,
-                number_of_clients,
-                use_tls,
-                is_cluster,
-            )
+        anyio.run(
+            main,
+            args.backend,
+            iterations,
+            num_of_concurrent_tasks,
+            data_size,
+            clients_to_run,
+            host,
+            number_of_clients,
+            use_tls,
+            is_cluster,
+            backend=args.backend,
         )
 
     process_results()

@@ -1,13 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 
+import anyio
 import pytest
+
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
-
 from tests.conftest import (
     NEW_PASSWORD,
     USERNAME,
@@ -22,7 +22,7 @@ from tests.utils.utils import (
 )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestAuthCommands:
     """Test cases for password authentication and management"""
 
@@ -70,12 +70,12 @@ class TestAuthCommands:
         # Add a short delay to allow the server to apply the new password
         # without this delay, command may or may not time out while the client reconnect
         # ending up with a flaky test
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
         # Verify that the client is able to reconnect with the new password,
         value = await glide_client.get("test_key")
         assert value == b"test_value"
         await kill_connections(management_client)
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
         # Verify that the client is able to immediateAuth with the new password after client is killed
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
@@ -97,7 +97,7 @@ class TestAuthCommands:
         await glide_client.set("test_key", "test_value")
         await config_set_new_password(glide_client, NEW_PASSWORD)
         await kill_connections(management_client)
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )
@@ -220,7 +220,7 @@ class TestAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
 
         # The client should now reconnect with the new password automatically
         # Verify that the client is still able to perform operations
@@ -255,7 +255,7 @@ class TestAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
 
         result = await acl_glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
@@ -287,7 +287,7 @@ class TestAuthCommands:
         )
 
         # ensure client disconnection
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
 
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
