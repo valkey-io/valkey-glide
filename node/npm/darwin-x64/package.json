@@ -1,0 +1,19 @@
+{
+    "name": "@valkey/valkey-glide-darwin-x64",
+    "version": "$RELEASE_VERSION",
+    "description": "Native bindings for @valkey/valkey-glide on darwin-x64",
+    "main": "native.js",
+    "types": "native.d.ts",
+    "files": [
+        "native.js",
+        "native.d.ts",
+        "*.node"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "license": "Apache-2.0"
+}
