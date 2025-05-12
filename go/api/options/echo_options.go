@@ -7,12 +7,6 @@ type EchoOptions struct {
 	Message string
 }
 
-// Optional arguments for `Echo` for cluster client
-type ClusterEchoOptions struct {
-	*EchoOptions
-	*RouteOption
-}
-
 func (opts *EchoOptions) ToArgs() ([]string, error) {
 	if opts == nil {
 		return []string{}, nil
