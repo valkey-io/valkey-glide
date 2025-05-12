@@ -47,7 +47,7 @@ runs:
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
 
-        - name: Install software dependencies for Ubuntu MUSL
+        - name: Install software dependencies for MUSL
           shell: bash
           if: "${{ contains(inputs.target, 'musl') }}"
           run: |
@@ -60,7 +60,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext tar --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
@@ -75,3 +75,7 @@ runs:
           with:
               engine-version: ${{ inputs.engine-version }}
               target: ${{ inputs.target }}
+
+        - name: Install zig
+          if: ${{ contains(inputs.target, 'linux-gnu') }}
+          uses: ./.github/workflows/install-zig
