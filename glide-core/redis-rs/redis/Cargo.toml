@@ -96,6 +96,8 @@ uuid = { version = "1.6", optional = true }
 
 telemetrylib = { path = "../../telemetry" }
 
+logger_core = { path = "../../../logger_core" } 
+
 lazy_static = "1"
 
 [features]
