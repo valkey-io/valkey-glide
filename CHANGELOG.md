@@ -78,6 +78,8 @@
 * Java: Change `BZMPOP` and `ZMPOP` to return `Map<String, Object>` and `Map<GlideString, Object>` instead of `Object[]` ([#3733](https://github.com/valkey-io/valkey-glide/pull/3733))
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 
+* Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
+
 #### Fixes
 
 * Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
