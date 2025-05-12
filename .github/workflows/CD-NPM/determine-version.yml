@@ -1,0 +1,59 @@
+name: Determine Release Version and NPM Tag
+
+on:
+    workflow_call:
+        inputs:
+            event_name:
+                required: true
+                type: string
+                description: "The event name that triggered the workflow (pull_request, push, workflow_dispatch)"
+            version:
+                required: false
+                type: string
+                default: ""
+                description: "The version specified in manual workflow dispatch"
+            ref:
+                required: false
+                type: string
+                default: ""
+                description: "The git ref that triggered the workflow"
+        outputs:
+            release_version:
+                description: "The release version"
+                value: ${{ jobs.determine-version.outputs.release_version }}
+            npm_tag:
+                description: "The npm tag to use"
+                value: ${{ jobs.determine-version.outputs.npm_tag }}
+
+jobs:
+    determine-version:
+        name: Determine Release Version and NPM Tag
+        runs-on: ubuntu-latest
+        outputs:
+            release_version: ${{ steps.set-version.outputs.release_version }}
+            npm_tag: ${{ steps.set-version.outputs.npm_tag }}
+        steps:
+            - name: Set version and tag
+              id: set-version
+              shell: bash
+              run: |
+                  R_VERSION=""
+                  if [[ "${{ inputs.event_name }}" == "pull_request" ]]; then
+                    R_VERSION="0.0.0-pr" # Placeholder for PRs, adjust if needed
+                  elif [[ "${{ inputs.event_name }}" == "workflow_dispatch" ]]; then
+                    R_VERSION="${{ inputs.version }}"
+                  else
+                    R_VERSION="${{ inputs.ref }}"
+                    R_VERSION="${R_VERSION#refs/tags/v}"
+                  fi
+                  echo "release_version=${R_VERSION}" >> $GITHUB_OUTPUT
+
+                  N_TAG="latest"
+                  if [[ "${R_VERSION}" == *"rc"* ]]; then
+                    N_TAG="next"
+                  fi
+                  echo "npm_tag=${N_TAG}" >> $GITHUB_OUTPUT
+
+                  # Also set to GITHUB_ENV for immediate use if any step in this job needed it
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${N_TAG}" >> $GITHUB_ENV

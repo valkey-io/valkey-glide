@@ -1,0 +1,39 @@
+name: Load Platform Matrix
+
+on:
+    workflow_call:
+        outputs:
+            platform_matrix:
+                description: "The platform matrix filtered for npm packages"
+                value: ${{ jobs.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+
+jobs:
+    load-platform-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: load-platform-matrix
+              id: load-platform-matrix
+              shell: bash
+              run: |
+                  # Filter entries with npm in PACKAGE_MANAGERS
+                  FILTERED_MATRIX_JSON=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))\n
+                  )' .github/json_matrices/build-matrix.json)
+
+                  # If aarch64-apple-darwin is present, remove x86_64-apple-darwin to avoid redundant builds,
+                  # as the aarch64 job will build both.
+                  FINAL_MATRIX_JSON=$(echo "${FILTERED_MATRIX_JSON}" | jq '
+                    . as $npm_platforms
+                    | ($npm_platforms | map(select(.TARGET == "aarch64-apple-darwin")) | length > 0) as $has_arm_darwin
+                    | if $has_arm_darwin then
+                        $npm_platforms | map(select(.TARGET != "x86_64-apple-darwin"))
+                      else
+                        $npm_platforms
+                      end
+                  ')
+                  echo "PLATFORM_MATRIX=$(echo "${FINAL_MATRIX_JSON}" | jq -c .)" >> $GITHUB_OUTPUT

@@ -1,0 +1,292 @@
+name: Build Native Binaries
+
+on:
+    workflow_call:
+        inputs:
+            release_version:
+                required: true
+                type: string
+                description: "The release version to build"
+            npm_tag:
+                required: true
+                type: string
+                description: "The npm tag (latest or next)"
+            platform_matrix:
+                required: true
+                type: string
+                description: "JSON string containing platform matrix"
+        secrets:
+            npm_auth_token:
+                required: true
+                description: "NPM authentication token"
+            github_token:
+                required: true
+                description: "GitHub token"
+        outputs:
+            uploaded_binaries:
+                description: "List of uploaded binary artifacts"
+                value: ${{ jobs.build-binaries.outputs.uploaded_binaries }}
+
+jobs:
+    build-binaries:
+        name: Build native binaries
+        runs-on: ${{ matrix.build.CD_RUNNER || matrix.build.BUILD_RUNNER || matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{fromJson(inputs.platform_matrix)}}
+        outputs:
+            uploaded_binaries: ${{ steps.upload-summary.outputs.binary_artifacts }}
+        steps:
+            # For MUSL on X64 we need to install git since we use the checkout action
+            - name: Install git for musl
+              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
+              run: |
+                  apk update
+                  apk add git
+
+            - name: Checkout
+              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  npm-scope: ${{ vars.NPM_SCOPE }}
+                  npm-auth-token: ${{ secrets.npm_auth_token }}
+                  arch: ${{ matrix.build.ARCH }}
+
+            - name: Set versioning environment variables
+              shell: bash
+              run: |
+                  # Set RELEASE_VERSION and NPM_TAG from inputs
+                  echo "RELEASE_VERSION=${{ inputs.release_version }}" >> $GITHUB_ENV
+                  echo "NPM_TAG=${{ inputs.npm_tag }}" >> $GITHUB_ENV
+
+                  # Determine if the target is musl and set PLATFORM_ID (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    MUSL_FLAG="-musl"
+                  else
+                    MUSL_FLAG=""
+                  fi
+                  PLATFORM_ID="${{ matrix.build.NAMED_OS }}${MUSL_FLAG}-${{ matrix.build.ARCH }}"
+                  echo "PLATFORM_ID=${PLATFORM_ID}" >> $GITHUB_ENV
+
+                  # Determine build type (matrix-dependent)
+                  if [[ "${{ matrix.build.TARGET }}" == *"apple-darwin"* ]]; then
+                    BUILD_TYPE="mac"
+                  elif [[ "${{ matrix.build.TARGET }}" == *"-musl"* ]]; then
+                    BUILD_TYPE="musl"
+                  else
+                    BUILD_TYPE="gnu"
+                  fi
+                  echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_ENV
+
+            - name: Setup node
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  architecture: ${{ matrix.build.ARCH }}
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+                  token: ${{ secrets.npm_auth_token }}
+
+            - name: Setup node for building
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              working-directory: ./node
+              run: |
+                  npm config set registry https://registry.npmjs.org/
+                  npm config set '//registry.npmjs.org/:_authToken' "${NODE_AUTH_TOKEN}"
+                  npm config set scope ${{ vars.NPM_SCOPE }}
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+
+            - name: Update package version in config.toml
+              uses: ./.github/workflows/update-glide-version
+              with:
+                  folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
+                  named_os: ${{ matrix.build.NAMED_OS }}
+
+            - name: Install Rust and protoc
+              uses: ./.github/workflows/install-rust-and-protoc/action.yml
+              with:
+                  target: ${{ matrix.build.TARGET }}
+                  github-token: ${{ secrets.github_token }}
+
+            # Install Zig for cross-compilation - direct installation for musl environments
+            - name: Install Zig directly on Alpine/musl
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              shell: bash
+              run: |
+                  echo "Installing Zig directly on Alpine Linux..."
+                  # Try to install from package manager first
+                  if ! apk add --no-cache zig; then
+                    echo "Zig not available in apk, installing manually..."
+                    
+                    # Install dependencies for manual installation
+                    apk add --no-cache curl xz
+                    
+                    # Download latest stable Zig for Linux
+                    ZIG_VERSION="0.12.0"
+                    ARCH=$(uname -m)
+                    if [[ "${ARCH}" == "x86_64" ]]; then
+                      ZIG_ARCH="x86_64"
+                    elif [[ "${ARCH}" == "aarch64" ]]; then
+                      ZIG_ARCH="aarch64"
+                    else
+                      echo "Unsupported architecture: ${ARCH}"
+                      exit 1
+                    fi
+                    
+                    # Download and extract Zig
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+                    mkdir -p /usr/local/zig
+                    tar -xf zig.tar.xz --strip-components=1 -C /usr/local/zig
+                    ln -s /usr/local/zig/zig /usr/local/bin/zig
+                    
+                    # Verify installation
+                    zig version
+                  fi
+
+            # Install Zig for cross-compilation - use action for non-musl environments
+            - uses: mlugg/setup-zig@v2
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              with:
+                  version: latest
+
+            # Build native modules using appropriate script based on platform
+            - name: Build native modules
+              shell: bash
+              working-directory: ./node/rust-client
+              env:
+                  TARGET: ${{ matrix.build.TARGET }}
+              run: |
+                  # Install build dependencies
+                  npm install
+
+                  # Verify Zig installation
+                  if ! command -v zig &> /dev/null; then
+                    echo "Zig not found in PATH, installing manually..."
+                    
+                    # Install dependencies for manual installation if not on musl
+                    # (for musl, they should have been installed in the previous step)
+                    if ! command -v apk &> /dev/null; then
+                      if command -v apt-get &> /dev/null; then
+                        sudo apt-get update
+                        sudo apt-get install -y curl xz-utils
+                      elif command -v yum &> /dev/null; then
+                        sudo yum install -y curl xz
+                      fi
+                    fi
+                    
+                    # Download latest stable Zig for the appropriate platform
+                    ZIG_VERSION="0.12.0"
+                    PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+                    ARCH=$(uname -m)
+                    
+                    if [[ "${PLATFORM}" == "darwin" ]]; then
+                      if [[ "${ARCH}" == "x86_64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-macos-x86_64-${ZIG_VERSION}.tar.xz"
+                      elif [[ "${ARCH}" == "arm64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-macos-aarch64-${ZIG_VERSION}.tar.xz"
+                      fi
+                    elif [[ "${PLATFORM}" == "linux" ]]; then
+                      if [[ "${ARCH}" == "x86_64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+                      elif [[ "${ARCH}" == "aarch64" ]]; then
+                        ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-aarch64-${ZIG_VERSION}.tar.xz"
+                      fi
+                    fi
+                    
+                    if [[ -n "${ZIG_URL}" ]]; then
+                      echo "Downloading Zig from ${ZIG_URL}..."
+                      curl -sSL "${ZIG_URL}" -o zig.tar.xz
+                      mkdir -p /tmp/zig
+                      tar -xf zig.tar.xz --strip-components=1 -C /tmp/zig
+                      
+                      # Add Zig to PATH
+                      echo "Adding Zig to PATH..."
+                      export PATH="/tmp/zig:$PATH"
+                    else
+                      echo "ERROR: Unsupported platform/architecture: ${PLATFORM}/${ARCH}"
+                      exit 1
+                    fi
+                  fi
+
+                  # Verify Zig is now available
+                  echo "Zig version:"
+                  zig version
+
+                  # Select appropriate build script based on platform
+                  if [[ "$TARGET" == *"apple-darwin"* ]]; then
+                    echo "Building for macOS ($TARGET)..."
+                    npm run build:release:mac
+                    
+                    # For macOS, if we're on ARM, also build for x86_64
+                    if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
+                      echo "Building universal binary for macOS..."
+                      CARGO_BUILD_TARGET=x86_64-apple-darwin npm run build:release:mac
+                    fi
+                    
+                  elif [[ "$TARGET" == *"-musl"* ]]; then
+                    echo "Building for musl ($TARGET)..."
+                    # Make sure all dependencies for building on Alpine are installed
+                    if command -v apk &> /dev/null; then
+                      apk add --no-cache libc-dev build-base
+                    fi
+                    npm run build:release:musl
+                  else
+                    echo "Building for gnu ($TARGET)..."
+                    npm run build:release:gnu
+                  fi
+
+                  # Verify the build output
+                  echo "Verifying native binary output:"
+                  ls -la *.node
+
+                  # Verify JavaScript bindings were generated
+                  echo "Verifying JavaScript bindings:"
+                  if [[ -f "native.js" && -f "native.d.ts" ]]; then
+                    echo "✅ JavaScript bindings were successfully generated:"
+                    ls -la native.js native.d.ts
+                  else
+                    echo "❌ ERROR: JavaScript bindings are missing!"
+                    echo "Current directory contents:"
+                    ls -la
+                    exit 1
+                  fi
+
+            # Upload native JS/TS declaration files once from Ubuntu x64 build
+            - name: Upload native JS files
+              if: ${{ matrix.build.TARGET == 'x86_64-unknown-linux-gnu' }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-js-files
+                  path: |
+                      node/rust-client/native.js
+                      node/rust-client/native.d.ts
+                  if-no-files-found: error
+                  compression-level: 6
+                  overwrite: false
+
+            - name: Upload node binaries artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: node-binaries-${{ env.PLATFORM_ID }}
+                  path: |
+                      node/rust-client/glide-rs.*.node
+                  if-no-files-found: error
+
+            - name: Record uploaded artifacts
+              id: upload-summary
+              shell: bash
+              run: |
+                  echo "binary_artifacts=node-binaries-${{ env.PLATFORM_ID }}" >> $GITHUB_OUTPUT
