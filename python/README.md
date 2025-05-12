@@ -48,7 +48,7 @@ macOS:
 | 3.12           |
 | 3.13           |
 
-Both `asyncio` and `trio` are supported.
+Valkey GLIDE transparently supports both the `asyncio` and `trio` concurrency frameworks.
 
 ## Installation and Setup
 
