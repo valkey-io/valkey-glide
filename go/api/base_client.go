@@ -523,7 +523,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 	return handleOkOrStringOrNilResponse(result)
 }
 
-// Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such value
+// Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such key
 // exists.
 //
 // See [valkey.io] for details.
@@ -905,7 +905,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-// Returns the longest common subsequence between strings stored at key1 and key2.
+// Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
@@ -927,7 +927,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 //
 // Return value:
 //
-//	The longest common subsequence between the 2 strings.
+//	A string containing all the longest common subsequences combined between the 2 strings.
 //	An empty string is returned if the keys do not exist or have no common subsequences.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
@@ -2546,6 +2546,10 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 
 // Pops one element from the first non-empty list from the provided keys.
 //
+// Note:
+//
+//	When in cluster mode, `keys` must map to the same hash slot.
+//
 // Since:
 //
 //	Valkey 7.0 and above.
@@ -2560,6 +2564,7 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 // Return value:
 //
 //	A map of key name mapped array of popped element.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error) {
@@ -2603,6 +2608,7 @@ func (client *baseClient) LMPop(keys []string, listDirection options.ListDirecti
 // Return value:
 //
 //	A map of key name mapped array of popped elements.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPopCount(
@@ -2962,9 +2968,8 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 // Parameters:
 //
 //	key - The key to expire.
-//
-// seconds - Time in seconds for the key to expire.
-// option - The option to set expiry, see [options.ExpireCondition].
+//	seconds - Time in seconds for the key to expire.
+//	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3025,9 +3030,8 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 // Parameters:
 //
 //	key - The key to expire.
-//
-// unixTimestampInSeconds - Absolute Unix timestamp.
-// option - The option to set expiry - see [options.ExpireCondition].
+//	unixTimestampInSeconds - Absolute Unix timestamp.
+//	expireCondition - The option to set expiry - see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3149,7 +3153,7 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 //
 //	key - The key to set timeout on it.
 //	unixMilliseconds - The timeout in an absolute Unix timestamp.
-//	option - The option to set expiry, see [options.ExpireCondition].
+//	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3504,7 +3508,8 @@ func (client *baseClient) XAdd(key string, values [][]string) (Result[string], e
 //
 // Return value:
 //
-//	The id of the added entry.
+//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
+//	matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
@@ -3765,19 +3770,25 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 	return handleFloatOrNilResponse(result)
 }
 
-// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+//
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key - The key of the set.
-//	member - The member to add to.
-//	increment - The increment to add to the member's score.
+//	key - The key of the sorted set.
+//	member - A member in the sorted set to increment.
+//	increment - The score to increment the member.
 //
 // Return value:
 //
-//	Result[float64] - The new score of the member.
+//	The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -3793,15 +3804,21 @@ func (client *baseClient) ZAddIncr(
 	return client.zAddIncrBase(key, options)
 }
 
-// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+//
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key - The key of the set.
-//	member - The member to add to.
-//	increment - The increment to add to the member's score.
+//	key - The key of the sorted set.
+//	member - A member in the sorted set to increment.
+//	increment - The score to increment the member.
 //	opts - The options for the command. See [ZAddOptions] for details.
 //
 // Return value:
@@ -4548,7 +4565,7 @@ func (client *baseClient) XAutoClaim(
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	options - Options detailing how to read the stream.
+//	options - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Return value:
 //
@@ -4636,7 +4653,7 @@ func (client *baseClient) XAutoClaimJustId(
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	opts - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Return value:
 //

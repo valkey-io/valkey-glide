@@ -1477,7 +1477,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LRange,
                 new String[] {key, Long.toString(start), Long.toString(end)},
-                response -> castArray(handleArrayOrNullResponse(response), String.class));
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override

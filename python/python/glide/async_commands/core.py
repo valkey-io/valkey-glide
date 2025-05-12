@@ -593,7 +593,7 @@ class CoreCommands(Protocol):
 
     async def get(self, key: TEncodable) -> Optional[bytes]:
         """
-        Get the value associated with the given key, or null if no such value exists.
+        Get the value associated with the given key, or null if no such key exists.
 
         See [valkey.io](https://valkey.io/commands/get/) for details.
 
@@ -3273,7 +3273,7 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the stream.
             group_name (TEncodable): The newly created consumer group name.
             group_id (TEncodable): The stream entry ID that specifies the last delivered entry in the stream from the new
-                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+                group's perspective. The special ID "$" can be used to specify the last entry in the stream.
             options (Optional[StreamGroupOptions]): Options for creating the stream group.
 
         Returns:
@@ -3733,7 +3733,7 @@ class CoreCommands(Protocol):
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
             start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
-            count (Optional[int]): Limits the number of claimed entries to the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value. Default value is 100.
 
         Returns:
             List[Union[bytes, Mapping[bytes, List[List[bytes]]], List[bytes]]]: A list containing the following elements:
@@ -3820,7 +3820,7 @@ class CoreCommands(Protocol):
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
             start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
-            count (Optional[int]): Limits the number of claimed entries to the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value. Default value is 100.
 
         Returns:
             List[Union[bytes, List[bytes]]]: A list containing the following elements:

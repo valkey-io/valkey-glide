@@ -417,7 +417,7 @@ public interface ScriptingAndFunctionsCommands {
      * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code
@@ -434,7 +434,7 @@ public interface ScriptingAndFunctionsCommands {
      * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code

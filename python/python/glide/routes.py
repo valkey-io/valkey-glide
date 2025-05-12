@@ -10,9 +10,14 @@ from glide.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 
 class SlotType(Enum):
     PRIMARY = 1
+    """
+    Address a primary node.
+    """
 
     REPLICA = 2
     """
+    Address a replica node.
+
     `REPLICA` overrides the `read_from_replica` configuration. If it's used the request
     will be routed to a replica, even if the strategy is `ALWAYS_FROM_MASTER`.
     """
@@ -38,6 +43,10 @@ class AllNodes(Route):
 
 
 class AllPrimaries(Route):
+    """
+    Route request to all primary nodes.
+    """
+
     pass
 
 
@@ -53,6 +62,13 @@ class RandomNode(Route):
 
 
 class SlotKeyRoute(Route):
+    """Routes a request to a node by its slot key
+
+    Attributes:
+        slot_type (SlotType): Defines type of the node being addressed.
+        slot_key (str): The request will be sent to nodes managing this key.
+    """
+
     def __init__(self, slot_type: SlotType, slot_key: str) -> None:
         super().__init__()
         self.slot_type = slot_type
@@ -60,6 +76,15 @@ class SlotKeyRoute(Route):
 
 
 class SlotIdRoute(Route):
+    """Routes a request to a node by its slot ID
+
+    Attributes:
+        slot_type (SlotType): Defines type of the node being addressed.
+        slot_id (int): Slot number. There are 16384 slots in a Valkey cluster, and each shard
+            manages a slot range. Unless the slot is known, it's better to route using
+            `SlotType.PRIMARY`
+    """
+
     def __init__(self, slot_type: SlotType, slot_id: int) -> None:
         super().__init__()
         self.slot_type = slot_type

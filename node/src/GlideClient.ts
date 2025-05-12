@@ -416,11 +416,20 @@ export class GlideClient extends BaseClient {
     /**
      * Gets information and statistics about the server.
      *
+     * Starting from server version 7, command supports multiple section arguments.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
      *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * @returns A string containing the information for the sections requested.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the info method with retrieving total_net_input_bytes from the result
+     * const result = await client.info(new Section[] { Section.STATS });
+     * console.log(someParsingFunction(result, "total_net_input_bytes")); // Output: 1
+     * ```
      */
     public async info(sections?: InfoOptions[]): Promise<string> {
         return this.createWritePromise(createInfo(sections), {
