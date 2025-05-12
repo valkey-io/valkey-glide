@@ -1,0 +1,22 @@
+{
+    "name": "@valkey/valkey-glide-linux-x64-musl",
+    "version": "$RELEASE_VERSION",
+    "description": "Native bindings for @valkey/valkey-glide on linux-x64-musl",
+    "main": "native.js",
+    "types": "native.d.ts",
+    "files": [
+        "native.js",
+        "native.d.ts",
+        "*.node"
+    ],
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "license": "Apache-2.0"
+}
