@@ -22,13 +22,13 @@ dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
-    shadow group: 'io.netty', name: 'netty-handler', version: '4.1.115.Final'
+    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
-    shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
-    shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-aarch_64'
-    shadow group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
-    shadow group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-x86_64'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
@@ -52,6 +52,9 @@ ext {
         }
         return output.split(" ")[1]
     }
+
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
 }
 
 tasks.register('protobuf', Exec) {
@@ -96,7 +99,12 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    commandLine 'cargo', 'build', '--release'
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
 }
@@ -131,7 +139,11 @@ compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
-    from "${projectDir}/../target/release"
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else {
+        from "${projectDir}/../target/release"
+    }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
 }
@@ -244,9 +256,64 @@ jar {
     archiveClassifier = osdetector.classifier
 }
 
+import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.TransformerContext
+import org.apache.tools.zip.ZipOutputStream
+import org.apache.tools.zip.ZipEntry
+
+// https://github.com/grpc/grpc-java/blob/b3db8c2489af25b0d10b6f45e60fd50771aa93d1/netty/shaded/build.gradle#L149
+/**
+ * A Transformer which updates the Netty JAR META-INF/ resources to accurately
+ * reference shaded class names.
+ */
+@CacheableTransformer
+class NettyResourceTransformer implements Transformer {
+
+    // A map of resource file paths to be modified
+    private Map<String, String> resources = [:]
+
+    @Override
+    boolean canTransformResource(FileTreeElement fileTreeElement) {
+        fileTreeElement.name.startsWith("META-INF/native-image/io.netty")
+    }
+
+    @Override
+    void transform(TransformerContext context) {
+        String updatedPath = context.path.replace("io.netty", "glide.io.netty")
+        String updatedContent = context.is.getText().replace("io.netty", "glide.io.netty")
+        resources.put(updatedPath, updatedContent)
+    }
+
+    @Override
+    boolean hasTransformedResource() {
+        resources.size() > 0
+    }
+
+    @Override
+    void modifyOutputStream(ZipOutputStream outputStream, boolean preserveFileTimestamps) {
+        for (resourceEntry in resources) {
+            ZipEntry entry = new ZipEntry(resourceEntry.key)
+            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
+
+            outputStream.putNextEntry(entry)
+            outputStream.write(resourceEntry.value.getBytes())
+            outputStream.closeEntry()
+        }
+    }
+}
+
 shadowJar {
     dependsOn('copyNativeLib')
     archiveClassifier = osdetector.classifier
+    excludes.remove("module-info.class")
+    relocate('io.netty', 'glide.io.netty')
+    relocate('com.google.protobuf', 'glide.com.google.protobuf')
+    mergeServiceFiles()
+
+    relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
+    relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
+    transform(NettyResourceTransformer.class)
 }
 
 sourcesJar {
