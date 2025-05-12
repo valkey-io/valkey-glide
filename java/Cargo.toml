@@ -20,8 +20,10 @@ log = "0.4.20"
 bytes = { version = "1.6.0" }
 
 [profile.release]
-lto = true
-strip = "symbols"
+opt-level = 3         # Optimize for performance
+lto = "fat"           # Enable the most aggressive Link Time Optimization
+codegen-units = 1     # Reduce the number of code generation units, increasing optimization time but improving performance
+strip = "symbols"     # Remove symbol
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ffi_test)'] }

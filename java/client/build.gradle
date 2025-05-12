@@ -51,6 +51,9 @@ ext {
         }
         return output.split(" ")[1]
     }
+
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
 }
 
 tasks.register('protobuf', Exec) {
@@ -95,7 +98,12 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    commandLine 'cargo', 'build', '--release'
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
 }
@@ -130,7 +138,11 @@ compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
-    from "${projectDir}/../target/release"
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else {
+        from "${projectDir}/../target/release"
+    }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
 }

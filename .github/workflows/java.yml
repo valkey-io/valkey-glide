@@ -336,6 +336,9 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
+            - name: Install zig
+              uses: ./.github/workflows/install-zig
+
             - name: Test java wrapper
               working-directory: java
               run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true

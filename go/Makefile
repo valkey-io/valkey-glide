@@ -3,27 +3,37 @@
 SHELL:=/bin/bash
 GO_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 ROOT_FOLDER := $(abspath $(GO_DIR)/..)
-GLIDE_CORE_FOLDER := $(ROOT_FOLDER)/glide-core
-GLIDE_FFI_FOLDER := $(ROOT_FOLDER)/ffi
+GLIDE_CORE_PATH := $(ROOT_FOLDER)/glide-core
+GLIDE_FFI_PATH := $(ROOT_FOLDER)/ffi
+TARGET_DIR := $(GLIDE_FFI_PATH)/target
 
 # Determine the target folder based on OS and architecture
 UNAME := $(shell uname)
 ARCH := $(shell uname -m)
 
 ifeq ($(UNAME), Darwin)
-    TARGET_FOLDER := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
+    TARGET_TRIPLET := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
+	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
+	BUILD_CMD := rustc --crate-type staticlib
+	CARGO_FIX_CMD := : # no-op
+	CARGO_POSTFIX_CMD := : # no-op
     STRIP_CMD := strip -x
 else ifeq ($(UNAME), Linux)
-    TARGET_FOLDER := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    # TODO: musl
+    TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+	# zigbuild https://github.com/rust-cross/cargo-zigbuild
+	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET).2.17
+	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
+	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml
+	CARGO_POSTFIX_CMD := git restore Cargo.toml
     STRIP_CMD := strip --strip-unneeded
+	TARGET_DIR := $(TARGET_DIR)/$(TARGET_TRIPLET)
 else
     $(error Unsupported platform: $(UNAME) $(ARCH))
 endif
 
-TARGET_FOLDER := rustbin/$(TARGET_FOLDER)
-
-# Ensure the target directory exists
-$(shell mkdir -p $(TARGET_FOLDER))
+# Path where compiled binary is copied to and therefore used by go
+DEST_PATH := rustbin/$(TARGET_TRIPLET)
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
@@ -50,42 +60,45 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 	rm -rf protobuf
-	rm -rf $(GLIDE_FFI_FOLDER)/target
+	rm -rf $(GLIDE_FFI_PATH)/target
 	rm -rf reports
 
 
 # Release build
-build-glide-client: BUILD_FLAGS=--release --crate-type staticlib
-build-glide-client: TARGET_SUBDIR=release
+build-glide-client: BUILD_FLAGS=--release
+build-glide-client: TARGET_DIR := $(TARGET_DIR)/release
 build-glide-client: build-glide-ffi
 
 # Debug build (no --release flag)
-build-glide-client-debug: BUILD_FLAGS=--crate-type staticlib
-build-glide-client-debug: TARGET_SUBDIR=debug
+build-glide-client-debug: BUILD_FLAGS=
+build-glide-client-debug: TARGET_DIR := $(TARGET_DIR)/debug
 build-glide-client-debug: build-glide-ffi
 
 libglide_ffi:
-	cd $(GLIDE_FFI_FOLDER) && cargo rustc $(BUILD_FLAGS)
+	mkdir -p $(DEST_PATH)
+	cd $(GLIDE_FFI_PATH) && \
+	$(CARGO_FIX_CMD) && \
+	cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
+	$(CARGO_POSTFIX_CMD) && \
+	$(STRIP_CMD) $(TARGET_DIR)/libglide_ffi.a && \
+	cp $(TARGET_DIR)/libglide_ffi.a $(GO_DIR)/$(DEST_PATH)
 
-build-glide-ffi: gen-c-bindings
+build-glide-ffi: libglide_ffi gen-c-bindings
 
-gen-c-bindings: libglide_ffi
-	cd $(GLIDE_FFI_FOLDER) && \
+gen-c-bindings:
+	cd $(GLIDE_FFI_PATH) && \
 	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
-	echo $(TARGET_FOLDER)
-	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a
-	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
 
 generate-protobuf:
 	rm -rf protobuf
 	mkdir -p protobuf
-	protoc --proto_path=$(GLIDE_CORE_FOLDER)/src/protobuf \
+	protoc --proto_path=$(GLIDE_CORE_PATH)/src/protobuf \
 		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_out=./protobuf \
 		--go_opt=paths=source_relative \
-		$(GLIDE_CORE_FOLDER)/src/protobuf/*.proto
+		$(GLIDE_CORE_PATH)/src/protobuf/*.proto
 
 lint:
 	go vet ./...
