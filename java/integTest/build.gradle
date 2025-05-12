@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id "com.google.osdetector" version "1.7.3"
+    id 'jacoco'
 }
 
 repositories {
@@ -161,7 +162,56 @@ tasks.withType(Test) {
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
     }
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
+
+// JaCoCo section (code coverage by integration tests)
+jacoco {
+    toolVersion = "0.8.9"
+}
+jacocoTestReport {
+    reports {
+        xml.configure { enabled false }
+        csv.configure { enabled false }
+        html.configure { enabled true } 
+    }
+
+    sourceDirectories.setFrom(files("${project.rootDir}/client/src/main/java"))
+    classDirectories.setFrom(files("${project.rootDir}/client/build/classes/java/main"))
+    executionData.from = files("$buildDir/jacoco/test.exec")
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it)
+        }))
+    }
+}
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'CLASS'
+            excludes = [
+            ]
+            limit {
+                counter = 'LINE'
+                minimum = 1.0
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 1.0
+            }
+        }
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it)
+        }))
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
+// End of JaCoCo section
 
 test {
     filter {
