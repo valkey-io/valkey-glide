@@ -128,6 +128,8 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
 //
+// Starting from server version 7, command supports multiple section arguments.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
