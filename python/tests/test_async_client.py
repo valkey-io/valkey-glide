@@ -9332,7 +9332,7 @@ class TestCommands:
         assert "Invalid FREQ value" in str(e)
 
         # Restore with frequency and idletime both set.
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(RequestError) as e:
             await glide_client.restore(
                 key2, 0, bytesData, replace=True, idletime=-10, frequency=10
             )
