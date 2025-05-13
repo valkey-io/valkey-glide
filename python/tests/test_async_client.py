@@ -9327,7 +9327,7 @@ class TestCommands:
         )
 
         # Restore with REPLACE and negative frequency
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(RequestError) as e:
             await glide_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
