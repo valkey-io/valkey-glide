@@ -378,7 +378,9 @@ func (config *GlideClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *
 // encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *GlideClusterClientConfiguration {
+func (config *GlideClusterClientConfiguration) WithRequestTimeout(
+	requestTimeout time.Duration,
+) *GlideClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }

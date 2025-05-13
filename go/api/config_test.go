@@ -48,7 +48,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 	ports := []int{1234, 5678}
 	username := "username"
 	password := "password"
-	timeout := 3
+	timeout := 3 * time.Second
 	clientName := "client name"
 	retries, factor, base := 5, 10, 50
 	databaseId := 1
@@ -57,7 +57,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		WithUseTLS(true).
 		WithReadFrom(PreferReplica).
 		WithCredentials(NewServerCredentials(username, password)).
-		WithRequestTimeout(timeout * time.Second).
+		WithRequestTimeout(timeout).
 		WithClientName(clientName).
 		WithReconnectStrategy(NewBackoffStrategy(retries, factor, base)).
 		WithDatabaseId(databaseId)
