@@ -59,3 +59,13 @@ generated/
 # docs
 docs/markdown/node/**
 docs/site/**
+copilot.yml
+memory-bank/
+#cpp files
+cpp/benchmarks/build/
+cpp/build/
+cpp/examples/build/
+cpp/include/glide/connection_request.pb.h
+
+cpp/include/glide/glide_base.h
+cpp/src/connection_request.pb.cc

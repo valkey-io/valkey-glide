@@ -21,6 +21,7 @@ type GlideClientCommands interface {
 	BitmapCommands
 	ConnectionManagementCommands
 	ScriptingAndFunctionStandaloneCommands
+	PubSubStandaloneCommands
 }
 
 // Client used for connection to standalone servers.
@@ -113,7 +114,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Gets the values of configuration parameters.
@@ -156,7 +157,7 @@ func (client *GlideClient) Select(index int64) (string, error) {
 		return DefaultStringResponse, err
 	}
 
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Gets information and statistics about the server.
@@ -173,6 +174,8 @@ func (client *GlideClient) Info() (string, error) {
 }
 
 // Gets information and statistics about the server.
+//
+// Starting from server version 7, command supports multiple section arguments.
 //
 // See [valkey.io] for details.
 //
@@ -281,7 +284,7 @@ func (client *GlideClient) FlushAll() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of all the existing databases.
@@ -302,7 +305,7 @@ func (client *GlideClient) FlushAllWithOptions(mode options.FlushMode) (string, 
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -319,7 +322,7 @@ func (client *GlideClient) FlushDB() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Deletes all the keys of the currently selected database.
@@ -340,7 +343,7 @@ func (client *GlideClient) FlushDBWithOptions(mode options.FlushMode) (string, e
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
@@ -423,7 +426,7 @@ func (client *GlideClient) ConfigResetStat() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Gets the name of the current connection.
@@ -457,7 +460,7 @@ func (client *GlideClient) ClientSetName(connectionName string) (string, error) 
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
 }
 
 // Move key from the currently selected database to the database specified by dbIndex.
@@ -542,7 +545,7 @@ func (client *GlideClient) ConfigRewrite() (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Returns a random existing key name from the currently selected database.
@@ -609,5 +612,32 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 	if err != nil {
 		return DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClient) Publish(channel string, message string) (int64, error) {
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }

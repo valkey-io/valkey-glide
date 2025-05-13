@@ -703,3 +703,154 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	// Output:
 	// OK
 }
+
+func ExampleGlideClient_FunctionKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKill() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill when no function is running
+	_, err := client.FunctionKill()
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_FunctionKillWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill with route when no function is running
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionKillWithRoute(opts)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClient_FunctionList() {
+	client := getExampleGlideClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	query := FunctionListQuery{
+		LibraryName: "mylib",
+		WithCode:    true,
+	}
+
+	libs, err := client.FunctionList(query)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Printf("There are %d libraries loaded.\n", len(libs))
+	for i, lib := range libs {
+		fmt.Printf("%d) Library name '%s', on engine %s, with %d functions\n", i+1, lib.Name, lib.Engine, len(lib.Functions))
+		for j, fn := range lib.Functions {
+			fmt.Printf("   %d) function '%s'\n", j+1, fn.Name)
+		}
+	}
+	// Output:
+	// There are 1 libraries loaded.
+	// 1) Library name 'mylib', on engine LUA, with 1 functions
+	//    1) function 'myfunc'
+}
+
+func ExampleGlideClusterClient_FunctionList() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	_, err := client.FunctionLoad(libraryCode, true)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	query := FunctionListQuery{
+		LibraryName: "mylib",
+		WithCode:    true,
+	}
+
+	libs, err := client.FunctionList(query)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Printf("There are %d libraries loaded.\n", len(libs))
+	for i, lib := range libs {
+		fmt.Printf("%d) Library name '%s', on engine %s, with %d functions\n", i+1, lib.Name, lib.Engine, len(lib.Functions))
+		for j, fn := range lib.Functions {
+			fmt.Printf("   %d) function '%s'\n", j+1, fn.Name)
+		}
+	}
+	// Output:
+	// There are 1 libraries loaded.
+	// 1) Library name 'mylib', on engine LUA, with 1 functions
+	//    1) function 'myfunc'
+}
+
+func ExampleGlideClusterClient_FunctionListWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Load a function first
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{
+		Route: route,
+	}
+	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// List functions with route
+	query := FunctionListQuery{
+		WithCode: true,
+	}
+	result, err := client.FunctionListWithRoute(query, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print results for each node
+	for _, libs := range result.MultiValue() {
+		fmt.Println("Example Node:")
+		for _, lib := range libs {
+			fmt.Printf("  Library: %s\n", lib.Name)
+			fmt.Printf("  Engine: %s\n", lib.Engine)
+			fmt.Printf("  Functions: %d\n", len(lib.Functions))
+		}
+		break
+	}
+
+	// Output:
+	// Example Node:
+	//   Library: mylib
+	//   Engine: LUA
+	//   Functions: 1
+}

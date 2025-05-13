@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -39,7 +40,6 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -235,6 +235,54 @@ public class CommandTests {
     public void custom_command_ping_binary(GlideClusterClient clusterClient) {
         ClusterValue<Object> data = clusterClient.customCommand(new GlideString[] {gs("ping")}).get();
         assertEquals(gs("PONG"), data.getSingleValue());
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void custom_command_dbsize(GlideClusterClient clusterClient) {
+        ClusterValue<Object> data = clusterClient.customCommand(new String[] {"dbsize"}).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+        data = clusterClient.customCommand(new GlideString[] {gs("dbsize")}).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+
+        data = clusterClient.customCommand(new String[] {"dbsize"}, ALL_NODES).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+        data = clusterClient.customCommand(new GlideString[] {gs("dbsize")}, ALL_NODES).get();
+        assertTrue((Long) data.getSingleValue() >= 0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void custom_command_config_get(GlideClusterClient clusterClient) {
+        ClusterValue<Object> data =
+                clusterClient.customCommand(new String[] {"config", "get", "*file"}, RANDOM).get();
+        assertFalse(((Map<String, Object>) data.getSingleValue()).isEmpty());
+
+        data = clusterClient.customCommand(new String[] {"config", "get", "*file"}, ALL_NODES).get();
+        assertFalse(((Map<String, Object>) data.getMultiValue()).isEmpty());
+
+        for (Object value : ((Map<String, Object>) data.getMultiValue()).values()) {
+            assertFalse(((Map<String, Object>) value).isEmpty());
+        }
+
+        data =
+                clusterClient
+                        .customCommand(new GlideString[] {gs("config"), gs("get"), gs("*file")}, RANDOM)
+                        .get();
+        assertFalse(((Map<GlideString, Object>) data.getSingleValue()).isEmpty());
+
+        data =
+                clusterClient
+                        .customCommand(new GlideString[] {gs("config"), gs("get"), gs("*file")}, ALL_NODES)
+                        .get();
+        assertFalse(((Map<String, Object>) data.getMultiValue()).isEmpty());
+
+        for (Object value : ((Map<String, Object>) data.getMultiValue()).values()) {
+            assertFalse(((Map<GlideString, Object>) value).isEmpty());
+        }
     }
 
     @ParameterizedTest
@@ -1670,11 +1718,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction).get());
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
@@ -1719,10 +1767,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
-                new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());
+                new Object[][] {{binaryString}, {binaryString}},
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }

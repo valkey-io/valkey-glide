@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
@@ -275,13 +274,6 @@ public class PubSubTests {
     //  meanwhile, all pubsubMessages are delivered.
     //  debug this and add checks for `publish` return value
 
-    // TODO: remove once fixed
-    private void skipTestsOnMac() {
-        assumeFalse(
-                System.getProperty("os.name").toLowerCase().contains("mac"),
-                "PubSub doesn't work on mac OS");
-    }
-
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
@@ -312,7 +304,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         GlideString channel = gs(UUID.randomUUID().toString());
         GlideString message = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
@@ -333,7 +324,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         int numChannels = 16;
         int messagesPerChannel = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
@@ -369,7 +359,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
         GlideString pubsubMessage = gs(UUID.randomUUID().toString());
@@ -391,7 +380,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub_many_channels(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         int numChannels = 16;
         int pubsubMessagesPerChannel = 16;
@@ -429,7 +417,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void pattern(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         Map<GlideString, GlideString> message2channels =
@@ -468,7 +455,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void pattern_many_channels(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -506,7 +492,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_one_client(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -557,7 +542,6 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_multiple_clients(
             boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -626,7 +610,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_one_client(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -682,7 +665,6 @@ public class PubSubTests {
     @Test
     public void coexistense_of_sync_and_async_read() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         String prefix = "channel.";
         String pattern = prefix + "*";
@@ -764,7 +746,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -880,7 +861,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void three_publishing_clients_same_name_with_sharded(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
         var exactMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
@@ -959,7 +939,6 @@ public class PubSubTests {
     @SneakyThrows
     @Test
     public void error_cases() {
-        skipTestsOnMac();
         // client isn't configured with subscriptions
         var client = createClient(true);
         assertThrows(ConfigurationError.class, client::tryGetPubSubMessage);
@@ -981,7 +960,7 @@ public class PubSubTests {
                         .publish("two", "mnk", true)
                         .publish("three", "xyz", true);
         var exception =
-                assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
+                assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction, false).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("crossslot"));
     }
@@ -991,7 +970,6 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void transaction_with_all_types_of_messages(boolean standalone, MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        skipTestsOnMac();
         assumeTrue(
                 standalone, // TODO activate tests after fix
                 "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
@@ -1028,14 +1006,14 @@ public class PubSubTests {
                     new Batch(true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((GlideClient) sender).exec(transaction).get();
+            ((GlideClient) sender).exec(transaction, false).get();
         } else {
             var transaction =
                     new ClusterBatch(true)
                             .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((GlideClusterClient) sender).exec(transaction).get();
+            ((GlideClusterClient) sender).exec(transaction, false).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -1473,8 +1451,8 @@ public class PubSubTests {
         // no channels exists yet
         var result =
                 standalone
-                        ? ((GlideClient) client).exec((Batch) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
+                        ? ((GlideClient) client).exec((Batch) transaction, false).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
         assertDeepEquals(
                 new Object[] {
                     new String[0], // pubsubChannels()
@@ -1502,8 +1480,8 @@ public class PubSubTests {
 
         result =
                 standalone
-                        ? ((GlideClient) client).exec((Batch) transaction).get()
-                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, options).get();
+                        ? ((GlideClient) client).exec((Batch) transaction, false).get()
+                        : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
 
         // convert arrays to sets, because we can't compare arrays - they received reordered
         result[0] = Set.of((Object[]) result[0]);

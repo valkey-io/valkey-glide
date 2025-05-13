@@ -3,7 +3,7 @@ name: Deploy mkdocs website to GitHub Pages
 on:
     push:
         branches:
-            - "main"
+            - main
         paths:
             - python/**
             - node/**
@@ -14,6 +14,7 @@ on:
 jobs:
     build-and-deploy-docs:
         runs-on: ubuntu-latest
+        if: github.repository_owner == 'valkey-io'
 
         steps:
             - name: Checkout your branch
@@ -29,15 +30,5 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Install mkdocs + plugins
-              run: |
-                  python3 -m pip install --upgrade pip
-                  pip install --break-system-packages \
-                    mkdocs \
-                    mkdocstrings-python==1.13.0 \
-                    pymdown-extensions \
-                    mkdocs-breadcrumbs-plugin \
-                    mkdocs-material \
-
-            - name: build docs
+            - name: Install dependencies and build docs
               run: ./docs/build-docs.sh gh-deploy --force
