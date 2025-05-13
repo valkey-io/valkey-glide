@@ -157,7 +157,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		clientConfig := api.NewGlideClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
 			WithUseTLS(suite.tls).
-			WithRequestTimeout(5000)
+			WithRequestTimeout(5 * time.Second)
 
 		client, err := api.NewGlideClient(clientConfig)
 		if err == nil && client != nil {
@@ -176,7 +176,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 	clientConfig := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 
 	client, err := api.NewGlideClusterClient(clientConfig)
 	if err == nil && client != nil {
@@ -267,13 +267,13 @@ func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 
 func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClient {
 	clients := []api.BaseClient{}
-	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20000, nil)
+	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20*time.Second, nil)
 	if err != nil {
 		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
 	}
 	clients = append(clients, clusterTimeoutClient)
 
-	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(250, 20000)
+	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(250, 20*time.Second)
 	if err != nil {
 		suite.T().Fatalf("Failed to create standalone timeout client: %s", err.Error())
 	}
@@ -286,7 +286,7 @@ func (suite *GlideTestSuite) defaultClientConfig() *api.GlideClientConfiguration
 	return api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 }
 
 func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
@@ -308,7 +308,7 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *api.GlideClusterClien
 	return api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 }
 
 func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
@@ -327,7 +327,8 @@ func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfigu
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClient(
-	connectTimeout, requestTimeout int,
+	connectTimeout int,
+	requestTimeout time.Duration,
 	backoffStrategy *api.BackoffStrategy,
 ) (api.GlideClientCommands, error) {
 	clientConfig := suite.defaultClientConfig().
@@ -339,7 +340,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
-	connectTimeout, requestTimeout int,
+	connectTimeout int,
+	requestTimeout time.Duration,
 ) (api.GlideClusterClientCommands, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(

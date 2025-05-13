@@ -1111,7 +1111,7 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.client(testConfig)
 	defer testClient.Close()
 

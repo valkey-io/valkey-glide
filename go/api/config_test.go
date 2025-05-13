@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
@@ -56,7 +57,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		WithUseTLS(true).
 		WithReadFrom(PreferReplica).
 		WithCredentials(NewServerCredentials(username, password)).
-		WithRequestTimeout(timeout).
+		WithRequestTimeout(timeout * time.Second).
 		WithClientName(clientName).
 		WithReconnectStrategy(NewBackoffStrategy(retries, factor, base)).
 		WithDatabaseId(databaseId)
