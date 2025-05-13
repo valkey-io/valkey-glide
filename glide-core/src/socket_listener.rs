@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use super::rotating_buffer::RotatingBuffer;
+use crate::client::get_or_init_runtime;
 use crate::client::Client;
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
@@ -29,11 +30,10 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
+use std::str;
 use std::sync::RwLock;
-use std::{str, thread};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
@@ -869,7 +869,6 @@ pub fn start_socket_listener_internal<InitCallback>(
             return;
         }
     }
-
     // Retry with write lock, will be dropped upon the function completion
     let mut sockets_write_guard = INITIALIZED_SOCKETS
         .write()
@@ -881,87 +880,90 @@ pub fn start_socket_listener_internal<InitCallback>(
 
     let (tx, rx) = std::sync::mpsc::channel();
     let socket_path_cloned = socket_path.clone();
-    let init_callback_cloned = init_callback.clone();
-    let tx_cloned = tx.clone();
-    thread::Builder::new()
-        .name("socket_listener_thread".to_string())
-        .spawn(move || {
-            let init_result = {
-                let runtime = match Builder::new_current_thread().enable_all().build() {
-                    Err(err) => {
-                        log_error(
-                            "listen_on_socket",
-                            format!("Error failed to create a new tokio thread: {err}"),
-                        );
-                        return Err(err);
-                    }
-                    Ok(runtime) => runtime,
-                };
-
-                runtime.block_on(async move {
-                    let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
-                        Err(err) => {
-                            log_error(
-                                "listen_on_socket",
-                                format!("Error failed to bind listening socket: {err}"),
-                            );
-                            return Err(err);
-                        }
-                        Ok(listener_socket) => listener_socket,
-                    };
-                    // Restrict permissions: rw------- (owner only)
-                    fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))?;
-
-                    // Signal initialization is successful.
-                    // IMPORTANT:
-                    // tx.send() must be called before init_callback_cloned() to ensure runtimes, such as Python, can properly complete the main function
-                    let _ = tx.send(true);
-                    init_callback_cloned(Ok(socket_path_cloned.clone()));
-
-                    let local_set_pool = LocalPoolHandle::new(num_cpus::get());
-                    loop {
-                        match listener_socket.accept().await {
-                            Ok((stream, _addr)) => {
-                                local_set_pool
-                                    .spawn_pinned(move || listen_on_client_stream(stream));
-                            }
-                            Err(err) => {
-                                log_error(
-                                    "listen_on_socket",
-                                    format!("Error accepting connection: {err}"),
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // ensure socket file removal
-                    drop(listener_socket);
-                    let _ = std::fs::remove_file(socket_path_cloned.clone());
-
-                    // no more listening on socket - update the sockets db
-                    let mut sockets_write_guard = INITIALIZED_SOCKETS
-                        .write()
-                        .expect("Failed to acquire sockets db write guard");
-                    sockets_write_guard.remove(&socket_path_cloned);
-                    Ok(())
-                })
-            };
-
-            if let Err(err) = init_result {
-                init_callback(Err(err.to_string()));
-                let _ = tx_cloned.send(false);
-            }
-            Ok(())
-        })
-        .expect("Thread spawn failed. Cannot report error because callback was moved.");
-
-    // wait for thread initialization signaling, callback invocation is done in the thread
-    let _ = rx.recv().map(|res| {
-        if res {
-            sockets_write_guard.insert(socket_path);
+    let glide_rt = match get_or_init_runtime() {
+        Ok(handle) => handle,
+        Err(err) => {
+            init_callback(Err(err));
+            return;
         }
+    };
+
+    glide_rt.runtime.spawn(async move {
+        let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
+            Err(err) => {
+                log_error(
+                    "listen_on_socket",
+                    format!("Failed to bind listening socket: {err}"),
+                );
+
+                if let Err(err) = tx.send(Err(err)) {
+                    log_error(
+                        "listen_on_socket",
+                        format!(
+                            "Failed to notify about socket binding failure.
+                      Channel send error: {err:?}"
+                        ),
+                    );
+                }
+                return;
+            }
+            Ok(listener_socket) => listener_socket,
+        };
+
+        // Restrict permissions: rw------- (owner only)
+        if let Err(err) =
+            fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))
+        {
+            log_error(
+                "listen_on_socket",
+                format!("Failed to set socket path permissions: {err:?}"),
+            );
+            let _ = tx.send(Err(err));
+            return;
+        }
+
+        // Signal initialization is successful.
+        let _ = tx.send(Ok(socket_path_cloned.clone()));
+
+        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
+        loop {
+            match listener_socket.accept().await {
+                Ok((stream, _addr)) => {
+                    local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
+                }
+                Err(err) => {
+                    log_error(
+                        "listen_on_socket",
+                        format!("Error accepting connection: {err}"),
+                    );
+                    break;
+                }
+            }
+        }
+
+        // ensure socket file removal
+        drop(listener_socket);
+        let _ = std::fs::remove_file(socket_path_cloned.clone());
+
+        // no more listening on socket - update the sockets db
+        let mut sockets_write_guard = INITIALIZED_SOCKETS
+            .write()
+            .expect("Failed to acquire sockets db write guard");
+        sockets_write_guard.remove(&socket_path_cloned);
     });
+
+    match rx.recv()
+        .map_err(|e| e.to_string()) // recv error -> String
+        .and_then(|res| res.map_err(|e| e.to_string())) // inner thread error -> String
+        {
+            Ok(socket_path) => {
+                sockets_write_guard.insert(socket_path.clone());
+                init_callback(Ok(socket_path));
+            }
+            Err(err) => {
+                init_callback(Err(err));
+            }
+        }
 }
 
 /// Creates a new thread with a main loop task listening on the socket for new connections.
