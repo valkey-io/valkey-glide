@@ -50641,7 +50641,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: io.netty:netty-buffer:4.1.115.Final
+Package: io.netty:netty-buffer:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50849,7 +50849,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-codec:4.1.115.Final
+Package: io.netty:netty-codec:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51057,7 +51057,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-common:4.1.115.Final
+Package: io.netty:netty-common:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51265,7 +51265,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-handler:4.1.115.Final
+Package: io.netty:netty-handler:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51473,7 +51473,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-resolver:4.1.115.Final
+Package: io.netty:netty-resolver:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51681,7 +51681,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport:4.1.115.Final
+Package: io.netty:netty-transport:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51889,7 +51889,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport-classes-epoll:4.1.115.Final
+Package: io.netty:netty-transport-classes-epoll:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52097,7 +52097,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport-classes-kqueue:4.1.115.Final
+Package: io.netty:netty-transport-classes-kqueue:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52305,7 +52305,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport-native-epoll:4.1.115.Final
+Package: io.netty:netty-transport-native-epoll:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52513,7 +52513,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport-native-kqueue:4.1.115.Final
+Package: io.netty:netty-transport-native-kqueue:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52721,7 +52721,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: io.netty:netty-transport-native-unix-common:4.1.115.Final
+Package: io.netty:netty-transport-native-unix-common:4.1.121.Final
 
 The following copyrights and licenses were found in the source code of this package:
 

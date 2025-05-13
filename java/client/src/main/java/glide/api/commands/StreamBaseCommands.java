@@ -255,7 +255,9 @@ public interface StreamBaseCommands {
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
      *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]</code>.
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if all key-ID pairs
+     *     in <code>keys_and_ids</code> have either a non-existing key or a non-existing ID, or there
+     *     are no entries after the given ID, or a timeout is hit in the block option.
      * @example
      *     <pre>{@code
      * // retrieve streamKey entries and block for 1 second if is no stream data
@@ -418,14 +420,16 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -457,14 +461,16 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -497,14 +503,16 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -535,14 +543,16 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -575,14 +585,16 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -617,14 +629,16 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -658,14 +672,16 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -698,14 +714,16 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
+     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
+     *           stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -755,7 +773,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param groupname The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @return <code>OK</code>.
      * @example
@@ -795,7 +813,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @param options The group options {@link StreamGroupOptions}.
      * @return <code>OK</code>.
@@ -1859,7 +1877,7 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry ID to be used as the start argument for the next call to <code>
@@ -1895,7 +1913,7 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry ID to be used as the start argument for the next call to <code>
@@ -2012,7 +2030,7 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry ID to be used as the start argument for the next call to <code>
@@ -2048,7 +2066,7 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry ID to be used as the start argument for the next call to <code>

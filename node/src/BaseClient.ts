@@ -1474,13 +1474,13 @@ export class BaseClient {
         }
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      *
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return `null`.
      *
      * @example
      * ```typescript
@@ -2595,9 +2595,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      *
@@ -2623,9 +2623,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
@@ -5846,7 +5846,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `tuple` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -5921,7 +5921,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      * @returns An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
@@ -6041,7 +6041,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
      *
      * @example
@@ -6077,14 +6077,14 @@ export class BaseClient {
      * console.log(infoResult);
      * // Output: {
      * //   length: 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
      * //   groups: 1,
      * // }
      * ```
@@ -6095,27 +6095,27 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   'length': 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'entries': [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     * //   'groups': [ {
-     * //     'name': 'group',
-     * //     'last-delivered-id': '1719877599564-0',
-     * //     'entries-read': 1,
-     * //     'lag': 1,
-     * //     'pel-count': 1,
-     * //     'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     * //     'consumers': [ {
-     * //         'name': 'consumer',
-     * //         'seen-time': 1722624726802,
-     * //         'active-time': 1722624726802,
-     * //         'pel-count': 1,
-     * //         'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //   "length": 2,
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],
+     * //   "groups': [ {
+     * //     "name': "group",
+     * //     "last-delivered-id": "1719877599564-0",
+     * //     "entries-read": 1,
+     * //     "lag": 1,
+     * //     "pel-count": 1,
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
+     * //     "consumers": [ {
+     * //         "name": "consumer",
+     * //         "seen-time": 1722624726802,
+     * //         "active-time": 1722624726802,
+     * //         "pel-count": 1,
+     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
      * //         }
      * //       ]
      * //     }
@@ -7489,6 +7489,7 @@ export class BaseClient {
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      *
      * @example
      * ```typescript
