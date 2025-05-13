@@ -327,8 +327,7 @@ func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfigu
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClient(
-	connectTimeout int,
-	requestTimeout time.Duration,
+	connectTimeout, requestTimeout time.Duration,
 	backoffStrategy *api.BackoffStrategy,
 ) (api.GlideClientCommands, error) {
 	clientConfig := suite.defaultClientConfig().
@@ -340,8 +339,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
-	connectTimeout int,
-	requestTimeout time.Duration,
+	connectTimeout, requestTimeout time.Duration,
 ) (api.GlideClusterClientCommands, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(
