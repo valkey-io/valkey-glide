@@ -18,6 +18,8 @@ package api
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
+// uint64_t create_leaked_otel_span(const char *name);
+// void drop_otel_span(uint64_t span_ptr);
 import "C"
 
 import (
@@ -324,6 +326,13 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
+
+	// Create a span with the command name
+	var spanPtr C.uint64_t = C.uint64_t(0)
+	if len(args) > 0 {
+		spanPtr = C.uint64_t(client.createOtelSpan(args[0]))
+	}
+
 	C.command(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
@@ -333,6 +342,7 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		spanPtr,
 	)
 	client.mu.Unlock()
 
@@ -343,6 +353,11 @@ func (client *baseClient) executeCommandWithRoute(
 		delete(client.pending, resultChannelPtr)
 	}
 	client.mu.Unlock()
+
+	// Drop the span after command completes
+	if spanPtr != 0 {
+		client.dropOtelSpan(uint64(spanPtr))
+	}
 
 	if payload.error != nil {
 		return nil, payload.error
@@ -7638,4 +7653,22 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	}
 
 	return handleIntResponse(result)
+}
+
+// createOtelSpan creates an OpenTelemetry span using the FFI layer and returns its pointer as uint64.
+func (client *baseClient) createOtelSpan(spanName string) uint64 {
+	if spanName == "" {
+		spanName = "valkey.command"
+	}
+	cName := C.CString(spanName)
+	defer C.free(unsafe.Pointer(cName))
+	return uint64(C.create_otel_span(cName))
+}
+
+// dropOtelSpan drops an OpenTelemetry span using the FFI layer.
+func (client *baseClient) dropOtelSpan(spanPtr uint64) {
+	if spanPtr == 0 {
+		return
+	}
+	C.drop_otel_span(C.uint64_t(spanPtr))
 }
