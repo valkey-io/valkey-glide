@@ -23,6 +23,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
@@ -67,6 +68,7 @@ static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
 
 pub struct GlideRt {
     pub runtime: Handle,
+    pub(crate) thread: Option<JoinHandle<()>>,
     shutdown_notifier: Arc<Notify>,
 }
 
@@ -78,19 +80,15 @@ pub fn get_or_init_runtime() -> Result<&'static GlideRt, String> {
     RUNTIME.get_or_try_init(|| {
         let notify = Arc::new(Notify::new());
         let notify_thread = notify.clone();
+
         let (tx, rx) = oneshot::channel();
 
-        thread::Builder::new()
+        let thread_handle = thread::Builder::new()
             .name("glide-runtime-thread".into())
             .spawn(move || {
                 match Builder::new_current_thread().enable_all().build() {
                     Ok(runtime) => {
-                        let handle = runtime.handle().clone();
-                        let glide_rt = GlideRt {
-                            runtime: handle,
-                            shutdown_notifier: notify_thread.clone(),
-                        };
-                        let _ = tx.send(Ok(glide_rt));
+                        let _ = tx.send(Ok(runtime.handle().clone()));
                         // Keep runtime alive until shutdown is signaled
                         runtime.block_on(notify_thread.notified());
                     }
@@ -101,8 +99,15 @@ pub fn get_or_init_runtime() -> Result<&'static GlideRt, String> {
             })
             .map_err(|_| "Failed to spawn runtime thread".to_string())?;
 
-        rx.blocking_recv()
-            .map_err(|_| "Runtime thread panicked".to_string())?
+        let runtime_handle = rx
+            .blocking_recv()
+            .map_err(|err| format!("Failed to receive runtime handle: {err:?}"))??;
+
+        Ok(GlideRt {
+            runtime: runtime_handle,
+            thread: Some(thread_handle),
+            shutdown_notifier: notify,
+        })
     })
 }
 
@@ -110,6 +115,11 @@ impl Drop for GlideRt {
     fn drop(&mut self) {
         if let Some(rt) = RUNTIME.get() {
             rt.shutdown_notifier.notify_one();
+        }
+
+        // Move the JoinHandle out of the Option and join it
+        if let Some(handle) = self.thread.take() {
+            handle.join().expect("GlideRt thread panicked");
         }
     }
 }
