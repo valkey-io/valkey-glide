@@ -28,7 +28,7 @@ const (
 )
 
 func (suite *GlideTestSuite) TestSetAndGet_noOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		suite.verifyOK(client.Set(keyName, initialValue))
 		result, err := client.Get(keyName)
 
@@ -38,7 +38,7 @@ func (suite *GlideTestSuite) TestSetAndGet_noOptions() {
 }
 
 func (suite *GlideTestSuite) TestSetAndGet_byteString() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		invalidUTF8Value := "\xff\xfe\xfd"
 		suite.verifyOK(client.Set(keyName, invalidUTF8Value))
 		result, err := client.Get(keyName)
@@ -49,7 +49,7 @@ func (suite *GlideTestSuite) TestSetAndGet_byteString() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		suite.verifyOK(client.Set(keyName, initialValue))
 
 		opts := options.NewSetOptions().SetReturnOldValue(true)
@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -77,7 +77,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetOnlyIfExists()
 		result, err := client.SetWithOptions(key, anotherValue, *opts)
@@ -88,7 +88,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetOnlyIfDoesNotExist()
 		result, err := client.SetWithOptions(key, anotherValue, *opts)
@@ -102,7 +102,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetOnlyIfDoesNotExist()
 		suite.verifyOK(client.Set(key, initialValue))
@@ -120,7 +120,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey()
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
 			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(2000)))
@@ -151,7 +151,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
 			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(100500)))
@@ -183,7 +183,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -206,7 +206,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 }
 
 func (suite *GlideTestSuite) TestGetEx_existingAndNonExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -222,7 +222,7 @@ func (suite *GlideTestSuite) TestGetEx_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -246,7 +246,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 }
 
 func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -269,7 +269,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 }
 
 func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().SetReturnOldValue(true)
 
@@ -281,7 +281,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() 
 }
 
 func (suite *GlideTestSuite) TestMSetAndMGet_existingAndNonExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		key2 := uuid.New().String()
 		key3 := uuid.New().String()
@@ -305,7 +305,7 @@ func (suite *GlideTestSuite) TestMSetAndMGet_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestMSetNXAndMGet_nonExistingKey_valuesSet() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 		key3 := "{key}" + uuid.New().String()
@@ -329,7 +329,7 @@ func (suite *GlideTestSuite) TestMSetNXAndMGet_nonExistingKey_valuesSet() {
 }
 
 func (suite *GlideTestSuite) TestMSetNXAndMGet_existingKey_valuesNotUpdated() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 		key3 := "{key}" + uuid.New().String()
@@ -356,7 +356,7 @@ func (suite *GlideTestSuite) TestMSetNXAndMGet_existingKey_valuesNotUpdated() {
 }
 
 func (suite *GlideTestSuite) TestIncrCommands_existingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, "10"))
 
@@ -375,7 +375,7 @@ func (suite *GlideTestSuite) TestIncrCommands_existingKey() {
 }
 
 func (suite *GlideTestSuite) TestIncrCommands_nonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		res1, err := client.Incr(key1)
 		assert.Nil(suite.T(), err)
@@ -394,7 +394,7 @@ func (suite *GlideTestSuite) TestIncrCommands_nonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestIncrCommands_TypeError() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, "stringValue"))
 
@@ -416,7 +416,7 @@ func (suite *GlideTestSuite) TestIncrCommands_TypeError() {
 }
 
 func (suite *GlideTestSuite) TestDecrCommands_existingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, "10"))
 
@@ -431,7 +431,7 @@ func (suite *GlideTestSuite) TestDecrCommands_existingKey() {
 }
 
 func (suite *GlideTestSuite) TestDecrCommands_nonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		res1, err := client.Decr(key1)
 		assert.Nil(suite.T(), err)
@@ -445,7 +445,7 @@ func (suite *GlideTestSuite) TestDecrCommands_nonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestStrlen_existingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -457,7 +457,7 @@ func (suite *GlideTestSuite) TestStrlen_existingKey() {
 }
 
 func (suite *GlideTestSuite) TestStrlen_nonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		res, err := client.Strlen(key)
 		assert.Nil(suite.T(), err)
@@ -466,7 +466,7 @@ func (suite *GlideTestSuite) TestStrlen_nonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		res, err := client.SetRange(key, 0, "Dummy string")
 		assert.Nil(suite.T(), err)
@@ -494,7 +494,7 @@ func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys_binaryString() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		nonUtf8String := "Dummy \xFF string"
 		key := uuid.New().String()
 		res, err := client.SetRange(key, 0, nonUtf8String)
@@ -518,7 +518,7 @@ func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys_binaryStrin
 }
 
 func (suite *GlideTestSuite) TestGetRange_existingAndNonExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, "Dummy string"))
 
@@ -546,7 +546,7 @@ func (suite *GlideTestSuite) TestGetRange_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestGetRange_binaryString() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		nonUtf8String := "Dummy \xFF string"
 		suite.verifyOK(client.Set(key, nonUtf8String))
@@ -558,7 +558,7 @@ func (suite *GlideTestSuite) TestGetRange_binaryString() {
 }
 
 func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value1 := uuid.New().String()
 		value2 := uuid.New().String()
@@ -582,7 +582,7 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 
@@ -602,7 +602,7 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 
@@ -622,7 +622,7 @@ func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
 func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
 
@@ -657,7 +657,7 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
 
@@ -689,7 +689,7 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		_, err := client.Set("{lcs}key1", "ohmytext")
 		assert.Nil(suite.T(), err)
 
@@ -721,7 +721,7 @@ func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 }
 
 func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := "testValue"
 
@@ -737,7 +737,7 @@ func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestGetDel_NonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		result, err := client.GetDel(key)
@@ -748,7 +748,7 @@ func (suite *GlideTestSuite) TestGetDel_NonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		result, err := client.GetDel("")
 
 		assert.NotNil(suite.T(), err)
@@ -758,7 +758,7 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 }
 
 func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.New().String()
 
@@ -773,7 +773,7 @@ func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHSet_byteString() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		field1 := string([]byte{0xFF, 0x00, 0xAA})
 		value1 := string([]byte{0xDE, 0xAD, 0xBE, 0xEF})
 		field2 := string([]byte{0x01, 0x02, 0x03, 0xFE})
@@ -796,7 +796,7 @@ func (suite *GlideTestSuite) TestHSet_byteString() {
 }
 
 func (suite *GlideTestSuite) TestHSet_WithAddNewField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.New().String()
 
@@ -816,7 +816,7 @@ func (suite *GlideTestSuite) TestHSet_WithAddNewField() {
 }
 
 func (suite *GlideTestSuite) TestHGet_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -831,7 +831,7 @@ func (suite *GlideTestSuite) TestHGet_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHGet_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.HGet(key, "field1")
@@ -841,7 +841,7 @@ func (suite *GlideTestSuite) TestHGet_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHGet_WithNotExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -856,7 +856,7 @@ func (suite *GlideTestSuite) TestHGet_WithNotExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHGetAll_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -871,7 +871,7 @@ func (suite *GlideTestSuite) TestHGetAll_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHGetAll_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HGetAll(key)
@@ -881,7 +881,7 @@ func (suite *GlideTestSuite) TestHGetAll_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHMGet() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -899,7 +899,7 @@ func (suite *GlideTestSuite) TestHMGet() {
 }
 
 func (suite *GlideTestSuite) TestHMGet_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HMGet(key, []string{"field1", "field2", "field3"})
@@ -910,7 +910,7 @@ func (suite *GlideTestSuite) TestHMGet_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHMGet_WithNotExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -926,7 +926,7 @@ func (suite *GlideTestSuite) TestHMGet_WithNotExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHSetNX_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -941,7 +941,7 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHSetNX_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.HSetNX(key, "field1", "value1")
@@ -955,7 +955,7 @@ func (suite *GlideTestSuite) TestHSetNX_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHSetNX_WithExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -970,7 +970,7 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHDel() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -993,7 +993,7 @@ func (suite *GlideTestSuite) TestHDel() {
 }
 
 func (suite *GlideTestSuite) TestHDel_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		res, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
@@ -1002,7 +1002,7 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHDel_WithNotExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1017,7 +1017,7 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHLen() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1032,7 +1032,7 @@ func (suite *GlideTestSuite) TestHLen() {
 }
 
 func (suite *GlideTestSuite) TestHLen_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		res, err := client.HLen(key)
 
@@ -1042,7 +1042,7 @@ func (suite *GlideTestSuite) TestHLen_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHVals_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1057,7 +1057,7 @@ func (suite *GlideTestSuite) TestHVals_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHVals_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HVals(key)
@@ -1067,7 +1067,7 @@ func (suite *GlideTestSuite) TestHVals_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHExists_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1082,7 +1082,7 @@ func (suite *GlideTestSuite) TestHExists_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHExists_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HExists(key, "field1")
@@ -1092,7 +1092,7 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHExists_WithNotExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1107,7 +1107,7 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHKeys_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1122,7 +1122,7 @@ func (suite *GlideTestSuite) TestHKeys_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHKeys_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HKeys(key)
@@ -1132,7 +1132,7 @@ func (suite *GlideTestSuite) TestHKeys_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHStrLen_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1147,7 +1147,7 @@ func (suite *GlideTestSuite) TestHStrLen_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHStrLen_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.HStrLen(key, "field1")
@@ -1157,7 +1157,7 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		key := uuid.NewString()
 
@@ -1172,7 +1172,7 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHIncrBy_WithExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		field := uuid.NewString()
 		fieldValueMap := map[string]string{field: "10"}
@@ -1188,7 +1188,7 @@ func (suite *GlideTestSuite) TestHIncrBy_WithExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		field := uuid.NewString()
 		field2 := uuid.NewString()
@@ -1205,7 +1205,7 @@ func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		field := uuid.NewString()
 		fieldValueMap := map[string]string{field: "10"}
@@ -1221,7 +1221,7 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		field := uuid.NewString()
 		field2 := uuid.NewString()
@@ -1238,7 +1238,7 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
 }
 
 func (suite *GlideTestSuite) TestHScan() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		initialCursor := "0"
@@ -1407,7 +1407,7 @@ func (suite *GlideTestSuite) TestHScan() {
 
 func (suite *GlideTestSuite) TestHRandField() {
 	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		// key does not exist
@@ -1477,7 +1477,7 @@ func (suite *GlideTestSuite) TestHRandField() {
 }
 
 func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}
 		key := uuid.NewString()
 
@@ -1496,7 +1496,7 @@ func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestLPop_nonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.LPop(key)
@@ -1510,7 +1510,7 @@ func (suite *GlideTestSuite) TestLPop_nonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestLPushLPop_typeError() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		suite.verifyOK(client.Set(key, "value"))
 
@@ -1527,7 +1527,7 @@ func (suite *GlideTestSuite) TestLPushLPop_typeError() {
 }
 
 func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
 		assert.Nil(suite.T(), err)
@@ -1597,7 +1597,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 }
 
 func (suite *GlideTestSuite) TestLPosCount() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
@@ -1634,7 +1634,7 @@ func (suite *GlideTestSuite) TestLPosCount() {
 }
 
 func (suite *GlideTestSuite) TestLPosCount_withOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
@@ -1657,7 +1657,7 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 }
 
 func (suite *GlideTestSuite) TestRPush() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value1", "value2", "value3", "value4"}
 		key := uuid.NewString()
 
@@ -1676,7 +1676,7 @@ func (suite *GlideTestSuite) TestRPush() {
 }
 
 func (suite *GlideTestSuite) TestSAdd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2"}
 
@@ -1687,7 +1687,7 @@ func (suite *GlideTestSuite) TestSAdd() {
 }
 
 func (suite *GlideTestSuite) TestSAdd_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2"}
 
@@ -1702,7 +1702,7 @@ func (suite *GlideTestSuite) TestSAdd_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSRem() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1717,7 +1717,7 @@ func (suite *GlideTestSuite) TestSRem() {
 }
 
 func (suite *GlideTestSuite) TestSRem_WithExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2"}
 
@@ -1732,7 +1732,7 @@ func (suite *GlideTestSuite) TestSRem_WithExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSRem_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res2, err := client.SRem(key, []string{"member1", "member2"})
@@ -1742,7 +1742,7 @@ func (suite *GlideTestSuite) TestSRem_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSRem_WithExistingKeyAndDifferentMembers() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1757,7 +1757,7 @@ func (suite *GlideTestSuite) TestSRem_WithExistingKeyAndDifferentMembers() {
 }
 
 func (suite *GlideTestSuite) TestSUnionStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -1867,7 +1867,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 }
 
 func (suite *GlideTestSuite) TestSMembers() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1882,7 +1882,7 @@ func (suite *GlideTestSuite) TestSMembers() {
 }
 
 func (suite *GlideTestSuite) TestSMembers_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.SMembers(key)
@@ -1892,7 +1892,7 @@ func (suite *GlideTestSuite) TestSMembers_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSCard() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1907,7 +1907,7 @@ func (suite *GlideTestSuite) TestSCard() {
 }
 
 func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.SCard(key)
@@ -1917,7 +1917,7 @@ func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSIsMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1932,7 +1932,7 @@ func (suite *GlideTestSuite) TestSIsMember() {
 }
 
 func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.SIsMember(key, "member2")
@@ -1942,7 +1942,7 @@ func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"member1", "member2", "member3"}
 
@@ -1957,7 +1957,7 @@ func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
 }
 
 func (suite *GlideTestSuite) TestSDiff() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -1976,7 +1976,7 @@ func (suite *GlideTestSuite) TestSDiff() {
 }
 
 func (suite *GlideTestSuite) TestSDiff_WithNotExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -1987,7 +1987,7 @@ func (suite *GlideTestSuite) TestSDiff_WithNotExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestSDiff_WithSingleKeyExist() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -2002,7 +2002,7 @@ func (suite *GlideTestSuite) TestSDiff_WithSingleKeyExist() {
 }
 
 func (suite *GlideTestSuite) TestSDiffStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -2026,7 +2026,7 @@ func (suite *GlideTestSuite) TestSDiffStore() {
 }
 
 func (suite *GlideTestSuite) TestSDiffStore_WithNotExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -2042,7 +2042,7 @@ func (suite *GlideTestSuite) TestSDiffStore_WithNotExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestSinter() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -2061,7 +2061,7 @@ func (suite *GlideTestSuite) TestSinter() {
 }
 
 func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -2072,7 +2072,7 @@ func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestSinterStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -2157,7 +2157,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 func (suite *GlideTestSuite) TestSInterCard() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -2182,7 +2182,7 @@ func (suite *GlideTestSuite) TestSInterCard() {
 func (suite *GlideTestSuite) TestSInterCardLimit() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 
@@ -2205,7 +2205,7 @@ func (suite *GlideTestSuite) TestSInterCardLimit() {
 }
 
 func (suite *GlideTestSuite) TestSRandMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res, err := client.SAdd(key, []string{"one"})
@@ -2220,7 +2220,7 @@ func (suite *GlideTestSuite) TestSRandMember() {
 }
 
 func (suite *GlideTestSuite) TestSPop() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		members := []string{"value1", "value2", "value3"}
 
@@ -2241,7 +2241,7 @@ func (suite *GlideTestSuite) TestSPop() {
 }
 
 func (suite *GlideTestSuite) TestSPop_LastMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		res1, err := client.SAdd(key, []string{"lastValue"})
@@ -2260,7 +2260,7 @@ func (suite *GlideTestSuite) TestSPop_LastMember() {
 }
 
 func (suite *GlideTestSuite) TestSMIsMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		stringKey := uuid.NewString()
 		nonExistingKey := uuid.NewString()
@@ -2291,7 +2291,7 @@ func (suite *GlideTestSuite) TestSMIsMember() {
 }
 
 func (suite *GlideTestSuite) TestSUnion() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -2345,7 +2345,7 @@ func (suite *GlideTestSuite) TestSUnion() {
 }
 
 func (suite *GlideTestSuite) TestSMove() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
@@ -2444,7 +2444,7 @@ func (suite *GlideTestSuite) TestSMove() {
 }
 
 func (suite *GlideTestSuite) TestSScan() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		initialCursor := "0"
@@ -2549,7 +2549,7 @@ func (suite *GlideTestSuite) TestSScan() {
 }
 
 func (suite *GlideTestSuite) TestLRange() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}
 		key := uuid.NewString()
 
@@ -2576,7 +2576,7 @@ func (suite *GlideTestSuite) TestLRange() {
 }
 
 func (suite *GlideTestSuite) TestLIndex() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}
 		key := uuid.NewString()
 
@@ -2609,7 +2609,7 @@ func (suite *GlideTestSuite) TestLIndex() {
 }
 
 func (suite *GlideTestSuite) TestLTrim() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}
 		key := uuid.NewString()
 
@@ -2640,7 +2640,7 @@ func (suite *GlideTestSuite) TestLTrim() {
 }
 
 func (suite *GlideTestSuite) TestLLen() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}
 		key := uuid.NewString()
 
@@ -2667,7 +2667,7 @@ func (suite *GlideTestSuite) TestLLen() {
 }
 
 func (suite *GlideTestSuite) TestLRem() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value1", "value2", "value1", "value1", "value2"}
 		key := uuid.NewString()
 
@@ -2703,7 +2703,7 @@ func (suite *GlideTestSuite) TestLRem() {
 }
 
 func (suite *GlideTestSuite) TestRPopAndRPopCount() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value1", "value2", "value3", "value4"}
 		key := uuid.NewString()
 
@@ -2744,7 +2744,7 @@ func (suite *GlideTestSuite) TestRPopAndRPopCount() {
 }
 
 func (suite *GlideTestSuite) TestLInsert() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		list := []string{"value1", "value2", "value3", "value4"}
 		key := uuid.NewString()
 
@@ -2783,7 +2783,7 @@ func (suite *GlideTestSuite) TestLInsert() {
 }
 
 func (suite *GlideTestSuite) TestBLPop() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		listKey1 := "{listKey}-1-" + uuid.NewString()
 		listKey2 := "{listKey}-2-" + uuid.NewString()
 
@@ -2810,7 +2810,7 @@ func (suite *GlideTestSuite) TestBLPop() {
 }
 
 func (suite *GlideTestSuite) TestBRPop() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		listKey1 := "{listKey}-1-" + uuid.NewString()
 		listKey2 := "{listKey}-2-" + uuid.NewString()
 
@@ -2837,7 +2837,7 @@ func (suite *GlideTestSuite) TestBRPop() {
 }
 
 func (suite *GlideTestSuite) TestRPushX() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		key3 := uuid.NewString()
@@ -2877,7 +2877,7 @@ func (suite *GlideTestSuite) TestRPushX() {
 }
 
 func (suite *GlideTestSuite) TestLPushX() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		key3 := uuid.NewString()
@@ -2920,7 +2920,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
@@ -2976,7 +2976,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
@@ -3027,7 +3027,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
@@ -3110,7 +3110,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 }
 
 func (suite *GlideTestSuite) TestLSet() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		nonExistentKey := uuid.NewString()
 
@@ -3144,7 +3144,7 @@ func (suite *GlideTestSuite) TestLMove() {
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		nonExistentKey := "{key}-3" + uuid.NewString()
@@ -3210,7 +3210,7 @@ func (suite *GlideTestSuite) TestLMove() {
 }
 
 func (suite *GlideTestSuite) TestExists() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		// Test 1: Check if an existing key returns 1
@@ -3236,7 +3236,7 @@ func (suite *GlideTestSuite) TestExists() {
 }
 
 func (suite *GlideTestSuite) TestExpire() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3255,7 +3255,7 @@ func (suite *GlideTestSuite) TestExpire() {
 }
 
 func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		// Trying to set an expiry on a non-existent key
 		result, err := client.Expire(key, 1)
@@ -3266,7 +3266,7 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3290,7 +3290,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3315,7 +3315,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3336,7 +3336,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3365,7 +3365,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3386,7 +3386,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3404,7 +3404,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3428,7 +3428,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3453,7 +3453,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 }
 
 func (suite *GlideTestSuite) TestPExpire() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3472,7 +3472,7 @@ func (suite *GlideTestSuite) TestPExpire() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3498,7 +3498,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3519,7 +3519,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3545,7 +3545,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3570,7 +3570,7 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 }
 
 func (suite *GlideTestSuite) TestPExpireAt() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3591,7 +3591,7 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3612,7 +3612,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3636,7 +3636,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3662,7 +3662,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3689,7 +3689,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 func (suite *GlideTestSuite) TestExpireTime() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3718,7 +3718,7 @@ func (suite *GlideTestSuite) TestExpireTime() {
 
 func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		// Call ExpireTime on a key that doesn't exist
@@ -3730,7 +3730,7 @@ func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 
 func (suite *GlideTestSuite) TestPExpireTime() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
@@ -3758,7 +3758,7 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 }
 
 func (suite *GlideTestSuite) Test_ZCard() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{key}" + uuid.NewString()
 		membersScores := map[string]float64{
 			"one":   1.0,
@@ -3786,7 +3786,7 @@ func (suite *GlideTestSuite) Test_ZCard() {
 
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		// Call ExpireTime on a key that doesn't exist
@@ -3797,7 +3797,7 @@ func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 }
 
 func (suite *GlideTestSuite) TestTTL_WithValidKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3812,7 +3812,7 @@ func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 }
 
 func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3830,7 +3830,7 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 }
 
 func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3846,7 +3846,7 @@ func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 }
 
 func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(key, value))
@@ -3864,7 +3864,7 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 }
 
 func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
@@ -3873,7 +3873,7 @@ func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
 }
 
 func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		// case : Add elements and add same elements again
@@ -3902,7 +3902,7 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 }
 
 func (suite *GlideTestSuite) TestPfCount_SingleKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		res, err := client.PfAdd(key, []string{"i", "j", "g"})
 		assert.Nil(suite.T(), err)
@@ -3915,7 +3915,7 @@ func (suite *GlideTestSuite) TestPfCount_SingleKey() {
 }
 
 func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String() + "{group}"
 		key2 := uuid.New().String() + "{group}"
 
@@ -3934,7 +3934,7 @@ func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
 }
 
 func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String() + "{group}"
 		key2 := uuid.New().String() + "{group}"
 
@@ -3945,7 +3945,7 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestPfMerge() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		source1 := uuid.New().String() + "{group}"
 		source2 := uuid.New().String() + "{group}"
 		destination := uuid.New().String() + "{group}"
@@ -3969,7 +3969,7 @@ func (suite *GlideTestSuite) TestPfMerge() {
 }
 
 func (suite *GlideTestSuite) TestPfMerge_SingleSource() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		source := uuid.New().String() + "{group}"
 		destination := uuid.New().String() + "{group}"
 
@@ -3988,7 +3988,7 @@ func (suite *GlideTestSuite) TestPfMerge_SingleSource() {
 }
 
 func (suite *GlideTestSuite) TestPfMerge_NonExistentSource() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		nonExistentKey := uuid.New().String() + "{group}"
 		destination := uuid.New().String() + "{group}"
 
@@ -4003,7 +4003,7 @@ func (suite *GlideTestSuite) TestPfMerge_NonExistentSource() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
@@ -4025,7 +4025,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
@@ -4049,7 +4049,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
 }
 
 func (suite *GlideTestSuite) TestSort_SuccessfulSort() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"3", "1", "2"})
 
@@ -4068,7 +4068,7 @@ func (suite *GlideTestSuite) TestSort_SuccessfulSort() {
 }
 
 func (suite *GlideTestSuite) TestSortStore_BasicSorting() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"10", "2", "5", "1", "4"})
@@ -4086,7 +4086,7 @@ func (suite *GlideTestSuite) TestSortStore_BasicSorting() {
 }
 
 func (suite *GlideTestSuite) TestSortStore_ErrorHandling() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		result, err := client.SortStore("{listKey}nonExistingKey", "{listKey}mydestinationKey")
 
 		assert.Nil(suite.T(), err)
@@ -4095,7 +4095,7 @@ func (suite *GlideTestSuite) TestSortStore_ErrorHandling() {
 }
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
 		sortedKey := "{key}" + uuid.New().String()
 		client.LPush(key, []string{"30", "20", "10", "40", "50"})
@@ -4114,7 +4114,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
 }
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"apple", "banana", "cherry", "date", "elderberry"})
@@ -4134,7 +4134,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
 }
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"10", "20", "30", "40", "50"})
@@ -4154,7 +4154,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 
 func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"3", "1", "2"})
 
@@ -4174,7 +4174,7 @@ func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
 
 func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
@@ -4200,7 +4200,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		nonExistentKey := "{key}-3" + uuid.NewString()
@@ -4267,7 +4267,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 }
 
 func (suite *GlideTestSuite) TestDel_MultipleKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "testKey1_" + uuid.New().String()
 		key2 := "testKey2_" + uuid.New().String()
 		key3 := "testKey3_" + uuid.New().String()
@@ -4297,7 +4297,7 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 }
 
 func (suite *GlideTestSuite) TestType() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check if the value is string
 		keyName := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(keyName, initialValue))
@@ -4317,7 +4317,7 @@ func (suite *GlideTestSuite) TestType() {
 }
 
 func (suite *GlideTestSuite) TestTouch() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check if an touch valid key
 		keyName := "{keyName}" + uuid.NewString()
 		keyName1 := "{keyName1}" + uuid.NewString()
@@ -4335,7 +4335,7 @@ func (suite *GlideTestSuite) TestTouch() {
 }
 
 func (suite *GlideTestSuite) TestUnlink() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check if an unlink valid key
 		keyName := "{keyName}" + uuid.NewString()
 		keyName1 := "{keyName1}" + uuid.NewString()
@@ -4353,7 +4353,7 @@ func (suite *GlideTestSuite) TestUnlink() {
 }
 
 func (suite *GlideTestSuite) TestRename() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1 Check if the command successfully renamed
 		key := "{keyName}" + uuid.NewString()
 		initialValueRename := "TestRename_RenameValue"
@@ -4371,7 +4371,7 @@ func (suite *GlideTestSuite) TestRename() {
 }
 
 func (suite *GlideTestSuite) TestRenameNX() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1 Check if the RenameNX command return true if key was renamed to newKey
 		key := "{keyName}" + uuid.NewString()
 		key2 := "{keyName}" + uuid.NewString()
@@ -4392,7 +4392,7 @@ func (suite *GlideTestSuite) TestRenameNX() {
 }
 
 func (suite *GlideTestSuite) TestXAdd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		// stream does not exist
 		res, err := client.XAdd(key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
@@ -4420,7 +4420,7 @@ func (suite *GlideTestSuite) TestXAdd() {
 }
 
 func (suite *GlideTestSuite) TestXAddWithOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		// stream does not exist
 		res, err := client.XAddWithOptions(
@@ -4452,7 +4452,7 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 
 // submit args with custom command API, check that no error returned.
 // returns a response or raises `errMsg` if failed to submit the command.
-func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []string, errMsg string) any {
+func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClientCommands, args []string, errMsg string) any {
 	var res any
 	var err error
 	switch c := client.(type) {
@@ -4468,7 +4468,7 @@ func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []
 }
 
 func (suite *GlideTestSuite) TestXAutoClaim() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		consumer := uuid.NewString()
@@ -4584,7 +4584,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 }
 
 func (suite *GlideTestSuite) TestXReadGroup() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{xreadgroup}-1-" + uuid.NewString()
 		key2 := "{xreadgroup}-2-" + uuid.NewString()
 		key3 := "{xreadgroup}-3-" + uuid.NewString()
@@ -4708,7 +4708,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 }
 
 func (suite *GlideTestSuite) TestXRead() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{xread}" + uuid.NewString()
 		key2 := "{xread}" + uuid.NewString()
 		key3 := "{xread}" + uuid.NewString()
@@ -4757,7 +4757,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
 
 		// ensure that commands doesn't time out even if timeout > request timeout
-		var testClient api.BaseClient
+		var testClient api.BaseClientCommands
 		if _, ok := client.(api.GlideClientCommands); ok {
 			testClient = suite.client(config.NewGlideClientConfiguration().
 				WithAddress(&suite.standaloneHosts[0]).
@@ -4793,7 +4793,7 @@ func (suite *GlideTestSuite) TestXRead() {
 }
 
 func (suite *GlideTestSuite) TestXGroupSetId() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		consumer := uuid.NewString()
@@ -4881,7 +4881,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 }
 
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		key2 := uuid.New().String()
 		key3 := uuid.New().String()
@@ -4972,7 +4972,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 }
 
 func (suite *GlideTestSuite) TestZincrBy() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		key2 := uuid.New().String()
 
@@ -5003,7 +5003,7 @@ func (suite *GlideTestSuite) TestZincrBy() {
 }
 
 func (suite *GlideTestSuite) TestBZPopMin() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{zset}-1-" + uuid.NewString()
 		key2 := "{zset}-2-" + uuid.NewString()
 		key3 := "{zset}-2-" + uuid.NewString()
@@ -5045,7 +5045,7 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 }
 
 func (suite *GlideTestSuite) TestZPopMin() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		key2 := uuid.New().String()
 		memberScoreMap := map[string]float64{
@@ -5077,7 +5077,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 }
 
 func (suite *GlideTestSuite) TestZPopMax() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		key2 := uuid.New().String()
 		memberScoreMap := map[string]float64{
@@ -5108,7 +5108,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 }
 
 func (suite *GlideTestSuite) TestZRem() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		memberScoreMap := map[string]float64{
 			"one":   1.0,
@@ -5144,7 +5144,7 @@ func (suite *GlideTestSuite) TestZRem() {
 }
 
 func (suite *GlideTestSuite) TestZRange() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key := uuid.New().String()
 		memberScoreMap := map[string]float64{
@@ -5246,7 +5246,7 @@ func (suite *GlideTestSuite) TestZRange() {
 }
 
 func (suite *GlideTestSuite) TestZRangeWithScores() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key := uuid.New().String()
 		memberScoreMap := map[string]float64{
@@ -5383,7 +5383,7 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 }
 
 func (suite *GlideTestSuite) TestZRangeStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key := "{key}" + uuid.New().String()
 		dest := "{key}" + uuid.New().String()
@@ -5529,7 +5529,7 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 }
 
 func (suite *GlideTestSuite) TestPersist() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check if persist command removes the expiration time of a key.
 		keyName := "{keyName}" + uuid.NewString()
 		t := suite.T()
@@ -5557,7 +5557,7 @@ func (suite *GlideTestSuite) TestPersist() {
 }
 
 func (suite *GlideTestSuite) TestZRank() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		stringKey := uuid.New().String()
 		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
@@ -5590,7 +5590,7 @@ func (suite *GlideTestSuite) TestZRank() {
 }
 
 func (suite *GlideTestSuite) TestZRevRank() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		stringKey := uuid.New().String()
 		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
@@ -5623,7 +5623,7 @@ func (suite *GlideTestSuite) TestZRevRank() {
 }
 
 func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		field1 := uuid.NewString()
@@ -5719,7 +5719,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 }
 
 func (suite *GlideTestSuite) Test_ZScore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		t := suite.T()
@@ -5758,7 +5758,7 @@ func (suite *GlideTestSuite) Test_ZScore() {
 }
 
 func (suite *GlideTestSuite) TestZCount() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		membersScores := map[string]float64{
@@ -5837,7 +5837,7 @@ func (suite *GlideTestSuite) TestZCount() {
 }
 
 func (suite *GlideTestSuite) Test_XDel() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
 		streamId1 := "0-1"
@@ -5886,7 +5886,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 }
 
 func (suite *GlideTestSuite) TestZScan() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		initialCursor := "0"
 		defaultCount := 20
@@ -6044,7 +6044,7 @@ func (suite *GlideTestSuite) TestZScan() {
 }
 
 func (suite *GlideTestSuite) TestXPending() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// TODO: Update tests when XGroupCreate, XGroupCreateConsumer, XReadGroup, XClaim, XClaimJustId and XAck are added to
 		// the Go client.
 		//
@@ -6218,7 +6218,7 @@ func (suite *GlideTestSuite) TestXPending() {
 }
 
 func (suite *GlideTestSuite) TestXPendingFailures() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// TODO: Update tests when XGroupCreate, XGroupCreateConsumer, XReadGroup, XClaim, XClaimJustId and XAck are added to
 		// the Go client.
 		//
@@ -6552,7 +6552,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 }
 
 func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		id := "0-1"
@@ -6603,7 +6603,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 func (suite *GlideTestSuite) TestObjectEncoding() {
 	suite.T().Skip("Skip until test is fixed")
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check object encoding for embstr
 		key := "{keyName}" + uuid.NewString()
 		value1 := "Hello"
@@ -6622,7 +6622,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 }
 
 func (suite *GlideTestSuite) TestDumpRestore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// Test 1: Check restore command for deleted key and check value
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
@@ -6650,7 +6650,7 @@ func (suite *GlideTestSuite) TestDumpRestore() {
 }
 
 func (suite *GlideTestSuite) TestRestoreWithOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
 		t := suite.T()
@@ -6711,7 +6711,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 }
 
 func (suite *GlideTestSuite) TestZRemRangeByRank() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		stringKey := uuid.New().String()
 		membersScores := map[string]float64{
@@ -6759,7 +6759,7 @@ func (suite *GlideTestSuite) TestZRemRangeByRank() {
 }
 
 func (suite *GlideTestSuite) TestZRemRangeByLex() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		stringKey := uuid.New().String()
 
@@ -6814,7 +6814,7 @@ func (suite *GlideTestSuite) TestZRemRangeByLex() {
 }
 
 func (suite *GlideTestSuite) TestZRemRangeByScore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		stringKey := uuid.New().String()
 
@@ -6871,7 +6871,7 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 
 func (suite *GlideTestSuite) TestZMScore() {
 	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 
 		zAddResult, err := client.ZAdd(key, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
@@ -6920,7 +6920,7 @@ func (suite *GlideTestSuite) TestZMScore() {
 }
 
 func (suite *GlideTestSuite) TestZRandMember() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key1 := uuid.NewString()
 		key2 := uuid.NewString()
@@ -6982,7 +6982,7 @@ func (suite *GlideTestSuite) TestZRandMember() {
 }
 
 func (suite *GlideTestSuite) TestObjectIdleTime() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		defaultClient := suite.defaultClient()
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
@@ -7007,7 +7007,7 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 }
 
 func (suite *GlideTestSuite) TestObjectRefCount() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
 		t := suite.T()
@@ -7022,7 +7022,7 @@ func (suite *GlideTestSuite) TestObjectRefCount() {
 }
 
 func (suite *GlideTestSuite) TestObjectFreq() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		defaultClient := suite.defaultClient()
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
@@ -7054,7 +7054,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 	suite.T().Skip("Skipping test for now")
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -7085,7 +7085,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 	suite.T().Skip("Skipping test for now")
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -7118,7 +7118,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 	suite.T().Skip("Skipping test for now")
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -7172,7 +7172,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"a", "b", "c", "d", "e"})
@@ -7197,7 +7197,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 }
 
 func (suite *GlideTestSuite) TestXGroupStreamCommands() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		stringKey := uuid.New().String()
 		groupName := "group" + uuid.New().String()
@@ -7310,7 +7310,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 }
 
 func (suite *GlideTestSuite) TestXInfoStream() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		consumer := uuid.NewString()
@@ -7361,7 +7361,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 }
 
 func (suite *GlideTestSuite) TestXInfoConsumers() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		consumer1 := uuid.NewString()
@@ -7461,7 +7461,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 }
 
 func (suite *GlideTestSuite) TestXInfoGroups() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.NewString()
 		group := uuid.NewString()
 		consumer := uuid.NewString()
@@ -7631,7 +7631,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 }
 
 func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		var resultInt64 int64
 		resultInt64, err := client.SetBit(key, 7, 1)
@@ -7645,7 +7645,7 @@ func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
 }
 
 func (suite *GlideTestSuite) TestSetBit_SetAndCheckPreviousBit() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		var resultInt64 int64
 		resultInt64, err := client.SetBit(key, 7, 1)
@@ -7659,7 +7659,7 @@ func (suite *GlideTestSuite) TestSetBit_SetAndCheckPreviousBit() {
 }
 
 func (suite *GlideTestSuite) TestSetBit_SetMultipleBits() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		var resultInt64 int64
 
@@ -7682,7 +7682,7 @@ func (suite *GlideTestSuite) TestSetBit_SetMultipleBits() {
 }
 
 func (suite *GlideTestSuite) TestWait() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "test")
 		// Test 1:  numberOfReplicas (2)
@@ -7699,7 +7699,7 @@ func (suite *GlideTestSuite) TestWait() {
 }
 
 func (suite *GlideTestSuite) TestGetBit_ExistingKey_ValidOffset() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		offset := int64(7)
 		value := int64(1)
@@ -7713,7 +7713,7 @@ func (suite *GlideTestSuite) TestGetBit_ExistingKey_ValidOffset() {
 }
 
 func (suite *GlideTestSuite) TestGetBit_NonExistentKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		offset := int64(10)
 
@@ -7724,7 +7724,7 @@ func (suite *GlideTestSuite) TestGetBit_NonExistentKey() {
 }
 
 func (suite *GlideTestSuite) TestGetBit_InvalidOffset() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		invalidOffset := int64(-1)
 
@@ -7734,7 +7734,7 @@ func (suite *GlideTestSuite) TestGetBit_InvalidOffset() {
 }
 
 func (suite *GlideTestSuite) TestBitCount_ExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		for i := int64(0); i < 8; i++ {
 			client.SetBit(key, i, 1)
@@ -7747,7 +7747,7 @@ func (suite *GlideTestSuite) TestBitCount_ExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestBitCount_ZeroBits() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		result, err := client.BitCount(key)
@@ -7757,7 +7757,7 @@ func (suite *GlideTestSuite) TestBitCount_ZeroBits() {
 }
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
 
@@ -7775,7 +7775,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
 
@@ -7794,7 +7794,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
 
@@ -7812,7 +7812,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 }
 
 func (suite *GlideTestSuite) TestBitOp_AND() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		bitopkey1 := "{bitop_test}" + uuid.New().String()
 		bitopkey2 := "{bitop_test}" + uuid.New().String()
 		destKey := "{bitop_test}" + uuid.New().String()
@@ -7834,7 +7834,7 @@ func (suite *GlideTestSuite) TestBitOp_AND() {
 }
 
 func (suite *GlideTestSuite) TestBitOp_OR() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{bitop_test}" + uuid.New().String()
 		key2 := "{bitop_test}" + uuid.New().String()
 		destKey := "{bitop_test}" + uuid.New().String()
@@ -7856,7 +7856,7 @@ func (suite *GlideTestSuite) TestBitOp_OR() {
 }
 
 func (suite *GlideTestSuite) TestBitOp_XOR() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{bitop_test}" + uuid.New().String()
 		key2 := "{bitop_test}" + uuid.New().String()
 		destKey := "{bitop_test}" + uuid.New().String()
@@ -7878,7 +7878,7 @@ func (suite *GlideTestSuite) TestBitOp_XOR() {
 }
 
 func (suite *GlideTestSuite) TestBitOp_NOT() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		srcKey := "{bitop_test}" + uuid.New().String()
 		destKey := "{bitop_test}" + uuid.New().String()
 
@@ -7896,7 +7896,7 @@ func (suite *GlideTestSuite) TestBitOp_NOT() {
 }
 
 func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		destKey := "{bitop_test}" + uuid.New().String()
 		key1 := "{bitop_test}" + uuid.New().String()
 		key2 := "{bitop_test}" + uuid.New().String()
@@ -7922,7 +7922,7 @@ func (suite *GlideTestSuite) TestBitOp_InvalidArguments() {
 }
 
 func (suite *GlideTestSuite) TestXPendingAndXClaim() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// 1. Arrange the data
 		key := uuid.New().String()
 		groupName := "group" + uuid.New().String()
@@ -8123,7 +8123,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 }
 
 func (suite *GlideTestSuite) TestXClaimFailure() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		stringKey := "string-key-" + uuid.New().String()
 		groupName := "group" + uuid.New().String()
@@ -8235,7 +8235,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 }
 
 func (suite *GlideTestSuite) TestCopy() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 		value := "hello"
@@ -8255,7 +8255,7 @@ func (suite *GlideTestSuite) TestCopy() {
 }
 
 func (suite *GlideTestSuite) TestCopyWithOptions() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
 		value := "hello"
@@ -8277,7 +8277,7 @@ func (suite *GlideTestSuite) TestCopyWithOptions() {
 }
 
 func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		key2 := uuid.New().String()
 		stringKey := uuid.New().String()
@@ -8488,7 +8488,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 }
 
 func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		commands := []options.BitFieldSubCommands{
@@ -8517,7 +8517,7 @@ func (suite *GlideTestSuite) TestBitField_GetAndIncrBy() {
 }
 
 func (suite *GlideTestSuite) TestBitField_Overflow() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		// SAT (Saturate) Overflow Test
 		key1 := uuid.New().String()
 		satCommands := []options.BitFieldSubCommands{
@@ -8566,7 +8566,7 @@ func (suite *GlideTestSuite) TestBitField_Overflow() {
 }
 
 func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		commands := []options.BitFieldSubCommands{
@@ -8587,7 +8587,7 @@ func (suite *GlideTestSuite) TestBitField_MultipleOperations() {
 }
 
 func (suite *GlideTestSuite) TestBitPos_ExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\x10")
 		result, err := client.BitPos(key, 1)
@@ -8597,7 +8597,7 @@ func (suite *GlideTestSuite) TestBitPos_ExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestBitPos_NonExistingKey() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		result, err := client.BitPos(key, 0)
 		assert.NoError(suite.T(), err)
@@ -8606,7 +8606,7 @@ func (suite *GlideTestSuite) TestBitPos_NonExistingKey() {
 }
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x01\x80")
 
@@ -8622,7 +8622,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_StartEnd() {
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x02\x00")
 
@@ -8639,7 +8639,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_BitmapIndexType() {
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x10\x00")
 
@@ -8655,7 +8655,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_BitIndexType() {
 }
 
 func (suite *GlideTestSuite) TestBitPos_FindBitZero() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\xFF\xF7")
 
@@ -8666,7 +8666,7 @@ func (suite *GlideTestSuite) TestBitPos_FindBitZero() {
 }
 
 func (suite *GlideTestSuite) TestBitPosWithOptions_NegativeEnd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		client.Set(key, "\x00\x01\x80")
 
@@ -8681,7 +8681,7 @@ func (suite *GlideTestSuite) TestBitPosWithOptions_NegativeEnd() {
 }
 
 func (suite *GlideTestSuite) TestBitField_Failures() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 
 		// Test invalid bit size for unsigned
@@ -8703,7 +8703,7 @@ func (suite *GlideTestSuite) TestBitField_Failures() {
 }
 
 func (suite *GlideTestSuite) TestBitFieldRO_BasicOperation() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value := int64(42)
 
@@ -8731,7 +8731,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_BasicOperation() {
 }
 
 func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := uuid.New().String()
 		value1 := int64(42)
 		value2 := int64(43)
@@ -8770,7 +8770,7 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 
 func (suite *GlideTestSuite) TestZInter() {
 	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
@@ -8874,7 +8874,7 @@ func (suite *GlideTestSuite) TestZInter() {
 }
 
 func (suite *GlideTestSuite) TestZInterStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
@@ -9013,7 +9013,7 @@ func (suite *GlideTestSuite) TestZInterStore() {
 }
 
 func (suite *GlideTestSuite) TestZDiff() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.NewString()
@@ -9087,7 +9087,7 @@ func (suite *GlideTestSuite) TestZDiff() {
 }
 
 func (suite *GlideTestSuite) TestZDiffStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.NewString()
@@ -9168,7 +9168,7 @@ func (suite *GlideTestSuite) TestZDiffStore() {
 
 func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
@@ -9296,7 +9296,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 
 func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 	suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-" + uuid.New().String()
 		key2 := "{key}-" + uuid.New().String()
 		key3 := "{key}-" + uuid.New().String()
@@ -9455,7 +9455,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 
 func (suite *GlideTestSuite) TestZInterCard() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}:1-" + uuid.NewString()
 		key2 := "{key}:2-" + uuid.NewString()
 		key3 := "{key}:3-" + uuid.NewString()
@@ -9510,7 +9510,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 }
 
 func (suite *GlideTestSuite) TestZLexCount() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		suite.SkipIfServerVersionLowerThanBy("6.2.0", suite.T())
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.New().String()
@@ -9580,7 +9580,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 }
 
 func (suite *GlideTestSuite) TestGeoAdd() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.New().String()
 		key2 := "{testKey}:2-" + uuid.New().String()
@@ -9644,7 +9644,7 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 }
 
 func (suite *GlideTestSuite) TestGeoDist() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key1 := uuid.New().String()
 		key2 := uuid.New().String()
@@ -9688,7 +9688,7 @@ func (suite *GlideTestSuite) TestGeoDist() {
 }
 
 func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key := "{testKey}:3-" + uuid.New().String()
 
@@ -9728,7 +9728,7 @@ func (suite *GlideTestSuite) TestGeoAdd_InvalidArgs() {
 }
 
 func (suite *GlideTestSuite) TestGeoHash() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := uuid.New().String()
 		t := suite.T()
 
@@ -9767,7 +9767,7 @@ func (suite *GlideTestSuite) TestGeoHash() {
 }
 
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key := suite.GenerateLargeUuid()
 		value := suite.GenerateLargeUuid()
 		suite.verifyOK(client.Set(key, value))
@@ -9778,7 +9778,7 @@ func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 }
 
 func (suite *GlideTestSuite) TestGeoPos() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		t := suite.T()
 		key1 := "{testKey}:1-" + uuid.New().String()
 		key2 := "{testKey}:2-" + uuid.New().String()
@@ -9822,7 +9822,7 @@ func (suite *GlideTestSuite) TestGeoPos() {
 }
 
 func (suite *GlideTestSuite) TestGeoSearch() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.New().String()
 		key2 := "{key}-2-" + uuid.New().String()
 
@@ -10114,7 +10114,7 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 }
 
 func (suite *GlideTestSuite) TestGeoSearchStore() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		sourceKey := "{key}-1-" + uuid.New().String()
 		destinationKey := "{key}-2-" + uuid.New().String()
 		key3 := "{key}-3-" + uuid.New().String()
@@ -10271,7 +10271,7 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 func (suite *GlideTestSuite) TestBZPopMax() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 
 		res1, err := client.BZPopMax([]string{key1}, float64(0.1))
@@ -10297,7 +10297,7 @@ func (suite *GlideTestSuite) TestBZPopMax() {
 func (suite *GlideTestSuite) TestZMPop() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
@@ -10356,7 +10356,7 @@ func (suite *GlideTestSuite) TestZMPop() {
 func (suite *GlideTestSuite) TestZMPopWithOptions() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client api.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()

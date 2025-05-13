@@ -385,7 +385,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
 			}
 
-			clients := make([]api.BaseClient, 0, len(tt.channelDefns))
+			clients := make([]api.BaseClientCommands, 0, len(tt.channelDefns))
 			for _, defn := range tt.channelDefns {
 				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false)
 				clients = append(clients, client)

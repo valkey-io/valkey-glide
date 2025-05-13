@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
-	suite.runWithTimeoutClients(func(client api.BaseClient) {
+	suite.runWithTimeoutClients(func(client api.BaseClientCommands) {
 		backoffStrategy := config.NewBackoffStrategy(2, 100, 1)
 		_, clusterMode := client.(api.GlideClusterClientCommands)
 
@@ -111,7 +111,7 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
-			var timeoutClient api.BaseClient
+			var timeoutClient api.BaseClientCommands
 			var err error
 			if clusterMode {
 				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)

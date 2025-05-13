@@ -13,7 +13,7 @@ const (
 	JsonGet = "JSON.GET"
 )
 
-func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap bool) (any, error) {
+func executeCommandWithReturnMap(client api.BaseClientCommands, args []string, returnMap bool) (any, error) {
 	switch client := client.(type) {
 	case *api.GlideClient:
 		return client.CustomCommand(args)
@@ -32,7 +32,7 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 	}
 }
 
-func executeCommand(client api.BaseClient, args []string) (any, error) {
+func executeCommand(client api.BaseClientCommands, args []string) (any, error) {
 	return executeCommandWithReturnMap(client, args, false)
 }
 
@@ -56,7 +56,7 @@ func executeCommand(client api.BaseClient, args []string) (any, error) {
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func Set(
-	client api.BaseClient,
+	client api.BaseClientCommands,
 	key string,
 	path string,
 	value string,
@@ -93,7 +93,7 @@ func Set(
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func SetWithOptions(
-	client api.BaseClient,
+	client api.BaseClientCommands,
 	key string,
 	path string,
 	value string,
@@ -128,7 +128,7 @@ func SetWithOptions(
 //	If `key` doesn't exist, returns models.CreateNilStringResult().
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
-func Get(client api.BaseClient, key string) (models.Result[string], error) {
+func Get(client api.BaseClientCommands, key string) (models.Result[string], error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
 	if err != nil || result == nil {
 		return models.CreateNilStringResult(), err
@@ -153,7 +153,11 @@ func Get(client api.BaseClient, key string) (models.Result[string], error) {
 //	If `key` doesn't exist, returns models.CreateNilStringResult().
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
-func GetWithOptions(client api.BaseClient, key string, options jsonOptions.JsonGetOptions) (models.Result[string], error) {
+func GetWithOptions(
+	client api.BaseClientCommands,
+	key string,
+	options jsonOptions.JsonGetOptions,
+) (models.Result[string], error) {
 	args := []string{JsonGet, key}
 	optionalArgs, err := options.ToArgs()
 	if err != nil {

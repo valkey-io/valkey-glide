@@ -25,7 +25,7 @@ func getExampleGlideClient() *api.GlideClient {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return client.(*api.GlideClient)
+	return client
 }
 
 func getExampleGlideClusterClient() *api.GlideClusterClient {
@@ -43,5 +43,5 @@ func getExampleGlideClusterClient() *api.GlideClusterClient {
 		fmt.Println("error flushing database: ", err)
 	}
 
-	return client.(*api.GlideClusterClient)
+	return client
 }

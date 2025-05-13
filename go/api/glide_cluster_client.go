@@ -22,7 +22,7 @@ var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
 // All commands that can be executed by GlideClusterClient.
 type GlideClusterClientCommands interface {
-	BaseClient
+	BaseClientCommands
 	GenericClusterCommands
 	ServerManagementClusterCommands
 	ConnectionManagementClusterCommands
@@ -62,7 +62,7 @@ type GlideClusterClient struct {
 //	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
 //	      using the specified username and password.
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
-func NewGlideClusterClient(config *config.GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
+func NewGlideClusterClient(config *config.GlideClusterClientConfiguration) (*GlideClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

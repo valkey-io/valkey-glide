@@ -240,12 +240,12 @@ func (suite *GlideTestSuite) TearDownTest() {
 	})
 }
 
-func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClient)) {
+func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClientCommands)) {
 	clients := suite.getDefaultClients()
 	suite.runWithClients(clients, test)
 }
 
-func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClient)) {
+func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClientCommands)) {
 	clients := suite.getTimeoutClients()
 	suite.runWithClients(clients, test)
 }
@@ -254,18 +254,18 @@ func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
 	parallelism int,
 	count int64,
 	timeout time.Duration,
-	test func(client api.BaseClient),
+	test func(client api.BaseClientCommands),
 ) {
 	clients := suite.getDefaultClients()
 	suite.runParallelizedWithClients(clients, parallelism, count, timeout, test)
 }
 
-func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
-	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
+func (suite *GlideTestSuite) getDefaultClients() []api.BaseClientCommands {
+	return []api.BaseClientCommands{suite.defaultClient(), suite.defaultClusterClient()}
 }
 
-func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClient {
-	clients := []api.BaseClient{}
+func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClientCommands {
+	clients := []api.BaseClientCommands{}
 	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20000, nil)
 	if err != nil {
 		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
@@ -288,12 +288,12 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.GlideClientConfigurat
 		WithRequestTimeout(5000)
 }
 
-func (suite *GlideTestSuite) defaultClient() api.GlideClientCommands {
+func (suite *GlideTestSuite) defaultClient() *api.GlideClient {
 	config := suite.defaultClientConfig()
 	return suite.client(config)
 }
 
-func (suite *GlideTestSuite) client(config *config.GlideClientConfiguration) api.GlideClientCommands {
+func (suite *GlideTestSuite) client(config *config.GlideClientConfiguration) *api.GlideClient {
 	client, err := api.NewGlideClient(config)
 
 	assert.Nil(suite.T(), err)
@@ -310,12 +310,12 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.GlideClusterCl
 		WithRequestTimeout(5000)
 }
 
-func (suite *GlideTestSuite) defaultClusterClient() api.GlideClusterClientCommands {
+func (suite *GlideTestSuite) defaultClusterClient() *api.GlideClusterClient {
 	config := suite.defaultClusterClientConfig()
 	return suite.clusterClient(config)
 }
 
-func (suite *GlideTestSuite) clusterClient(config *config.GlideClusterClientConfiguration) api.GlideClusterClientCommands {
+func (suite *GlideTestSuite) clusterClient(config *config.GlideClusterClientConfiguration) *api.GlideClusterClient {
 	client, err := api.NewGlideClusterClient(config)
 
 	assert.Nil(suite.T(), err)
@@ -328,7 +328,7 @@ func (suite *GlideTestSuite) clusterClient(config *config.GlideClusterClientConf
 func (suite *GlideTestSuite) createConnectionTimeoutClient(
 	connectTimeout, requestTimeout int,
 	backoffStrategy *config.BackoffStrategy,
-) (api.GlideClientCommands, error) {
+) (*api.GlideClient, error) {
 	clientConfig := suite.defaultClientConfig().
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
@@ -339,7 +339,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 	connectTimeout, requestTimeout int,
-) (api.GlideClusterClientCommands, error) {
+) (*api.GlideClusterClient, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(
 			config.NewAdvancedGlideClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
@@ -347,7 +347,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 	return api.NewGlideClusterClient(clientConfig)
 }
 
-func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {
+func (suite *GlideTestSuite) runWithClients(clients []api.BaseClientCommands, test func(client api.BaseClientCommands)) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
@@ -356,11 +356,11 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 }
 
 func (suite *GlideTestSuite) runParallelizedWithClients(
-	clients []api.BaseClient,
+	clients []api.BaseClientCommands,
 	parallelism int,
 	count int64,
 	timeout time.Duration,
-	test func(client api.BaseClient),
+	test func(client api.BaseClientCommands),
 ) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
@@ -419,7 +419,7 @@ func (c *ClientType) String() string {
 	return []string{"GlideClient", "GlideClusterClient"}[*c]
 }
 
-func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) api.BaseClient {
+func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) api.BaseClientCommands {
 	switch clientType {
 	case GlideClient:
 		if sub, ok := subscription.(*config.StandaloneSubscriptionConfig); ok {
@@ -441,14 +441,14 @@ func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription
 
 func (suite *GlideTestSuite) createStandaloneClientWithSubscriptions(
 	config *config.StandaloneSubscriptionConfig,
-) api.GlideClientCommands {
+) *api.GlideClient {
 	clientConfig := suite.defaultClientConfig().WithSubscriptionConfig(config)
 	return suite.client(clientConfig)
 }
 
 func (suite *GlideTestSuite) createClusterClientWithSubscriptions(
 	config *config.ClusterSubscriptionConfig,
-) api.GlideClusterClientCommands {
+) *api.GlideClusterClient {
 	clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(config)
 	return suite.clusterClient(clientConfig)
 }
@@ -622,7 +622,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	channels []ChannelDefn,
 	clientId int,
 	withCallback bool,
-) api.BaseClient {
+) api.BaseClientCommands {
 	callback := func(message *models.PubSubMessage, context any) {
 		callbackCtx.Store(fmt.Sprintf("%d-%s", clientId, message.Channel), message)
 	}

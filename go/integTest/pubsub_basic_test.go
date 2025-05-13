@@ -148,7 +148,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 				tt.channelName: tt.messageContent,
 			}
 
-			var receiver api.BaseClient
+			var receiver api.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
@@ -321,7 +321,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 			// Create multiple subscribers
 			const numSubscribers = 3
 			queues := make(map[int]*api.PubSubMessageQueue)
-			subscribers := make([]api.BaseClient, numSubscribers)
+			subscribers := make([]api.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
@@ -455,7 +455,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			expectedMessages := make(map[string]string)
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClient
+			var receiver api.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
@@ -641,7 +641,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 				expectedMessages[channelName] = tt.messageContent
 			}
 
-			var receiver api.BaseClient
+			var receiver api.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
@@ -775,7 +775,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			expectedMessages := make(map[string]string)
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClient
+			var receiver api.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
@@ -930,7 +930,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			expectedMessages[tt.exactChannel] = tt.messageContent
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClient
+			var receiver api.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
@@ -1097,7 +1097,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			// Create multiple subscribers
 			const numSubscribers = 3
 			queues := make(map[int]*api.PubSubMessageQueue)
-			subscribers := make([]api.BaseClient, numSubscribers)
+			subscribers := make([]api.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {

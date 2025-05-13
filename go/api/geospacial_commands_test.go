@@ -583,7 +583,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
 	// 1
 }
 
-func AddInitialGeoData(client BaseClient, key string) {
+func AddInitialGeoData(client BaseClientCommands, key string) {
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 	}
