@@ -421,28 +421,6 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 	return handleStringOrNilResponse(payload.value)
 }
 
-// dropCommandSpan drops an OpenTelemetry span associated with a command.
-// The spanPtr parameter can be nil or a uint64 representing the span pointer.
-// func (client *baseClient) dropCommandSpan(spanPtr interface{}) {
-// 	if spanPtr == nil {
-// 		return
-// 	}
-
-// 	var spanValue uint64
-// 	switch v := spanPtr.(type) {
-// 	case uint64:
-// 		spanValue = v
-// 	case int64:
-// 		spanValue = uint64(v)
-// 	case int:
-// 		spanValue = uint64(v)
-// 	default:
-// 		return
-// 	}
-
-// 	C.drop_otel_span(C.uintptr_t(spanValue))
-// }
-
 // Update the current connection with a new password.
 //
 // This method is useful in scenarios where the server password has changed or when utilizing
