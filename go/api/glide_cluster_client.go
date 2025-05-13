@@ -6,6 +6,8 @@ package api
 import "C"
 
 import (
+	"unsafe"
+
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"github.com/valkey-io/valkey-glide/go/api/models"
@@ -13,7 +15,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/internal/utils"
-	"unsafe"
 )
 
 // GlideClusterClient interface compliance check.

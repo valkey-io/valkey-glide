@@ -347,7 +347,10 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 	return api.NewGlideClusterClient(clientConfig)
 }
 
-func (suite *GlideTestSuite) runWithClients(clients []interfaces.BaseClientCommands, test func(client interfaces.BaseClientCommands)) {
+func (suite *GlideTestSuite) runWithClients(
+	clients []interfaces.BaseClientCommands,
+	test func(client interfaces.BaseClientCommands),
+) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
