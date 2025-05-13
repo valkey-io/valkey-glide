@@ -68,6 +68,8 @@
 * Benchmarks: Fix rust benchmark latencies calculation
 * Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
 * Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
+* Go: Move private types to internal packages ([#3841](https://github.com/valkey-io/valkey-glide/pull/3841))
+* Go: Move private interfaces to internal packages ([#3856](https://github.com/valkey-io/valkey-glide/pull/3856))
 
 #### Breaking Changes
 
