@@ -147,6 +147,58 @@ class PeriodicChecksStatus(Enum):
     """
 
 
+class OpenTelemetryConfig:
+    """
+    Represents the configuration for OpenTelemetry.
+
+    Attributes:
+        traces_collector_endpoint (str): The client collector address to export the traces measurements.
+            Supported protocols:
+            - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
+            - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
+            - gRPC: Use `grpc://` prefix (e.g., `grpc://localhost:4317`)
+            - File: Use file:// followed by a full path to export the signals to a local file.
+            The file:// endpoint supports both directory paths and explicit file paths:
+            - If the path is a directory or lacks a file extension (e.g., file:///tmp/otel),
+            it will default to writing to a file named spans.json in that directory.
+            - If the path includes a filename with an extension (e.g., file:///tmp/otel/traces.json),
+            the specified file will be used as-is.
+            - The parent directory must already exist. If it does not, the client will fail to initialize.
+            - If the target file already exists, new data will be appended to it.
+
+        metrics_collector_endpoint (str): The client collector address to export the metrics.
+            Supports the same protocols as traces_collector_endpoint.
+        flush_interval_ms (Optional[int]): The duration in milliseconds the data will be exported to the collector.
+            If interval is not specified, 5000ms will be used.
+    """
+
+    def __init__(
+        self,
+        traces_collector_endpoint: str,
+        metrics_collector_endpoint: str,
+        flush_interval_ms: Optional[int] = None,
+    ):
+        self.traces_collector_endpoint = traces_collector_endpoint
+        self.metrics_collector_endpoint = metrics_collector_endpoint
+        self.flush_interval_ms = flush_interval_ms
+
+        # Validate flush_interval_ms is not negative
+        if flush_interval_ms is not None and flush_interval_ms < 0:
+            raise ConfigurationError("InvalidInput: flushIntervalMs cannot be negative")
+
+        # Validate collector endpoints
+        for endpoint in [traces_collector_endpoint, metrics_collector_endpoint]:
+            if not (
+                endpoint.startswith("http://")
+                or endpoint.startswith("https://")
+                or endpoint.startswith("grpc://")
+                or endpoint.startswith("file://")
+            ):
+                raise ConfigurationError(
+                    f"InvalidInput: Collector endpoint '{endpoint}' must start with http://, https://, grpc://, or file://"
+                )
+
+
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
@@ -156,16 +208,36 @@ class AdvancedBaseClientConfiguration:
             This applies both during initial client creation and any reconnections that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
             If not explicitly set, a default value of 250 milliseconds will be used.
+        opentelemetry_config (Optional[OpenTelemetryConfig]): Configuration for OpenTelemetry if exists.
+            If not set, OpenTelemetry will not be enabled.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        opentelemetry_config: Optional[OpenTelemetryConfig] = None,
+    ):
         self.connection_timeout = connection_timeout
+        self.opentelemetry_config = opentelemetry_config
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
+
+        if self.opentelemetry_config:
+            request.opentelemetry_config.traces_collector_endpoint = (
+                self.opentelemetry_config.traces_collector_endpoint
+            )
+            request.opentelemetry_config.metrics_collector_endpoint = (
+                self.opentelemetry_config.metrics_collector_endpoint
+            )
+            if self.opentelemetry_config.flush_interval_ms is not None:
+                request.opentelemetry_config.flush_interval = (
+                    self.opentelemetry_config.flush_interval_ms
+                )
+
         return request
 
 
@@ -315,11 +387,17 @@ class BaseClientConfiguration:
 class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Standalone Glide client.
+
+    Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnections that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 250 milliseconds will be used.
+        opentelemetry_config (Optional[OpenTelemetryConfig]): Configuration for OpenTelemetry if exists.
+            If not set, OpenTelemetry will not be enabled.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
-
-        super().__init__(connection_timeout)
+    # Inherits __init__ from AdvancedBaseClientConfiguration
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -477,10 +555,17 @@ class GlideClientConfiguration(BaseClientConfiguration):
 class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Glide Cluster client.
+
+    Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnections that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 250 milliseconds will be used.
+        opentelemetry_config (Optional[OpenTelemetryConfig]): Configuration for OpenTelemetry if exists.
+            If not set, OpenTelemetry will not be enabled.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
-        super().__init__(connection_timeout)
+    # Inherits __init__ from AdvancedBaseClientConfiguration
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
