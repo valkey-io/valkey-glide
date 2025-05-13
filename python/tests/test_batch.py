@@ -1401,6 +1401,16 @@ class TestBatch:
         assert result2[0] == OK
         assert result2[1] == b"value"
 
+        # Restore with frequency and idletime both set.
+        with pytest.raises(RequestError) as e:
+            await glide_client.restore(
+                key2, 0, b"", replace=True, idletime=-10, frequency=10
+            )
+        assert (
+            "syntax error: both IDLETIME and FREQ cannot be set at the same time."
+            in str(e)
+        )
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_function_dump_restore(

@@ -2318,7 +2318,9 @@ class BaseBatch:
         if absttl is True:
             args.append("ABSTTL")
         if idletime is not None and frequency is not None:
-            raise ValueError("syntax error: both IDLETIME and FREQ cannot be set at the same time.")
+            raise ValueError(
+                "syntax error: both IDLETIME and FREQ cannot be set at the same time."
+            )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:
