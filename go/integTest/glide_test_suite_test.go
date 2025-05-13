@@ -17,15 +17,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/api/constants"
-	"github.com/valkey-io/valkey-glide/go/api/models"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 type GlideTestSuite struct {
@@ -34,8 +34,8 @@ type GlideTestSuite struct {
 	clusterHosts    []config.NodeAddress
 	tls             bool
 	serverVersion   string
-	clients         []api.GlideClientCommands
-	clusterClients  []api.GlideClusterClientCommands
+	clients         []interfaces.GlideClientCommands
+	clusterClients  []interfaces.GlideClusterClientCommands
 }
 
 var (
@@ -240,12 +240,12 @@ func (suite *GlideTestSuite) TearDownTest() {
 	})
 }
 
-func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClientCommands)) {
+func (suite *GlideTestSuite) runWithDefaultClients(test func(client interfaces.BaseClientCommands)) {
 	clients := suite.getDefaultClients()
 	suite.runWithClients(clients, test)
 }
 
-func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClientCommands)) {
+func (suite *GlideTestSuite) runWithTimeoutClients(test func(client interfaces.BaseClientCommands)) {
 	clients := suite.getTimeoutClients()
 	suite.runWithClients(clients, test)
 }
@@ -254,18 +254,18 @@ func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
 	parallelism int,
 	count int64,
 	timeout time.Duration,
-	test func(client api.BaseClientCommands),
+	test func(client interfaces.BaseClientCommands),
 ) {
 	clients := suite.getDefaultClients()
 	suite.runParallelizedWithClients(clients, parallelism, count, timeout, test)
 }
 
-func (suite *GlideTestSuite) getDefaultClients() []api.BaseClientCommands {
-	return []api.BaseClientCommands{suite.defaultClient(), suite.defaultClusterClient()}
+func (suite *GlideTestSuite) getDefaultClients() []interfaces.BaseClientCommands {
+	return []interfaces.BaseClientCommands{suite.defaultClient(), suite.defaultClusterClient()}
 }
 
-func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClientCommands {
-	clients := []api.BaseClientCommands{}
+func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands {
+	clients := []interfaces.BaseClientCommands{}
 	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20000, nil)
 	if err != nil {
 		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
@@ -347,7 +347,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 	return api.NewGlideClusterClient(clientConfig)
 }
 
-func (suite *GlideTestSuite) runWithClients(clients []api.BaseClientCommands, test func(client api.BaseClientCommands)) {
+func (suite *GlideTestSuite) runWithClients(clients []interfaces.BaseClientCommands, test func(client interfaces.BaseClientCommands)) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
@@ -356,11 +356,11 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClientCommands, te
 }
 
 func (suite *GlideTestSuite) runParallelizedWithClients(
-	clients []api.BaseClientCommands,
+	clients []interfaces.BaseClientCommands,
 	parallelism int,
 	count int64,
 	timeout time.Duration,
-	test func(client api.BaseClientCommands),
+	test func(client interfaces.BaseClientCommands),
 ) {
 	for _, client := range clients {
 		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
@@ -419,7 +419,7 @@ func (c *ClientType) String() string {
 	return []string{"GlideClient", "GlideClusterClient"}[*c]
 }
 
-func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) api.BaseClientCommands {
+func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) interfaces.BaseClientCommands {
 	switch clientType {
 	case GlideClient:
 		if sub, ok := subscription.(*config.StandaloneSubscriptionConfig); ok {
@@ -622,7 +622,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	channels []ChannelDefn,
 	clientId int,
 	withCallback bool,
-) api.BaseClientCommands {
+) interfaces.BaseClientCommands {
 	callback := func(message *models.PubSubMessage, context any) {
 		callbackCtx.Store(fmt.Sprintf("%d-%s", clientId, message.Channel), message)
 	}
@@ -663,4 +663,8 @@ func getChannelMode(sharded bool) TestChannelMode {
 		return ShardedMode
 	}
 	return ExactMode
+}
+
+type PubSubQueuer interface {
+	GetQueue() (*api.PubSubMessageQueue, error)
 }

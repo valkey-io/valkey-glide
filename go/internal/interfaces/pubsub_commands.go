@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 // PubSubCommands defines the interface for Pub/Sub operations available in both standalone and cluster modes.
 type PubSubCommands interface {
@@ -26,8 +26,4 @@ type PubSubClusterCommands interface {
 	PubSubShardChannels() ([]string, error)
 	PubSubShardChannelsWithPattern(pattern string) ([]string, error)
 	PubSubShardNumSub(channels ...string) (map[string]int64, error)
-}
-
-type PubSubHandler interface {
-	GetQueue() (*PubSubMessageQueue, error)
 }

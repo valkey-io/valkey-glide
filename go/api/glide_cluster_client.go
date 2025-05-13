@@ -6,30 +6,20 @@ package api
 import "C"
 
 import (
-	"unsafe"
-
-	"github.com/valkey-io/valkey-glide/go/api/constants"
-
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/internal/utils"
+	"unsafe"
 )
 
 // GlideClusterClient interface compliance check.
-var _ GlideClusterClientCommands = (*GlideClusterClient)(nil)
+var _ interfaces.GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
 // All commands that can be executed by GlideClusterClient.
-type GlideClusterClientCommands interface {
-	BaseClientCommands
-	GenericClusterCommands
-	ServerManagementClusterCommands
-	ConnectionManagementClusterCommands
-	ScriptingAndFunctionClusterCommands
-	PubSubClusterCommands
-}
-
 // Client used for connection to cluster servers.
 // Use [NewGlideClusterClient] to request a client.
 //

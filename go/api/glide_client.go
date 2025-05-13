@@ -10,23 +10,14 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api/constants"
 	"github.com/valkey-io/valkey-glide/go/api/models"
 	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/internal/utils"
 )
 
 // GlideClient interface compliance check.
-var _ GlideClientCommands = (*GlideClient)(nil)
+var _ interfaces.GlideClientCommands = (*GlideClient)(nil)
 
 // All commands that can be executed by GlideClient.
-type GlideClientCommands interface {
-	BaseClientCommands
-	GenericCommands
-	ServerManagementCommands
-	BitmapCommands
-	ConnectionManagementCommands
-	ScriptingAndFunctionStandaloneCommands
-	PubSubStandaloneCommands
-}
-
 // Client used for connection to standalone servers.
 // Use [NewGlideClient] to request a client.
 //

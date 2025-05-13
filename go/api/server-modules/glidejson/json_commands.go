@@ -6,6 +6,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api/models"
 	jsonOptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
 	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 const (
@@ -13,7 +14,7 @@ const (
 	JsonGet = "JSON.GET"
 )
 
-func executeCommandWithReturnMap(client api.BaseClientCommands, args []string, returnMap bool) (any, error) {
+func executeCommandWithReturnMap(client interfaces.BaseClientCommands, args []string, returnMap bool) (any, error) {
 	switch client := client.(type) {
 	case *api.GlideClient:
 		return client.CustomCommand(args)
@@ -32,7 +33,7 @@ func executeCommandWithReturnMap(client api.BaseClientCommands, args []string, r
 	}
 }
 
-func executeCommand(client api.BaseClientCommands, args []string) (any, error) {
+func executeCommand(client interfaces.BaseClientCommands, args []string) (any, error) {
 	return executeCommandWithReturnMap(client, args, false)
 }
 
@@ -56,7 +57,7 @@ func executeCommand(client api.BaseClientCommands, args []string) (any, error) {
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func Set(
-	client api.BaseClientCommands,
+	client interfaces.BaseClientCommands,
 	key string,
 	path string,
 	value string,
@@ -93,7 +94,7 @@ func Set(
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func SetWithOptions(
-	client api.BaseClientCommands,
+	client interfaces.BaseClientCommands,
 	key string,
 	path string,
 	value string,
@@ -128,7 +129,7 @@ func SetWithOptions(
 //	If `key` doesn't exist, returns models.CreateNilStringResult().
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
-func Get(client api.BaseClientCommands, key string) (models.Result[string], error) {
+func Get(client interfaces.BaseClientCommands, key string) (models.Result[string], error) {
 	result, err := executeCommand(client, []string{JsonGet, key})
 	if err != nil || result == nil {
 		return models.CreateNilStringResult(), err
@@ -154,7 +155,7 @@ func Get(client api.BaseClientCommands, key string) (models.Result[string], erro
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
 func GetWithOptions(
-	client api.BaseClientCommands,
+	client interfaces.BaseClientCommands,
 	key string,
 	options jsonOptions.JsonGetOptions,
 ) (models.Result[string], error) {

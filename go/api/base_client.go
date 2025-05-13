@@ -39,24 +39,6 @@ import (
 )
 
 // BaseClientCommands defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
-type BaseClientCommands interface {
-	StringCommands
-	HashCommands
-	ListCommands
-	SetCommands
-	StreamCommands
-	SortedSetCommands
-	HyperLogLogCommands
-	GenericBaseCommands
-	BitmapCommands
-	GeoSpatialCommands
-	ScriptingAndFunctionBaseCommands
-	PubSubCommands
-	PubSubHandler
-	// Close terminates the client by closing all associated resources.
-	Close()
-}
-
 const OK = "OK"
 
 type payload struct {

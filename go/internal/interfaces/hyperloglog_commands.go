@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package interfaces
 
 // Supports commands and transactions for the "HyperLogLog" group of commands for standalone and cluster clients.
 //

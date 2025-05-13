@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 func ExampleGlideClient_GeoAdd() {
@@ -583,7 +584,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
 	// 1
 }
 
-func AddInitialGeoData(client BaseClientCommands, key string) {
+func AddInitialGeoData(client interfaces.BaseClientCommands, key string) {
 	membersToCoordinates := map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 	}

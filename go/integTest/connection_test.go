@@ -11,6 +11,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
@@ -61,9 +62,9 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
-	suite.runWithTimeoutClients(func(client api.BaseClientCommands) {
+	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
 		backoffStrategy := config.NewBackoffStrategy(2, 100, 1)
-		_, clusterMode := client.(api.GlideClusterClientCommands)
+		_, clusterMode := client.(interfaces.GlideClusterClientCommands)
 
 		// Runnable for long-running DEBUG SLEEP command
 		debugSleepTask := func() {
@@ -72,12 +73,12 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 					suite.T().Errorf("Recovered in debugSleepTask: %v", r)
 				}
 			}()
-			if clusterClient, ok := client.(api.GlideClusterClientCommands); ok {
+			if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
 				_, err := clusterClient.CustomCommandWithRoute([]string{"DEBUG", "sleep", "7"}, config.AllNodes)
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
-			} else if glideClient, ok := client.(api.GlideClientCommands); ok {
+			} else if glideClient, ok := client.(interfaces.GlideClientCommands); ok {
 				_, err := glideClient.CustomCommand([]string{"DEBUG", "sleep", "7"})
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
@@ -111,7 +112,7 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
-			var timeoutClient api.BaseClientCommands
+			var timeoutClient interfaces.BaseClientCommands
 			var err error
 			if clusterMode {
 				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)
