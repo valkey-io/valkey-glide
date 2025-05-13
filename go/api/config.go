@@ -99,12 +99,6 @@ type baseClientConfiguration struct {
 	clientAZ       string
 }
 
-// Advanced configuration settings class for creating a client. Shared settings for standalone and
-// cluster clients.
-type AdvancedBaseClientConfiguration struct {
-	connectionTimeout int
-}
-
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
 	request := protobuf.ConnectionRequest{}
 	for _, address := range config.addresses {
@@ -333,7 +327,6 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
 	}
-
 	return request, nil
 }
 
@@ -413,6 +406,12 @@ func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
 ) *GlideClusterClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
 	return config
+}
+
+// Advanced configuration settings class for creating a client. Shared settings for standalone and
+// cluster clients.
+type AdvancedBaseClientConfiguration struct {
+	connectionTimeout int
 }
 
 // Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
