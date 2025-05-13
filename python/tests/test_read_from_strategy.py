@@ -4,17 +4,17 @@ import re
 from typing import Mapping, cast
 
 import pytest
+
 from glide.async_commands.core import InfoSection
 from glide.config import ProtocolVersion, ReadFrom
 from glide.constants import OK
 from glide.glide_client import GlideClusterClient
 from glide.routes import AllNodes, SlotIdRoute, SlotType
-
 from tests.conftest import create_client
 from tests.utils.utils import get_first_result
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 # @pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestAZAffinity:
     async def _get_num_replicas(self, client: GlideClusterClient) -> int:

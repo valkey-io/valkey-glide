@@ -1,14 +1,14 @@
-import asyncio
 from typing import AsyncGenerator, List, cast
 
+import anyio
 import pytest
+
 from glide import ByAddressRoute
 from glide.async_commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
 from glide.glide import ClusterScanCursor
 from glide.glide_client import GlideClient, GlideClusterClient
-
 from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import get_random_string
@@ -18,10 +18,10 @@ from tests.utils.utils import get_random_string
 async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
     # we allow max 20 seconds to get the nodes
     timeout = 20
-    start_time = asyncio.get_event_loop().time()
+    start_time = anyio.current_time()
 
     while True:
-        if asyncio.get_event_loop().time() - start_time > timeout:
+        if anyio.current_time() - start_time > timeout:
             return False
 
         cluster_info = await client.custom_command(["CLUSTER", "INFO"])
@@ -50,7 +50,7 @@ async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
             ):
                 break
 
-        await asyncio.sleep(2)
+        await anyio.sleep(2)
 
     return True
 
@@ -93,7 +93,7 @@ async def glide_client_scoped(
     await client.close()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestScan:
     # Cluster scan tests
     @pytest.mark.parametrize("cluster_mode", [True])

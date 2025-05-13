@@ -446,7 +446,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Gets the value associated with the given key, or <code>null</code> if no such value exists.
+     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
+     * <code>key</code> exists.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -744,7 +745,9 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
      * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
      * order to provide an offset starting from the end of the string. So <code>-1</code> means the
-     * last character, <code>-2</code> the penultimate and so forth.
+     * last character, <code>-2</code> the penultimate and so forth. If <code>key</code> does not
+     * exist, an empty string is returned. If <code>start</code> or <code>end</code> are out of range,
+     * returns the substring within the valid range of the string.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3465,7 +3468,10 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
      *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream entry IDs, to an array
-     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns <code>
+     *     null</code> if all key-ID pairs in <code>keys_and_ids</code> have either a non-existing key
+     *     or a non-existing ID, or there are no entries after the given ID, or a timeout is hit in
+     *     the block option.
      */
     public <ArgType> T xread(
             @NonNull Map<ArgType, ArgType> keysAndIds, @NonNull StreamReadOptions options) {
@@ -3539,16 +3545,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -3574,16 +3580,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -3612,16 +3618,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -3649,16 +3655,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
+     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
+     *           exclusive bounded stream entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4300,7 +4306,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
@@ -4395,7 +4401,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count Limits the number of claimed entries to the specified value.
+     * @param count Limits the number of claimed entries to the specified value. Default value is 100.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
@@ -5958,7 +5964,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
-     *     elements.
+     *     elements. If no member could be popped, returns <code>null</code>.
      */
     public <ArgType> T lmpop(
             @NonNull ArgType[] keys, @NonNull ListDirection direction, @NonNull Long count) {
@@ -5986,7 +5992,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
-     *     popped element.
+     *     popped element. If no member could be popped, returns <code>null</code>.
      */
     public <ArgType> T lmpop(@NonNull ArgType[] keys, @NonNull ListDirection direction) {
         checkTypeOrThrow(keys);

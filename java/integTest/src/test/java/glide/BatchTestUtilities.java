@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -9,7 +10,6 @@ import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;

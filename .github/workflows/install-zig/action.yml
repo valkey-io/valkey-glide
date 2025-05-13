@@ -1,0 +1,15 @@
+name: Install zig compiler and ziglang
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install zig
+          shell: bash
+          run: |
+              if [[ `cat /etc/os-release | grep "Amazon Linux"` ]]; then
+                  yum install -y python3-pip
+              else
+                  sudo apt install -y python3-pip
+              fi
+              pip3 install ziglang
+              cargo install --locked cargo-zigbuild

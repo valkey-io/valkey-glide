@@ -1,9 +1,24 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 import sys
 import threading
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
+
+import anyio
+import sniffio
+from anyio import to_thread
 
 from glide.async_commands.cluster_commands import ClusterCommands
 from glide.async_commands.command_args import ObjectType
@@ -38,11 +53,17 @@ from .glide import (
 )
 
 if sys.version_info >= (3, 11):
-    import asyncio as async_timeout
     from typing import Self
 else:
-    import async_timeout
     from typing_extensions import Self
+
+if TYPE_CHECKING:
+    import asyncio
+
+    import trio
+
+    TTask = Union[asyncio.Task[None], trio.lowlevel.Task]
+    TFuture = Union[asyncio.Future[Any], "_CompatFuture"]
 
 
 def get_request_error_class(
@@ -59,22 +80,93 @@ def get_request_error_class(
     return RequestError
 
 
+class _CompatFuture:
+    """anyio shim for asyncio.Future-like functionality"""
+
+    def __init__(self) -> None:
+        self._is_done = anyio.Event()
+        self._result: Any = None
+        self._exception: Optional[Exception] = None
+
+    def set_result(self, result: Any) -> None:
+        self._result = result
+        self._is_done.set()
+
+    def set_exception(self, exception: Exception) -> None:
+        self._exception = exception
+        self._is_done.set()
+
+    def done(self) -> bool:
+        return self._is_done.is_set()
+
+    def __await__(self):
+        return self._is_done.wait().__await__()
+
+    def result(self) -> Any:
+        if self._exception:
+            raise self._exception
+
+        return self._result
+
+
+def _get_new_future_instance() -> "TFuture":
+    if sniffio.current_async_library() == "asyncio":
+        import asyncio
+
+        return asyncio.get_running_loop().create_future()
+
+    # _CompatFuture is also compatible with asyncio, but is not as closely integrated
+    # into the asyncio event loop and thus introduces a noticeable performance
+    # degradation. so we only use it for trio
+    return _CompatFuture()
+
+
 class BaseClient(CoreCommands):
     def __init__(self, config: BaseClientConfiguration):
         """
         To create a new client, use the `create` classmethod
         """
         self.config: BaseClientConfiguration = config
-        self._available_futures: Dict[int, asyncio.Future] = {}
+        self._available_futures: Dict[int, "TFuture"] = {}
         self._available_callback_indexes: List[int] = list()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
-        self._reader_task: Optional[asyncio.Task] = None
+        self._reader_task: Optional["TTask"] = None
         self._is_closed: bool = False
-        self._pubsub_futures: List[asyncio.Future] = []
+        self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[Response] = list()
+
+        self._pending_tasks: Optional[Set[Awaitable[None]]] = None
+        """asyncio-only to avoid gc on pending write tasks"""
+
+    def _create_task(self, task, *args, **kwargs):
+        """framework agnostic free-floating task shim"""
+        framework = sniffio.current_async_library()
+        if framework == "trio":
+            from functools import partial
+
+            import trio
+
+            return trio.lowlevel.spawn_system_task(partial(task, **kwargs), *args)
+        elif framework == "asyncio":
+            import asyncio
+
+            # the asyncio event loop holds weak refs to tasks, so it's recommended to
+            # hold strong refs to them during their lifetime to prevent garbage
+            # collection
+            t = asyncio.create_task(task(*args, **kwargs))
+
+            if self._pending_tasks is None:
+                self._pending_tasks = set()
+
+            self._pending_tasks.add(t)
+            t.add_done_callback(self._pending_tasks.discard)
+
+            return t
+
+        raise RuntimeError(f"Unsupported async framework {framework}")
 
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
@@ -148,8 +240,8 @@ class BaseClient(CoreCommands):
         """
         config = config
         self = cls(config)
-        init_future: asyncio.Future = asyncio.Future()
-        loop = asyncio.get_event_loop()
+
+        init_event: threading.Event = threading.Event()
 
         def init_callback(socket_path: Optional[str], err: Optional[str]):
             if err is not None:
@@ -161,7 +253,7 @@ class BaseClient(CoreCommands):
             else:
                 # Received socket path
                 self.socket_path = socket_path
-                loop.call_soon_threadsafe(init_future.set_result, True)
+                init_event.set()
 
         start_socket_listener_external(init_callback=init_callback)
 
@@ -169,36 +261,27 @@ class BaseClient(CoreCommands):
         # level or higher
         ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
         # Wait for the socket listener to complete its initialization
-        await init_future
+        await to_thread.run_sync(init_event.wait)
         # Create UDS connection
         await self._create_uds_connection()
+
         # Start the reader loop as a background task
-        self._reader_task = asyncio.create_task(self._reader_loop())
+        self._reader_task = self._create_task(self._reader_loop)
+
         # Set the client configurations
         await self._set_connection_configurations()
+
         return self
 
     async def _create_uds_connection(self) -> None:
         try:
             # Open an UDS connection
-            async with async_timeout.timeout(DEFAULT_TIMEOUT_IN_MILLISECONDS):
-                reader, writer = await asyncio.open_unix_connection(
-                    path=self.socket_path
+            with anyio.fail_after(DEFAULT_TIMEOUT_IN_MILLISECONDS):
+                self._stream = await anyio.connect_unix(
+                    path=cast(str, self.socket_path)
                 )
-            self._reader = reader
-            self._writer = writer
         except Exception as e:
-            await self.close(f"Failed to create UDS connection: {e}")
-            raise
-
-    def __del__(self) -> None:
-        try:
-            if self._reader_task:
-                self._reader_task.cancel()
-        except RuntimeError as e:
-            if "no running event loop" in str(e):
-                # event loop already closed
-                pass
+            raise ClosingError("Failed to create UDS connection") from e
 
     async def close(self, err_message: Optional[str] = None) -> None:
         """
@@ -210,25 +293,24 @@ class BaseClient(CoreCommands):
             closing all open futures.
             Defaults to None.
         """
-        self._is_closed = True
-        for response_future in self._available_futures.values():
-            if not response_future.done():
-                err_message = "" if err_message is None else err_message
-                response_future.set_exception(ClosingError(err_message))
-        try:
-            self._pubsub_lock.acquire()
-            for pubsub_future in self._pubsub_futures:
-                if not pubsub_future.done() and not pubsub_future.cancelled():
-                    pubsub_future.set_exception(ClosingError(""))
-        finally:
-            self._pubsub_lock.release()
+        if not self._is_closed:
+            self._is_closed = True
+            err_message = "" if err_message is None else err_message
+            for response_future in self._available_futures.values():
+                if not response_future.done():
+                    response_future.set_exception(ClosingError(err_message))
+            try:
+                self._pubsub_lock.acquire()
+                for pubsub_future in self._pubsub_futures:
+                    if not pubsub_future.done():
+                        pubsub_future.set_exception(ClosingError(err_message))
+            finally:
+                self._pubsub_lock.release()
 
-        self._writer.close()
-        await self._writer.wait_closed()
-        self.__del__()
+            await self._stream.aclose()
 
-    def _get_future(self, callback_idx: int) -> asyncio.Future:
-        response_future: asyncio.Future = asyncio.Future()
+    def _get_future(self, callback_idx: int) -> "TFuture":
+        response_future: "TFuture" = _get_new_future_instance()
         self._available_futures.update({callback_idx: response_future})
         return response_future
 
@@ -237,14 +319,15 @@ class BaseClient(CoreCommands):
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
-        response_future: asyncio.Future = self._get_future(0)
-        await self._write_or_buffer_request(conn_request)
+        response_future: "TFuture" = self._get_future(0)
+        self._create_write_task(conn_request)
         await response_future
-        if response_future.result() is not OK:
-            raise ClosingError(response_future.result())
+        res = response_future.result()
+        if res is not OK:
+            raise ClosingError(res)
 
     def _create_write_task(self, request: TRequest):
-        asyncio.create_task(self._write_or_buffer_request(request))
+        self._create_task(self._write_or_buffer_request, request)
 
     async def _write_or_buffer_request(self, request: TRequest):
         self._buffered_requests.append(request)
@@ -252,7 +335,21 @@ class BaseClient(CoreCommands):
             try:
                 while len(self._buffered_requests) > 0:
                     await self._write_buffered_requests_to_socket()
-
+            except Exception as e:
+                # trio system tasks cannot raise exceptions, so gracefully propagate
+                # any error to the pending future instead
+                callback_idx = (
+                    request.callback_idx if isinstance(request, CommandRequest) else 0
+                )
+                res_future = self._available_futures.pop(callback_idx, None)
+                if res_future:
+                    res_future.set_exception(e)
+                else:
+                    ClientLogger.log(
+                        LogLevel.WARN,
+                        "unhandled response error",
+                        f"Unhandled response error for unknown request: {callback_idx}",
+                    )
             finally:
                 self._writer_lock.release()
 
@@ -262,8 +359,7 @@ class BaseClient(CoreCommands):
         b_arr = bytearray()
         for request in requests:
             ProtobufCodec.encode_delimited(b_arr, request)
-        self._writer.write(b_arr)
-        await self._writer.drain()
+        await self._stream.send(b_arr)
 
     def _encode_arg(self, arg: TEncodable) -> bytes:
         """
@@ -417,14 +513,15 @@ class BaseClient(CoreCommands):
             )
 
         # locking might not be required
-        response_future: asyncio.Future = asyncio.Future()
+        response_future: "TFuture" = _get_new_future_instance()
         try:
             self._pubsub_lock.acquire()
             self._pubsub_futures.append(response_future)
             self._complete_pubsub_futures_safe()
         finally:
             self._pubsub_lock.release()
-        return await response_future
+        await response_future
+        return response_future.result()
 
     def try_get_pubsub_message(self) -> Optional[CoreCommands.PubSubMsg]:
         if self._is_closed:
@@ -457,8 +554,7 @@ class BaseClient(CoreCommands):
     def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
         while len(self._pubsub_futures):
             next_future = self._pubsub_futures.pop(0)
-            if not next_future.cancelled():
-                next_future.set_exception(exception)
+            next_future.set_exception(exception)
 
     def _notification_to_pubsub_message_safe(
         self, response: Response
@@ -538,10 +634,16 @@ class BaseClient(CoreCommands):
                 if response.HasField("closing_error")
                 else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
             )
+            exc = ClosingError(err_msg)
             if res_future is not None:
-                res_future.set_exception(ClosingError(err_msg))
-            await self.close(err_msg)
-            raise ClosingError(err_msg)
+                res_future.set_exception(exc)
+            else:
+                ClientLogger.log(
+                    LogLevel.WARN,
+                    "unhandled response error",
+                    f"Unhandled response error for unknown request: {response.callback_idx}",
+                )
+            raise exc
         else:
             self._available_callback_indexes.append(response.callback_idx)
             if response.HasField("request_error"):
@@ -561,9 +663,7 @@ class BaseClient(CoreCommands):
                 if response.HasField("closing_error")
                 else "Client Error - push notification without resp_pointer"
             )
-            await self.close(err_msg)
             raise ClosingError(err_msg)
-
         try:
             self._pubsub_lock.acquire()
             callback, context = self.config._get_pubsub_callback_and_context()
@@ -579,30 +679,36 @@ class BaseClient(CoreCommands):
 
     async def _reader_loop(self) -> None:
         # Socket reader loop
-        remaining_read_bytes = bytearray()
-        while True:
-            read_bytes = await self._reader.read(DEFAULT_READ_BYTES_SIZE)
-            if len(read_bytes) == 0:
-                err_msg = "The communication layer was unexpectedly closed."
-                await self.close(err_msg)
-                raise ClosingError(err_msg)
-            read_bytes = remaining_read_bytes + bytearray(read_bytes)
-            read_bytes_view = memoryview(read_bytes)
-            offset = 0
-            while offset <= len(read_bytes):
+        try:
+            remaining_read_bytes = bytearray()
+            while True:
                 try:
-                    response, offset = ProtobufCodec.decode_delimited(
-                        read_bytes, read_bytes_view, offset, Response
+                    read_bytes = await self._stream.receive(DEFAULT_READ_BYTES_SIZE)
+                except (anyio.ClosedResourceError, anyio.EndOfStream):
+                    raise ClosingError(
+                        "The communication layer was unexpectedly closed."
                     )
-                except PartialMessageException:
-                    # Received only partial response, break the inner loop
-                    remaining_read_bytes = read_bytes[offset:]
-                    break
-                response = cast(Response, response)
-                if response.is_push:
-                    await self._process_push(response=response)
-                else:
-                    await self._process_response(response=response)
+                read_bytes = remaining_read_bytes + bytearray(read_bytes)
+                read_bytes_view = memoryview(read_bytes)
+                offset = 0
+                while offset <= len(read_bytes):
+                    try:
+                        response, offset = ProtobufCodec.decode_delimited(
+                            read_bytes, read_bytes_view, offset, Response
+                        )
+                    except PartialMessageException:
+                        # Received only partial response, break the inner loop
+                        remaining_read_bytes = read_bytes[offset:]
+                        break
+                    response = cast(Response, response)
+                    if response.is_push:
+                        await self._process_push(response=response)
+                    else:
+                        await self._process_response(response=response)
+        except Exception as e:
+            # close and stop reading at terminal exceptions from incoming responses or
+            # stream closures
+            await self.close(str(e))
 
     async def get_statistics(self) -> dict:
         return get_statistics()

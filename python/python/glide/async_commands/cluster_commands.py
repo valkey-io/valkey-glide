@@ -36,9 +36,13 @@ class ClusterCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
             For example - Return a list of all pub/sub clients from all nodes::
 
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
+                await client.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
 
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
@@ -62,6 +66,8 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the server.
+
+        Starting from server version 7, command supports multiple section arguments.
 
         See [valkey.io](https://valkey.io/commands/info/) for details.
 

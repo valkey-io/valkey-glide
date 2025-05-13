@@ -2336,10 +2336,6 @@ public interface SortedSetBaseCommands {
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * String[] payload = client.zinter(keyArray).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
-     *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * String[] payload = client.zinter(weightedKeys).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
      */
     CompletableFuture<String[]> zinter(KeyArray keys);
@@ -2358,10 +2354,6 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
      * GlideString[] payload = client.zinter(keyArray).get()
-     * assert payload.equals(new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
-     *
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
-     * GlideString[] payload = client.zinter(weightedKeys).get()
      * assert payload.equals(new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
      * }</pre>
      */
@@ -2388,10 +2380,6 @@ public interface SortedSetBaseCommands {
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zinterWithScores(keyArray).get();
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
-     *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
@@ -2417,10 +2405,6 @@ public interface SortedSetBaseCommands {
      * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
      * Map<GlideString, Double> payload1 = client.zinterWithScores(keyArray).get();
      * assert payload1.equals(Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
-     *
-     * WeightedKeysBinary weightedKeys = new WeightedKeys(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
-     * Map<GlideString, Double> payload2 = client.zinterWithScores(weightedKeys).get();
-     * assert payload2.equals(Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zinterWithScores(
@@ -2448,10 +2432,6 @@ public interface SortedSetBaseCommands {
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zinterWithScores(keyArray, Aggregate.MAX).get();
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
-     *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys, Aggregate.SUM).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zinterWithScores(
@@ -2479,10 +2459,6 @@ public interface SortedSetBaseCommands {
      * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
      * Map<GlideString, Double> payload1 = client.zinterWithScores(keyArray, AggregateBinary.MAX).get();
      * assert payload1.equals(Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
-     *
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
-     * Map<GlideString, Double> payload2 = client.zinterWithScores(weightedKeys, AggregateBinary.SUM).get();
-     * assert payload2.equals(Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zinterWithScores(
