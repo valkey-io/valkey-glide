@@ -9314,6 +9314,12 @@ class TestCommands:
             await glide_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
+        # Restore with frequency and idletime both set.
+        with pytest.raises(RequestError) as e:
+            await glide_client.restore(key2, 0, bytesData, replace=True, idletime=-10, frequency=10)
+        assert "syntax error: both IDLETIME and FREQ cannot be set at the same time." in str(e)
+    
+
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
