@@ -410,6 +410,20 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured
+        span = None
+        if (
+            hasattr(self.config, "advanced_config")
+            and self.config.advanced_config
+            and self.config.advanced_config.opentelemetry_config
+        ):
+
+            from glide.opentelemetry import GlideSpan
+
+            command_name = RequestType.Name(request_type)
+            span = GlideSpan(command_name)
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
@@ -424,8 +438,19 @@ class BaseClient(CoreCommands):
             request.single_command.args_vec_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span.ptr
+
         set_protobuf_route(request, route)
-        return await self._write_request_await_response(request)
+
+        try:
+            return await self._write_request_await_response(request)
+        finally:
+            # Clean up span if it was created
+            if span:
+                del span
 
     async def _execute_batch(
         self,
@@ -441,6 +466,21 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured
+        span = None
+        if (
+            hasattr(self.config, "advanced_config")
+            and self.config.advanced_config
+            and self.config.advanced_config.opentelemetry_config
+        ):
+
+            from glide.opentelemetry import GlideSpan
+
+            span = GlideSpan(
+                "Batch"
+            )  # Use "Batch" as span name for transactions, matching Node.js binding
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         batch_commands = []
@@ -462,8 +502,19 @@ class BaseClient(CoreCommands):
             request.batch.timeout = timeout
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
+        
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span.ptr
+        
         set_protobuf_route(request, route)
-        return await self._write_request_await_response(request)
+
+        try:
+            return await self._write_request_await_response(request)
+        finally:
+            # Clean up span if it was created
+            if span:
+                del span
 
     async def _execute_script(
         self,
