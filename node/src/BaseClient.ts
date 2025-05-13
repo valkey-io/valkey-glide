@@ -1096,15 +1096,15 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
 
-            // create a span only if the otel config exits and measure statistics only according to the requests percentage configuration
+            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
 
             if (this.shouldSample()) {
-                const commandObj =
+                const commandName =
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]
                         : "Batch";
-                const pair = createLeakedOtelSpan(commandObj);
+                const pair = createLeakedOtelSpan(commandName);
                 spanPtr = new Long(pair[0], pair[1]);
             }
 

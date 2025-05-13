@@ -93,28 +93,31 @@ export class OpenTelemetry {
     }
 
     /**
-     * Get the sample percentage
-     * @returns The sample percentage
+     * Get the sample percentage for traces
+     * @returns The sample percentage for traces only if OpenTelemetry is initialized and the traces config is set, otherwise undefined.
      */
     public static getSamplePercentage() {
         return this.openTelemetryConfig?.traces?.samplePercentage;
     }
 
     /**
-     * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100
+     * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100.
+     * This setting only affects traces, not metrics.
      * @param percentage - The sample percentage 0-100
+     * @throws Error if OpenTelemetry is not initialized or traces config is not set
      * @remarks
      * This method can be called at runtime to change the sampling percentage without reinitializing OpenTelemetry.
      */
     public static setSamplePercentage(percentage: number) {
-        if (this.openTelemetryConfig && this.openTelemetryConfig.traces) {
-            this.openTelemetryConfig.traces.samplePercentage = percentage;
-        } else {
+        if (!this.openTelemetryConfig || !this.openTelemetryConfig.traces) {
             Logger.log(
                 "error",
                 "GlideOpenTelemetry",
                 "OpenTelemetry config traces not initialized",
             );
+            throw new Error("OpenTelemetry config traces not initialized");
         }
+
+        this.openTelemetryConfig.traces.samplePercentage = percentage;
     }
 }
