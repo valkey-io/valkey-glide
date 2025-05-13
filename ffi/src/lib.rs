@@ -10,6 +10,10 @@ use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
+use glide_core::{
+    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
+    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
+};
 use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -23,6 +27,7 @@ use std::ffi::CStr;
 use std::future::Future;
 use std::slice::from_raw_parts;
 use std::str;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     ffi::{c_void, CString},
@@ -31,9 +36,6 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
-
-// Telemetry and OpenTelemetry imports
-use glide_core::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 /// The struct represents the response of the command.
 ///
@@ -957,8 +959,17 @@ pub unsafe extern "C" fn command(
         Routes::default()
     };
 
-    // TODO: Use span_ptr for OpenTelemetry tracking in command execution
-    let _otel_span_ptr = span_ptr;
+    // Reconstruct the span from the pointer
+    let otel_span: Option<Arc<GlideSpan>> = if span_ptr != 0 {
+        Some(unsafe { Arc::from_raw(span_ptr as *const GlideSpan) })
+    } else {
+        None
+    };
+
+    // Set the span if present
+    if let Some(span) = otel_span.clone() {
+        cmd.set_span(Some((*span).clone()));
+    }
 
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_command(channel, async move {
@@ -1290,5 +1301,75 @@ pub extern "C" fn drop_otel_span(span_ptr: u64) {
     }
     unsafe {
         Arc::from_raw(span_ptr as *const GlideSpan);
+    }
+}
+
+#[repr(C)]
+pub struct OtelExporterConfig {
+    pub endpoint: *const c_char, // null if not set
+    pub sample_percentage: u32,  // only for traces, 0 if not set
+}
+
+#[repr(C)]
+pub struct OpenTelemetryConfig {
+    pub traces: OtelExporterConfig,  // endpoint null if not set
+    pub metrics: OtelExporterConfig, // endpoint null if not set, sample_percentage ignored
+    pub flush_interval_ms: i64,      // 0 if not set
+}
+
+/// Initialize OpenTelemetry globally for the process. Returns 0 on success, 1 on error.
+#[no_mangle]
+pub extern "C" fn init_open_telemetry(config: OpenTelemetryConfig) -> i32 {
+    use glide_core::{
+        GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
+        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
+    };
+    // At least one exporter must be set
+    let traces_endpoint = unsafe { config.traces.endpoint.as_ref() };
+    let metrics_endpoint = unsafe { config.metrics.endpoint.as_ref() };
+    if traces_endpoint.is_none() && metrics_endpoint.is_none() {
+        return 1;
+    }
+    let mut builder = GlideOpenTelemetryConfigBuilder::default();
+    // Traces
+    if let Some(ptr) = traces_endpoint {
+        let endpoint = unsafe { CStr::from_ptr(ptr) };
+        let endpoint_str = match endpoint.to_str() {
+            Ok(s) => s,
+            Err(_) => return 1,
+        };
+        let exporter = match GlideOpenTelemetrySignalsExporter::from_str(endpoint_str) {
+            Ok(e) => e,
+            Err(_) => return 1,
+        };
+        let sample = if config.traces.sample_percentage > 0 {
+            Some(config.traces.sample_percentage)
+        } else {
+            None
+        };
+        builder = builder.with_trace_exporter(exporter, sample);
+    }
+    // Metrics
+    if let Some(ptr) = metrics_endpoint {
+        let endpoint = unsafe { CStr::from_ptr(ptr) };
+        let endpoint_str = match endpoint.to_str() {
+            Ok(s) => s,
+            Err(_) => return 1,
+        };
+        let exporter = match GlideOpenTelemetrySignalsExporter::from_str(endpoint_str) {
+            Ok(e) => e,
+            Err(_) => return 1,
+        };
+        builder = builder.with_metrics_exporter(exporter);
+    }
+    let flush = if config.flush_interval_ms > 0 {
+        config.flush_interval_ms as u64
+    } else {
+        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64
+    };
+    builder = builder.with_flush_interval(std::time::Duration::from_millis(flush));
+    match GlideOpenTelemetry::initialise(builder.build()) {
+        Ok(_) => 0,
+        Err(_) => 1,
     }
 }

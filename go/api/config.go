@@ -5,7 +5,6 @@ package api
 import (
 	"errors"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
 
@@ -104,9 +103,6 @@ type baseClientConfiguration struct {
 // cluster clients.
 type AdvancedBaseClientConfiguration struct {
 	connectionTimeout int
-	// OpenTelemetryConfig provides configuration options for OpenTelemetry integration.
-	// If not set, OpenTelemetry integration will be disabled.
-	openTelemetryConfig *config.OpenTelemetryConfig
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -215,18 +211,6 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 
 	if config.AdvancedGlideClientConfiguration.connectionTimeout != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClientConfiguration.connectionTimeout)
-	}
-
-	if config.AdvancedGlideClientConfiguration.openTelemetryConfig != nil {
-		otelCfg := config.AdvancedGlideClientConfiguration.openTelemetryConfig
-		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
-			TracesCollectorEndpoint:  otelCfg.TracesCollectorEndPoint,
-			MetricsCollectorEndpoint: otelCfg.MetricsCollectorEndPoint,
-		}
-		if otelCfg.FlushIntervalMs > 0 {
-			flushInterval := uint32(otelCfg.FlushIntervalMs)
-			request.OpentelemetryConfig.FlushIntervalMs = &flushInterval
-		}
 	}
 
 	return request, nil
@@ -348,18 +332,6 @@ func (config *GlideClusterClientConfiguration) toProtobuf() (*protobuf.Connectio
 	request.ClusterModeEnabled = true
 	if (config.AdvancedGlideClusterClientConfiguration.connectionTimeout) != 0 {
 		request.ConnectionTimeout = uint32(config.AdvancedGlideClusterClientConfiguration.connectionTimeout)
-	}
-
-	if config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig != nil {
-		otelCfg := config.AdvancedGlideClusterClientConfiguration.openTelemetryConfig
-		request.OpentelemetryConfig = &protobuf.OpenTelemetryConfig{
-			TracesCollectorEndpoint:  otelCfg.TracesCollectorEndPoint,
-			MetricsCollectorEndpoint: otelCfg.MetricsCollectorEndPoint,
-		}
-		if otelCfg.FlushIntervalMs > 0 {
-			flushInterval := uint32(otelCfg.FlushIntervalMs)
-			request.OpentelemetryConfig.FlushIntervalMs = &flushInterval
-		}
 	}
 
 	return request, nil

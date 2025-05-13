@@ -326,6 +326,13 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
+
+	// Create a span with the command name
+	var spanPtr C.uint64_t = C.uint64_t(0)
+	if len(args) > 0 {
+		spanPtr = C.uint64_t(client.createOtelSpan(args[0]))
+	}
+
 	C.command(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
@@ -335,6 +342,7 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		spanPtr,
 	)
 	client.mu.Unlock()
 
@@ -345,6 +353,11 @@ func (client *baseClient) executeCommandWithRoute(
 		delete(client.pending, resultChannelPtr)
 	}
 	client.mu.Unlock()
+
+	// Drop the span after command completes
+	if spanPtr != 0 {
+		client.dropOtelSpan(uint64(spanPtr))
+	}
 
 	if payload.error != nil {
 		return nil, payload.error
@@ -7664,99 +7677,20 @@ func (client *baseClient) Publish(channel string, message string) (int64, error)
 	return handleIntResponse(result)
 }
 
-// // createOtelSpan creates an OpenTelemetry span using the FFI layer and returns its pointer as uint64.
-// func (client *baseClient) createOtelSpan(spanName string) uint64 {
-// 	if spanName == "" {
-// 		spanName = "valkey.command"
-// 	}
-// 	cName := C.CString(spanName)
-// 	defer C.free(unsafe.Pointer(cName))
-// 	return uint64(C.create_otel_span(cName))
-// }
+// createOtelSpan creates an OpenTelemetry span using the FFI layer and returns its pointer as uint64.
+func (client *baseClient) createOtelSpan(spanName string) uint64 {
+	if spanName == "" {
+		spanName = "valkey.command"
+	}
+	cName := C.CString(spanName)
+	defer C.free(unsafe.Pointer(cName))
+	return uint64(C.create_otel_span(cName))
+}
 
-// // dropOtelSpan drops an OpenTelemetry span using the FFI layer.
-// func (client *baseClient) dropOtelSpan(spanPtr uint64) {
-// 	if spanPtr == 0 {
-// 		return
-// 	}
-// 	C.drop_otel_span(C.uint64_t(spanPtr))
-// }
-
-// // executeCommandWithSpan is like executeCommand but passes the span pointer to the FFI layer.
-// func (client *baseClient) executeCommandWithSpan(
-// 	requestType C.RequestType,
-// 	args []string,
-// 	spanPtr uint64,
-// ) (*C.struct_CommandResponse, error) {
-// 	return client.executeCommandWithRouteAndSpan(requestType, args, nil, spanPtr)
-// }
-
-// // executeCommandWithRouteAndSpan is like executeCommandWithRoute but passes the span pointer to the FFI layer.
-// func (client *baseClient) executeCommandWithRouteAndSpan(
-// 	requestType C.RequestType,
-// 	args []string,
-// 	route config.Route,
-// 	spanPtr uint64,
-// ) (*C.struct_CommandResponse, error) {
-// 	var cArgsPtr *C.uintptr_t = nil
-// 	var argLengthsPtr *C.ulong = nil
-// 	if len(args) > 0 {
-// 		cArgs, argLengths := toCStrings(args)
-// 		cArgsPtr = &cArgs[0]
-// 		argLengthsPtr = &argLengths[0]
-// 	}
-
-// 	var routeBytesPtr *C.uchar = nil
-// 	var routeBytesCount C.uintptr_t = 0
-// 	if route != nil {
-// 		routeProto, err := routeToProtobuf(route)
-// 		if err != nil {
-// 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
-// 		}
-// 		msg, err := proto.Marshal(routeProto)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		routeBytesCount = C.uintptr_t(len(msg))
-// 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
-// 	}
-
-// 	resultChannel := make(chan payload, 1)
-// 	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-// 	pinner := pinner{}
-// 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-// 	defer pinner.Unpin()
-
-// 	client.mu.Lock()
-// 	if client.coreClient == nil {
-// 		client.mu.Unlock()
-// 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
-// 	}
-// 	client.pending[resultChannelPtr] = struct{}{}
-// 	C.command(
-// 		client.coreClient,
-// 		C.uintptr_t(pinnedChannelPtr),
-// 		requestType,
-// 		C.ulong(len(args)),
-// 		cArgsPtr,
-// 		argLengthsPtr,
-// 		routeBytesPtr,
-// 		routeBytesCount,
-// 		C.uint64_t(spanPtr),
-// 	)
-// 	client.mu.Unlock()
-
-// 	payload := <-resultChannel
-
-// 	client.mu.Lock()
-// 	if client.pending != nil {
-// 		delete(client.pending, resultChannelPtr)
-// 	}
-// 	client.mu.Unlock()
-
-// 	if payload.error != nil {
-// 		return nil, payload.error
-// 	}
-// 	return payload.value, nil
-// }
+// dropOtelSpan drops an OpenTelemetry span using the FFI layer.
+func (client *baseClient) dropOtelSpan(spanPtr uint64) {
+	if spanPtr == 0 {
+		return
+	}
+	C.drop_otel_span(C.uint64_t(spanPtr))
+}
