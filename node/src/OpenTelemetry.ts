@@ -33,6 +33,7 @@
  */
 
 import { InitOpenTelemetry, OpenTelemetryConfig } from "glide-rs";
+import { ConfigurationError } from "./Errors";
 import { Logger } from "./Logger";
 
 export class OpenTelemetry {
@@ -110,12 +111,9 @@ export class OpenTelemetry {
      */
     public static setSamplePercentage(percentage: number) {
         if (!this.openTelemetryConfig || !this.openTelemetryConfig.traces) {
-            Logger.log(
-                "error",
-                "GlideOpenTelemetry",
+            throw new ConfigurationError(
                 "OpenTelemetry config traces not initialized",
             );
-            throw new Error("OpenTelemetry config traces not initialized");
         }
 
         this.openTelemetryConfig.traces.samplePercentage = percentage;
