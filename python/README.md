@@ -37,6 +37,7 @@ Linux:
 macOS:
 
 -   macOS 14.7 (Apple silicon/aarch_64)
+-   macOS 13.7 (x86_64/amd64)
 
 ## Python Supported Versions
 
@@ -47,6 +48,8 @@ macOS:
 | 3.11           |
 | 3.12           |
 | 3.13           |
+
+Valkey GLIDE transparently supports both the `asyncio` and `trio` concurrency frameworks.
 
 ## Installation and Setup
 
