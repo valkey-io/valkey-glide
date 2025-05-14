@@ -28,7 +28,7 @@ public enum Level
 ///      new logs will not be saved with the logs that were sent before the call.
 ///   </item>
 /// </list>
-/// If no call to any of these function is received, the first log attempt will initialize a new logger with default configuration.
+/// If none of these functions are called, the first log attempt will initialize a new logger with default configuration.
 /// </summary>
 public class Logger
 {

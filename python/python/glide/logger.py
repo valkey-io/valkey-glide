@@ -26,7 +26,7 @@ class Logger:
     1. By calling Logger.init, which configures the logger only if it wasn't previously configured.
     2. By calling Logger.set_logger_config, which replaces the existing configuration, and means that new logs will not be
     saved with the logs that were sent before the call.
-    If no call to any of these function is received, the first log attempt will initialize a new logger with default configuration.
+    If none of these functions are called, the first log attempt will initialize a new logger with default configuration.
     """
 
     _instance = None
