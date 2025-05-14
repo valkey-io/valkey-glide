@@ -38,7 +38,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BaseClientCommands defines an interface for methods common to both [GlideClientCommands] and [GlideClusterClientCommands].
 const OK = "OK"
 
 type payload struct {
