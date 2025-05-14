@@ -4,6 +4,7 @@ package api
 
 import (
 	"errors"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/protobuf"
 )
@@ -94,7 +95,7 @@ type baseClientConfiguration struct {
 	useTLS         bool
 	credentials    *ServerCredentials
 	readFrom       ReadFrom
-	requestTimeout int
+	requestTimeout time.Duration
 	clientName     string
 	clientAZ       string
 }
@@ -248,11 +249,11 @@ func (config *GlideClientConfiguration) WithReadFrom(readFrom ReadFrom) *GlideCl
 	return config
 }
 
-// WithRequestTimeout sets the duration in milliseconds that the client should wait for a request to complete. This duration
+// WithRequestTimeout sets the duration that the client should wait for a request to complete. This duration
 // encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *GlideClientConfiguration) WithRequestTimeout(requestTimeout int) *GlideClientConfiguration {
+func (config *GlideClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *GlideClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
@@ -373,11 +374,13 @@ func (config *GlideClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *
 	return config
 }
 
-// WithRequestTimeout sets the duration in milliseconds that the client should wait for a request to complete. This duration
+// WithRequestTimeout sets the duration that the client should wait for a request to complete. This duration
 // encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout int) *GlideClusterClientConfiguration {
+func (config *GlideClusterClientConfiguration) WithRequestTimeout(
+	requestTimeout time.Duration,
+) *GlideClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
@@ -414,7 +417,7 @@ func (config *GlideClusterClientConfiguration) WithSubscriptionConfig(
 // Advanced configuration settings class for creating a client. Shared settings for standalone and
 // cluster clients.
 type AdvancedBaseClientConfiguration struct {
-	connectionTimeout int
+	connectionTimeout time.Duration
 }
 
 // Represents advanced configuration settings for a Standalone [GlideClient] used in [GlideClientConfiguration].
@@ -427,13 +430,13 @@ func NewAdvancedGlideClientConfiguration() *AdvancedGlideClientConfiguration {
 	return &AdvancedGlideClientConfiguration{}
 }
 
-// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 // The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
 // during initial client creation and any reconnections that may occur during request processing.
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
 // pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
 func (config *AdvancedGlideClientConfiguration) WithConnectionTimeout(
-	connectionTimeout int,
+	connectionTimeout time.Duration,
 ) *AdvancedGlideClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config
@@ -450,9 +453,9 @@ func NewAdvancedGlideClusterClientConfiguration() *AdvancedGlideClusterClientCon
 	return &AdvancedGlideClusterClientConfiguration{}
 }
 
-// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 func (config *AdvancedGlideClusterClientConfiguration) WithConnectionTimeout(
-	connectionTimeout int,
+	connectionTimeout time.Duration,
 ) *AdvancedGlideClusterClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config

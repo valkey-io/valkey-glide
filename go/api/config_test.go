@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/protobuf"
@@ -47,7 +48,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 	ports := []int{1234, 5678}
 	username := "username"
 	password := "password"
-	timeout := 3
+	timeout := 3 * time.Second
 	clientName := "client name"
 	retries, factor, base := 5, 10, 50
 	databaseId := 1
