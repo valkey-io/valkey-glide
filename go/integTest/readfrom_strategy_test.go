@@ -23,14 +23,14 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2000))
 
 	// Reset the availability zone for all nodes
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.TODO(),
+	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": ""}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
-	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.TODO()))
+	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.Background()))
 
 	// 12182 is the slot of "foo"
 	_, err = clientForConfigSet.ConfigSetWithOptions(
-		context.TODO(),
+		context.Background(),
 		map[string]string{
 			"availability-zone": az,
 		},
@@ -44,11 +44,11 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 		WithClientAZ(az))
 
 	for i := 0; i < GET_CALLS; i++ {
-		_, err := clientForTestingAz.Get(context.TODO(), "foo")
+		_, err := clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.TODO(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server, options.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -85,13 +85,13 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2000))
 
 	// Reset the availability zone for all nodes
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.TODO(),
+	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": ""}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
-	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.TODO()))
+	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.Background()))
 
 	// Get Replica Count for current cluster
-	clusterInfo, err := clientForConfigSet.InfoWithOptions(context.TODO(),
+	clusterInfo, err := clientForConfigSet.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			RouteOption: &options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "key")},
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Replication}},
@@ -110,7 +110,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", 3)
 
 	// Setting AZ for all Nodes
-	_, err = clientForConfigSet.ConfigSetWithOptions(context.TODO(),
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": az}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	clientForConfigSet.Close()
@@ -121,7 +121,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 		WithReadFrom(api.AzAffinity).
 		WithClientAZ(az))
 
-	azGetResult, err := clientForTestingAz.ConfigGetWithOptions(context.TODO(),
+	azGetResult, err := clientForTestingAz.ConfigGetWithOptions(context.Background(),
 		[]string{"availability-zone"}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	for _, value := range azGetResult.MultiValue() {
@@ -130,11 +130,11 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 
 	// Execute GET commands
 	for i := 0; i < nGetCalls; i++ {
-		_, err := clientForTestingAz.Get(context.TODO(), "foo")
+		_, err := clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.TODO(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -169,15 +169,17 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 		WithClientAZ("non-existing-az"))
 
 	// Reset stats
-	suite.verifyOK(clientForTestingAz.ConfigResetStatWithOptions(context.TODO(), options.RouteOption{Route: config.AllNodes}))
+	suite.verifyOK(
+		clientForTestingAz.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
 
 	// Execute GET commands
 	for i := 0; i < nGetCalls; i++ {
-		_, err := clientForTestingAz.Get(context.TODO(), "foo")
+		_, err := clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.TODO(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -212,15 +214,17 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 		WithRequestTimeout(2000))
 
 	// Reset stats and set all nodes to otherAz
-	suite.verifyOK(clientForConfigSet.ConfigResetStatWithOptions(context.TODO(), options.RouteOption{Route: config.AllNodes}))
+	suite.verifyOK(
+		clientForConfigSet.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
 
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.TODO(),
+	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": otherAz}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 
 	// Set primary for slot 12182 to az
 	_, err = clientForConfigSet.ConfigSetWithOptions(
-		context.TODO(),
+		context.Background(),
 		map[string]string{
 			"availability-zone": az,
 		},
@@ -229,7 +233,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	assert.NoError(suite.T(), err)
 
 	// Verify primary AZ
-	primaryAzResult, err := clientForConfigSet.ConfigGetWithOptions(context.TODO(),
+	primaryAzResult, err := clientForConfigSet.ConfigGetWithOptions(context.Background(),
 		[]string{"availability-zone"}, options.RouteOption{Route: config.NewSlotIdRoute(config.SlotTypePrimary, 12182)})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), az, primaryAzResult.SingleValue()["availability-zone"])
@@ -246,11 +250,11 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 
 	// Execute GET commands
 	for i := 0; i < nGetCalls; i++ {
-		_, err := clientForTestingAz.Get(context.TODO(), "foo")
+		_, err := clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.TODO(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},

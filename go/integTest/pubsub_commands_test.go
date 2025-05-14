@@ -127,15 +127,15 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 					t.Fatal("Expected GlideClusterClient for sharded channels")
 				}
 				if tt.pattern == "" {
-					activeChannels, err = clusterClient.PubSubShardChannels(context.TODO())
+					activeChannels, err = clusterClient.PubSubShardChannels(context.Background())
 				} else {
-					activeChannels, err = clusterClient.PubSubShardChannelsWithPattern(context.TODO(), tt.pattern)
+					activeChannels, err = clusterClient.PubSubShardChannelsWithPattern(context.Background(), tt.pattern)
 				}
 			} else {
 				if tt.pattern == "" {
-					activeChannels, err = receiver.PubSubChannels(context.TODO())
+					activeChannels, err = receiver.PubSubChannels(context.Background())
 				} else {
-					activeChannels, err = receiver.PubSubChannelsWithPattern(context.TODO(), tt.pattern)
+					activeChannels, err = receiver.PubSubChannelsWithPattern(context.Background(), tt.pattern)
 				}
 			}
 			assert.NoError(t, err)
@@ -225,7 +225,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			// Get pattern subscription count
-			count, err := receiver.PubSubNumPat(context.TODO())
+			count, err := receiver.PubSubNumPat(context.Background())
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedCount, count)
 		})
@@ -405,9 +405,9 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				if !ok {
 					t.Fatal("Expected GlideClusterClient for sharded channels")
 				}
-				counts, err = clusterClient.PubSubShardNumSub(context.TODO(), tt.queryChannels...)
+				counts, err = clusterClient.PubSubShardNumSub(context.Background(), tt.queryChannels...)
 			} else {
-				counts, err = clients[0].PubSubNumSub(context.TODO(), tt.queryChannels...)
+				counts, err = clients[0].PubSubNumSub(context.Background(), tt.queryChannels...)
 			}
 			assert.NoError(t, err)
 

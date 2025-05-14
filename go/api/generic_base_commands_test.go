@@ -12,9 +12,9 @@ import (
 
 func ExampleGlideClient_Del() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Del(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Del(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -30,9 +30,9 @@ func ExampleGlideClient_Del() {
 
 func ExampleGlideClusterClient_Del() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Del(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Del(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -48,9 +48,9 @@ func ExampleGlideClusterClient_Del() {
 
 func ExampleGlideClient_Exists() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Exists(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Exists(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -66,9 +66,9 @@ func ExampleGlideClient_Exists() {
 
 func ExampleGlideClusterClient_Exists() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Exists(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Exists(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -84,9 +84,9 @@ func ExampleGlideClusterClient_Exists() {
 
 func ExampleGlideClient_Expire() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key", time.Now().Unix()+1)
-	result2, err := client.Expire(context.TODO(), "key", 1)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key", time.Now().Unix()+1)
+	result2, err := client.Expire(context.Background(), "key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -102,9 +102,9 @@ func ExampleGlideClient_Expire() {
 
 func ExampleGlideClusterClient_Expire() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key", time.Now().Unix()+1)
-	result2, err := client.Expire(context.TODO(), "key", 1)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key", time.Now().Unix()+1)
+	result2, err := client.Expire(context.Background(), "key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -120,8 +120,8 @@ func ExampleGlideClusterClient_Expire() {
 
 func ExampleGlideClient_ExpireWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireWithOptions(context.TODO(), "key", 1, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireWithOptions(context.Background(), "key", 1, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -135,8 +135,8 @@ func ExampleGlideClient_ExpireWithOptions() {
 
 func ExampleGlideClusterClient_ExpireWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireWithOptions(context.TODO(), "key", 1, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireWithOptions(context.Background(), "key", 1, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -150,8 +150,8 @@ func ExampleGlideClusterClient_ExpireWithOptions() {
 
 func ExampleGlideClient_ExpireAt() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key", time.Now().Unix()+1)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key", time.Now().Unix()+1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -165,8 +165,8 @@ func ExampleGlideClient_ExpireAt() {
 
 func ExampleGlideClusterClient_ExpireAt() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key", time.Now().Unix()+1)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key", time.Now().Unix()+1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -180,8 +180,8 @@ func ExampleGlideClusterClient_ExpireAt() {
 
 func ExampleGlideClient_ExpireAtWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAtWithOptions(context.TODO(), "key", time.Now().Unix()+1, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAtWithOptions(context.Background(), "key", time.Now().Unix()+1, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -195,8 +195,8 @@ func ExampleGlideClient_ExpireAtWithOptions() {
 
 func ExampleGlideClusterClient_ExpireAtWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireAtWithOptions(context.TODO(), "key", time.Now().Unix()+1, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireAtWithOptions(context.Background(), "key", time.Now().Unix()+1, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -210,8 +210,8 @@ func ExampleGlideClusterClient_ExpireAtWithOptions() {
 
 func ExampleGlideClient_PExpire() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpire(context.TODO(), "key", int64(5*1000))
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpire(context.Background(), "key", int64(5*1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -225,8 +225,8 @@ func ExampleGlideClient_PExpire() {
 
 func ExampleGlideClusterClient_PExpire() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpire(context.TODO(), "key", int64(5*1000))
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpire(context.Background(), "key", int64(5*1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -240,8 +240,8 @@ func ExampleGlideClusterClient_PExpire() {
 
 func ExampleGlideClient_PExpireWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireWithOptions(context.TODO(), "key", int64(5*1000), options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireWithOptions(context.Background(), "key", int64(5*1000), options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -255,8 +255,8 @@ func ExampleGlideClient_PExpireWithOptions() {
 
 func ExampleGlideClusterClient_PExpireWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireWithOptions(context.TODO(), "key", int64(5*1000), options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireWithOptions(context.Background(), "key", int64(5*1000), options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -270,8 +270,8 @@ func ExampleGlideClusterClient_PExpireWithOptions() {
 
 func ExampleGlideClient_PExpireAt() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireAt(context.TODO(), "key", time.Now().Unix()*1000)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireAt(context.Background(), "key", time.Now().Unix()*1000)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -285,8 +285,8 @@ func ExampleGlideClient_PExpireAt() {
 
 func ExampleGlideClusterClient_PExpireAt() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireAt(context.TODO(), "key", time.Now().Unix()*1000)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireAt(context.Background(), "key", time.Now().Unix()*1000)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -300,8 +300,8 @@ func ExampleGlideClusterClient_PExpireAt() {
 
 func ExampleGlideClient_PExpireAtWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireAtWithOptions(context.TODO(), "key", time.Now().Unix()*1000, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireAtWithOptions(context.Background(), "key", time.Now().Unix()*1000, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -315,8 +315,8 @@ func ExampleGlideClient_PExpireAtWithOptions() {
 
 func ExampleGlideClusterClient_PExpireAtWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireAtWithOptions(context.TODO(), "key", time.Now().Unix()*1000, options.HasNoExpiry)
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireAtWithOptions(context.Background(), "key", time.Now().Unix()*1000, options.HasNoExpiry)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -330,10 +330,10 @@ func ExampleGlideClusterClient_PExpireAtWithOptions() {
 
 func ExampleGlideClient_ExpireTime() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireTime(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireTime(context.Background(), "key")
 	_, err = client.ExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*1000,
 	) // ExpireTime("key") returns proper unix timestamp in seconds
@@ -350,10 +350,10 @@ func ExampleGlideClient_ExpireTime() {
 
 func ExampleGlideClusterClient_ExpireTime() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.ExpireTime(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.ExpireTime(context.Background(), "key")
 	_, err = client.ExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*1000,
 	) // ExpireTime("key") returns proper unix timestamp in seconds
@@ -370,10 +370,10 @@ func ExampleGlideClusterClient_ExpireTime() {
 
 func ExampleGlideClient_PExpireTime() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireTime(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireTime(context.Background(), "key")
 	_, err = client.PExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*1000,
 	) // PExpireTime("key") returns proper unix time in milliseconds
@@ -390,10 +390,10 @@ func ExampleGlideClient_PExpireTime() {
 
 func ExampleGlideClusterClient_PExpireTime() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PExpireTime(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PExpireTime(context.Background(), "key")
 	_, err = client.PExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*1000,
 	) // PExpireTime("key") returns proper unix time in milliseconds
@@ -410,9 +410,9 @@ func ExampleGlideClusterClient_PExpireTime() {
 
 func ExampleGlideClient_TTL() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.TTL(context.TODO(), "key")
-	_, err = client.ExpireAt(context.TODO(), "key", time.Now().Unix()*1000) // TTL("key") returns proper TTL in seconds
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.TTL(context.Background(), "key")
+	_, err = client.ExpireAt(context.Background(), "key", time.Now().Unix()*1000) // TTL("key") returns proper TTL in seconds
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -426,9 +426,9 @@ func ExampleGlideClient_TTL() {
 
 func ExampleGlideClusterClient_TTL() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.TTL(context.TODO(), "key")
-	_, err = client.ExpireAt(context.TODO(), "key", time.Now().Unix()*1000) // TTL("key") returns proper TTL in seconds
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.TTL(context.Background(), "key")
+	_, err = client.ExpireAt(context.Background(), "key", time.Now().Unix()*1000) // TTL("key") returns proper TTL in seconds
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -442,10 +442,10 @@ func ExampleGlideClusterClient_TTL() {
 
 func ExampleGlideClient_PTTL() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PTTL(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PTTL(context.Background(), "key")
 	_, err = client.PExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*100000,
 	) // PTTL("key") returns proper TTL in milliseconds
@@ -462,10 +462,10 @@ func ExampleGlideClient_PTTL() {
 
 func ExampleGlideClusterClient_PTTL() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key", "someValue")
-	result1, err := client.PTTL(context.TODO(), "key")
+	result, err := client.Set(context.Background(), "key", "someValue")
+	result1, err := client.PTTL(context.Background(), "key")
 	_, err = client.PExpireAt(
-		context.TODO(),
+		context.Background(),
 		"key",
 		time.Now().Unix()*100000,
 	) // PTTL("key") returns proper TTL in milliseconds
@@ -482,9 +482,9 @@ func ExampleGlideClusterClient_PTTL() {
 
 func ExampleGlideClient_Unlink() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Unlink(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Unlink(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -500,9 +500,9 @@ func ExampleGlideClient_Unlink() {
 
 func ExampleGlideClusterClient_Unlink() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Unlink(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Unlink(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -518,9 +518,9 @@ func ExampleGlideClusterClient_Unlink() {
 
 func ExampleGlideClient_Touch() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Touch(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Touch(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -536,9 +536,9 @@ func ExampleGlideClient_Touch() {
 
 func ExampleGlideClusterClient_Touch() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Set(context.TODO(), "key2", "someValue")
-	result2, err := client.Touch(context.TODO(), []string{"key1", "key2", "key3"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Set(context.Background(), "key2", "someValue")
+	result2, err := client.Touch(context.Background(), []string{"key1", "key2", "key3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -554,8 +554,8 @@ func ExampleGlideClusterClient_Touch() {
 
 func ExampleGlideClient_Type() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Type(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Type(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -569,8 +569,8 @@ func ExampleGlideClient_Type() {
 
 func ExampleGlideClusterClient_Type() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Type(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Type(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -584,8 +584,8 @@ func ExampleGlideClusterClient_Type() {
 
 func ExampleGlideClient_Rename() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Rename(context.TODO(), "key1", "key2")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Rename(context.Background(), "key1", "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -599,8 +599,8 @@ func ExampleGlideClient_Rename() {
 
 func ExampleGlideClusterClient_Rename() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "{key}1", "someValue")
-	result1, err := client.Rename(context.TODO(), "{key}1", "{key}2")
+	result, err := client.Set(context.Background(), "{key}1", "someValue")
+	result1, err := client.Rename(context.Background(), "{key}1", "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -614,8 +614,8 @@ func ExampleGlideClusterClient_Rename() {
 
 func ExampleGlideClient_RenameNX() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.RenameNX(context.TODO(), "key1", "key2")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.RenameNX(context.Background(), "key1", "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -629,8 +629,8 @@ func ExampleGlideClient_RenameNX() {
 
 func ExampleGlideClusterClient_RenameNX() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "{key}1", "someValue")
-	result1, err := client.RenameNX(context.TODO(), "{key}1", "{key}2")
+	result, err := client.Set(context.Background(), "{key}1", "someValue")
+	result1, err := client.RenameNX(context.Background(), "{key}1", "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -644,9 +644,9 @@ func ExampleGlideClusterClient_RenameNX() {
 
 func ExampleGlideClient_Persist() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key1", time.Now().Unix()*1000)
-	result2, err := client.Persist(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key1", time.Now().Unix()*1000)
+	result2, err := client.Persist(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -662,9 +662,9 @@ func ExampleGlideClient_Persist() {
 
 func ExampleGlideClusterClient_Persist() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ExpireAt(context.TODO(), "key1", time.Now().Unix()*1000)
-	result2, err := client.Persist(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ExpireAt(context.Background(), "key1", time.Now().Unix()*1000)
+	result2, err := client.Persist(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -680,10 +680,10 @@ func ExampleGlideClusterClient_Persist() {
 
 func ExampleGlideClient_Restore() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	dump, err := client.Dump(context.TODO(), "key1")
-	result1, err := client.Del(context.TODO(), []string{"key1"})
-	result2, err := client.Restore(context.TODO(), "key1", 0, dump.Value())
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	dump, err := client.Dump(context.Background(), "key1")
+	result1, err := client.Del(context.Background(), []string{"key1"})
+	result2, err := client.Restore(context.Background(), "key1", 0, dump.Value())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -699,10 +699,10 @@ func ExampleGlideClient_Restore() {
 
 func ExampleGlideClusterClient_Restore() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	dump, err := client.Dump(context.TODO(), "key1")
-	result1, err := client.Del(context.TODO(), []string{"key1"})
-	result2, err := client.Restore(context.TODO(), "key1", 0, dump.Value())
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	dump, err := client.Dump(context.Background(), "key1")
+	result1, err := client.Del(context.Background(), []string{"key1"})
+	result2, err := client.Restore(context.Background(), "key1", 0, dump.Value())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -718,11 +718,11 @@ func ExampleGlideClusterClient_Restore() {
 
 func ExampleGlideClient_RestoreWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	dump, err := client.Dump(context.TODO(), "key1")
-	result1, err := client.Del(context.TODO(), []string{"key1"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	dump, err := client.Dump(context.Background(), "key1")
+	result1, err := client.Del(context.Background(), []string{"key1"})
 	opts := options.NewRestoreOptions().SetReplace().SetABSTTL().SetEviction(options.FREQ, 10)
-	result2, err := client.RestoreWithOptions(context.TODO(), "key1", 0, dump.Value(), *opts)
+	result2, err := client.RestoreWithOptions(context.Background(), "key1", 0, dump.Value(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -738,11 +738,11 @@ func ExampleGlideClient_RestoreWithOptions() {
 
 func ExampleGlideClusterClient_RestoreWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	dump, err := client.Dump(context.TODO(), "key1")
-	result1, err := client.Del(context.TODO(), []string{"key1"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	dump, err := client.Dump(context.Background(), "key1")
+	result1, err := client.Del(context.Background(), []string{"key1"})
 	opts := options.NewRestoreOptions().SetReplace().SetABSTTL().SetEviction(options.FREQ, 10)
-	result2, err := client.RestoreWithOptions(context.TODO(), "key1", 0, dump.Value(), *opts)
+	result2, err := client.RestoreWithOptions(context.Background(), "key1", 0, dump.Value(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -758,8 +758,8 @@ func ExampleGlideClusterClient_RestoreWithOptions() {
 
 func ExampleGlideClient_ObjectEncoding() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectEncoding(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectEncoding(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -773,8 +773,8 @@ func ExampleGlideClient_ObjectEncoding() {
 
 func ExampleGlideClusterClient_ObjectEncoding() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectEncoding(context.TODO(), "key1")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectEncoding(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -788,8 +788,8 @@ func ExampleGlideClusterClient_ObjectEncoding() {
 
 func ExampleGlideClient_Dump() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Dump(context.TODO(), "key1") // Contains serialized value of the data stored at key1
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Dump(context.Background(), "key1") // Contains serialized value of the data stored at key1
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -803,8 +803,8 @@ func ExampleGlideClient_Dump() {
 
 func ExampleGlideClusterClient_Dump() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Dump(context.TODO(), "key1") // Contains serialized value of the data stored at key1
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Dump(context.Background(), "key1") // Contains serialized value of the data stored at key1
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -819,11 +819,11 @@ func ExampleGlideClusterClient_Dump() {
 func ExampleGlideClient_ObjectFreq() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	client.ConfigSet(context.TODO(), map[string]string{"maxmemory-policy": "allkeys-lfu"}) // example configuration
-	client.Set(context.TODO(), "key1", "someValue")
-	client.Set(context.TODO(), "key1", "someOtherValue")
+	client.ConfigSet(context.Background(), map[string]string{"maxmemory-policy": "allkeys-lfu"}) // example configuration
+	client.Set(context.Background(), "key1", "someValue")
+	client.Set(context.Background(), "key1", "someOtherValue")
 
-	result, err := client.ObjectFreq(context.TODO(), "key1")
+	result, err := client.ObjectFreq(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -836,10 +836,10 @@ func ExampleGlideClusterClient_ObjectFreq() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	// TODO: Once ConfigSet and ConfigGet are implemented, replace CustomCommand
-	client.CustomCommand(context.TODO(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lfu"})
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	_, err = client.Set(context.TODO(), "key1", "someOtherValue")
-	result1, err := client.ObjectFreq(context.TODO(), "key1")
+	client.CustomCommand(context.Background(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lfu"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	_, err = client.Set(context.Background(), "key1", "someOtherValue")
+	result1, err := client.ObjectFreq(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -852,10 +852,10 @@ func ExampleGlideClusterClient_ObjectFreq() {
 }
 
 func ExampleGlideClient_ObjectIdleTime() {
-	var client *GlideClient = getExampleGlideClient()                                      // example helper function
-	client.ConfigSet(context.TODO(), map[string]string{"maxmemory-policy": "allkeys-lru"}) // example configuration
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectIdleTime(context.TODO(), "key1")
+	var client *GlideClient = getExampleGlideClient()                                            // example helper function
+	client.ConfigSet(context.Background(), map[string]string{"maxmemory-policy": "allkeys-lru"}) // example configuration
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectIdleTime(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -871,9 +871,9 @@ func ExampleGlideClusterClient_ObjectIdleTime() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
 	// TODO: Once ConfigSet and ConfigGet are implemented, replace CustomCommand
-	client.CustomCommand(context.TODO(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lru"})
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectIdleTime(context.TODO(), "key1")
+	client.CustomCommand(context.Background(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lru"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectIdleTime(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -886,10 +886,13 @@ func ExampleGlideClusterClient_ObjectIdleTime() {
 }
 
 func ExampleGlideClient_ObjectRefCount() {
-	var client *GlideClient = getExampleGlideClient()                                                // example helper function
-	_, err := client.ConfigSet(context.TODO(), map[string]string{"maxmemory-policy": "allkeys-lru"}) // example configuration
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectRefCount(context.TODO(), "key1")
+	var client *GlideClient = getExampleGlideClient() // example helper function
+	_, err := client.ConfigSet(
+		context.Background(),
+		map[string]string{"maxmemory-policy": "allkeys-lru"},
+	) // example configuration
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectRefCount(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -903,9 +906,9 @@ func ExampleGlideClient_ObjectRefCount() {
 
 func ExampleGlideClusterClient_ObjectRefCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.CustomCommand(context.TODO(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lru"})
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.ObjectRefCount(context.TODO(), "key1")
+	client.CustomCommand(context.Background(), []string{"CONFIG", "SET", "maxmemory-policy", "allkeys-lru"})
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.ObjectRefCount(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -919,8 +922,8 @@ func ExampleGlideClusterClient_ObjectRefCount() {
 
 func ExampleGlideClient_Sort() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
-	result1, err := client.Sort(context.TODO(), "key1")
+	result, err := client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	result1, err := client.Sort(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -934,8 +937,8 @@ func ExampleGlideClient_Sort() {
 
 func ExampleGlideClusterClient_Sort() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
-	result1, err := client.Sort(context.TODO(), "key1")
+	result, err := client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	result1, err := client.Sort(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -950,11 +953,11 @@ func ExampleGlideClusterClient_Sort() {
 func ExampleGlideClient_SortWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).SetOrderBy(options.ASC)
-	client.Set(context.TODO(), "weight_item1", "3")
-	client.Set(context.TODO(), "weight_item2", "1")
-	client.Set(context.TODO(), "weight_item3", "2")
-	result, err := client.LPush(context.TODO(), "key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortWithOptions(context.TODO(), "key1", *opts)
+	client.Set(context.Background(), "weight_item1", "3")
+	client.Set(context.Background(), "weight_item2", "1")
+	client.Set(context.Background(), "weight_item3", "2")
+	result, err := client.LPush(context.Background(), "key1", []string{"item1", "item2", "item3"})
+	result1, err := client.SortWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -969,8 +972,8 @@ func ExampleGlideClient_SortWithOptions() {
 func ExampleGlideClusterClient_SortWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
-	result, err := client.LPush(context.TODO(), "key1", []string{"3", "1", "2"})
-	result1, err := client.SortWithOptions(context.TODO(), "key1", *opts)
+	result, err := client.LPush(context.Background(), "key1", []string{"3", "1", "2"})
+	result1, err := client.SortWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -984,8 +987,8 @@ func ExampleGlideClusterClient_SortWithOptions() {
 
 func ExampleGlideClient_SortStore() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
-	result1, err := client.SortStore(context.TODO(), "key1", "key1_store")
+	result, err := client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	result1, err := client.SortStore(context.Background(), "key1", "key1_store")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -999,8 +1002,8 @@ func ExampleGlideClient_SortStore() {
 
 func ExampleGlideClusterClient_SortStore() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "{key}1", []string{"1", "3", "2", "4"})
-	result1, err := client.SortStore(context.TODO(), "{key}1", "{key}2")
+	result, err := client.LPush(context.Background(), "{key}1", []string{"1", "3", "2", "4"})
+	result1, err := client.SortStore(context.Background(), "{key}1", "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1015,11 +1018,11 @@ func ExampleGlideClusterClient_SortStore() {
 func ExampleGlideClient_SortStoreWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).SetOrderBy(options.ASC)
-	client.Set(context.TODO(), "weight_item1", "3")
-	client.Set(context.TODO(), "weight_item2", "1")
-	client.Set(context.TODO(), "weight_item3", "2")
-	result, err := client.LPush(context.TODO(), "key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortStoreWithOptions(context.TODO(), "key1", "key1_store", *opts)
+	client.Set(context.Background(), "weight_item1", "3")
+	client.Set(context.Background(), "weight_item2", "1")
+	client.Set(context.Background(), "weight_item3", "2")
+	result, err := client.LPush(context.Background(), "key1", []string{"item1", "item2", "item3"})
+	result1, err := client.SortStoreWithOptions(context.Background(), "key1", "key1_store", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1034,8 +1037,8 @@ func ExampleGlideClient_SortStoreWithOptions() {
 func ExampleGlideClusterClient_SortStoreWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
-	result, err := client.LPush(context.TODO(), "{key}1", []string{"3", "1", "2"})
-	result1, err := client.SortStoreWithOptions(context.TODO(), "{key}1", "{key}2", *opts)
+	result, err := client.LPush(context.Background(), "{key}1", []string{"3", "1", "2"})
+	result1, err := client.SortStoreWithOptions(context.Background(), "{key}1", "{key}2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1049,8 +1052,8 @@ func ExampleGlideClusterClient_SortStoreWithOptions() {
 
 func ExampleGlideClient_SortReadOnly() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
-	result1, err := client.SortReadOnly(context.TODO(), "key1")
+	result, err := client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	result1, err := client.SortReadOnly(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1064,8 +1067,8 @@ func ExampleGlideClient_SortReadOnly() {
 
 func ExampleGlideClusterClient_SortReadOnly() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "key1", []string{"1", "3", "2", "4"})
-	result1, err := client.SortReadOnly(context.TODO(), "key1")
+	result, err := client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	result1, err := client.SortReadOnly(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1080,11 +1083,11 @@ func ExampleGlideClusterClient_SortReadOnly() {
 func ExampleGlideClient_SortReadOnlyWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 	opts := options.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).SetOrderBy(options.ASC)
-	client.Set(context.TODO(), "weight_item1", "3")
-	client.Set(context.TODO(), "weight_item2", "1")
-	client.Set(context.TODO(), "weight_item3", "2")
-	result, err := client.LPush(context.TODO(), "key1", []string{"item1", "item2", "item3"})
-	result1, err := client.SortReadOnlyWithOptions(context.TODO(), "key1", *opts)
+	client.Set(context.Background(), "weight_item1", "3")
+	client.Set(context.Background(), "weight_item2", "1")
+	client.Set(context.Background(), "weight_item3", "2")
+	result, err := client.LPush(context.Background(), "key1", []string{"item1", "item2", "item3"})
+	result1, err := client.SortReadOnlyWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1099,8 +1102,8 @@ func ExampleGlideClient_SortReadOnlyWithOptions() {
 func ExampleGlideClusterClient_SortReadOnlyWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.NewSortOptions().SetIsAlpha(false).SetOrderBy(options.ASC)
-	result, err := client.LPush(context.TODO(), "key1", []string{"3", "1", "2"})
-	result1, err := client.SortReadOnlyWithOptions(context.TODO(), "key1", *opts)
+	result, err := client.LPush(context.Background(), "key1", []string{"3", "1", "2"})
+	result1, err := client.SortReadOnlyWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1114,8 +1117,8 @@ func ExampleGlideClusterClient_SortReadOnlyWithOptions() {
 
 func ExampleGlideClient_Wait() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.Set(context.TODO(), "key1", "someValue")
-	result, err := client.Wait(context.TODO(), 2, 1)
+	client.Set(context.Background(), "key1", "someValue")
+	result, err := client.Wait(context.Background(), 2, 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1129,8 +1132,8 @@ func ExampleGlideClient_Wait() {
 
 func ExampleGlideClusterClient_Wait() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.Set(context.TODO(), "key1", "someValue")
-	result, err := client.Wait(context.TODO(), 2, 1)
+	client.Set(context.Background(), "key1", "someValue")
+	result, err := client.Wait(context.Background(), 2, 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1142,9 +1145,9 @@ func ExampleGlideClusterClient_Wait() {
 
 func ExampleGlideClient_Copy() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.Set(context.TODO(), "key1", "someValue")
-	result1, err := client.Copy(context.TODO(), "key1", "key2")
-	result2, err := client.Get(context.TODO(), "key2")
+	result, err := client.Set(context.Background(), "key1", "someValue")
+	result1, err := client.Copy(context.Background(), "key1", "key2")
+	result2, err := client.Get(context.Background(), "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1160,9 +1163,9 @@ func ExampleGlideClient_Copy() {
 
 func ExampleGlideClusterClient_Copy() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Set(context.TODO(), "{key}1", "someValue")
-	result1, err := client.Copy(context.TODO(), "{key}1", "{key}2")
-	result2, err := client.Get(context.TODO(), "{key}2")
+	result, err := client.Set(context.Background(), "{key}1", "someValue")
+	result1, err := client.Copy(context.Background(), "{key}1", "{key}2")
+	result2, err := client.Get(context.Background(), "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1178,12 +1181,12 @@ func ExampleGlideClusterClient_Copy() {
 
 func ExampleGlideClient_CopyWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.Set(context.TODO(), "key1", "someValue")
+	client.Set(context.Background(), "key1", "someValue")
 
 	opts := options.NewCopyOptions().SetReplace()
-	client.CopyWithOptions(context.TODO(), "key1", "key2", *opts)
+	client.CopyWithOptions(context.Background(), "key1", "key2", *opts)
 
-	result, err := client.Get(context.TODO(), "key2")
+	result, err := client.Get(context.Background(), "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1195,12 +1198,12 @@ func ExampleGlideClient_CopyWithOptions() {
 func ExampleGlideClusterClient_CopyWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
-	client.Set(context.TODO(), "{key}1", "someValue")
+	client.Set(context.Background(), "{key}1", "someValue")
 
 	opts := options.NewCopyOptions().SetReplace()
-	client.CopyWithOptions(context.TODO(), "{key}1", "{key}2", *opts)
+	client.CopyWithOptions(context.Background(), "{key}1", "{key}2", *opts)
 
-	result, err := client.Get(context.TODO(), "{key}2")
+	result, err := client.Get(context.Background(), "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

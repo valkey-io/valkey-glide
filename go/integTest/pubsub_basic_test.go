@@ -167,13 +167,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			var err error
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					tt.channelName,
 					tt.messageContent,
 					tt.sharded,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), tt.channelName, tt.messageContent)
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), tt.channelName, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -349,13 +349,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 			var err error
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					tt.channelName,
 					tt.messageContent,
 					tt.sharded,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), tt.channelName, tt.messageContent)
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), tt.channelName, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -484,9 +484,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			for _, channel := range tt.channels {
 				var err error
 				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), channel, tt.messageContent, false)
+					_, err = publisher.(*api.GlideClusterClient).Publish(
+						context.Background(),
+						channel,
+						tt.messageContent,
+						false,
+					)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(context.TODO(), channel, tt.messageContent)
+					_, err = publisher.(*api.GlideClient).Publish(context.Background(), channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
@@ -495,13 +500,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			var err error
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					"other-channel",
 					"should not receive",
 					false,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), "other-channel", "should not receive")
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), "other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -674,14 +679,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			for _, channelName := range tt.channelNames {
 				if tt.clientType == GlideClusterClient {
 					_, err := publisher.(*api.GlideClusterClient).Publish(
-						context.TODO(),
+						context.Background(),
 						channelName,
 						tt.messageContent,
 						tt.sharded,
 					)
 					assert.Nil(t, err)
 				} else {
-					_, err := publisher.(*api.GlideClient).Publish(context.TODO(), channelName, tt.messageContent)
+					_, err := publisher.(*api.GlideClient).Publish(context.Background(), channelName, tt.messageContent)
 					assert.Nil(t, err)
 				}
 			}
@@ -814,9 +819,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			for _, channel := range tt.channels {
 				var err error
 				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), channel, tt.messageContent, false)
+					_, err = publisher.(*api.GlideClusterClient).Publish(
+						context.Background(),
+						channel,
+						tt.messageContent,
+						false,
+					)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(context.TODO(), channel, tt.messageContent)
+					_, err = publisher.(*api.GlideClient).Publish(context.Background(), channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
@@ -825,13 +835,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			var err error
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					"other-channel",
 					"should not receive",
 					false,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), "other-channel", "should not receive")
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), "other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -973,9 +983,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			// Publish to exact channel
 			var err error
 			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), tt.exactChannel, tt.messageContent, false)
+				_, err = publisher.(*api.GlideClusterClient).Publish(
+					context.Background(),
+					tt.exactChannel,
+					tt.messageContent,
+					false,
+				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), tt.exactChannel, tt.messageContent)
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), tt.exactChannel, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -983,9 +998,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			for _, channel := range tt.patternChannels {
 				var err error
 				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), channel, tt.messageContent, false)
+					_, err = publisher.(*api.GlideClusterClient).Publish(
+						context.Background(),
+						channel,
+						tt.messageContent,
+						false,
+					)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(context.TODO(), channel, tt.messageContent)
+					_, err = publisher.(*api.GlideClient).Publish(context.Background(), channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
@@ -993,13 +1013,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			// Publish to a non-matching channel
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					"other-channel",
 					"should not receive",
 					false,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), "other-channel", "should not receive")
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), "other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -1149,9 +1169,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			// Publish to exact channel
 			var err error
 			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), tt.exactChannel, tt.messageContent, false)
+				_, err = publisher.(*api.GlideClusterClient).Publish(
+					context.Background(),
+					tt.exactChannel,
+					tt.messageContent,
+					false,
+				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), tt.exactChannel, tt.messageContent)
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), tt.exactChannel, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -1159,9 +1184,14 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			for _, channel := range tt.patternChannels {
 				var err error
 				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(context.TODO(), channel, tt.messageContent, false)
+					_, err = publisher.(*api.GlideClusterClient).Publish(
+						context.Background(),
+						channel,
+						tt.messageContent,
+						false,
+					)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(context.TODO(), channel, tt.messageContent)
+					_, err = publisher.(*api.GlideClient).Publish(context.Background(), channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
@@ -1169,13 +1199,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			// Publish to a non-matching channel
 			if tt.clientType == GlideClusterClient {
 				_, err = publisher.(*api.GlideClusterClient).Publish(
-					context.TODO(),
+					context.Background(),
 					"other-channel",
 					"should not receive",
 					false,
 				)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(context.TODO(), "other-channel", "should not receive")
+				_, err = publisher.(*api.GlideClient).Publish(context.Background(), "other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 

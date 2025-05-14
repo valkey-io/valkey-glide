@@ -13,7 +13,7 @@ func ExampleNewGlideClient() {
 		WithUseTLS(false).
 		WithReconnectStrategy(NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
-	client, err := NewGlideClient(context.TODO(), config)
+	client, err := NewGlideClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
@@ -28,7 +28,7 @@ func ExampleNewGlideClusterClient() {
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5000).
 		WithUseTLS(false)
-	client, err := NewGlideClusterClient(context.TODO(), config)
+	client, err := NewGlideClusterClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

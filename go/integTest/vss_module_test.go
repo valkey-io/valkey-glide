@@ -12,7 +12,7 @@ import (
 
 func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {
 	client := suite.defaultClusterClient()
-	result, err := client.InfoWithOptions(context.TODO(),
+	result, err := client.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 			RouteOption: nil,

@@ -11,7 +11,7 @@ import (
 
 func ExampleGlideClient_LPush() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -22,7 +22,7 @@ func ExampleGlideClient_LPush() {
 
 func ExampleGlideClusterClient_LPush() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -33,9 +33,9 @@ func ExampleGlideClusterClient_LPush() {
 
 func ExampleGlideClient_LPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
-	result1, err := client.LPop(context.TODO(), "my_list")
-	result2, err := client.LPop(context.TODO(), "non_existent")
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
+	result1, err := client.LPop(context.Background(), "my_list")
+	result2, err := client.LPop(context.Background(), "non_existent")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -51,9 +51,9 @@ func ExampleGlideClient_LPop() {
 
 func ExampleGlideClusterClient_LPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
-	result1, err := client.LPop(context.TODO(), "my_list")
-	result2, err := client.LPop(context.TODO(), "non_existent")
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
+	result1, err := client.LPop(context.Background(), "my_list")
+	result2, err := client.LPop(context.Background(), "non_existent")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -69,9 +69,9 @@ func ExampleGlideClusterClient_LPop() {
 
 func ExampleGlideClient_LPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
-	result1, err := client.LPopCount(context.TODO(), "my_list", 2)
-	result2, err := client.LPop(context.TODO(), "non_existent")
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
+	result1, err := client.LPopCount(context.Background(), "my_list", 2)
+	result2, err := client.LPop(context.Background(), "non_existent")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -87,9 +87,9 @@ func ExampleGlideClient_LPopCount() {
 
 func ExampleGlideClusterClient_LPopCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"value1", "value2"})
-	result1, err := client.LPopCount(context.TODO(), "my_list", 2)
-	result2, err := client.LPop(context.TODO(), "non_existent")
+	result, err := client.LPush(context.Background(), "my_list", []string{"value1", "value2"})
+	result1, err := client.LPopCount(context.Background(), "my_list", 2)
+	result2, err := client.LPop(context.Background(), "non_existent")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -105,8 +105,8 @@ func ExampleGlideClusterClient_LPopCount() {
 
 func ExampleGlideClient_LPos() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPos(context.TODO(), "my_list", "e")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
+	result1, err := client.LPos(context.Background(), "my_list", "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -120,8 +120,8 @@ func ExampleGlideClient_LPos() {
 
 func ExampleGlideClusterClient_LPos() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPos(context.TODO(), "my_list", "e")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
+	result1, err := client.LPos(context.Background(), "my_list", "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -135,8 +135,8 @@ func ExampleGlideClusterClient_LPos() {
 
 func ExampleGlideClient_LPosWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPosWithOptions(context.TODO(),
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
+	result1, err := client.LPosWithOptions(context.Background(),
 		"my_list",
 		"e",
 		*options.NewLPosOptions().SetRank(2),
@@ -154,8 +154,8 @@ func ExampleGlideClient_LPosWithOptions() {
 
 func ExampleGlideClusterClient_LPosWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPosWithOptions(context.TODO(),
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
+	result1, err := client.LPosWithOptions(context.Background(),
 		"my_list",
 		"e",
 		*options.NewLPosOptions().SetRank(2),
@@ -173,8 +173,8 @@ func ExampleGlideClusterClient_LPosWithOptions() {
 
 func ExampleGlideClient_LPosCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCount(context.TODO(), "my_list", "e", 3)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LPosCount(context.Background(), "my_list", "e", 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -188,8 +188,8 @@ func ExampleGlideClient_LPosCount() {
 
 func ExampleGlideClusterClient_LPosCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCount(context.TODO(), "my_list", "e", 3)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LPosCount(context.Background(), "my_list", "e", 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -203,9 +203,9 @@ func ExampleGlideClusterClient_LPosCount() {
 
 func ExampleGlideClient_LPosCountWithOptions() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCountWithOptions(context.TODO(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
-	result2, err := client.LPosCountWithOptions(context.TODO(), "my_list", "e", 3,
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
+	result2, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 3,
 		*options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -222,9 +222,9 @@ func ExampleGlideClient_LPosCountWithOptions() {
 
 func ExampleGlideClusterClient_LPosCountWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCountWithOptions(context.TODO(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
-	result2, err := client.LPosCountWithOptions(context.TODO(), "my_list", "e", 3,
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
+	result2, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 3,
 		*options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -241,7 +241,7 @@ func ExampleGlideClusterClient_LPosCountWithOptions() {
 
 func ExampleGlideClient_RPush() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -253,7 +253,7 @@ func ExampleGlideClient_RPush() {
 
 func ExampleGlideClusterClient_RPush() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -265,8 +265,8 @@ func ExampleGlideClusterClient_RPush() {
 
 func ExampleGlideClient_LRange() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LRange(context.TODO(), "my_list", 0, 2)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LRange(context.Background(), "my_list", 0, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -280,8 +280,8 @@ func ExampleGlideClient_LRange() {
 
 func ExampleGlideClusterClient_LRange() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LRange(context.TODO(), "my_list", 0, 2)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LRange(context.Background(), "my_list", 0, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -295,8 +295,8 @@ func ExampleGlideClusterClient_LRange() {
 
 func ExampleGlideClient_LIndex() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LIndex(context.TODO(), "my_list", 3)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LIndex(context.Background(), "my_list", 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -310,8 +310,8 @@ func ExampleGlideClient_LIndex() {
 
 func ExampleGlideClusterClient_LIndex() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LIndex(context.TODO(), "my_list", 3)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LIndex(context.Background(), "my_list", 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -325,9 +325,9 @@ func ExampleGlideClusterClient_LIndex() {
 
 func ExampleGlideClient_LTrim() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LTrim(context.TODO(), "my_list", 0, 4)
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LTrim(context.Background(), "my_list", 0, 4)
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -343,9 +343,9 @@ func ExampleGlideClient_LTrim() {
 
 func ExampleGlideClusterClient_LTrim() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LTrim(context.TODO(), "my_list", 0, 4)
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LTrim(context.Background(), "my_list", 0, 4)
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -361,8 +361,8 @@ func ExampleGlideClusterClient_LTrim() {
 
 func ExampleGlideClient_LLen() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LLen(context.TODO(), "my_list")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LLen(context.Background(), "my_list")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -376,8 +376,8 @@ func ExampleGlideClient_LLen() {
 
 func ExampleGlideClusterClient_LLen() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LLen(context.TODO(), "my_list")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LLen(context.Background(), "my_list")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -391,9 +391,9 @@ func ExampleGlideClusterClient_LLen() {
 
 func ExampleGlideClient_LRem() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LRem(context.TODO(), "my_list", 2, "e")
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LRem(context.Background(), "my_list", 2, "e")
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -409,9 +409,9 @@ func ExampleGlideClient_LRem() {
 
 func ExampleGlideClusterClient_LRem() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LRem(context.TODO(), "my_list", 2, "e")
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.LRem(context.Background(), "my_list", 2, "e")
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -427,9 +427,9 @@ func ExampleGlideClusterClient_LRem() {
 
 func ExampleGlideClient_RPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.RPop(context.TODO(), "my_list")
-	result2, err := client.RPop(context.TODO(), "non_existing_key")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.RPop(context.Background(), "my_list")
+	result2, err := client.RPop(context.Background(), "non_existing_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -445,9 +445,9 @@ func ExampleGlideClient_RPop() {
 
 func ExampleGlideClusterClient_RPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.RPop(context.TODO(), "my_list")
-	result2, err := client.RPop(context.TODO(), "non_existing_key")
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.RPop(context.Background(), "my_list")
+	result2, err := client.RPop(context.Background(), "non_existing_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -463,8 +463,8 @@ func ExampleGlideClusterClient_RPop() {
 
 func ExampleGlideClient_RPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.RPopCount(context.TODO(), "my_list", 4)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.RPopCount(context.Background(), "my_list", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -478,8 +478,8 @@ func ExampleGlideClient_RPopCount() {
 
 func ExampleGlideClusterClient_RPopCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.RPopCount(context.TODO(), "my_list", 4)
+	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
+	result1, err := client.RPopCount(context.Background(), "my_list", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -493,9 +493,9 @@ func ExampleGlideClusterClient_RPopCount() {
 
 func ExampleGlideClient_LInsert() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.Del(context.TODO(), []string{"my_list"})
-	result, err := client.RPush(context.TODO(), "my_list", []string{"hello", "world"})
-	result1, err := client.LInsert(context.TODO(), "my_list", options.Before, "world", "there")
+	client.Del(context.Background(), []string{"my_list"})
+	result, err := client.RPush(context.Background(), "my_list", []string{"hello", "world"})
+	result1, err := client.LInsert(context.Background(), "my_list", options.Before, "world", "there")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -509,9 +509,9 @@ func ExampleGlideClient_LInsert() {
 
 func ExampleGlideClusterClient_LInsert() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.Del(context.TODO(), []string{"my_list"})
-	result, err := client.RPush(context.TODO(), "my_list", []string{"hello", "world"})
-	result1, err := client.LInsert(context.TODO(), "my_list", options.Before, "world", "there")
+	client.Del(context.Background(), []string{"my_list"})
+	result, err := client.RPush(context.Background(), "my_list", []string{"hello", "world"})
+	result1, err := client.LInsert(context.Background(), "my_list", options.Before, "world", "there")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -525,9 +525,9 @@ func ExampleGlideClusterClient_LInsert() {
 
 func ExampleGlideClient_BLPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "list_a", []string{"a", "b", "c", "d", "e"})
-	result1, err := client.RPush(context.TODO(), "list_b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BLPop(context.TODO(), []string{"list_a", "list_b"}, 0.5)
+	result, err := client.RPush(context.Background(), "list_a", []string{"a", "b", "c", "d", "e"})
+	result1, err := client.RPush(context.Background(), "list_b", []string{"f", "g", "h", "i", "j"})
+	result2, err := client.BLPop(context.Background(), []string{"list_a", "list_b"}, 0.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -543,9 +543,9 @@ func ExampleGlideClient_BLPop() {
 
 func ExampleGlideClusterClient_BLPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "{list}-a", []string{"a", "b", "c", "d", "e"})
-	result1, err := client.RPush(context.TODO(), "{list}-b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BLPop(context.TODO(), []string{"{list}-a", "{list}-b"}, 0.5)
+	result, err := client.RPush(context.Background(), "{list}-a", []string{"a", "b", "c", "d", "e"})
+	result1, err := client.RPush(context.Background(), "{list}-b", []string{"f", "g", "h", "i", "j"})
+	result2, err := client.BLPop(context.Background(), []string{"{list}-a", "{list}-b"}, 0.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -561,10 +561,10 @@ func ExampleGlideClusterClient_BLPop() {
 
 func ExampleGlideClient_BRPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	client.Del(context.TODO(), []string{"my_list", "list_a", "list_b"})
-	result, err := client.RPush(context.TODO(), "list_a", []string{"a", "b", "c", "d", "e"})
-	result1, err := client.RPush(context.TODO(), "list_b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BRPop(context.TODO(), []string{"list_a", "list_b"}, 0.5)
+	client.Del(context.Background(), []string{"my_list", "list_a", "list_b"})
+	result, err := client.RPush(context.Background(), "list_a", []string{"a", "b", "c", "d", "e"})
+	result1, err := client.RPush(context.Background(), "list_b", []string{"f", "g", "h", "i", "j"})
+	result2, err := client.BRPop(context.Background(), []string{"list_a", "list_b"}, 0.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -580,10 +580,10 @@ func ExampleGlideClient_BRPop() {
 
 func ExampleGlideClusterClient_BRPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	client.Del(context.TODO(), []string{"my_list", "{list}-a", "{list}-b"})
-	result, err := client.RPush(context.TODO(), "{list}-a", []string{"a", "b", "c", "d", "e"})
-	result1, err := client.RPush(context.TODO(), "{list}-b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BRPop(context.TODO(), []string{"{list}-a", "{list}-b"}, 0.5)
+	client.Del(context.Background(), []string{"my_list", "{list}-a", "{list}-b"})
+	result, err := client.RPush(context.Background(), "{list}-a", []string{"a", "b", "c", "d", "e"})
+	result1, err := client.RPush(context.Background(), "{list}-b", []string{"f", "g", "h", "i", "j"})
+	result2, err := client.BRPop(context.Background(), []string{"{list}-a", "{list}-b"}, 0.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -599,9 +599,9 @@ func ExampleGlideClusterClient_BRPop() {
 
 func ExampleGlideClient_RPushX() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"value1"})
-	result1, err := client.RPushX(context.TODO(), "my_list", []string{"value2", "value3"})
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"value1"})
+	result1, err := client.RPushX(context.Background(), "my_list", []string{"value2", "value3"})
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -617,9 +617,9 @@ func ExampleGlideClient_RPushX() {
 
 func ExampleGlideClusterClient_RPushX() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"value1"})
-	result1, err := client.RPushX(context.TODO(), "my_list", []string{"value2", "value3"})
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"value1"})
+	result1, err := client.RPushX(context.Background(), "my_list", []string{"value2", "value3"})
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -635,9 +635,9 @@ func ExampleGlideClusterClient_RPushX() {
 
 func ExampleGlideClient_LPushX() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"value1"})
-	result1, err := client.LPushX(context.TODO(), "my_list", []string{"value2", "value3"})
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"value1"})
+	result1, err := client.LPushX(context.Background(), "my_list", []string{"value2", "value3"})
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -653,9 +653,9 @@ func ExampleGlideClient_LPushX() {
 
 func ExampleGlideClusterClient_LPushX() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.RPush(context.TODO(), "my_list", []string{"value1"})
-	result1, err := client.LPushX(context.TODO(), "my_list", []string{"value2", "value3"})
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.RPush(context.Background(), "my_list", []string{"value1"})
+	result1, err := client.LPushX(context.Background(), "my_list", []string{"value2", "value3"})
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -671,8 +671,8 @@ func ExampleGlideClusterClient_LPushX() {
 
 func ExampleGlideClient_LMPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPop(context.TODO(), []string{"my_list"}, options.Left)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LMPop(context.Background(), []string{"my_list"}, options.Left)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -686,8 +686,8 @@ func ExampleGlideClient_LMPop() {
 
 func ExampleGlideClusterClient_LMPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPop(context.TODO(), []string{"my_list"}, options.Left)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LMPop(context.Background(), []string{"my_list"}, options.Left)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -701,8 +701,8 @@ func ExampleGlideClusterClient_LMPop() {
 
 func ExampleGlideClient_LMPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPopCount(context.TODO(), []string{"my_list"}, options.Left, 2)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LMPopCount(context.Background(), []string{"my_list"}, options.Left, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -716,8 +716,8 @@ func ExampleGlideClient_LMPopCount() {
 
 func ExampleGlideClusterClient_LMPopCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LMPopCount(context.TODO(), []string{"my_list"}, options.Left, 2)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LMPopCount(context.Background(), []string{"my_list"}, options.Left, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -731,8 +731,8 @@ func ExampleGlideClusterClient_LMPopCount() {
 
 func ExampleGlideClient_BLMPop() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPop(context.TODO(), []string{"my_list"}, options.Left, 0.1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, options.Left, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -746,8 +746,8 @@ func ExampleGlideClient_BLMPop() {
 
 func ExampleGlideClusterClient_BLMPop() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPop(context.TODO(), []string{"my_list"}, options.Left, 0.1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, options.Left, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -761,8 +761,8 @@ func ExampleGlideClusterClient_BLMPop() {
 
 func ExampleGlideClient_BLMPopCount() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPopCount(context.TODO(), []string{"my_list"}, options.Left, 2, 0.1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, options.Left, 2, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -776,8 +776,8 @@ func ExampleGlideClient_BLMPopCount() {
 
 func ExampleGlideClusterClient_BLMPopCount() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPopCount(context.TODO(), []string{"my_list"}, options.Left, 2, 0.1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, options.Left, 2, 0.1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -792,9 +792,9 @@ func ExampleGlideClusterClient_BLMPopCount() {
 func ExampleGlideClient_LSet() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
 
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LSet(context.TODO(), "my_list", 1, "someOtherValue")
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LSet(context.Background(), "my_list", 1, "someOtherValue")
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -811,9 +811,9 @@ func ExampleGlideClient_LSet() {
 func ExampleGlideClusterClient_LSet() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 
-	result, err := client.LPush(context.TODO(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.LSet(context.TODO(), "my_list", 1, "someOtherValue")
-	result2, err := client.LRange(context.TODO(), "my_list", 0, -1)
+	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
+	result1, err := client.LSet(context.Background(), "my_list", 1, "someOtherValue")
+	result2, err := client.LRange(context.Background(), "my_list", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -829,11 +829,11 @@ func ExampleGlideClusterClient_LSet() {
 
 func ExampleGlideClient_LMove() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list1", []string{"two", "one"})
-	result1, err := client.LPush(context.TODO(), "my_list2", []string{"four", "three"})
-	result2, err := client.LMove(context.TODO(), "my_list1", "my_list2", options.Left, options.Left)
-	result3, err := client.LRange(context.TODO(), "my_list1", 0, -1)
-	result4, err := client.LRange(context.TODO(), "my_list2", 0, -1)
+	result, err := client.LPush(context.Background(), "my_list1", []string{"two", "one"})
+	result1, err := client.LPush(context.Background(), "my_list2", []string{"four", "three"})
+	result2, err := client.LMove(context.Background(), "my_list1", "my_list2", options.Left, options.Left)
+	result3, err := client.LRange(context.Background(), "my_list1", 0, -1)
+	result4, err := client.LRange(context.Background(), "my_list2", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -853,11 +853,11 @@ func ExampleGlideClient_LMove() {
 
 func ExampleGlideClusterClient_LMove() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "{list}-1", []string{"two", "one"})
-	result1, err := client.LPush(context.TODO(), "{list}-2", []string{"four", "three"})
-	result2, err := client.LMove(context.TODO(), "{list}-1", "{list}-2", options.Left, options.Left)
-	result3, err := client.LRange(context.TODO(), "{list}-1", 0, -1)
-	result4, err := client.LRange(context.TODO(), "{list}-2", 0, -1)
+	result, err := client.LPush(context.Background(), "{list}-1", []string{"two", "one"})
+	result1, err := client.LPush(context.Background(), "{list}-2", []string{"four", "three"})
+	result2, err := client.LMove(context.Background(), "{list}-1", "{list}-2", options.Left, options.Left)
+	result3, err := client.LRange(context.Background(), "{list}-1", 0, -1)
+	result4, err := client.LRange(context.Background(), "{list}-2", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -877,11 +877,11 @@ func ExampleGlideClusterClient_LMove() {
 
 func ExampleGlideClient_BLMove() {
 	var client *GlideClient = getExampleGlideClient() // example helper function
-	result, err := client.LPush(context.TODO(), "my_list1", []string{"two", "one"})
-	result1, err := client.LPush(context.TODO(), "my_list2", []string{"four", "three"})
-	result2, err := client.BLMove(context.TODO(), "my_list1", "my_list2", options.Left, options.Left, 0.1)
-	result3, err := client.LRange(context.TODO(), "my_list1", 0, -1)
-	result4, err := client.LRange(context.TODO(), "my_list2", 0, -1)
+	result, err := client.LPush(context.Background(), "my_list1", []string{"two", "one"})
+	result1, err := client.LPush(context.Background(), "my_list2", []string{"four", "three"})
+	result2, err := client.BLMove(context.Background(), "my_list1", "my_list2", options.Left, options.Left, 0.1)
+	result3, err := client.LRange(context.Background(), "my_list1", 0, -1)
+	result4, err := client.LRange(context.Background(), "my_list2", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -901,11 +901,11 @@ func ExampleGlideClient_BLMove() {
 
 func ExampleGlideClusterClient_BLMove() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.LPush(context.TODO(), "{list}-1", []string{"two", "one"})
-	result1, err := client.LPush(context.TODO(), "{list}-2", []string{"four", "three"})
-	result2, err := client.BLMove(context.TODO(), "{list}-1", "{list}-2", options.Left, options.Left, 0.1)
-	result3, err := client.LRange(context.TODO(), "{list}-1", 0, -1)
-	result4, err := client.LRange(context.TODO(), "{list}-2", 0, -1)
+	result, err := client.LPush(context.Background(), "{list}-1", []string{"two", "one"})
+	result1, err := client.LPush(context.Background(), "{list}-2", []string{"four", "three"})
+	result2, err := client.BLMove(context.Background(), "{list}-1", "{list}-2", options.Left, options.Left, 0.1)
+	result3, err := client.LRange(context.Background(), "{list}-1", 0, -1)
+	result4, err := client.LRange(context.Background(), "{list}-2", 0, -1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

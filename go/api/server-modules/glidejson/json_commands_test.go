@@ -12,7 +12,7 @@ import (
 
 func Example_jsonSet() {
 	var client *api.GlideClient = getExampleGlideClient()
-	result, err := Set(context.TODO(), client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
+	result, err := Set(context.Background(), client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -23,7 +23,7 @@ func Example_jsonSet() {
 
 func ExampleGlideClusterClient_jsonSet() {
 	var client *api.GlideClusterClient = getExampleGlideClusterClient()
-	result, err := Set(context.TODO(), client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
+	result, err := Set(context.Background(), client, "my_key", "$", "{\"a\":1.0,\"b\":2}")
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -35,7 +35,7 @@ func ExampleGlideClusterClient_jsonSet() {
 func Example_jsonSetWithOptions() {
 	var client *api.GlideClient = getExampleGlideClient()
 	jsonSetResult, err := SetWithOptions(
-		context.TODO(),
+		context.Background(),
 		client,
 		"key",
 		"$",
@@ -53,7 +53,7 @@ func Example_jsonSetWithOptions() {
 func ExampleGlideClusterClient_jsonSetWithOptions() {
 	var client *api.GlideClusterClient = getExampleGlideClusterClient()
 	jsonSetResult, err := SetWithOptions(
-		context.TODO(),
+		context.Background(),
 		client,
 		"key",
 		"$",
@@ -71,9 +71,9 @@ func ExampleGlideClusterClient_jsonSetWithOptions() {
 func Example_jsonGet() {
 	var client *api.GlideClient = getExampleGlideClient()
 	jsonValue := "{\"a\":1.0,\"b\":2}"
-	_, err := Set(context.TODO(), client, "key", "$", jsonValue)
+	_, err := Set(context.Background(), client, "key", "$", jsonValue)
 
-	jsonGetResult, err := Get(context.TODO(), client, "key")
+	jsonGetResult, err := Get(context.Background(), client, "key")
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -85,9 +85,9 @@ func Example_jsonGet() {
 func ExampleGlideClusterClient_jsonGet() {
 	var client *api.GlideClusterClient = getExampleGlideClusterClient()
 	jsonValue := "{\"a\":1.0,\"b\":2}"
-	_, err := Set(context.TODO(), client, "key", "$", jsonValue)
+	_, err := Set(context.Background(), client, "key", "$", jsonValue)
 
-	jsonGetResult, err := Get(context.TODO(), client, "key")
+	jsonGetResult, err := Get(context.Background(), client, "key")
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -99,9 +99,9 @@ func ExampleGlideClusterClient_jsonGet() {
 func Example_jsonGetWithOptions() {
 	var client *api.GlideClient = getExampleGlideClient()
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
-	_, err := Set(context.TODO(), client, "key", "$", jsonValue)
+	_, err := Set(context.Background(), client, "key", "$", jsonValue)
 	jsonGetResult, err := GetWithOptions(
-		context.TODO(), client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		context.Background(), client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}
@@ -113,9 +113,9 @@ func Example_jsonGetWithOptions() {
 func ExampleGlideClusterClient_jsonGetWithOptions() {
 	var client *api.GlideClusterClient = getExampleGlideClusterClient()
 	jsonValue := "{\"a\": {\"c\": 1, \"d\": 4}, \"b\": {\"c\": 2}, \"c\": true}"
-	_, err := Set(context.TODO(), client, "key", "$", jsonValue)
+	_, err := Set(context.Background(), client, "key", "$", jsonValue)
 	jsonGetResult, err := GetWithOptions(
-		context.TODO(), client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
+		context.Background(), client, "key", *jsonOptions.NewJsonGetOptionsBuilder().SetPaths([]string{"$..c"}))
 	if err != nil {
 		fmt.Println("JSON.SET example failed with an error: ", err)
 	}

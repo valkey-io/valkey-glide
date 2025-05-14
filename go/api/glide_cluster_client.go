@@ -260,7 +260,7 @@ func (client *GlideClusterClient) Ping(ctx context.Context) (string, error) {
 //
 //	route := options.RouteOption{config.RandomRoute}
 //	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
-//	result, err := clusterClient.PingWithOptions(context.TODO(), opts)
+//	result, err := clusterClient.PingWithOptions(context.Background(), opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/

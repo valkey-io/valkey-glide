@@ -17,6 +17,6 @@ func (suite *GlideTestSuite) TestParallelizedSetWithGC() {
 		runtime.GC()
 		key := uuid.New().String()
 		value := uuid.New().String()
-		suite.verifyOK(client.Set(context.TODO(), key, value))
+		suite.verifyOK(client.Set(context.Background(), key, value))
 	})
 }
