@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 // TestPubSub_Patterns tests all combinations of client types and message reading methods
@@ -148,11 +149,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 				tt.channelName: tt.messageContent,
 			}
 
-			var receiver api.BaseClientCommands
+			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
-				queue, err := receiver.GetQueue()
+				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
@@ -321,13 +322,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 			// Create multiple subscribers
 			const numSubscribers = 3
 			queues := make(map[int]*api.PubSubMessageQueue)
-			subscribers := make([]api.BaseClientCommands, numSubscribers)
+			subscribers := make([]interfaces.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
 					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
 					subscribers[i] = receiver
-					queue, err := receiver.GetQueue()
+					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {
@@ -455,11 +456,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			expectedMessages := make(map[string]string)
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClientCommands
+			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
-				queue, err := receiver.GetQueue()
+				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
@@ -641,11 +642,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 				expectedMessages[channelName] = tt.messageContent
 			}
 
-			var receiver api.BaseClientCommands
+			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
-				queue, err := receiver.GetQueue()
+				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
@@ -775,11 +776,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			expectedMessages := make(map[string]string)
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClientCommands
+			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
-				queue, err := receiver.GetQueue()
+				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
@@ -930,11 +931,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			expectedMessages[tt.exactChannel] = tt.messageContent
 			expectedMessages[tt.pattern] = tt.messageContent
 
-			var receiver api.BaseClientCommands
+			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*api.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
-				queue, err := receiver.GetQueue()
+				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
@@ -1097,13 +1098,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 			// Create multiple subscribers
 			const numSubscribers = 3
 			queues := make(map[int]*api.PubSubMessageQueue)
-			subscribers := make([]api.BaseClientCommands, numSubscribers)
+			subscribers := make([]interfaces.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
 					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
 					subscribers[i] = receiver
-					queue, err := receiver.GetQueue()
+					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {

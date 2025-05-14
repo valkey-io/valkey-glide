@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 // TestPubSubChannels tests the PubSubChannels command for standalone client
@@ -385,7 +386,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
 			}
 
-			clients := make([]api.BaseClientCommands, 0, len(tt.channelDefns))
+			clients := make([]interfaces.BaseClientCommands, 0, len(tt.channelDefns))
 			for _, defn := range tt.channelDefns {
 				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false)
 				clients = append(clients, client)
