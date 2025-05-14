@@ -561,7 +561,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeSetCon
 /// that this constant is consistent with the Rust client.
 ///
 /// * `env`    - The JNI environment.
-/// * `_class`  - The class object. Not used..
+/// * `_class`  - The class object. Not used.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeZSetConstant<'local>(
     env: JNIEnv<'local>,
