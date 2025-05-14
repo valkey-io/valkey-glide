@@ -8,7 +8,7 @@ use test_env_helpers::*;
 #[before_all]
 mod tests {
     use logger_core::{init, log_debug, log_trace};
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{Rng, distributions::Alphanumeric};
     use std::{
         fs::{read_dir, read_to_string, remove_dir_all},
         path::Path,
