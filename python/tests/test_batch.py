@@ -1407,7 +1407,7 @@ class TestBatch:
                 key2, 0, b"", replace=True, idletime=-10, frequency=10
             )
         assert (
-            "syntax error: both IDLETIME and FREQ cannot be set at the same time."
+            "syntax error: IDLETIME and FREQ cannot be set at the same time."
             in str(e)
         )
 

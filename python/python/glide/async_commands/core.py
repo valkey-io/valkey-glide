@@ -6652,7 +6652,7 @@ class CoreCommands(Protocol):
             args.append("ABSTTL")
         if idletime is not None and frequency is not None:
             raise RequestError(
-                "syntax error: both IDLETIME and FREQ cannot be set at the same time."
+                "syntax error: IDLETIME and FREQ cannot be set at the same time."
             )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
