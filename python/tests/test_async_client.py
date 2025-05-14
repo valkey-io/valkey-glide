@@ -12,8 +12,8 @@ import anyio
 import pytest
 
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.batch import Batch, ClusterBatch
-from glide.async_commands.bitmap import (
+from glide.commands.batch import Batch, ClusterBatch
+from glide.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -27,8 +27,8 @@ from glide.async_commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
-from glide.async_commands.core import (
+from glide.commands.command_args import Limit, ListDirection, OrderBy
+from glide.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -37,19 +37,19 @@ from glide.async_commands.core import (
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
-    InfBound,
     InfoSection,
     InsertPosition,
     OnlyIfEqual,
     UpdateOptions,
 )
-from glide.async_commands.sorted_set import (
+from glide.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
     GeoSearchByRadius,
     GeoSearchCount,
     GeospatialData,
     GeoUnit,
+    InfBound,
     LexBoundary,
     RangeByIndex,
     RangeByLex,
@@ -57,7 +57,7 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.async_commands.stream import (
+from glide.commands.stream import (
     ExclusiveIdBound,
     IdBound,
     MaxId,

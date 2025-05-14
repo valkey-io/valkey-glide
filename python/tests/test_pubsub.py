@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 import anyio
 import pytest
 
-from glide.async_commands.core import CoreCommands
+from glide.commands.async_commands.core import CoreCommands
 from glide.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,

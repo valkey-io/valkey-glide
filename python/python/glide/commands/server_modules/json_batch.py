@@ -22,9 +22,9 @@ Examples:
 
 from typing import List, Optional, Union
 
-from glide.async_commands.batch import TBatch
-from glide.async_commands.core import ConditionalChange
-from glide.async_commands.server_modules.glide_json import (
+from glide.commands.batch import TBatch
+from glide.commands.core_options import ConditionalChange
+from glide.commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,

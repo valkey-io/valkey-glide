@@ -8,10 +8,10 @@ from typing import List, Mapping, Union, cast
 
 import pytest
 
-from glide.async_commands.command_args import OrderBy
-from glide.async_commands.server_modules import ft
-from glide.async_commands.server_modules import glide_json as GlideJson
-from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+from glide.commands.command_args import OrderBy
+from glide.commands.server_modules import ft
+from glide.commands.server_modules import glide_json as GlideJson
+from glide.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateGroupBy,
     FtAggregateOptions,
@@ -19,7 +19,7 @@ from glide.async_commands.server_modules.ft_options.ft_aggregate_options import 
     FtAggregateSortBy,
     FtAggregateSortProperty,
 )
-from glide.async_commands.server_modules.ft_options.ft_create_options import (
+from glide.commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
@@ -33,10 +33,8 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
-from glide.async_commands.server_modules.ft_options.ft_profile_options import (
-    FtProfileOptions,
-)
-from glide.async_commands.server_modules.ft_options.ft_search_options import (
+from glide.commands.server_modules.ft_options.ft_profile_options import FtProfileOptions
+from glide.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
