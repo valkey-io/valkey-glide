@@ -55,6 +55,7 @@ from glide.async_commands.stream import (
     _create_xpending_range_args,
 )
 from glide.constants import TEncodable
+from glide.exceptions import RequestError
 from glide.protobuf.command_request_pb2 import RequestType
 
 if sys.version_info >= (3, 13):
@@ -2317,6 +2318,10 @@ class BaseBatch:
             args.append("REPLACE")
         if absttl is True:
             args.append("ABSTTL")
+        if idletime is not None and frequency is not None:
+            raise RequestError(
+                "syntax error: IDLETIME and FREQ cannot be set at the same time."
+            )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:
