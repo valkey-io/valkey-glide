@@ -155,7 +155,17 @@ If needed, you can invoke `pytest` directly from the root `python/` directory fo
 ### Run all tests manually
 ```bash
 source .env/bin/activate
-pytest -v --asyncio-mode=auto
+pytest -v
+```
+
+### Running with different async backends
+
+Python GLIDE supports both trio and asyncio. Pass the `--async-backend` flag to `pytest` with either `trio`, `asyncio` or `uvloop` to run tests on the specified async backend. You can pass multiple async backends to run tests on all of them.
+
+Example:
+```bash
+source .env/bin/activate
+pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
 # Protobuf
@@ -457,3 +467,7 @@ Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
 -   [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
 -   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+# Community Support and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

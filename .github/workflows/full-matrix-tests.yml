@@ -6,7 +6,7 @@ on:
             full-matrix:
                 description: "Run the full engine and host matrix"
                 type: boolean
-                default: false
+                default: true
             # GHA supports up to 10 inputs, there is no option for multi-choice
             core:
                 description: "Test GLIDE core"
@@ -15,7 +15,7 @@ on:
             redis-rs:
                 description: "Test Redis-RS client"
                 type: boolean
-                default: true
+                default: false
             node:
                 description: "Test Node client"
                 type: boolean
@@ -31,11 +31,11 @@ on:
             csharp:
                 description: "Test C# client"
                 type: boolean
-                default: false
+                default: true
             go:
                 description: "Test Golang client"
                 type: boolean
-                default: false
+                default: true
 
     schedule:
         - cron: "0 3 * * *"
@@ -84,9 +84,7 @@ jobs:
         secrets: inherit
 
     run-full-tests-for-csharp:
-        # C# deactivated in cron, uncomment condition to activate
-        #if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
-        if: (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
         uses: ./.github/workflows/csharp.yml
         name: Run CI for c# client
         secrets: inherit

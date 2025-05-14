@@ -1,16 +1,37 @@
-# Valkey GLIDE
-Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS and GCP, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
+# Welcome to Valkey GLIDE!
+
+Valkey General Language Independent Driver for the Enterprise (GLIDE) is the official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
+
+## Why Choose Valkey GLIDE?
+
+- **Community and Open Source**: Join our vibrant community and contribute to the project. We are always here to respond, and the client is for the community.
+- **Reliability**: Built with best practices learned from over a decade of operating Redis OSS-compatible services.
+- **Performance**: Optimized for high performance and low latency.
+- **High Availability**: Designed to ensure your applications are always up and running.
+- **Cross-Language Support**: Implemented using a core driver framework written in Rust, with language-specific extensions to ensure consistency and reduce complexity.
+- **Stability and Fault Tolerance**: We brought our years of experience to create a bulletproof client.
+- **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
+
+## Key Features
+- **[AZ Affinity](https://valkey.io/blog/az-affinity-strategy/)** – Ensures low-latency connections and minimal cross-zone costs by routing read traffic to replicas in the clients availability zone.
+- **[PubSub Auto-Reconnection](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=PubSub%20Support,Receiving%2C%20and%20Unsubscribing.)** – Seamless background resubscription on topology updates or disconnection.
+- **[Sharded PubSub](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=Receiving%2C%20and%20Unsubscribing.-,Subscribing,routed%20to%20the%20server%20holding%20the%20slot%20for%20the%20command%27s%20channel.,-Receiving)** – Native support for sharded PubSub across cluster slots.
+- **[Cluster-Aware MGET/MSET/DEL/FLUSHALL](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling:~:text=Multi%2DSlot%20Command%20Execution,JSON.MGET)** – Execute multi-key commands across cluster slots without manual key grouping.
+- **[Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)** – Unified key iteration across shards using a consistent, high-level API for cluster environments.
+- **Support for TS / CJS / MJS** – Fully compatible with modern and legacy JavaScript/TypeScript runtimes.
 
 ## Supported Engine Versions
+
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |  7.1  |  7.2  |  8.0  |
-|-----------------------|-------|-------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -   |   V   |   V   |
-| Redis                 |   V   |   V   |   V   |   V   |   -   |
+| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |
+|-----------------------|-------|-------|--------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -    |   V   |   V   |   V   |
+| Redis                 |   V   |   V   |   V    |   V   |   -   |   -   |
 
-## Current Status and upcoming releases
-In the current release, Valkey GLIDE is available for Python, Java and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future.
+## Current Status and Upcoming Releases
+
+In the current release, Valkey GLIDE is available for Python, Java, and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future. Additionally, Python sync and C++ are under active development, and a Ruby client is starting to take off.
 
 #### v1.2 (Dec. 2024)
 - Vector Similarity Search and JSON modules support
@@ -30,7 +51,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Node](./node/README.md)
 - [Go](./go/README.md)
 
-**General Concepts:** 
+**General Concepts:**
 - [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
 - [Connection Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#connection-management)
 - [Multi-Slot Command Handling](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling)
@@ -49,6 +70,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io/valkey-glide/wiki).
 
 ## Getting Help
+
 If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/valkey-io/valkey-glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:
 
 1. A clear and concise title
@@ -65,6 +87,16 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 ## Contributing
 
 GitHub is a platform for collaborative coding. If you're interested in writing code, we encourage you to contribute by submitting pull requests from forked copies of this repository. Additionally, please consider creating GitHub issues for reporting bugs and suggesting new features. Feel free to comment on issues that interest. For more info see [Contributing](./CONTRIBUTING.md).
+
+## Get Involved!
+
+We invite you to join our open-source community and contribute to Valkey GLIDE. Whether it's reporting bugs, suggesting new features, or submitting pull requests, your contributions are highly valued. Check out our [Contributing Guidelines](./CONTRIBUTING.md) to get started.
+
+If you have any questions or need assistance, don't hesitate to reach out. Open a GitHub issue, and our community and contributors will be happy to help you.
+
+## Community Support and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).
 
 ## License
 * [Apache License 2.0](./LICENSE)
