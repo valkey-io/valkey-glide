@@ -295,43 +295,24 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
-	// echo with option or with multiple options without route
-	opts := options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &options.RouteOption{Route: nil},
-	}
-	response, err := client.EchoWithOptions(context.Background(), opts)
+	// Echo with random route
+	route := options.RouteOption{Route: config.RandomRoute}
+	response, err := client.EchoWithOptions(context.Background(), "hello", route)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 
-	// same sections with random route
-	route := options.RouteOption{Route: *config.RandomRoute.ToPtr()}
-	opts = options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &route,
-	}
-	response, err = client.EchoWithOptions(context.Background(), opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
-
-	// default sections, multi node route
-	route = options.RouteOption{Route: *config.AllPrimaries.ToPtr()}
-	opts = options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &route,
-	}
-	response, err = client.EchoWithOptions(context.Background(), opts)
+	// Echo with multi node route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	response, err = client.EchoWithOptions(context.Background(), "hello", route)
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 	for _, messages := range response.MultiValue() {
 		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
 	}
+
+	// Ensure no error when using an empty message
+	_, err = client.EchoWithOptions(context.Background(), "", route)
+	assert.NoError(t, err, "EchoWithOptions with empty message should not return an error")
 }
 
 func (suite *GlideTestSuite) TestBasicClusterScan() {

@@ -188,6 +188,8 @@ func (client *GlideClient) Info(ctx context.Context) (string, error) {
 
 // Gets information and statistics about the server.
 //
+// Starting from server version 7, command supports multiple section arguments.
+//
 // See [valkey.io] for details.
 //
 // Parameters:

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -51,13 +52,7 @@ func ExampleGlideClusterClient_Echo() {
 
 func ExampleGlideClusterClient_EchoWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	opts := options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "Hello World",
-		},
-		RouteOption: &options.RouteOption{Route: nil},
-	}
-	result, err := client.EchoWithOptions(context.Background(), opts)
+	result, err := client.EchoWithOptions(context.Background(), "Hello World", options.RouteOption{Route: config.RandomRoute})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

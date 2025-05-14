@@ -8428,7 +8428,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Equal(suite.T(), int64(2), xlenResult)
 
 		// get everything from the stream
-		xrangeResult, err := client.XRange(context.Background(),
+		xrangeResult, err := client.XRange(
+			context.Background(),
 			key,
 			negativeInfinity,
 			positiveInfinity,
@@ -8444,7 +8445,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		)
 
 		// get everything from the stream in reverse
-		xrevrangeResult, err := client.XRevRange(context.Background(),
+		xrevrangeResult, err := client.XRevRange(
+			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
@@ -8460,7 +8462,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		)
 
 		// returns empty map if + before -
-		xrangeResult, err = client.XRange(context.Background(),
+		xrangeResult, err = client.XRange(
+			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
@@ -8469,7 +8472,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Empty(suite.T(), xrangeResult)
 
 		// rev search returns empty if - before +
-		xrevrangeResult, err = client.XRevRange(context.Background(),
+		xrevrangeResult, err = client.XRevRange(
+			context.Background(),
 			key,
 			negativeInfinity,
 			positiveInfinity,
@@ -8477,47 +8481,54 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrevrangeResult)
 
-		streamId3, err := client.XAdd(context.Background(),
+		streamId3, err := client.XAdd(
+			context.Background(),
 			key,
 			[][]string{{"field3", "value3"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId3)
 
-		// get the newest stream entry
-		xrangeResult, err = client.XRangeWithOptions(context.Background(),
-			key,
-			options.NewStreamBoundary(streamId2.Value(), false),
-			positiveInfinity,
-			*options.NewXRangeOptions().SetCount(1),
-		)
-		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.XRangeResponse{
-				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
-			},
-			xrangeResult,
-		)
+		// Exclusive ranges are added in 6.2.0
+		if suite.serverVersion >= "6.2.0" {
+			// get the newest stream entry
+			xrangeResult, err = client.XRangeWithOptions(
+				context.Background(),
+				key,
+				options.NewStreamBoundary(streamId2.Value(), false),
+				positiveInfinity,
+				*options.NewXRangeOptions().SetCount(1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(
+				suite.T(),
+				[]api.XRangeResponse{
+					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				},
+				xrangeResult,
+			)
 
-		// doing the same with rev search
-		xrevrangeResult, err = client.XRevRangeWithOptions(context.Background(),
-			key,
-			positiveInfinity,
-			options.NewStreamBoundary(streamId2.Value(), false),
-			*options.NewXRangeOptions().SetCount(1),
-		)
-		assert.NoError(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.XRangeResponse{
-				{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
-			},
-			xrevrangeResult,
-		)
+			// doing the same with rev search
+			xrevrangeResult, err = client.XRevRangeWithOptions(
+				context.Background(),
+				key,
+				positiveInfinity,
+				options.NewStreamBoundary(streamId2.Value(), false),
+				*options.NewXRangeOptions().SetCount(1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(
+				suite.T(),
+				[]api.XRangeResponse{
+					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				},
+				xrevrangeResult,
+			)
+		}
 
 		// both xrange and xrevrange return nil with a zero/negative count
-		xrangeResult, err = client.XRangeWithOptions(context.Background(),
+		xrangeResult, err = client.XRangeWithOptions(
+			context.Background(),
 			key,
 			negativeInfinity,
 			positiveInfinity,
@@ -8526,7 +8537,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
-		xrevrangeResult, err = client.XRevRangeWithOptions(context.Background(),
+		xrevrangeResult, err = client.XRevRangeWithOptions(
+			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
@@ -8544,7 +8556,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), xdelResult)
 
-		xrangeResult, err = client.XRange(context.Background(),
+		xrangeResult, err = client.XRange(
+			context.Background(),
 			key,
 			negativeInfinity,
 			positiveInfinity,
@@ -8552,7 +8565,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
-		xrevrangeResult, err = client.XRevRange(context.Background(),
+		xrevrangeResult, err = client.XRevRange(
+			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
@@ -8561,7 +8575,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Empty(suite.T(), xrevrangeResult)
 
 		// xrange and xrevrange against a non-existent stream
-		xrangeResult, err = client.XRange(context.Background(),
+		xrangeResult, err = client.XRange(
+			context.Background(),
 			key2,
 			negativeInfinity,
 			positiveInfinity,
@@ -8569,7 +8584,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Empty(suite.T(), xrangeResult)
 
-		xrevrangeResult, err = client.XRevRange(context.Background(),
+		xrevrangeResult, err = client.XRevRange(
+			context.Background(),
 			key2,
 			positiveInfinity,
 			negativeInfinity,
@@ -8599,7 +8615,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// xrange and xrevrange when range bound is not a valid id
 		_, err = client.XRange(context.Background(),
 			key,
-			options.NewStreamBoundary("invalid-id", false),
+			options.NewStreamBoundary("invalid-id", true),
 			positiveInfinity,
 		)
 		assert.Error(suite.T(), err)
@@ -8607,7 +8623,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 
 		_, err = client.XRevRange(context.Background(),
 			key,
-			options.NewStreamBoundary("invalid-id", false),
+			options.NewStreamBoundary("invalid-id", true),
 			negativeInfinity,
 		)
 		assert.Error(suite.T(), err)
