@@ -2,7 +2,7 @@
 
 package interfaces
 
-import "github.com/valkey-io/valkey-glide/go/api/models"
+import "github.com/valkey-io/valkey-glide/go/v2/models"
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // client.

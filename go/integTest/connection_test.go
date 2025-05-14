@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/internal/errors"
-	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	config := config.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
-	client, err := api.NewGlideClient(config)
+	client, err := glide.NewClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -26,12 +26,12 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect() {
-	config := config.NewGlideClusterClientConfiguration()
+	config := config.NewClusterClientConfiguration()
 	for _, host := range suite.clusterHosts {
 		config.WithAddress(&host)
 	}
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := glide.NewClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -40,10 +40,10 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	config := config.NewGlideClusterClientConfiguration().
+	config := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := glide.NewClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -52,9 +52,9 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 }
 
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
-	config := config.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{Host: "invalid-host"})
-	client, err := api.NewGlideClient(config)
+	client, err := glide.NewClient(config)
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)

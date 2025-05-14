@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api/models"
-	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -40,7 +40,7 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
@@ -99,7 +99,7 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
