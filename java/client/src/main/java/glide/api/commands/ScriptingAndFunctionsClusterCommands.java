@@ -1115,7 +1115,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code
@@ -1133,7 +1133,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code
@@ -1150,7 +1150,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
@@ -1169,7 +1169,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
-     * @param sha1s The Lua script to execute.
+     * @param sha1s SHA1 digests of Lua scripts to be checked.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
