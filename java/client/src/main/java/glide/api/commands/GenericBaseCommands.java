@@ -1477,6 +1477,8 @@ public interface GenericBaseCommands {
      * and acknowledged by at least <code>numreplicas</code> of replicas. If <code>timeout</code> is
      * reached, the command returns even if the specified number of replicas were not yet reached.
      *
+     * @apiNote This command clashes with Java's built-in wait method. Ensure you are using the right
+     *     one.
      * @param numreplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
      *     block indefinitely.
