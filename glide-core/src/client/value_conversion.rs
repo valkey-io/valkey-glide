@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use redis::{
-    cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
+    Cmd, ErrorKind, RedisResult, Value, cluster_routing::Routable, from_owned_redis_value,
 };
 
 #[derive(Clone, Copy)]
@@ -2117,16 +2117,18 @@ mod tests {
     #[test]
     fn convert_xautoclaim() {
         // Value conversion is not needed if the JUSTID arg was passed.
-        assert!(expected_type_for_cmd(
-            redis::cmd("XAUTOCLAIM")
-                .arg("key")
-                .arg("group")
-                .arg("consumer")
-                .arg("0")
-                .arg("0-0")
-                .arg("JUSTID")
-        )
-        .is_none());
+        assert!(
+            expected_type_for_cmd(
+                redis::cmd("XAUTOCLAIM")
+                    .arg("key")
+                    .arg("group")
+                    .arg("consumer")
+                    .arg("0")
+                    .arg("0-0")
+                    .arg("JUSTID")
+            )
+            .is_none()
+        );
 
         assert!(matches!(
             expected_type_for_cmd(
@@ -2771,11 +2773,13 @@ mod tests {
 
         let flat_array_unexpected_length =
             Value::Array(vec![Value::BulkString(b"somekey".to_vec())]);
-        assert!(convert_to_expected_type(
-            flat_array_unexpected_length,
-            Some(ExpectedReturnType::ArrayOfPairs)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(
+                flat_array_unexpected_length,
+                Some(ExpectedReturnType::ArrayOfPairs)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -2886,10 +2890,10 @@ mod tests {
             Some(ExpectedReturnType::DoubleOrNull)
         ));
 
-        assert!(expected_type_for_cmd(
-            redis::cmd("zadd").arg("XT").arg("CH").arg("0.6").arg("foo")
-        )
-        .is_none());
+        assert!(
+            expected_type_for_cmd(redis::cmd("zadd").arg("XT").arg("CH").arg("0.6").arg("foo"))
+                .is_none()
+        );
     }
 
     #[test]
@@ -2942,16 +2946,18 @@ mod tests {
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
-        assert!(expected_type_for_cmd(
-            redis::cmd("ZUNION")
-                .arg("2")
-                .arg("set1")
-                .arg("set2")
-                .arg("WEIGHTS")
-                .arg("1")
-                .arg("2")
-        )
-        .is_none());
+        assert!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+            )
+            .is_none()
+        );
 
         // Test ZUNION with Aggregate
         assert!(matches!(
@@ -2967,15 +2973,17 @@ mod tests {
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
-        assert!(expected_type_for_cmd(
-            redis::cmd("ZUNION")
-                .arg("2")
-                .arg("set1")
-                .arg("set2")
-                .arg("AGGREGATE")
-                .arg("MAX")
-        )
-        .is_none());
+        assert!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+            )
+            .is_none()
+        );
 
         // Test ZUNION with Weights and Aggregate
         assert!(matches!(
@@ -2994,18 +3002,20 @@ mod tests {
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
-        assert!(expected_type_for_cmd(
-            redis::cmd("ZUNION")
-                .arg("2")
-                .arg("set1")
-                .arg("set2")
-                .arg("WEIGHTS")
-                .arg("1")
-                .arg("2")
-                .arg("AGGREGATE")
-                .arg("MAX")
-        )
-        .is_none());
+        assert!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -3078,11 +3088,13 @@ mod tests {
             Value::Double(2.0),
             Value::Double(2.0),
         ]);
-        assert!(convert_to_expected_type(
-            array_with_unexpected_length,
-            Some(ExpectedReturnType::KeyWithMemberAndScore)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(
+                array_with_unexpected_length,
+                Some(ExpectedReturnType::KeyWithMemberAndScore)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -3134,11 +3146,13 @@ mod tests {
         assert_eq!(expected_response, converted_response);
 
         let unexpected_response_type = Value::Double(0.5);
-        assert!(convert_to_expected_type(
-            unexpected_response_type,
-            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(
+                unexpected_response_type,
+                Some(ExpectedReturnType::ArrayOfDoubleOrNull)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -3232,11 +3246,13 @@ mod tests {
             Value::BulkString(b"10.5".to_vec()),
         ])];
 
-        assert!(convert_to_expected_type(
-            Value::Array(array_of_arrays_err),
-            Some(ExpectedReturnType::MapOfStringToDouble)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(
+                Value::Array(array_of_arrays_err),
+                Some(ExpectedReturnType::MapOfStringToDouble)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -3268,11 +3284,13 @@ mod tests {
         assert_eq!(array_result[1], Value::Double(20.5));
 
         let array_err = vec![Value::BulkString(b"key".to_vec())];
-        assert!(convert_to_expected_type(
-            Value::Array(array_err),
-            Some(ExpectedReturnType::ZRankReturnType)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(
+                Value::Array(array_err),
+                Some(ExpectedReturnType::ZRankReturnType)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn pass_null_value_for_double_or_null() {
@@ -3304,11 +3322,10 @@ mod tests {
         assert_eq!(array_result[1], Value::Boolean(false));
         assert_eq!(array_result[2], Value::Boolean(true));
 
-        assert!(convert_to_expected_type(
-            Value::Nil,
-            Some(ExpectedReturnType::JsonToggleReturnType)
-        )
-        .is_err());
+        assert!(
+            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::JsonToggleReturnType))
+                .is_err()
+        );
     }
 
     #[test]
