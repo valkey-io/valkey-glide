@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from glide.config import ProtocolVersion
 from glide.constants import OK
-from glide.sync import TGlideClient
+from glide.glide_sync import TGlideClient
 
 from tests.utils.utils import get_random_string
 

@@ -1,7 +1,7 @@
 from typing import List, Optional, cast
 
 from glide.commands.core_options import InfoSection
-from glide.commands.sync_commands.core import CoreCommands
+from glide.glide_sync.sync_commands.core import CoreCommands
 from glide.constants import TClusterResponse, TEncodable, TResult
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route

@@ -60,7 +60,7 @@ from glide.constants import (
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ...glide import ClusterScanCursor
+from glide.glide_async.python.glide.glide import ClusterScanCursor
 
 
 class CoreCommands(Protocol):

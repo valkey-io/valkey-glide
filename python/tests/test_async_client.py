@@ -72,7 +72,7 @@ from glide.commands.stream import (
 )
 from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
 from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,

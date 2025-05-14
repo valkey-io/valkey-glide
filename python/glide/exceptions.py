@@ -1,6 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Optional
+from typing import Optional, Type
+
+from glide.protobuf.response_pb2 import RequestErrorType
 
 
 class GlideError(Exception):
@@ -60,3 +62,16 @@ class ConfigurationError(RequestError):
     """
     Errors that are thrown when a request cannot be completed in current configuration settings.
     """
+
+def get_request_error_class(
+    error_type: Optional[RequestErrorType.ValueType],
+) -> Type[RequestError]:
+    if error_type == RequestErrorType.Disconnect:
+        return ConnectionError
+    if error_type == RequestErrorType.ExecAbort:
+        return ExecAbortError
+    if error_type == RequestErrorType.Timeout:
+        return TimeoutError
+    if error_type == RequestErrorType.Unspecified:
+        return RequestError
+    return RequestError

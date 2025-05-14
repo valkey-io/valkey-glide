@@ -5,9 +5,9 @@ import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
-from glide.commands.async_commands.cluster_commands import ClusterCommands
-from glide.commands.async_commands.core import CoreCommands
-from glide.commands.async_commands.standalone_commands import StandaloneCommands
+from .async_commands.cluster_commands import ClusterCommands
+from .async_commands.core import CoreCommands
+from .async_commands.standalone_commands import StandaloneCommands
 from glide.commands.command_args import ObjectType
 from glide.commands.core_options import PubSubMsg
 from glide.config import BaseClientConfiguration, ServerCredentials
@@ -19,6 +19,7 @@ from glide.exceptions import (
     ExecAbortError,
     RequestError,
     TimeoutError,
+    get_request_error_class,
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
@@ -44,20 +45,6 @@ if sys.version_info >= (3, 11):
 else:
     import async_timeout
     from typing_extensions import Self
-
-
-def get_request_error_class(
-    error_type: Optional[RequestErrorType.ValueType],
-) -> Type[RequestError]:
-    if error_type == RequestErrorType.Disconnect:
-        return ConnectionError
-    if error_type == RequestErrorType.ExecAbort:
-        return ExecAbortError
-    if error_type == RequestErrorType.Timeout:
-        return TimeoutError
-    if error_type == RequestErrorType.Unspecified:
-        return RequestError
-    return RequestError
 
 
 class BaseClient(CoreCommands):

@@ -154,7 +154,7 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
 from glide.routes import (
@@ -168,7 +168,7 @@ from glide.routes import (
     SlotType,
 )
 
-from .glide import ClusterScanCursor, Script
+from glide.glide_async.python.glide.glide import ClusterScanCursor, Script
 
 __all__ = [
     # Client

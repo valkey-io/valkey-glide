@@ -11,9 +11,9 @@ from glide.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
 from glide.routes import AllNodes
-from glide.sync import TGlideClient as TSyncGlideClient
+from glide.glide_sync import TGlideClient as TSyncGlideClient
 from packaging import version
 
 T = TypeVar("T")

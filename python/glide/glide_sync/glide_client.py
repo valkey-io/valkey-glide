@@ -5,13 +5,12 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from cffi import FFI
-from glide.commands.sync_commands.cluster_commands import ClusterCommands
-from glide.commands.sync_commands.core import CoreCommands
-from glide.commands.sync_commands.standalone_commands import StandaloneCommands
+from .sync_commands.cluster_commands import ClusterCommands
+from .sync_commands.core import CoreCommands
+from .sync_commands.standalone_commands import StandaloneCommands
 from glide.config import BaseClientConfiguration, GlideClusterClientConfiguration
 from glide.constants import OK, TEncodable, TResult
-from glide.exceptions import ClosingError, RequestError
-from glide.glide_client import get_request_error_class
+from glide.exceptions import ClosingError, RequestError, get_request_error_class
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -22,7 +21,7 @@ else:
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
-ROOT_DIR = CURR_DIR.parent.parent.parent.parent
+ROOT_DIR = CURR_DIR.parent.parent.parent
 FFI_DIR = ROOT_DIR / "ffi"
 LIB_FILE = FFI_DIR / "target" / "debug" / "libglide_ffi.so"
 

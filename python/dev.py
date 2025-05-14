@@ -18,11 +18,12 @@ def find_project_root() -> Path:
 
 # Constants
 PROTO_REL_PATH = "glide-core/src/protobuf"
-PYTHON_CLIENT_PATH = "python/python/glide"
 VENV_NAME = ".env"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
-VENV_DIR = PYTHON_DIR / VENV_NAME
+PYTHON_CLIENT_PATH = PYTHON_DIR / "glide"
+ASYNC_CLIENT_DIR = PYTHON_CLIENT_PATH / "glide_async"
+VENV_DIR = ASYNC_CLIENT_DIR / VENV_NAME
 VENV_BIN_DIR = VENV_DIR / "bin"
 PYTHON_EXE = VENV_BIN_DIR / "python"
 FFI_DIR = GLIDE_ROOT / "ffi"
@@ -96,7 +97,7 @@ def get_venv_env() -> Dict[str, str]:
 
 def generate_protobuf_files() -> None:
     proto_src = GLIDE_ROOT / PROTO_REL_PATH
-    proto_dst = GLIDE_ROOT / PYTHON_CLIENT_PATH
+    proto_dst = PYTHON_CLIENT_PATH
     proto_files = list(proto_src.glob("*.proto"))
 
     if not proto_files:
@@ -140,7 +141,7 @@ def build_async_client(release: bool, no_cache: bool = False) -> None:
     if release:
         cmd += ["--release", "--strip"]
 
-    run_command(cmd, cwd=PYTHON_DIR, env=env, label="maturin develop")
+    run_command(cmd, cwd=ASYNC_CLIENT_DIR, env=env, label="maturin develop")
     print("[OK] Async client build completed")
 
 

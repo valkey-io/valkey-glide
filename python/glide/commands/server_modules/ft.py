@@ -26,7 +26,7 @@ from glide.constants import (
     FtSearchResponse,
     TEncodable,
 )
-from glide.glide_client import TGlideClient
+from glide.glide_async.python.glide.glide_client import TGlideClient # TODO: change that to work both with sync client
 
 
 async def create(

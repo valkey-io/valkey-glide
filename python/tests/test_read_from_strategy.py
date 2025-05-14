@@ -7,7 +7,7 @@ import pytest
 from glide.commands.core_options import InfoSection
 from glide.config import ProtocolVersion, ReadFrom
 from glide.constants import OK
-from glide.glide_client import GlideClusterClient
+from glide.glide_async.python.glide import GlideClusterClient
 from glide.routes import AllNodes, SlotIdRoute, SlotType
 
 from tests.conftest import create_client

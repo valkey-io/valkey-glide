@@ -6,8 +6,8 @@ from glide import ByAddressRoute
 from glide.commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
-from glide.glide import ClusterScanCursor
-from glide.glide_client import GlideClient, GlideClusterClient
+from glide.glide_async.python.glide.glide import ClusterScanCursor
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient
 
 from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster

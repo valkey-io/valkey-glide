@@ -16,13 +16,13 @@ from glide.config import (
     ServerCredentials,
 )
 from glide.exceptions import ClosingError
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
-from glide.sync import GlideClient as SyncGlideClient
-from glide.sync import GlideClusterClient as SyncGlideClusterClient
-from glide.sync import TGlideClient as TSyncGlideClient
+from glide.glide_sync.glide_client import GlideClient as SyncGlideClient
+from glide.glide_sync import GlideClusterClient as SyncGlideClusterClient
+from glide.glide_sync import TGlideClient as TSyncGlideClient
 
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (

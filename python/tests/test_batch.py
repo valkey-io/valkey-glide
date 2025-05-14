@@ -58,7 +58,7 @@ from glide.commands.stream import (
 )
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 
 from tests.conftest import create_client

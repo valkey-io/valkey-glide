@@ -40,7 +40,7 @@ from glide.commands.server_modules.ft_options.ft_search_options import (
 from glide.config import ProtocolVersion
 from glide.constants import OK, FtSearchResponse, TEncodable
 from glide.exceptions import RequestError
-from glide.glide_client import GlideClusterClient
+from glide.glide_async.python.glide import GlideClusterClient
 
 
 @pytest.mark.asyncio
