@@ -20,7 +20,6 @@ import (
 // GlideClusterClient interface compliance check.
 var _ interfaces.GlideClusterClientCommands = (*GlideClusterClient)(nil)
 
-// All commands that can be executed by GlideClusterClient.
 // Client used for connection to cluster servers.
 // Use [NewGlideClusterClient] to request a client.
 //
