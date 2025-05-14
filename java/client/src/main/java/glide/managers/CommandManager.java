@@ -33,6 +33,7 @@ import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.GlideValueResolver;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -258,12 +259,43 @@ public class CommandManager {
             return errorFuture;
         }
 
+        // Create a span for the command if OpenTelemetry is configured
+        // TODO: Only create spans if OpenTelemetry config exists (#3318)
+        // TODO: Add a condition to create a span statistic, such as only 1% of the requests
+        String commandName = determineCommandName(command);
+        long spanPtr = OpenTelemetryResolver.createOtelSpan(commandName);
+
+        // Add the span pointer to the command
+        command.setRootSpanPtr(spanPtr);
+
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
                 .write(command, true)
                 .exceptionally(this::exceptionHandler)
                 .thenApplyAsync(responseHandler::apply);
+    }
+
+    /**
+     * Determines a meaningful name for the command for telemetry purposes.
+     *
+     * @param command The command request builder
+     * @return A string representing the command type
+     */
+    private String determineCommandName(CommandRequest.Builder command) {
+        if (command.hasSingleCommand()) {
+            return command.getSingleCommand().getRequestType().name();
+        } else if (command.hasBatch()) {
+            return "Batch";
+        } else if (command.hasScriptInvocation() || command.hasScriptInvocationPointers()) {
+            return "Script";
+        } else if (command.hasClusterScan()) {
+            return "ClusterScan";
+        } else if (command.hasUpdateConnectionPassword()) {
+            return "UpdateConnectionPassword";
+        } else {
+            return "Unknown";
+        }
     }
 
     /**

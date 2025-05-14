@@ -13,6 +13,7 @@ import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.OpenTelemetryConfig;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ClosingException;
@@ -210,6 +211,24 @@ public class ConnectionManager {
             AdvancedBaseClientConfiguration configuration) {
         if (configuration.getConnectionTimeout() != null) {
             connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
+        }
+
+        // Add OpenTelemetry configuration if provided
+        if (configuration.getOpenTelemetryConfig() != null) {
+            OpenTelemetryConfig otelConfig = configuration.getOpenTelemetryConfig();
+
+            ConnectionRequestOuterClass.OpenTelemetryConfig.Builder outerOtelBuilder =
+                    ConnectionRequestOuterClass.OpenTelemetryConfig.newBuilder();
+            if (otelConfig.getTracesCollectorEndPoint() != null) {
+                outerOtelBuilder.setTracesCollectorEndpoint(otelConfig.getTracesCollectorEndPoint());
+            }
+            if (otelConfig.getMetricsCollectorEndPoint() != null) {
+                outerOtelBuilder.setMetricsCollectorEndpoint(otelConfig.getMetricsCollectorEndPoint());
+            }
+            if (otelConfig.getFlushIntervalMs() != null) {
+                outerOtelBuilder.setFlushInterval(otelConfig.getFlushIntervalMs());
+            }
+            connectionRequestBuilder.setOpentelemetryConfig(outerOtelBuilder.build());
         }
 
         return connectionRequestBuilder;
