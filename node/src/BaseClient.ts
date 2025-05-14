@@ -1130,7 +1130,6 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         const callbackIndex = this.getCallbackIndex();
         const basePromise = new Promise<T>((resolve, reject) => {
-
             // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
 
