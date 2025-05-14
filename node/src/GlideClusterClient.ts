@@ -893,6 +893,8 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
+     * Starting from server version 7, command supports multiple section arguments.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param options - (Optional) Additional parameters:
@@ -900,8 +902,15 @@ export class GlideClusterClient extends BaseClient {
      *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * - (Optional) `route`: see {@link RouteOption}.
      * @returns A string containing the information for the sections requested.
-     * When specifying a route other than a single node,
+     *     When specifying a route other than a single node,
      *     it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the info method with retrieving total_net_input_bytes from the result
+     * const result = await client.info(new Section[] { Section.STATS });
+     * console.log(someClusterParsingFunction(result, "total_net_input_bytes")); // Output: 1
+     * ```
      */
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,

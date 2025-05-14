@@ -294,43 +294,24 @@ func (suite *GlideTestSuite) TestEchoCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
-	// echo with option or with multiple options without route
-	opts := options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &options.RouteOption{Route: nil},
-	}
-	response, err := client.EchoWithOptions(opts)
+	// Echo with random route
+	route := options.RouteOption{Route: config.RandomRoute}
+	response, err := client.EchoWithOptions("hello", route)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
 
-	// same sections with random route
-	route := options.RouteOption{Route: *config.RandomRoute.ToPtr()}
-	opts = options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &route,
-	}
-	response, err = client.EchoWithOptions(opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
-
-	// default sections, multi node route
-	route = options.RouteOption{Route: *config.AllPrimaries.ToPtr()}
-	opts = options.ClusterEchoOptions{
-		EchoOptions: &options.EchoOptions{
-			Message: "hello",
-		},
-		RouteOption: &route,
-	}
-	response, err = client.EchoWithOptions(opts)
+	// Echo with multi node route
+	route = options.RouteOption{Route: config.AllPrimaries}
+	response, err = client.EchoWithOptions("hello", route)
 	assert.NoError(t, err)
 	assert.True(t, response.IsMultiValue())
 	for _, messages := range response.MultiValue() {
 		assert.Contains(t, strings.ToLower(messages), strings.ToLower("hello"))
 	}
+
+	// Ensure no error when using an empty message
+	_, err = client.EchoWithOptions("", route)
+	assert.NoError(t, err, "EchoWithOptions with empty message should not return an error")
 }
 
 func (suite *GlideTestSuite) TestBasicClusterScan() {
@@ -1475,9 +1456,7 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1634,9 +1613,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1697,9 +1674,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1765,9 +1740,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1898,9 +1871,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1916,9 +1887,7 @@ func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1954,9 +1923,7 @@ func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
 }
 
 func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write"
@@ -1998,7 +1965,7 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
@@ -2072,9 +2039,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_key_based_write_function"
@@ -2102,7 +2067,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
@@ -2139,4 +2104,117 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	// Wait for unkillable confirmation
 	foundUnkillable := <-unkillable
 	assert.True(suite.T(), foundUnkillable, "Function should be unkillable")
+}
+
+func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
+	client := suite.defaultClusterClient()
+
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	// Flush all functions first
+	suite.verifyOK(client.FunctionFlushSync())
+
+	// Dumping an empty lib
+	emptyDump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), emptyDump)
+	assert.Greater(suite.T(), len(emptyDump), 0)
+
+	name1 := "Foster"
+	libname1 := "FosterLib"
+	name2 := "Dogster"
+	libname2 := "DogsterLib"
+
+	// function name1 returns first argument
+	// function name2 returns argument array len
+	code := GenerateLuaLibCode(libname1, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+
+	// Load the functions
+	loadResult, err := client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname1, loadResult)
+
+	// Dump the library
+	dump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+
+	// Restore without cleaning the lib and/or overwrite option causes an error
+	_, err = client.FunctionRestore(dump)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// APPEND policy also fails for the same reason (name collision)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.AppendPolicy)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// REPLACE policy succeeds
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy))
+
+	// Verify functions still work after replace
+	result1, err := client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err := client.FCallReadOnlyWithArgs(name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
+
+	// create lib with another name, but with the same function names
+	suite.verifyOK(client.FunctionFlushSync())
+	code = GenerateLuaLibCode(libname2, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+	loadResult, err = client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname2, loadResult)
+
+	// REPLACE policy now fails due to a name collision
+	_, err = client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy)
+	assert.NotNil(suite.T(), err)
+	errMsg := err.Error()
+	// valkey checks names in random order and blames on first collision
+	assert.True(suite.T(),
+		strings.Contains(errMsg, "Function "+name1+" already exists") ||
+			strings.Contains(errMsg, "Function "+name2+" already exists"))
+
+	// FLUSH policy succeeds, but deletes the second lib
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.FlushPolicy))
+
+	// Verify original functions work again
+	result1, err = client.FCallReadOnlyWithArgs(name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err = client.FCallReadOnlyWithArgs(name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
 }
