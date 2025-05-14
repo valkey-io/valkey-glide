@@ -6,11 +6,11 @@ import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
 import { OpenTelemetryConfig } from "glide-rs";
 import {
-    ClusterTransaction,
+    ClusterBatch,
     GlideClient,
     GlideClusterClient,
     OpenTelemetry,
-    ProtocolVersion,
+    ProtocolVersion
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
@@ -367,18 +367,18 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
             });
 
-            const transaction = new ClusterTransaction();
+            const batch = new ClusterBatch(true);
 
-            transaction.set("test_key", "foo");
-            transaction.objectRefcount("test_key");
+            batch.set("test_key", "foo");
+            batch.objectRefcount("test_key");
 
-            const response = await client.exec(transaction);
+            const response = await client.exec(batch, true);
             expect(response).not.toBeNull();
 
             if (response != null) {
                 expect(response.length).toEqual(2);
-                expect(response[0]).toEqual("OK"); // transaction.set("test_key", "foo");
-                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount("test_key");
+                expect(response[0]).toEqual("OK"); // batch.set("test_key", "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // batch.objectRefcount("test_key");
             }
 
             // Force GC and check memory
@@ -443,12 +443,12 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 ),
             });
 
-            const transaction = new ClusterTransaction();
+            const batch = new ClusterBatch(true);
 
-            transaction.set("test_key", "foo");
-            transaction.objectRefcount("test_key");
+            batch.set("test_key", "foo");
+            batch.objectRefcount("test_key");
 
-            const response = await client.exec(transaction);
+            const response = await client.exec(batch, true);
             expect(response).not.toBeNull();
 
             if (response != null) {
