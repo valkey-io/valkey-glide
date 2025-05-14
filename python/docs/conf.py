@@ -31,6 +31,7 @@ autodoc_mock_imports = [
     "glide.protobuf",
     "pytest",
     "google",
+    "cffi",
 ]  # Prevents confusion in sphinx with imports
 
 autodoc_typehints = "description"

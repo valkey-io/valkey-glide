@@ -14,7 +14,7 @@ from glide import (
     RequestError,
 )
 from glide import TimeoutError as GlideTimeoutError
-from glide.async_commands.server_modules import glide_json
+from glide.commands.server_modules import glide_json
 
 
 async def create_client(

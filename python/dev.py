@@ -25,6 +25,7 @@ PYTHON_DIR = GLIDE_ROOT / "python"
 VENV_DIR = PYTHON_DIR / VENV_NAME
 VENV_BIN_DIR = VENV_DIR / "bin"
 PYTHON_EXE = VENV_BIN_DIR / "python"
+FFI_DIR = GLIDE_ROOT / "ffi"
 
 
 def check_dependencies() -> None:
@@ -143,6 +144,15 @@ def build_async_client(release: bool, no_cache: bool = False) -> None:
     print("[OK] Async client build completed")
 
 
+def build_sync_client() -> None:
+    print("[INFO] Building sync client...")
+    generate_protobuf_files()
+
+    run_command(["cargo", "build"], cwd=FFI_DIR, label="cargo build ffi")
+
+    print("[OK] Sync client build completed")
+
+
 def run_command(
     cmd: List[str],
     cwd: Optional[Path] = None,
@@ -220,6 +230,7 @@ def main() -> None:
 Examples:
     python dev.py build                                   # Build the async client in debug mode
     python dev.py build --client async --mode release     # Build the async client in release mode
+    python dev.py build --client sync                     # Build the sync client
     python dev.py protobuf                                # Generate Python protobuf files (.py and .pyi)
     python dev.py lint                                    # Run Python linters
     python dev.py test                                    # Run all tests
@@ -231,7 +242,10 @@ Examples:
 
     build_parser = subparsers.add_parser("build", help="Build the Python clients")
     build_parser.add_argument(
-        "--client", default="async", choices=["async"], help="Which client to build"
+        "--client",
+        default="all",
+        choices=["async", "sync", "all"],
+        help="Which client to build: 'async', 'sync', or 'all' to build both.",
     )
     build_parser.add_argument(
         "--mode", choices=["debug", "release"], default="debug", help="Build mode"
@@ -279,9 +293,12 @@ Examples:
     elif args.command == "build":
         release = args.mode == "release"
         no_cache = args.no_cache
-        if args.client in ("async"):
+        if args.client in ["async", "all"]:
             print(f"🛠 Building async client ({args.mode} mode)...")
             build_async_client(release, no_cache)
+        if args.client in ["sync", "all"]:
+            print("🛠 Building sync client...")
+            build_sync_client()
 
     print("[✅ DONE] Task completed successfully.")
 
