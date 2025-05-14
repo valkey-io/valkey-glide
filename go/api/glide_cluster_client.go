@@ -1728,3 +1728,99 @@ func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[str
 
 	return handleStringIntMapResponse(result)
 }
+
+// Returns the serialized payload of all loaded libraries.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *GlideClusterClient) FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionDump, []string{}, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithRoute(payload string, route config.Route) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	policy - A policy for handling existing libraries.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithPolicyWithRoute(
+	payload string,
+	policy options.FunctionRestorePolicy,
+	route config.Route,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload, string(policy)}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
