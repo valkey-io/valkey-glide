@@ -93,11 +93,7 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 
 #[cfg(feature = "proto")]
 pub(crate) fn none_if_zero(value: u32) -> Option<u32> {
-    if value == 0 {
-        None
-    } else {
-        Some(value)
-    }
+    if value == 0 { None } else { Some(value) }
 }
 
 #[cfg(feature = "proto")]

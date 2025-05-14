@@ -1,7 +1,7 @@
 [package]
 name = "rust-benchmark"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "Apache 2.0"
 authors = ["Valkey GLIDE Maintainers"]
 
@@ -10,7 +10,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 tokio = { version = "1", features = ["macros", "time", "rt-multi-thread"] }
 glide-core = { path = "../../glide-core" }
-logger_core = {path = "../../logger_core"}
+logger_core = { path = "../../logger_core" }
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 futures = "0.3.28"
 rand = "0.8.5"

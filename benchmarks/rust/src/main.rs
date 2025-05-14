@@ -8,15 +8,15 @@ use tikv_jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 use clap::Parser;
-use futures::{self, future::join_all, stream, StreamExt};
+use futures::{self, StreamExt, future::join_all, stream};
 use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use serde_json::Value;
 use std::{
     cmp::max,
     collections::HashMap,
     path::Path,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
     time::{Duration, Instant},
 };
 

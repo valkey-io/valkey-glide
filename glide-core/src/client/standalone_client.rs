@@ -2,19 +2,19 @@
 
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
-use super::{to_duration, DEFAULT_CONNECTION_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
+use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
 use crate::client::types::ReadFrom as ClientReadFrom;
-use futures::{future, stream, StreamExt};
+use futures::{StreamExt, future, stream};
 use logger_core::log_debug;
 use logger_core::log_warn;
 use rand::Rng;
 use redis::aio::ConnectionLike;
-use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
+use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
 use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
