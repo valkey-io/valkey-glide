@@ -183,7 +183,7 @@ jobs:
             - name: Generate protobuf for GO
               working-directory: ./go
               run: |
-                  make install-tools
+                  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
                   make generate-protobuf
 
             - name: Run ORT tools for Go
