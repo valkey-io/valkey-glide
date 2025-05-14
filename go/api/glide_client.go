@@ -17,7 +17,6 @@ import (
 // GlideClient interface compliance check.
 var _ interfaces.GlideClientCommands = (*GlideClient)(nil)
 
-// All commands that can be executed by GlideClient.
 // Client used for connection to standalone servers.
 // Use [NewGlideClient] to request a client.
 //
