@@ -176,11 +176,13 @@ describe("OpenTelemetry GlideClusterClient", () => {
         // check wrong open telemetry config before initilise it
         await wrongOpenTelemetryConfig();
 
+        await testSpanNotExportedBeforeInitOtel();
+
         // init open telemetry. The init can be called once per process.
         const openTelemetryConfig: OpenTelemetryConfig = {
             traces: {
                 endpoint: VALID_FILE_ENDPOINT_TRACES,
-                samplePercentage: 1,
+                samplePercentage: 100,
             },
             metrics: {
                 endpoint: VALID_ENDPOINT_METRICS,
@@ -190,12 +192,19 @@ describe("OpenTelemetry GlideClusterClient", () => {
         OpenTelemetry.init(openTelemetryConfig);
     }, 40000);
 
-    afterEach(async () => {
-        // remove the span file
+    async function teardown_otel_test() {
+        // Clean up OpenTelemetry files
         if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
             fs.unlinkSync(VALID_ENDPOINT_TRACES);
         }
 
+        if (fs.existsSync(VALID_ENDPOINT_METRICS)) {
+            fs.unlinkSync(VALID_ENDPOINT_METRICS);
+        }
+    }
+
+    afterEach(async () => {
+        await teardown_otel_test();
         await flushAndCloseClient(true, cluster.getAddresses(), client);
     });
 
@@ -206,6 +215,24 @@ describe("OpenTelemetry GlideClusterClient", () => {
             await cluster.close(true);
         }
     });
+
+    async function testSpanNotExportedBeforeInitOtel() {
+        await teardown_otel_test();
+
+        const client = await GlideClusterClient.createClient({
+            ...getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        });
+
+        await client.get("testSpanNotExportedBeforeInitOtel");
+
+        // check that the spans not exporter to the file before initilise otel
+        expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
+
+        client.close();
+    }
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span memory leak_%p`,
@@ -238,6 +265,55 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test percentage requests config_%p`,
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+            OpenTelemetry.setSamplePercentage(0);
+            expect(OpenTelemetry.getSamplePercentage()).toBe(0);
+
+            // wait for the spans to be flushed and removed the file
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            await teardown_otel_test();
+
+            for (let i = 0; i < 100; i++) {
+                await client.set(
+                    "GlideClusterClient_test_percentage_requests_config",
+                    "value",
+                );
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            // check that the spans not exporter to the file due to the requests percentage is 0
+            expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
+
+            OpenTelemetry.setSamplePercentage(100);
+
+            // Execute a series of commands sequentially
+            for (let i = 0; i < 10; i++) {
+                const key = `GlideClusterClient_test_percentage_requests_config_${i}`;
+                await client.get(key);
+            }
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            // Read the span file and check span name
+            const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+            expect(spanNames).toContain("Get");
+            // check that the spans exported to the file exactly 10 times
+            expect(spanNames.filter((name) => name === "Get").length).toBe(10);
         },
         TIMEOUT,
     );
