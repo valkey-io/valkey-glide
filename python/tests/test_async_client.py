@@ -9336,9 +9336,8 @@ class TestCommands:
             await glide_client.restore(
                 key2, 0, bytesData, replace=True, idletime=-10, frequency=10
             )
-        assert (
-            "syntax error: IDLETIME and FREQ cannot be set at the same time."
-            in str(e)
+        assert "syntax error: IDLETIME and FREQ cannot be set at the same time." in str(
+            e
         )
 
     @pytest.mark.skip_if_version_below("7.0.0")

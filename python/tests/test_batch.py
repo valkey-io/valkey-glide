@@ -1406,9 +1406,8 @@ class TestBatch:
             await glide_client.restore(
                 key2, 0, b"", replace=True, idletime=-10, frequency=10
             )
-        assert (
-            "syntax error: IDLETIME and FREQ cannot be set at the same time."
-            in str(e)
+        assert "syntax error: IDLETIME and FREQ cannot be set at the same time." in str(
+            e
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
