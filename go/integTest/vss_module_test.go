@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"context"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ import (
 
 func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {
 	client := suite.defaultClusterClient()
-	result, err := client.InfoWithOptions(
+	result, err := client.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
 			RouteOption: nil,

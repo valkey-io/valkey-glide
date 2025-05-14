@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,7 @@ import (
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.Background(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -30,7 +31,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 		config.WithAddress(&host)
 	}
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.Background(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -42,7 +43,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 	config := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := api.NewGlideClusterClient(context.Background(), config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -53,7 +54,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&api.NodeAddress{Host: "invalid-host"})
-	client, err := api.NewGlideClient(config)
+	client, err := api.NewGlideClient(context.Background(), config)
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)
@@ -73,12 +74,16 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			if clusterClient, ok := client.(api.GlideClusterClientCommands); ok {
-				_, err := clusterClient.CustomCommandWithRoute([]string{"DEBUG", "sleep", "7"}, config.AllNodes)
+				_, err := clusterClient.CustomCommandWithRoute(
+					context.Background(),
+					[]string{"DEBUG", "sleep", "7"},
+					config.AllNodes,
+				)
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
 			} else if glideClient, ok := client.(api.GlideClientCommands); ok {
-				_, err := glideClient.CustomCommand([]string{"DEBUG", "sleep", "7"})
+				_, err := glideClient.CustomCommand(context.Background(), []string{"DEBUG", "sleep", "7"})
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
@@ -121,7 +126,7 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {
 				defer timeoutClient.Close()
-				result, err := timeoutClient.Set("key", "value")
+				result, err := timeoutClient.Set(context.Background(), "key", "value")
 				assert.NoError(suite.T(), err)
 				assert.Equal(suite.T(), "OK", result)
 			}

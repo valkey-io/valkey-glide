@@ -6,6 +6,7 @@ package api
 import "C"
 
 import (
+	"context"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
@@ -41,6 +42,7 @@ type GlideClusterClient struct {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	config - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings,
 //	   periodic checks, and Pub/Sub subscriptions.
 //
@@ -59,7 +61,7 @@ type GlideClusterClient struct {
 //	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
 //	      using the specified username and password.
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
-func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
+func NewGlideClusterClient(ctx context.Context, config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
@@ -85,6 +87,7 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - Arguments for the custom command including the command name.
 //
 // Return value:
@@ -92,8 +95,8 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (GlideCluste
 //	The returned value for the custom command.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
-	res, err := client.executeCommand(C.CustomCommand, args)
+func (client *GlideClusterClient) CustomCommand(ctx context.Context, args []string) (ClusterValue[interface{}], error) {
+	res, err := client.executeCommand(ctx, C.CustomCommand, args)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
@@ -110,13 +113,17 @@ func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[int
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A map where each address is the key and its corresponding node response is the information for the default sections.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) Info() (map[string]string, error) {
-	result, err := client.executeCommand(C.Info, []string{})
+func (client *GlideClusterClient) Info(ctx context.Context) (map[string]string, error) {
+	result, err := client.executeCommand(ctx, C.Info, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +141,7 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - Additional command parameters, see [ClusterInfoOptions] for more details.
 //
 // Return value:
@@ -143,13 +151,16 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //	When a single node route is given, command returns a string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) InfoWithOptions(
+	ctx context.Context,
+	options options.ClusterInfoOptions,
+) (ClusterValue[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
 	if options.RouteOption == nil || options.RouteOption.Route == nil {
-		response, err := client.executeCommand(C.Info, optionArgs)
+		response, err := client.executeCommand(ctx, C.Info, optionArgs)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
@@ -159,7 +170,7 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 		}
 		return createClusterMultiValue[string](data), nil
 	}
-	response, err := client.executeCommandWithRoute(C.Info, optionArgs, options.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.Info, optionArgs, options.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -185,6 +196,7 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args  - Arguments for the custom command including the command name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -194,11 +206,11 @@ func (client *GlideClusterClient) InfoWithOptions(options options.ClusterInfoOpt
 //	The returning value depends on the executed command and route.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClusterClient) CustomCommandWithRoute(
+func (client *GlideClusterClient) CustomCommandWithRoute(ctx context.Context,
 	args []string,
 	route config.Route,
 ) (ClusterValue[interface{}], error) {
-	res, err := client.executeCommandWithRoute(C.CustomCommand, args, route)
+	res, err := client.executeCommandWithRoute(ctx, C.CustomCommand, args, route)
 	if err != nil {
 		return createEmptyClusterValue[interface{}](), err
 	}
@@ -215,13 +227,19 @@ func (client *GlideClusterClient) CustomCommandWithRoute(
 // Pings the server.
 // The command will be routed to all primary nodes.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *GlideClusterClient) Ping() (string, error) {
-	result, err := client.executeCommand(C.Ping, []string{})
+func (client *GlideClusterClient) Ping(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Ping, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -233,6 +251,7 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pingOptions - The [ClusterPingOptions] type.
 //
 // Return value:
@@ -243,24 +262,27 @@ func (client *GlideClusterClient) Ping() (string, error) {
 //
 //	route := options.RouteOption{config.RandomRoute}
 //	opts  := options.ClusterPingOptions{ &options.PingOptions{ "Hello" }, &route }
-//	result, err := clusterClient.PingWithOptions(opts)
+//	result, err := clusterClient.PingWithOptions(context.Background(), opts)
 //	fmt.Println(result) // Output: Hello
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPingOptions) (string, error) {
+func (client *GlideClusterClient) PingWithOptions(
+	ctx context.Context,
+	pingOptions options.ClusterPingOptions,
+) (string, error) {
 	args, err := pingOptions.ToArgs()
 	if err != nil {
 		return DefaultStringResponse, err
 	}
 	if pingOptions.RouteOption == nil || pingOptions.RouteOption.Route == nil {
-		response, err := client.executeCommand(C.Ping, args)
+		response, err := client.executeCommand(ctx, C.Ping, args)
 		if err != nil {
 			return DefaultStringResponse, err
 		}
 		return handleStringResponse(response)
 	}
 
-	response, err := client.executeCommandWithRoute(C.Ping, args, pingOptions.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.Ping, args, pingOptions.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -275,6 +297,7 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - The [RouteOption] type.
 //
 // Return value:
@@ -283,8 +306,11 @@ func (client *GlideClusterClient) PingWithOptions(pingOptions options.ClusterPin
 // of microseconds already elapsed in the current second.
 // The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 // [valkey.io]: https://valkey.io/commands/time/
-func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (ClusterValue[[]string], error) {
-	result, err := client.executeCommandWithRoute(C.Time, []string{}, opts.Route)
+func (client *GlideClusterClient) TimeWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (ClusterValue[[]string], error) {
+	result, err := client.executeCommandWithRoute(ctx, C.Time, []string{}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[[]string](), err
 	}
@@ -293,8 +319,11 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 
 // Returns the number of keys in the database.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - The [RouteOption] type.
 //
 // Return value:
@@ -302,8 +331,8 @@ func (client *GlideClusterClient) TimeWithOptions(opts options.RouteOption) (Clu
 //	The number of keys in the database.
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (int64, error) {
-	result, err := client.executeCommandWithRoute(C.DBSize, []string{}, opts.Route)
+func (client *GlideClusterClient) DBSizeWithOptions(ctx context.Context, opts options.RouteOption) (int64, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.DBSize, []string{}, opts.Route)
 	if err != nil {
 		return defaultIntResponse, err
 	}
@@ -315,13 +344,17 @@ func (client *GlideClusterClient) DBSizeWithOptions(opts options.RouteOption) (i
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *GlideClusterClient) FlushAll() (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{})
+func (client *GlideClusterClient) FlushAll(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushAll, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -334,6 +367,7 @@ func (client *GlideClusterClient) FlushAll() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
@@ -341,15 +375,18 @@ func (client *GlideClusterClient) FlushAll() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+func (client *GlideClusterClient) FlushAllWithOptions(
+	ctx context.Context,
+	flushOptions options.FlushClusterOptions,
+) (string, error) {
 	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
-		result, err := client.executeCommand(C.FlushAll, flushOptions.ToArgs())
+		result, err := client.executeCommand(ctx, C.FlushAll, flushOptions.ToArgs())
 		if err != nil {
 			return DefaultStringResponse, err
 		}
 		return handleOkResponse(result)
 	}
-	result, err := client.executeCommandWithRoute(C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.FlushAll, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -361,13 +398,17 @@ func (client *GlideClusterClient) FlushAllWithOptions(flushOptions options.Flush
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *GlideClusterClient) FlushDB() (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{})
+func (client *GlideClusterClient) FlushDB(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushDB, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -380,6 +421,7 @@ func (client *GlideClusterClient) FlushDB() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	flushOptions - The [FlushClusterOptions] type.
 //
 // Return value:
@@ -387,15 +429,18 @@ func (client *GlideClusterClient) FlushDB() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushClusterOptions) (string, error) {
+func (client *GlideClusterClient) FlushDBWithOptions(
+	ctx context.Context,
+	flushOptions options.FlushClusterOptions,
+) (string, error) {
 	if flushOptions.RouteOption == nil || flushOptions.RouteOption.Route == nil {
-		result, err := client.executeCommand(C.FlushDB, flushOptions.ToArgs())
+		result, err := client.executeCommand(ctx, C.FlushDB, flushOptions.ToArgs())
 		if err != nil {
 			return DefaultStringResponse, err
 		}
 		return handleOkResponse(result)
 	}
-	result, err := client.executeCommandWithRoute(C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.FlushDB, flushOptions.ToArgs(), flushOptions.RouteOption.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -406,6 +451,7 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 //
 // Parameters:
 //
+//	ctx     - The context for controlling the command execution.
 //	message - The message to be echoed back.
 //	opts    - Specifies the routing configuration for the command. The client will route the
 //	          command to the nodes defined by `opts.Route`.
@@ -415,8 +461,12 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 //	The message to be echoed back.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(message string, opts options.RouteOption) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.Echo, []string{message}, opts.Route)
+func (client *GlideClusterClient) EchoWithOptions(
+	ctx context.Context,
+	message string,
+	opts options.RouteOption,
+) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.Echo, []string{message}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -436,6 +486,7 @@ func (client *GlideClusterClient) EchoWithOptions(message string, opts options.R
 
 // Helper function to perform the cluster scan.
 func (client *GlideClusterClient) clusterScan(
+	ctx context.Context,
 	cursor *options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
@@ -513,6 +564,7 @@ func (client *GlideClusterClient) clusterScan(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
 //	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
 //
@@ -522,9 +574,10 @@ func (client *GlideClusterClient) clusterScan(
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) Scan(
+	ctx context.Context,
 	cursor options.ClusterScanCursor,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(&cursor, *options.NewClusterScanOptions())
+	response, err := client.clusterScan(ctx, &cursor, *options.NewClusterScanOptions())
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
@@ -550,6 +603,7 @@ func (client *GlideClusterClient) Scan(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
 //	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
 //	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
@@ -560,10 +614,11 @@ func (client *GlideClusterClient) Scan(
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *GlideClusterClient) ScanWithOptions(
+	ctx context.Context,
 	cursor options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(&cursor, opts)
+	response, err := client.clusterScan(ctx, &cursor, opts)
 	if err != nil {
 		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
@@ -574,13 +629,19 @@ func (client *GlideClusterClient) ScanWithOptions(
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *GlideClusterClient) Lolwut() (string, error) {
-	result, err := client.executeCommand(C.Lolwut, []string{})
+func (client *GlideClusterClient) Lolwut(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Lolwut, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -591,6 +652,7 @@ func (client *GlideClusterClient) Lolwut() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	lolwutOptions - The [LolwutOptions] type.
 //
 // Return value:
@@ -598,14 +660,17 @@ func (client *GlideClusterClient) Lolwut() (string, error) {
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (ClusterValue[string], error) {
+func (client *GlideClusterClient) LolwutWithOptions(
+	ctx context.Context,
+	lolwutOptions options.ClusterLolwutOptions,
+) (ClusterValue[string], error) {
 	args, err := lolwutOptions.ToArgs()
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
 
 	if lolwutOptions.RouteOption == nil || lolwutOptions.RouteOption.Route == nil {
-		response, err := client.executeCommand(C.Lolwut, args)
+		response, err := client.executeCommand(ctx, C.Lolwut, args)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
 		}
@@ -617,7 +682,7 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 	}
 
 	route := lolwutOptions.RouteOption.Route
-	response, err := client.executeCommandWithRoute(C.Lolwut, args, route)
+	response, err := client.executeCommandWithRoute(ctx, C.Lolwut, args, route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -639,13 +704,19 @@ func (client *GlideClusterClient) LolwutWithOptions(lolwutOptions options.Cluste
 
 // Gets the current connection id.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
-	response, err := client.executeCommand(C.ClientId, []string{})
+func (client *GlideClusterClient) ClientId(ctx context.Context) (ClusterValue[int64], error) {
+	response, err := client.executeCommand(ctx, C.ClientId, []string{})
 	if err != nil {
 		return createEmptyClusterValue[int64](), err
 	}
@@ -660,6 +731,7 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -668,8 +740,11 @@ func (client *GlideClusterClient) ClientId() (ClusterValue[int64], error) {
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
-	response, err := client.executeCommandWithRoute(C.ClientId, []string{}, opts.Route)
+func (client *GlideClusterClient) ClientIdWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClientId, []string{}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[int64](), err
 	}
@@ -691,13 +766,19 @@ func (client *GlideClusterClient) ClientIdWithOptions(opts options.RouteOption) 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
 // The command is routed to a random node by default, which is safe for read-only commands.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
-	response, err := client.executeCommand(C.LastSave, []string{})
+func (client *GlideClusterClient) LastSave(ctx context.Context) (ClusterValue[int64], error) {
+	response, err := client.executeCommand(ctx, C.LastSave, []string{})
 	if err != nil {
 		return createEmptyClusterValue[int64](), err
 	}
@@ -712,6 +793,7 @@ func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -720,8 +802,11 @@ func (client *GlideClusterClient) LastSave() (ClusterValue[int64], error) {
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) (ClusterValue[int64], error) {
-	response, err := client.executeCommandWithRoute(C.LastSave, []string{}, opts.Route)
+func (client *GlideClusterClient) LastSaveWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (ClusterValue[int64], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.LastSave, []string{}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[int64](), err
 	}
@@ -740,15 +825,21 @@ func (client *GlideClusterClient) LastSaveWithOptions(opts options.RouteOption) 
 	return createClusterSingleValue[int64](data), nil
 }
 
-// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
 //	OK to confirm that the statistics were successfully reset.
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
-func (client *GlideClusterClient) ConfigResetStat() (string, error) {
-	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+func (client *GlideClusterClient) ConfigResetStat(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigResetStat, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -757,8 +848,11 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -767,8 +861,8 @@ func (client *GlideClusterClient) ConfigResetStat() (string, error) {
 //	OK to confirm that the statistics were successfully reset.
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
-func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteOption) (string, error) {
-	response, err := client.executeCommandWithRoute(C.ConfigResetStat, []string{}, opts.Route)
+func (client *GlideClusterClient) ConfigResetStatWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ConfigResetStat, []string{}, opts.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -781,6 +875,7 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteO
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //
 // Return value:
@@ -788,10 +883,10 @@ func (client *GlideClusterClient) ConfigResetStatWithOptions(opts options.RouteO
 //	OK if all configurations have been successfully set. Otherwise, raises an error.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *GlideClusterClient) ConfigSet(
+func (client *GlideClusterClient) ConfigSet(ctx context.Context,
 	parameters map[string]string,
 ) (string, error) {
-	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	result, err := client.executeCommand(ctx, C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -803,6 +898,7 @@ func (client *GlideClusterClient) ConfigSet(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -812,10 +908,10 @@ func (client *GlideClusterClient) ConfigSet(
 //	OK if all configurations have been successfully set. Otherwise, raises an error.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *GlideClusterClient) ConfigSetWithOptions(
+func (client *GlideClusterClient) ConfigSetWithOptions(ctx context.Context,
 	parameters map[string]string, opts options.RouteOption,
 ) (string, error) {
-	result, err := client.executeCommandWithRoute(C.ConfigSet, utils.MapToString(parameters), opts.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.ConfigSet, utils.MapToString(parameters), opts.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -828,6 +924,7 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters -  An array of configuration parameter names to retrieve values for.
 //
 // Return value:
@@ -835,10 +932,10 @@ func (client *GlideClusterClient) ConfigSetWithOptions(
 //	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *GlideClusterClient) ConfigGet(
+func (client *GlideClusterClient) ConfigGet(ctx context.Context,
 	parameters []string,
 ) (map[string]string, error) {
-	res, err := client.executeCommand(C.ConfigGet, parameters)
+	res, err := client.executeCommand(ctx, C.ConfigGet, parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -854,6 +951,7 @@ func (client *GlideClusterClient) ConfigGet(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters - An array of configuration parameter names to retrieve values for.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	       command to the nodes defined by route.
@@ -863,10 +961,10 @@ func (client *GlideClusterClient) ConfigGet(
 //	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *GlideClusterClient) ConfigGetWithOptions(
+func (client *GlideClusterClient) ConfigGetWithOptions(ctx context.Context,
 	parameters []string, opts options.RouteOption,
 ) (ClusterValue[map[string]string], error) {
-	res, err := client.executeCommandWithRoute(C.ConfigGet, parameters, opts.Route)
+	res, err := client.executeCommandWithRoute(ctx, C.ConfigGet, parameters, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[map[string]string](), err
 	}
@@ -888,6 +986,7 @@ func (client *GlideClusterClient) ConfigGetWithOptions(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //
 // Return value:
@@ -895,8 +994,8 @@ func (client *GlideClusterClient) ConfigGetWithOptions(
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterValue[string], error) {
-	response, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+func (client *GlideClusterClient) ClientSetName(ctx context.Context, connectionName string) (ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -911,6 +1010,7 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -920,11 +1020,11 @@ func (client *GlideClusterClient) ClientSetName(connectionName string) (ClusterV
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *GlideClusterClient) ClientSetNameWithOptions(
+func (client *GlideClusterClient) ClientSetNameWithOptions(ctx context.Context,
 	connectionName string,
 	opts options.RouteOption,
 ) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.ClientSetName, []string{connectionName}, opts.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.ClientSetName, []string{connectionName}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -945,13 +1045,19 @@ func (client *GlideClusterClient) ClientSetNameWithOptions(
 
 // Gets the name of the current connection.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) {
-	response, err := client.executeCommand(C.ClientGetName, []string{})
+func (client *GlideClusterClient) ClientGetName(ctx context.Context) (ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -964,8 +1070,11 @@ func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) 
 
 // Gets the name of the current connection.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -974,8 +1083,11 @@ func (client *GlideClusterClient) ClientGetName() (ClusterValue[string], error) 
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOption) (ClusterValue[string], error) {
-	response, err := client.executeCommandWithRoute(C.ClientGetName, []string{}, opts.Route)
+func (client *GlideClusterClient) ClientGetNameWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClientGetName, []string{}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
@@ -997,13 +1109,19 @@ func (client *GlideClusterClient) ClientGetNameWithOptions(opts options.RouteOpt
 // Rewrites the configuration file with the current configuration.
 // The command will be routed a random node.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
-func (client *GlideClusterClient) ConfigRewrite() (string, error) {
-	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+func (client *GlideClusterClient) ConfigRewrite(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigRewrite, []string{})
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1014,6 +1132,7 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1022,8 +1141,8 @@ func (client *GlideClusterClient) ConfigRewrite() (string, error) {
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
-func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOption) (string, error) {
-	response, err := client.executeCommandWithRoute(C.ConfigRewrite, []string{}, opts.Route)
+func (client *GlideClusterClient) ConfigRewriteWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ConfigRewrite, []string{}, opts.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1032,13 +1151,19 @@ func (client *GlideClusterClient) ConfigRewriteWithOptions(opts options.RouteOpt
 
 // Returns a random key.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKey() (Result[string], error) {
-	result, err := client.executeCommand(C.RandomKey, []string{})
+func (client *GlideClusterClient) RandomKey(ctx context.Context) (Result[string], error) {
+	result, err := client.executeCommand(ctx, C.RandomKey, []string{})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -1049,6 +1174,7 @@ func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	 opts - specifies the routing configuration for the command.
 //
 //		 The client will route the command to the nodes defined by route,
@@ -1059,8 +1185,8 @@ func (client *GlideClusterClient) RandomKey() (Result[string], error) {
 //	A random key from the database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (Result[string], error) {
-	result, err := client.executeCommandWithRoute(C.RandomKey, []string{}, opts.Route)
+func (client *GlideClusterClient) RandomKeyWithRoute(ctx context.Context, opts options.RouteOption) (Result[string], error) {
+	result, err := client.executeCommandWithRoute(ctx, C.RandomKey, []string{}, opts.Route)
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -1077,6 +1203,7 @@ func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libraryCode - The source code that implements the library.
 //	replace - Whether the given library should overwrite a library with the same name if it
 //	already exists.
@@ -1088,7 +1215,7 @@ func (client *GlideClusterClient) RandomKeyWithRoute(opts options.RouteOption) (
 //	The library name that was loaded.
 //
 // [valkey.io]: https://valkey.io/commands/function-load/
-func (client *GlideClusterClient) FunctionLoadWithRoute(
+func (client *GlideClusterClient) FunctionLoadWithRoute(ctx context.Context,
 	libraryCode string,
 	replace bool,
 	route options.RouteOption,
@@ -1098,7 +1225,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 		args = append(args, options.ReplaceKeyword)
 	}
 	args = append(args, libraryCode)
-	result, err := client.executeCommandWithRoute(C.FunctionLoad, args, route.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionLoad, args, route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1115,6 +1242,7 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1123,8 +1251,8 @@ func (client *GlideClusterClient) FunctionLoadWithRoute(
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
-func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{}, route.Route)
+func (client *GlideClusterClient) FunctionFlushWithRoute(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionFlush, []string{}, route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1141,6 +1269,7 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1149,8 +1278,8 @@ func (client *GlideClusterClient) FunctionFlushWithRoute(route options.RouteOpti
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
-func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.SYNC)}, route.Route)
+func (client *GlideClusterClient) FunctionFlushSyncWithRoute(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionFlush, []string{string(options.SYNC)}, route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1167,6 +1296,7 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1175,8 +1305,8 @@ func (client *GlideClusterClient) FunctionFlushSyncWithRoute(route options.Route
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
-func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FunctionFlush, []string{string(options.ASYNC)}, route.Route)
+func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionFlush, []string{string(options.ASYNC)}, route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1194,6 +1324,7 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1203,8 +1334,13 @@ func (client *GlideClusterClient) FunctionFlushAsyncWithRoute(route options.Rout
 //	The invoked function's return value.
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithRoute(function string, route options.RouteOption) (ClusterValue[any], error) {
+func (client *GlideClusterClient) FCallWithRoute(
+	ctx context.Context,
+	function string,
+	route options.RouteOption,
+) (ClusterValue[any], error) {
 	result, err := client.executeCommandWithRoute(
+		ctx,
 		C.FCall,
 		[]string{function, utils.IntToString(0)},
 		route.Route,
@@ -1237,6 +1373,7 @@ func (client *GlideClusterClient) FCallWithRoute(function string, route options.
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1246,11 +1383,12 @@ func (client *GlideClusterClient) FCallWithRoute(function string, route options.
 //	The invoked function's return value.
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
-func (client *GlideClusterClient) FCallReadOnlyWithRoute(
+func (client *GlideClusterClient) FCallReadOnlyWithRoute(ctx context.Context,
 	function string,
 	route options.RouteOption,
 ) (ClusterValue[any], error) {
 	result, err := client.executeCommandWithRoute(
+		ctx,
 		C.FCallReadOnly,
 		[]string{function, utils.IntToString(0)},
 		route.Route,
@@ -1284,6 +1422,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //
@@ -1292,8 +1431,12 @@ func (client *GlideClusterClient) FCallReadOnlyWithRoute(
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithArgs(function string, args []string) (ClusterValue[any], error) {
-	return client.FCallWithArgsWithRoute(function, args, options.RouteOption{})
+func (client *GlideClusterClient) FCallWithArgs(
+	ctx context.Context,
+	function string,
+	args []string,
+) (ClusterValue[any], error) {
+	return client.FCallWithArgsWithRoute(ctx, function, args, options.RouteOption{})
 }
 
 // Invokes a previously loaded function.
@@ -1306,6 +1449,7 @@ func (client *GlideClusterClient) FCallWithArgs(function string, args []string) 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
@@ -1316,13 +1460,14 @@ func (client *GlideClusterClient) FCallWithArgs(function string, args []string) 
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
-func (client *GlideClusterClient) FCallWithArgsWithRoute(
+func (client *GlideClusterClient) FCallWithArgsWithRoute(ctx context.Context,
 	function string,
 	args []string,
 	route options.RouteOption,
 ) (ClusterValue[any], error) {
 	cmdArgs := append([]string{function, utils.IntToString(0)}, args...)
 	result, err := client.executeCommandWithRoute(
+		ctx,
 		C.FCall,
 		cmdArgs,
 		route.Route,
@@ -1355,6 +1500,7 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
@@ -1365,13 +1511,14 @@ func (client *GlideClusterClient) FCallWithArgsWithRoute(
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
-func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
+func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(ctx context.Context,
 	function string,
 	args []string,
 	route options.RouteOption,
 ) (ClusterValue[any], error) {
 	cmdArgs := append([]string{function, utils.IntToString(0)}, args...)
 	result, err := client.executeCommandWithRoute(
+		ctx,
 		C.FCallReadOnly,
 		cmdArgs,
 		route.Route,
@@ -1405,6 +1552,7 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //
@@ -1413,8 +1561,12 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgsWithRoute(
 //	The invoked function's return value wrapped by a [ClusterValue].
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
-func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []string) (ClusterValue[any], error) {
-	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
+func (client *GlideClusterClient) FCallReadOnlyWithArgs(
+	ctx context.Context,
+	function string,
+	args []string,
+) (ClusterValue[any], error) {
+	return client.FCallReadOnlyWithArgsWithRoute(ctx, function, args, options.RouteOption{})
 }
 
 // FunctionStats returns information about the function that's currently running and information about the
@@ -1427,6 +1579,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A map of node addresses to their function statistics represented by
@@ -1435,10 +1591,10 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 //	engines - Information about available engines and their stats.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
-func (client *GlideClusterClient) FunctionStats() (
+func (client *GlideClusterClient) FunctionStats(ctx context.Context) (
 	map[string]FunctionStatsResult, error,
 ) {
-	response, err := client.executeCommand(C.FunctionStats, []string{})
+	response, err := client.executeCommand(ctx, C.FunctionStats, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -1463,6 +1619,7 @@ func (client *GlideClusterClient) FunctionStats() (
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
 //	       command to the nodes defined by route. If no route is specified, the command
 //	       will be routed to all nodes.
@@ -1472,10 +1629,10 @@ func (client *GlideClusterClient) FunctionStats() (
 //	A [ClusterValue] containing a map of node addresses to their function statistics.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
-func (client *GlideClusterClient) FunctionStatsWithRoute(
+func (client *GlideClusterClient) FunctionStatsWithRoute(ctx context.Context,
 	opts options.RouteOption,
 ) (ClusterValue[FunctionStatsResult], error) {
-	response, err := client.executeCommandWithRoute(C.FunctionStats, []string{}, opts.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.FunctionStats, []string{}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[FunctionStatsResult](), err
 	}
@@ -1507,6 +1664,7 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //
 // Return value:
@@ -1514,8 +1672,8 @@ func (client *GlideClusterClient) FunctionStatsWithRoute(
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
-func (client *GlideClusterClient) FunctionDelete(libName string) (string, error) {
-	return client.FunctionDeleteWithRoute(libName, options.RouteOption{})
+func (client *GlideClusterClient) FunctionDelete(ctx context.Context, libName string) (string, error) {
+	return client.FunctionDeleteWithRoute(ctx, libName, options.RouteOption{})
 }
 
 // Deletes a library and all its functions.
@@ -1528,6 +1686,7 @@ func (client *GlideClusterClient) FunctionDelete(libName string) (string, error)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	    command to the nodes defined by `route`.
@@ -1537,8 +1696,12 @@ func (client *GlideClusterClient) FunctionDelete(libName string) (string, error)
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
-func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(C.FunctionDelete, []string{libName}, route.Route)
+func (client *GlideClusterClient) FunctionDeleteWithRoute(
+	ctx context.Context,
+	libName string,
+	route options.RouteOption,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionDelete, []string{libName}, route.Route)
 	if err != nil {
 		return DefaultStringResponse, err
 	}
@@ -1557,6 +1720,7 @@ func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route 
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
 //
@@ -1565,8 +1729,9 @@ func (client *GlideClusterClient) FunctionDeleteWithRoute(libName string, route 
 //	`OK` if function is terminated. Otherwise, throws an error.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
-func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOption) (string, error) {
+func (client *GlideClusterClient) FunctionKillWithRoute(ctx context.Context, route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(
+		ctx,
 		C.FunctionKill,
 		[]string{},
 		route.Route,
@@ -1587,6 +1752,7 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	query - The query to use to filter the functions and libraries.
 //	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by route.
@@ -1596,11 +1762,11 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 //	A [ClusterValue] containing a list of info about queried libraries and their functions.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
-func (client *GlideClusterClient) FunctionListWithRoute(
+func (client *GlideClusterClient) FunctionListWithRoute(ctx context.Context,
 	query FunctionListQuery,
 	route options.RouteOption,
 ) (ClusterValue[[]LibraryInfo], error) {
-	response, err := client.executeCommandWithRoute(C.FunctionList, query.ToArgs(), route.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.FunctionList, query.ToArgs(), route.Route)
 	if err != nil {
 		return createEmptyClusterValue[[]LibraryInfo](), err
 	}
@@ -1629,6 +1795,7 @@ func (client *GlideClusterClient) FunctionListWithRoute(
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channel - The channel to publish the message to.
 //	message - The message to publish.
 //	sharded - Whether the channel is sharded.
@@ -1638,7 +1805,7 @@ func (client *GlideClusterClient) FunctionListWithRoute(
 //	The number of clients that received the message.
 //
 // [valkey.io]: https://valkey.io/commands/publish
-func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
+func (client *GlideClusterClient) Publish(ctx context.Context, channel string, message string, sharded bool) (int64, error) {
 	args := []string{channel, message}
 
 	var requestType C.RequestType
@@ -1647,7 +1814,7 @@ func (client *GlideClusterClient) Publish(channel string, message string, sharde
 	} else {
 		requestType = C.Publish
 	}
-	result, err := client.executeCommand(requestType, args)
+	result, err := client.executeCommand(ctx, requestType, args)
 	if err != nil {
 		return 0, err
 	}
@@ -1663,13 +1830,17 @@ func (client *GlideClusterClient) Publish(channel string, message string, sharde
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A list of shard channels.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
-func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
-	result, err := client.executeCommand(C.PubSubShardChannels, []string{})
+func (client *GlideClusterClient) PubSubShardChannels(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.PubSubShardChannels, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -1687,6 +1858,7 @@ func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pattern - A glob-style pattern to match active shard channels.
 //
 // Return value:
@@ -1694,8 +1866,8 @@ func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
 //	A list of shard channels that match the given pattern.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
-func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string) ([]string, error) {
-	result, err := client.executeCommand(C.PubSubShardChannels, []string{pattern})
+func (client *GlideClusterClient) PubSubShardChannelsWithPattern(ctx context.Context, pattern string) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.PubSubShardChannels, []string{pattern})
 	if err != nil {
 		return nil, err
 	}
@@ -1713,6 +1885,7 @@ func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string)
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channels - The channel to get the number of subscribers for.
 //
 // Return value:
@@ -1720,8 +1893,8 @@ func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string)
 //	The number of subscribers for the sharded channel.
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
-func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[string]int64, error) {
-	result, err := client.executeCommand(C.PubSubShardNumSub, channels)
+func (client *GlideClusterClient) PubSubShardNumSub(ctx context.Context, channels ...string) (map[string]int64, error) {
+	result, err := client.executeCommand(ctx, C.PubSubShardNumSub, channels)
 	if err != nil {
 		return nil, err
 	}

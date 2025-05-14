@@ -3,6 +3,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -12,35 +14,35 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementCommands interface {
-	Select(index int64) (string, error)
+	Select(ctx context.Context, index int64) (string, error)
 
-	ConfigGet(args []string) (map[string]string, error)
+	ConfigGet(ctx context.Context, args []string) (map[string]string, error)
 
-	ConfigSet(parameters map[string]string) (string, error)
+	ConfigSet(ctx context.Context, parameters map[string]string) (string, error)
 
-	Info() (string, error)
+	Info(ctx context.Context) (string, error)
 
-	InfoWithOptions(options options.InfoOptions) (string, error)
+	InfoWithOptions(ctx context.Context, options options.InfoOptions) (string, error)
 
-	DBSize() (int64, error)
+	DBSize(ctx context.Context) (int64, error)
 
-	Time() ([]string, error)
+	Time(ctx context.Context) ([]string, error)
 
-	FlushAll() (string, error)
+	FlushAll(ctx context.Context) (string, error)
 
-	FlushAllWithOptions(mode options.FlushMode) (string, error)
+	FlushAllWithOptions(ctx context.Context, mode options.FlushMode) (string, error)
 
-	FlushDB() (string, error)
+	FlushDB(ctx context.Context) (string, error)
 
-	FlushDBWithOptions(mode options.FlushMode) (string, error)
+	FlushDBWithOptions(ctx context.Context, mode options.FlushMode) (string, error)
 
-	Lolwut() (string, error)
+	Lolwut(ctx context.Context) (string, error)
 
-	LolwutWithOptions(opts options.LolwutOptions) (string, error)
+	LolwutWithOptions(ctx context.Context, opts options.LolwutOptions) (string, error)
 
-	LastSave() (int64, error)
+	LastSave(ctx context.Context) (int64, error)
 
-	ConfigResetStat() (string, error)
+	ConfigResetStat(ctx context.Context) (string, error)
 
-	ConfigRewrite() (string, error)
+	ConfigRewrite(ctx context.Context) (string, error)
 }
