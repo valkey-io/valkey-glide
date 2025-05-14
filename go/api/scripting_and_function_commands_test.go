@@ -854,3 +854,128 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Engine: LUA
 	//   Functions: 1
 }
+
+func ExampleGlideClient_FunctionDump() {
+	client := getExampleGlideClient()
+
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	dump, _ := client.FunctionDump()
+	if len(dump) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClusterClient_FunctionDump() {
+	client := getExampleGlideClusterClient()
+
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	dump, _ := client.FunctionDump()
+	if len(dump) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClusterClient_FunctionDumpWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
+	dump, _ := client.FunctionDumpWithRoute(config.RandomRoute)
+	if len(dump.SingleValue()) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClient_FunctionRestore() {
+	client := getExampleGlideClient()
+
+	// Attempt to restore with invalid dump data
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestore(invalidDump)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestore() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestore(invalidDump)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data and route
+	invalidDump := "invalid_dump_data"
+	route := config.RandomRoute
+	_, err := client.FunctionRestoreWithRoute(invalidDump, route)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClient_FunctionRestoreWithPolicy() {
+	client := getExampleGlideClient()
+
+	// Attempt to restore with invalid dump data and policy
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestoreWithPolicy(invalidDump, options.FlushPolicy)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithPolicy() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data and policy
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestoreWithPolicy(invalidDump, options.FlushPolicy)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithPolicyWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data, policy and route
+	invalidDump := "invalid_dump_data"
+	route := config.RandomRoute
+	_, err := client.FunctionRestoreWithPolicyWithRoute(invalidDump, options.FlushPolicy, route)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
