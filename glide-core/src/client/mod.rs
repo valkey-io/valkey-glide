@@ -20,8 +20,8 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -34,7 +34,7 @@ mod standalone_client;
 mod value_conversion;
 use redis::InfoDict;
 use telemetrylib::*;
-use tokio::sync::{mpsc, oneshot, Notify};
+use tokio::sync::{Notify, mpsc, oneshot};
 use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
@@ -860,14 +860,14 @@ async fn create_cluster_client(
                         return Err(RedisError::from((
                             ErrorKind::ResponseError,
                             "Failed to parse engine version",
-                        )))
+                        )));
                     }
                 },
                 _ => {
                     return Err(RedisError::from((
                         ErrorKind::ResponseError,
                         "Could not determine engine version from INFO result",
-                    )))
+                    )));
                 }
             }
         }
@@ -1106,7 +1106,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::{
-        get_request_timeout, RequestTimeoutOption, TimeUnit, BLOCKING_CMD_TIMEOUT_EXTENSION,
+        BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
 
     use super::get_timeout_from_cmd_arg;

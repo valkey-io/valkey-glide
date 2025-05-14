@@ -1,7 +1,7 @@
 [package]
 name = "glide-rs"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
 
@@ -14,14 +14,15 @@ crate-type = ["cdylib"]
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../../glide-core", features = ["socket-layer"] }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
-napi = {version = "2", default-features = false,features = ["napi8"]}
+napi = { version = "2", default-features = false, features = ["napi8"] }
 napi-derive = "2"
-logger_core = {path = "../../logger_core"}
+logger_core = { path = "../../logger_core" }
 byteorder = "1"
 bytes = "1"
 num-traits = "0.2"
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = {version = "0.6", features = ["disable_initial_exec_tls"] }
+tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }
 num-bigint = { version = "0.4", optional = true }
 
 [build-dependencies]
