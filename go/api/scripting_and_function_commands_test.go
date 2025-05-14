@@ -859,10 +859,8 @@ func ExampleGlideClient_FunctionDump() {
 	client := getExampleGlideClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
-	_, err := client.FunctionDump()
-	if err != nil {
-		fmt.Println("Error:", err.Error())
-	} else {
+	dump, _ := client.FunctionDump()
+	if len(dump) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
 
@@ -874,10 +872,8 @@ func ExampleGlideClusterClient_FunctionDump() {
 	client := getExampleGlideClusterClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
-	_, err := client.FunctionDump()
-	if err != nil {
-		fmt.Println("Error:", err.Error())
-	} else {
+	dump, _ := client.FunctionDump()
+	if len(dump) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
 
@@ -889,10 +885,8 @@ func ExampleGlideClusterClient_FunctionDumpWithRoute() {
 	client := getExampleGlideClusterClient()
 
 	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
-	_, err := client.FunctionDumpWithRoute(config.RandomRoute)
-	if err != nil {
-		fmt.Println("Error:", err.Error())
-	} else {
+	dump, _ := client.FunctionDumpWithRoute(config.RandomRoute)
+	if len(dump.SingleValue()) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
 
