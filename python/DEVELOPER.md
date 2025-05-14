@@ -155,7 +155,17 @@ If needed, you can invoke `pytest` directly from the root `python/` directory fo
 ### Run all tests manually
 ```bash
 source .env/bin/activate
-pytest -v --asyncio-mode=auto
+pytest -v
+```
+
+### Running with different async backends
+
+Python GLIDE supports both trio and asyncio. Pass the `--async-backend` flag to `pytest` with either `trio`, `asyncio` or `uvloop` to run tests on the specified async backend. You can pass multiple async backends to run tests on all of them.
+
+Example:
+```bash
+source .env/bin/activate
+pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
 # Protobuf
