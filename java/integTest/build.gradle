@@ -179,7 +179,10 @@ jacocoTestReport {
 
     sourceDirectories.setFrom(files("${project.rootDir}/client/src/main/java"))
     classDirectories.setFrom(files("$buildDir/classes"))
-    executionData.from = files("$buildDir/jacoco/test.exec")
+    executionData.setFrom(
+        files("$buildDir/jacoco/test.exec"),
+        files("$buildDir/jacoco/pubsubTest.exec")
+    )
     
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
@@ -225,6 +228,7 @@ tasks.register('pubsubTest', Test) {
     filter {
         includeTestsMatching 'glide.PubSubTests'
     }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
 
 tasks.register('modulesTest', Test) {
