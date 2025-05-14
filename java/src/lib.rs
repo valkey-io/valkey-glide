@@ -169,7 +169,8 @@ fn array_to_java_array<'local>(
 }
 
 /// # Safety
-/// All FFI functions are considered `unsafe` by default.
+/// * `pointer` must not be `null`.
+/// * `pointer` must be able to be safely casted to a valid [`Box<Value>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointer<
     'local,
@@ -196,7 +197,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueF
 }
 
 /// # Safety
-/// All FFI functions are considered `unsafe` by default.
+/// * `pointer` must not be `null`.
+/// * `pointer` must be able to be safely casted to a valid [`Box<Value>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<
     'local,
@@ -229,13 +231,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueF
 /// * `env`     - The JNI environment.
 /// * `_class`  - The class object. Not used.
 /// * `args`    - The arguments. This should be a byte[][] from Java.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedBytesVec<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedBytesVec<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     args: JObjectArray<'local>,
@@ -272,11 +269,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_create
 ///
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMaxRequestArgsLengthInBytes<
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMaxRequestArgsLengthInBytes<
     'local,
 >(
     _env: JNIEnv<'local>,
@@ -285,10 +279,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMax
     MAX_REQUEST_ARGS_LENGTH_IN_BYTES as jlong
 }
 
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSocketListener<
+pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSocketListener<
     'local,
 >(
     mut env: JNIEnv<'local>,
@@ -324,10 +316,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_st
     .unwrap_or(JObject::null())
 }
 
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     code: JByteArray,
@@ -350,10 +340,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScrip
     .unwrap_or(JObject::null())
 }
 
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     hash: JString,
@@ -404,10 +392,8 @@ impl TryFrom<Level> for logger_core::Level {
     }
 }
 
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInternal<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInternal<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     level: jint,
@@ -439,10 +425,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInterna
     .unwrap_or(())
 }
 
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     level: jint,
@@ -483,11 +467,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initIntern
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
 /// * cursor      - The cursor handle to release.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<
     'local,
 >(
     mut env: JNIEnv<'local>,
@@ -519,11 +500,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFinishedCursorHandleConstant<
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFinishedCursorHandleConstant<
     'local,
 >(
     env: JNIEnv<'local>,
@@ -539,13 +517,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStringConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStringConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -559,13 +532,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeListConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeListConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -579,13 +547,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeSetConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeSetConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -598,14 +561,9 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 /// that this constant is consistent with the Rust client.
 ///
 /// * `env`    - The JNI environment.
-/// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
+/// * `_class`  - The class object. Not used..
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeZSetConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeZSetConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -619,13 +577,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeHashConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeHashConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -639,13 +592,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStreamConstant<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStreamConstant<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
@@ -658,11 +606,8 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTyp
 ///
 /// * `env`    - The JNI environment.
 /// * `_class`  - The class object. Not used.
-///
-/// # Safety
-/// All FFI functions are considered `unsafe` by default.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JObject<'local> {
