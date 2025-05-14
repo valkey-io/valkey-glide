@@ -1965,7 +1965,7 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
@@ -2067,7 +2067,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
