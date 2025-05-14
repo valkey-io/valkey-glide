@@ -9,6 +9,7 @@ from glide.commands.async_commands.cluster_commands import ClusterCommands
 from glide.commands.async_commands.core import CoreCommands
 from glide.commands.async_commands.standalone_commands import StandaloneCommands
 from glide.commands.command_args import ObjectType
+from glide.commands.core_options import PubSubMsg
 from glide.config import BaseClientConfiguration, ServerCredentials
 from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TEncodable, TRequest, TResult
 from glide.exceptions import (
@@ -400,7 +401,7 @@ class BaseClient(CoreCommands):
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
-    async def get_pubsub_message(self) -> CoreCommands.PubSubMsg:
+    async def get_pubsub_message(self) -> PubSubMsg:
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
@@ -426,7 +427,7 @@ class BaseClient(CoreCommands):
             self._pubsub_lock.release()
         return await response_future
 
-    def try_get_pubsub_message(self) -> Optional[CoreCommands.PubSubMsg]:
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
@@ -443,7 +444,7 @@ class BaseClient(CoreCommands):
             )
 
         # locking might not be required
-        msg: Optional[CoreCommands.PubSubMsg] = None
+        msg: Optional[PubSubMsg] = None
         try:
             self._pubsub_lock.acquire()
             self._complete_pubsub_futures_safe()
@@ -462,7 +463,7 @@ class BaseClient(CoreCommands):
 
     def _notification_to_pubsub_message_safe(
         self, response: Response
-    ) -> Optional[CoreCommands.PubSubMsg]:
+    ) -> Optional[PubSubMsg]:
         pubsub_message = None
         push_notification = cast(
             Dict[str, Any], value_from_pointer(response.resp_pointer)
@@ -481,11 +482,11 @@ class BaseClient(CoreCommands):
         ):
             values: List = push_notification["values"]
             if message_kind == "PMessage":
-                pubsub_message = BaseClient.PubSubMsg(
+                pubsub_message = PubSubMsg(
                     message=values[2], channel=values[1], pattern=values[0]
                 )
             else:
-                pubsub_message = BaseClient.PubSubMsg(
+                pubsub_message = PubSubMsg(
                     message=values[1], channel=values[0], pattern=None
                 )
         elif (
