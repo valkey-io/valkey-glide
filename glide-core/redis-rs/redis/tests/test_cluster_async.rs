@@ -169,22 +169,6 @@ mod cluster_async {
             GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config.clone()),
             Duration::from_millis(5000)
         );
-
-        let cluster = TestClusterContext::new(3, 0);
-
-        let cluster_addresses: Vec<_> = cluster
-            .cluster
-            .servers
-            .iter()
-            .map(|server| server.connection_info())
-            .collect();
-        ClusterClient::builder(cluster_addresses.clone())
-            .open_telemetry_config(glide_ot_config.clone())
-            .build()
-            .unwrap()
-            .get_async_connection(None)
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
