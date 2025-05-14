@@ -30,12 +30,12 @@ pub(crate) mod shared_client_tests {
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
-        cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
         FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
+        cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
     };
     use rstest::rstest;
-    use utilities::cluster::*;
     use utilities::BackingServer;
+    use utilities::cluster::*;
     use utilities::*;
 
     struct TestBasics {
@@ -1068,10 +1068,12 @@ pub(crate) mod shared_client_tests {
                         pipeline_result.is_err(),
                         "Pipeline should have failed: {pipeline_result:?}"
                     );
-                    assert!(pipeline_result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("FatalReceiveError"),);
+                    assert!(
+                        pipeline_result
+                            .unwrap_err()
+                            .to_string()
+                            .contains("FatalReceiveError"),
+                    );
                 }
             }
         });

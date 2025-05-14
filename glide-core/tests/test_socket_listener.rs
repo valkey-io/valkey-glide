@@ -24,7 +24,7 @@ mod socket_listener {
     use command_request::{CommandRequest, RequestType};
     use glide_core::command_request::command::{Args, ArgsArray};
     use glide_core::command_request::{Batch, Command};
-    use glide_core::response::{response, ConstantResponse, Response};
+    use glide_core::response::{ConstantResponse, Response, response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, FromRedisValue, Value};
@@ -832,7 +832,7 @@ mod socket_listener {
 
         let key = generate_random_string(1);
         let request_type = i32::MAX; // here we send an erroneous enum
-                                     // Send a set request
+        // Send a set request
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
         write_command_request(
