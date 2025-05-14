@@ -29,7 +29,7 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::{env, str};
 use std::{io, thread};
-use telemetrylib::GlideSpan;
+use telemetrylib::{GlideSpan, GlideSpanStatus};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -190,11 +190,15 @@ async fn write_result(
     response.callback_idx = callback_index;
     response.is_push = false;
     response.root_span_ptr = command_span_ptr;
+    let otel_command_span: Option<GlideSpan> = get_unsafe_span_from_ptr(command_span_ptr);
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
         )),
         Ok(value) => {
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Ok);
+            }
             if value != Value::Nil {
                 // Since null values don't require any additional data, they can be sent without any extra effort.
                 // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
@@ -207,12 +211,18 @@ async fn write_result(
         }
         Err(ClientUsageError::Internal(error_message)) => {
             log_error("internal error", &error_message);
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             Some(response::response::Value::ClosingError(
                 error_message.into(),
             ))
         }
         Err(ClientUsageError::User(error_message)) => {
             log_error("user error", &error_message);
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             let request_error = response::RequestError {
                 type_: response::RequestErrorType::Unspecified.into(),
                 message: error_message.into(),
@@ -224,6 +234,9 @@ async fn write_result(
             let error_message = error_message(&err);
             log_warn("received error", error_message.as_str());
             log_debug("received error", format!("for callback {}", callback_index));
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             let request_error = response::RequestError {
                 type_: match error_type(&err) {
                     RequestErrorType::Unspecified => response::RequestErrorType::Unspecified,
