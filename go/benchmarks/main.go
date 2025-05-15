@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 type options struct {
@@ -43,9 +43,9 @@ type runConfiguration struct {
 }
 
 const (
-	goRedis = "go-redis"
-	glide   = "glide"
-	all     = "all"
+	goRedis     = "go-redis"
+	valkeyGlide = "glide"
+	all         = "all"
 )
 
 func main() {
@@ -149,11 +149,11 @@ func verifyOptions(opts *options) (*runConfiguration, error) {
 	case strings.EqualFold(opts.clients, goRedis):
 		runConfig.clientNames = append(runConfig.clientNames, goRedis)
 
-	case strings.EqualFold(opts.clients, glide):
-		runConfig.clientNames = append(runConfig.clientNames, glide)
+	case strings.EqualFold(opts.clients, valkeyGlide):
+		runConfig.clientNames = append(runConfig.clientNames, valkeyGlide)
 
 	case strings.EqualFold(opts.clients, all):
-		runConfig.clientNames = append(runConfig.clientNames, goRedis, glide)
+		runConfig.clientNames = append(runConfig.clientNames, goRedis, valkeyGlide)
 	default:
 		return nil, fmt.Errorf("invalid clients option, should be one of: all|go-redis|glide")
 	}

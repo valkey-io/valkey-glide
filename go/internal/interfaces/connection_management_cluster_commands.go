@@ -3,8 +3,8 @@
 package interfaces
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/models"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Connection Management" group of commands for cluster client.

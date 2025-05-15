@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api/models"
-	"github.com/valkey-io/valkey-glide/go/api/options"
-	"github.com/valkey-io/valkey-glide/go/internal/errors"
-	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 const (
@@ -4759,11 +4759,11 @@ func (suite *GlideTestSuite) TestXRead() {
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient interfaces.BaseClientCommands
 		if _, ok := client.(interfaces.GlideClientCommands); ok {
-			testClient = suite.client(config.NewGlideClientConfiguration().
+			testClient = suite.client(config.NewClientConfiguration().
 				WithAddress(&suite.standaloneHosts[0]).
 				WithUseTLS(suite.tls))
 		} else {
-			testClient = suite.clusterClient(config.NewGlideClusterClientConfiguration().
+			testClient = suite.clusterClient(config.NewClusterClientConfiguration().
 				WithAddress(&suite.clusterHosts[0]).
 				WithUseTLS(suite.tls))
 		}

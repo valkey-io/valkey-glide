@@ -71,7 +71,7 @@ build-glide-ffi: gen-c-bindings
 
 gen-c-bindings: libglide_ffi
 	cd $(GLIDE_FFI_FOLDER) && \
-	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
+	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)lib.h --lang c
 	echo $(TARGET_FOLDER)
 	$(STRIP_CMD) $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a
 	cp $(GLIDE_FFI_FOLDER)/target/$(TARGET_SUBDIR)/libglide_ffi.a $(TARGET_FOLDER)
@@ -80,9 +80,9 @@ generate-protobuf:
 	rm -rf internal/protobuf
 	mkdir -p internal/protobuf
 	protoc --proto_path=$(GLIDE_CORE_FOLDER)/src/protobuf \
-		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
-		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
-		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/internal/protobuf \
+		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
 		--go_out=./internal/protobuf \
 		--go_opt=paths=source_relative \
 		$(GLIDE_CORE_FOLDER)/src/protobuf/*.proto
@@ -115,7 +115,7 @@ unit-test:
 	mkdir -p reports
 	set -o pipefail; \
 	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
 example-test:
@@ -128,8 +128,8 @@ example-test:
 	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
 	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
-	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
+	go test -v . -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
@@ -148,6 +148,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

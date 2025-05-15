@@ -126,7 +126,7 @@ func createClients(config *benchmarkConfig) ([]benchmarkClient, error) {
 		switch config.clientName {
 		case goRedis:
 			client = &goRedisBenchmarkClient{}
-		case glide:
+		case valkeyGlide:
 			client = &glideBenchmarkClient{}
 		}
 
