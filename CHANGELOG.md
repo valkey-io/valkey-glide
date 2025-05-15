@@ -72,6 +72,7 @@
 * Core: Refactor socket listener to use a runtime that lives for the application lifetime [#3842](https://github.com/valkey-io/valkey-glide/pull/3842)
 * Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))
 * Python: Fix restore command([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
+* Go: Echo command fix for glide client ([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
 
 #### Breaking Changes
 
