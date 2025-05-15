@@ -5584,13 +5584,26 @@ class ClusterBatch(BaseBatch):
     # TODO: add all CLUSTER commands
 
 
-@deprecated("Use ClusterBatch(is_atomic=True) instead.")
+def deprecated_class(reason):
+    def decorator(cls):
+        original_init = cls.__init__
+
+        def new_init(self, *args, **kwargs):
+            print(f"WARNING: {cls.__name__} is deprecated: {reason}")
+            original_init(self, *args, **kwargs)
+
+        cls.__init__ = new_init
+        return cls
+    return decorator
+
+
+@deprecated_class(reason="Use Batch(is_atomic=True) instead.")
 class Transaction(Batch):
     def __init__(self):
         super().__init__(is_atomic=True)
 
 
-@deprecated("Use ClusterBatch(is_atomic=True) instead.")
+@deprecated_class(reason="Use ClusterBatch(is_atomic=True) instead.")
 class ClusterTransaction(ClusterBatch):
     def __init__(self):
         super().__init__(is_atomic=True)
