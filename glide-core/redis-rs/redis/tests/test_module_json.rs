@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #![cfg(feature = "json")]
 
 use std::assert_eq;

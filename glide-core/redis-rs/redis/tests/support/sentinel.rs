@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use std::fs::File;
 use std::io::Write;
 use std::thread::sleep;

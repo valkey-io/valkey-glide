@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::error;

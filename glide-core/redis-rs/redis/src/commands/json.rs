@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use crate::cmd::{cmd, Cmd};
 use crate::connection::ConnectionLike;
 use crate::pipeline::Pipeline;

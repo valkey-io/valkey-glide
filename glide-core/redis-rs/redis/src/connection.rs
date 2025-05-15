@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::io::{self, Write};

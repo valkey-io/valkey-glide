@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 macro_rules! implement_commands {
     (
         $lifetime: lifetime

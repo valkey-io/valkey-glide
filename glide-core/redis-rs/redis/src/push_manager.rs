@@ -1,3 +1,4 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use crate::{PushKind, RedisResult, Value};
 use arc_swap::ArcSwap;
 use std::sync::Arc;
