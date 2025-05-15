@@ -81,4 +81,7 @@ public abstract class BaseClientConfiguration {
      * within the specified AZ if exits.
      */
     private final String clientAZ;
+
+    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
+    private final BackoffStrategy reconnectStrategy;
 }

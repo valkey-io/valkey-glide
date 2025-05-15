@@ -127,6 +127,8 @@ public class GlideClusterClient extends BaseClient
      *           <code>true</code>, the client will establish secure connections using TLS.
      *       <li><b>Pub/Sub Subscriptions</b>: Any channels or patterns specified in {@link
      *           ClusterSubscriptionConfiguration} will be subscribed to upon connection.
+     *       <li><b>Reconnection Strategy</b>: The {@link BackoffStrategy} settings define how the
+     *           client will attempt to reconnect in case of disconnections.
      *     </ul>
      *
      * @example
