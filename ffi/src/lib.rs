@@ -34,6 +34,7 @@ use std::{
     mem,
     os::raw::{c_char, c_double, c_long, c_ulong},
 };
+use std::sync::OnceLock;
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 
@@ -1304,72 +1305,119 @@ pub extern "C" fn drop_otel_span(span_ptr: u64) {
     }
 }
 
+/// Configuration for OpenTelemetry integration in the Node.js client.
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+/// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+/// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+///
+/// At least one of traces or metrics must be provided.
 #[repr(C)]
-pub struct OtelExporterConfig {
-    pub endpoint: *const c_char, // null if not set
-    pub sample_percentage: u32,  // only for traces, 0 if not set
-}
-
-#[repr(C)]
+#[derive(Clone)]
 pub struct OpenTelemetryConfig {
-    pub traces: OtelExporterConfig,  // endpoint null if not set
-    pub metrics: OtelExporterConfig, // endpoint null if not set, sample_percentage ignored
-    pub flush_interval_ms: i64,      // 0 if not set
+    /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+    pub traces: Option<OpenTelemetryTracesConfig>,
+    /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+    pub metrics: Option<OpenTelemetryMetricsConfig>,
+    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
+    pub flush_interval_ms: Option<i64>,
 }
 
-/// Initialize OpenTelemetry globally for the process. Returns 0 on success, 1 on error.
+/// Configuration for exporting OpenTelemetry traces.
+///
+/// - `endpoint`: The endpoint to which trace data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+#[repr(C)]
+#[derive(Clone)]
+pub struct OpenTelemetryTracesConfig {
+    /// The endpoint to which trace data will be exported.
+    pub endpoint: String,
+    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+    pub sample_percentage: Option<u32>,
+}
+
+/// Configuration for exporting OpenTelemetry metrics.
+///
+/// - `endpoint`: The endpoint to which metrics data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+#[repr(C)]
+#[derive(Clone)]
+pub struct OpenTelemetryMetricsConfig {
+    /// The endpoint to which metrics data will be exported.
+    pub endpoint: String,
+}
+
 #[no_mangle]
-pub extern "C" fn init_open_telemetry(config: OpenTelemetryConfig) -> i32 {
-    use glide_core::{
-        GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
-        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
-    };
-    // At least one exporter must be set
-    let traces_endpoint = unsafe { config.traces.endpoint.as_ref() };
-    let metrics_endpoint = unsafe { config.metrics.endpoint.as_ref() };
-    if traces_endpoint.is_none() && metrics_endpoint.is_none() {
-        return 1;
+pub extern "C" fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<(), String> {
+    // At least one of traces or metrics must be provided
+    if open_telemetry_config.traces.is_none() && open_telemetry_config.metrics.is_none() {
+        let error_msg = "At least one of traces or metrics must be provided for OpenTelemetry configuration";
+        return Err(error_msg.to_string());
     }
-    let mut builder = GlideOpenTelemetryConfigBuilder::default();
-    // Traces
-    if let Some(ptr) = traces_endpoint {
-        let endpoint = unsafe { CStr::from_ptr(ptr) };
-        let endpoint_str = match endpoint.to_str() {
-            Ok(s) => s,
-            Err(_) => return 1,
-        };
-        let exporter = match GlideOpenTelemetrySignalsExporter::from_str(endpoint_str) {
-            Ok(e) => e,
-            Err(_) => return 1,
-        };
-        let sample = if config.traces.sample_percentage > 0 {
-            Some(config.traces.sample_percentage)
-        } else {
-            None
-        };
-        builder = builder.with_trace_exporter(exporter, sample);
+
+    let mut config = GlideOpenTelemetryConfigBuilder::default();
+    
+    // Initialize open telemetry traces exporter
+    if let Some(traces) = open_telemetry_config.traces {
+        match GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint) {
+            Ok(exporter) => {
+                config = config.with_trace_exporter(exporter, traces.sample_percentage);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid traces exporter configuration: {}", e);
+                return Err(error_msg);
+            }
+        }
     }
-    // Metrics
-    if let Some(ptr) = metrics_endpoint {
-        let endpoint = unsafe { CStr::from_ptr(ptr) };
-        let endpoint_str = match endpoint.to_str() {
-            Ok(s) => s,
-            Err(_) => return 1,
-        };
-        let exporter = match GlideOpenTelemetrySignalsExporter::from_str(endpoint_str) {
-            Ok(e) => e,
-            Err(_) => return 1,
-        };
-        builder = builder.with_metrics_exporter(exporter);
+
+    // Initialize open telemetry metrics exporter
+    if let Some(metrics) = open_telemetry_config.metrics {
+        match GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint) {
+            Ok(exporter) => {
+                config = config.with_metrics_exporter(exporter);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid metrics exporter configuration: {}", e);
+                return Err(error_msg);
+            }
+        }
     }
-    let flush = if config.flush_interval_ms > 0 {
-        config.flush_interval_ms as u64
-    } else {
-        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as u64
-    };
-    builder = builder.with_flush_interval(std::time::Duration::from_millis(flush));
-    match GlideOpenTelemetry::initialise(builder.build()) {
-        Ok(_) => 0,
-        Err(_) => 1,
+
+    let flush_interval_ms = open_telemetry_config
+        .flush_interval_ms
+        .unwrap_or(DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64);
+
+    if flush_interval_ms <= 0 {
+        let error_msg = format!(
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+            flush_interval_ms
+        );
+        return Err(error_msg);
     }
+
+    config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    // Initialize OpenTelemetry synchronously
+    ensure_tokio_runtime().block_on(async {
+        match GlideOpenTelemetry::initialise(config.build()) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                Err(error_msg)
+            }
+        }
+    })?;
+
+    Ok(())
+}
+
+fn ensure_tokio_runtime() -> &'static Runtime {
+    static TOKIO: OnceLock<Runtime> = OnceLock::new();
+    TOKIO.get_or_init(|| Runtime::new().expect("Failed to create Tokio runtime"))
 }
