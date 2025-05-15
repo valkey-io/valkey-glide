@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
 namespace Valkey.Glide.IntegrationTests;
 
 public class SharedCommandTests(TestConfiguration config)
@@ -45,5 +47,36 @@ public class SharedCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string value = string.Empty;
         await GetAndSetValues(client, key, value);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(BatchTestUtils.GetTestClientWithAtomic), MemberType = typeof(BatchTestUtils))]
+    internal async Task BatchTest(BatchTestData testData)
+    {
+        IBatch batch = testData.Client is GlideClient ? new Batch(testData.IsAtomic) : new ClusterBatch(testData.IsAtomic);
+        List<(object? expected, string test)> expectedInfo = testData.TestDataProvider(batch, testData.IsAtomic);
+
+        object?[] actualResult = testData.Client switch
+        {
+            GlideClient client => (await client.Exec((Batch)batch, true))!,
+            GlideClusterClient client => (await client.Exec((ClusterBatch)batch, true))!,
+            _ => throw new NotImplementedException()
+        };
+
+        Assert.Equal(expectedInfo.Count, actualResult.Length);
+        List<string> failedChecks = [];
+        for (int i = 0; i < actualResult.Length; i++)
+        {
+            try
+            {
+                // TODO use assertDeepEquals
+                Assert.Equal(expectedInfo[i].expected, actualResult[i]);
+            }
+            catch (Exception e)
+            {
+                failedChecks.Add($"{expectedInfo[i].test} failed: {e.Message}");
+            }
+        }
+        Assert.Empty(failedChecks);
     }
 }
