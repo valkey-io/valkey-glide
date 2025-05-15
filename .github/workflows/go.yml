@@ -122,7 +122,7 @@ jobs:
               working-directory: go
               run: |
                   make install-tools build
-                  make -k unit-test integ-test
+                  make -k unit-test integ-test pubsub-test
 
             - name: Run Example Tests
               working-directory: go
@@ -252,8 +252,7 @@ jobs:
               working-directory: go
               run: |
                   make install-tools build
-                  make -k unit-test integ-test
-                  make -k pubsub-test
+                  make -k unit-test integ-test pubsub-test
 
             - name: Upload test reports
               if: always()
