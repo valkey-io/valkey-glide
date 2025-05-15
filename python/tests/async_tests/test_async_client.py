@@ -84,7 +84,8 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
-from tests.conftest import create_client
+
+from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
