@@ -34,7 +34,7 @@ func TestDefaultClusterConfig(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_Primary,
 	}
 
-	result, err := config.toProtobuf()
+	result, err := config.ToProtobuf()
 	if err != nil {
 		t.Fatalf("Failed to convert config to protobuf: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		)
 	}
 
-	result, err := config.toProtobuf()
+	result, err := config.ToProtobuf()
 	if err != nil {
 		t.Fatalf("Failed to convert config to protobuf: %v", err)
 	}
