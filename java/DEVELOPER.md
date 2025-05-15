@@ -281,7 +281,7 @@ To run server modules test (it doesn't start servers):
 
 ### JaCoCo Code Coverage Results
 
-The generated files are located in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`
+JaCoCo results are automatically generated just by running the tests (due to the `finalizedBy jacocoTestReport` task). The generated files are located in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`
 
 ### Generate files
 

@@ -8,7 +8,6 @@ plugins {
     id 'com.github.spotbugs' version '6.0.18'
     id 'com.google.osdetector' version '1.7.3'
     id 'com.gradleup.shadow' version '8.3.5'
-    id 'jacoco'
 }
 
 repositories {
@@ -254,49 +253,6 @@ tasks.withType(Test) {
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
-
-// JaCoCo section (code coverage by unit tests)
-jacoco {
-    toolVersion = "0.8.9"
-}
-jacocoTestReport {
-    reports {
-        xml.configure { enabled false }
-        csv.configure { enabled false }
-        html.configure { enabled true } 
-    }
-
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
-    }
-}
-jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            element = 'CLASS'
-            excludes = [
-            ]
-            limit {
-                counter = 'LINE'
-                // minimum = 1.0 // TODO: Add more tests to satisfy this
-            }
-            limit {
-                counter = 'BRANCH'
-                // minimum = 1.0 // TODO: Add more tests to satisfy this
-            }
-        }
-    }
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
-    }
-}
-
-check.dependsOn jacocoTestCoverageVerification
-// End of JaCoCo section
 
 jar {
     archiveClassifier = osdetector.classifier
