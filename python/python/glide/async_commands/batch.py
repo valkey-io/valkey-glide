@@ -5594,6 +5594,7 @@ def deprecated_class(reason):
 
         cls.__init__ = new_init
         return cls
+
     return decorator
 
 
