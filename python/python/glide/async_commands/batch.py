@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import sys
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
@@ -56,11 +55,6 @@ from glide.async_commands.stream import (
 )
 from glide.constants import TEncodable
 from glide.protobuf.command_request_pb2 import RequestType
-
-if sys.version_info >= (3, 13):
-    from warnings import deprecated
-else:
-    from typing_extensions import deprecated
 
 TBatch = TypeVar("TBatch", bound="BaseBatch")
 
