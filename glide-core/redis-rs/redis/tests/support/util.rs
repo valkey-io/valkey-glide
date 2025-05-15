@@ -130,7 +130,8 @@ pub async fn engine_version_less_than(min_version: &str) -> bool {
     false
 }
 
-pub async fn kill_connections(client: &mut ClusterConnection) {
+/// Terminates all client connections to all nodes in the cluster.
+pub async fn kill_all_connections(client: &mut ClusterConnection) {
     let mut client_kill_cmd = redis::cmd("CLIENT");
     client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
 

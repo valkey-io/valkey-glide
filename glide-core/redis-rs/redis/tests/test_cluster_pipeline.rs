@@ -848,7 +848,7 @@ mod test_cluster_pipeline {
             let kill_conn_future = async {
                 // Wait for 500 ms before killing the connections.
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                kill_connections(&mut stable_conn).await;
+                kill_all_connections(&mut stable_conn).await;
             };
 
             let future = async {
