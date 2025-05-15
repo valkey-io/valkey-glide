@@ -1,7 +1,7 @@
 [
     {
         "language": "java",
-        "versions": ["11", "17"],
+        "versions": ["11", "17", "21"],
         "always-run-versions": ["17"]
     },
     {
