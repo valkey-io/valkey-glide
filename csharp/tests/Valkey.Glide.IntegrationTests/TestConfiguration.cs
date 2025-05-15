@@ -75,7 +75,7 @@ public class TestConfiguration : IDisposable
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
         // Stop all if weren't stopped on previous test run
-        StopServer(false);
+        //StopServer(false);
 
         // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
@@ -87,9 +87,9 @@ public class TestConfiguration : IDisposable
         catch (DirectoryNotFoundException) { }
 
         // Start cluster
-        CLUSTER_HOSTS = StartServer(true);
+        CLUSTER_HOSTS = [("localhost", 7000)]; // StartServer(true);
         // Start standalone
-        STANDALONE_HOSTS = StartServer(false);
+        STANDALONE_HOSTS = [("localhost", 6379)]; // StartServer(false);
         // Get redis version
         SERVER_VERSION = GetServerVersion();
 
@@ -104,7 +104,7 @@ public class TestConfiguration : IDisposable
     {
         ResetTestClients();
         // Stop all
-        StopServer(true);
+        //StopServer(true);
     }
 
     private readonly string _scriptDir;
