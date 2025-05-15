@@ -14,8 +14,6 @@ type ConnectionManagementClusterCommands interface {
 
 	PingWithOptions(pingOptions options.ClusterPingOptions) (string, error)
 
-	Echo(message string) (Result[string], error)
-
 	EchoWithOptions(message string, routeOptions options.RouteOption) (ClusterValue[string], error)
 
 	ClientId() (ClusterValue[int64], error)
