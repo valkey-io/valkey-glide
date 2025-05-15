@@ -792,6 +792,126 @@ mod test_cluster_pipeline {
         }
     }
 
+    /// Tests pipeline retry behavior when encountering connection errors.
+    ///
+    /// This test is executed twice—once with `retry_connection_error = false` and once with `retry_connection_error = true`.
+    ///
+    /// **Execution flow:**
+    /// 1. Spawn `kill_conn_future` to sleep 500 ms then drop all connections on `connection`, simulating a `RecvError`.
+    /// 2. Build and dispatch a Redis pipeline:
+    ///    ```rust
+    ///    pipeline.incr(&key, 1)
+    ///           .blpop(&key2, 2.0)
+    ///           .set(&key3, "value");
+    ///    ```
+    /// 3. Call `route_pipeline(...)` with
+    ///    `PipelineRetryStrategy { retry_server_error: false, retry_connection_error: <toggle> }`.
+    /// 4. Join the kill task and the pipeline future, then assert based on the retry setting.
+    ///
+    /// - **Without retry** (`retry_connection_error = false`):
+    ///   - The pipeline is **not** retried.
+    ///   - `INCR` and `BLPOP` both hit a connection error and return `ServerError(RecvError)`.
+    ///   - `SET` on `key3` succeeds (`Value::Okay`) because it targets a different node and completes before the kill.
+    ///   - **Expected:**  
+    ///     `[ServerError(RecvError), ServerError(RecvError), Value::Okay]`
+    ///
+    /// - **With retry** (`retry_connection_error = true`):
+    ///   - After the connection drops, the entire pipeline is retried on a fresh connection.
+    ///   - `INCR` runs twice (once before drop, once on retry), so its final value is `2`.
+    ///   - `BLPOP` returns `Nil` on retry.
+    ///   - `SET` still succeeds (`Value::Okay`).
+    ///   - **Expected:**  
+    ///     `[Value::Int(2), Value::Nil, Value::Okay]`
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pipeline_kill_all_connections() {
+        for retry in [false, true] {
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
+                3,
+                0,
+                |builder| builder.retries(10),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
+            let mut stable_conn = cluster.async_connection(None).await;
+
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
+            let (key, key3) = generate_2_keys_in_different_node(nodes_and_slots);
+            let key2 = format!("{{{}}}:{}", key, generate_random_string(5));
+
+            let kill_conn_future = async {
+                // Wait for 500 ms before killing the connections.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                kill_all_connections(&mut stable_conn).await;
+            };
+
+            let future = async {
+                let mut pipeline = redis::pipe();
+                pipeline.incr(&key, 1).blpop(&key2, 2.0).set(key3, "value");
+
+                // Execute the pipeline.
+                let result = connection
+                    .route_pipeline(
+                        &pipeline,
+                        0,
+                        3,
+                        None,
+                        Some(PipelineRetryStrategy {
+                            retry_server_error: false,
+                            retry_connection_error: retry,
+                        }),
+                    )
+                    .await
+                    .expect("Pipeline execution failed");
+                result
+            };
+
+            let ((), result) = tokio::join!(kill_conn_future, future);
+
+            match retry {
+                true => {
+                    // When retry is enabled, the pipeline should be retried, and the INCR command should run twice.
+                    assert_eq!(
+                        result,
+                        [Value::Int(2), Value::Nil, Value::Okay],
+                        "Pipeline result did not match expected output.\n\
+                         Keys chosen: ('{}', '{}')\n\
+                         Actual result: {:?}",
+                        key,
+                        key2,
+                        result
+                    );
+                }
+                false => {
+                    // When retry is disabled, the pipeline should not be retried, and the INCR command should run once.
+                    assert!(
+                        result.iter().enumerate().all(|(i, r)| {
+                            if i == 2 {
+                                // since SET is in another node, it should have succeeded regardless of the connection kill
+                                // As it is not blocked by the BLPOP, the connection will be killed after the SET command succeeded
+                                matches!(r, Value::Okay)
+                            } else {
+                                matches!(r, Value::ServerError(ref err) if err.details().unwrap().contains("RecvError"))
+                            }
+                        }),
+                        "Pipeline result did not match expected output.\n\
+                     Keys chosen: ('{}', '{}')\n\
+                     Actual result: {:?}",
+                        key,
+                        key2,
+                        result
+                    );
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     #[serial_test::serial]
     async fn test_pipeline_read_from_replicas() {
