@@ -2,8 +2,7 @@
 
 from glide.logger import Level, Logger
 
-from tests.conftest import DEFAULT_TEST_LOG_LEVEL
-from tests.utils.utils import compare_maps
+from tests.utils.utils import DEFAULT_TEST_LOG_LEVEL, compare_maps
 
 
 class TestLogger:
