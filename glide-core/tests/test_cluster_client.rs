@@ -7,17 +7,17 @@ mod cluster_client_tests {
     use std::collections::HashMap;
 
     use super::*;
-    use cluster::{setup_cluster_with_replicas, LONG_CLUSTER_TEST_TIMEOUT};
+    use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
     use glide_core::client::Client;
     use glide_core::connection_request::{
         self, OpenTelemetryConfig, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
     };
+    use redis::InfoDict;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
-    use redis::InfoDict;
     use rstest::rstest;
-    use utilities::cluster::{setup_test_basics_internal, SHORT_CLUSTER_TEST_TIMEOUT};
+    use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
     use versions::Versioning;
 

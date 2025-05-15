@@ -366,3 +366,7 @@ In this project, only the function name and signature name is necessary. lib.rs 
 - [spotless-gradle](https://plugins.jetbrains.com/plugin/18321-spotless-gradle) - Spotless Gradle plugin for IntelliJ.
 - [lombok](https://plugins.jetbrains.com/plugin/6317-lombok) - Lombok plugin for IntelliJ.
 - [SpotBugs](https://plugins.jetbrains.com/plugin/14014-spotbugs) - SpotBugs plugin for IntelliJ.
+
+## Community and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

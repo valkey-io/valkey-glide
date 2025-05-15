@@ -128,6 +128,8 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 //
 // The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
 //
+// Starting from server version 7, command supports multiple section arguments.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -401,32 +403,24 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 }
 
 // Echo the provided message back.
-// The command will be routed a random node, unless `Route` in `echoOptions` is provided.
 //
 // Parameters:
 //
-//	echoOptions - The [ClusterEchoOptions] type.
+//	message - The message to be echoed back.
+//	opts    - Specifies the routing configuration for the command. The client will route the
+//	          command to the nodes defined by `opts.Route`.
 //
 // Return value:
 //
-//	A map where each address is the key and its corresponding node response is the information for the default sections.
+//	The message to be echoed back.
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	args, err := echoOptions.ToArgs()
+func (client *GlideClusterClient) EchoWithOptions(message string, opts options.RouteOption) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.Echo, []string{message}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	var route config.Route
-	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
-		route = echoOptions.RouteOption.Route
-	}
-	response, err := client.executeCommandWithRoute(C.Echo, args, route)
-	if err != nil {
-		return createEmptyClusterValue[string](), err
-	}
-	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
-		(echoOptions.RouteOption.Route).IsMultiNode() {
+	if (opts.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
@@ -1733,4 +1727,100 @@ func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[str
 	}
 
 	return handleStringIntMapResponse(result)
+}
+
+// Returns the serialized payload of all loaded libraries.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *GlideClusterClient) FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionDump, []string{}, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithRoute(payload string, route config.Route) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	policy - A policy for handling existing libraries.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithPolicyWithRoute(
+	payload string,
+	policy options.FunctionRestorePolicy,
+	route config.Route,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload, string(policy)}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }
