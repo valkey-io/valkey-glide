@@ -137,7 +137,7 @@ Before starting this step, make sure you've installed all software requirements.
 
 ### Test
 
-We run our tests using Go's `testing` package. But for convenience, we bundled the core logic into makefile commands to simplify the process.
+We run our tests using Go's `testing` package. For convenience, we bundled test configuration and logging into makefile commands to simplify the process.
 
 #### Test Categories
 
@@ -189,7 +189,7 @@ make long-timeout-test
 
 #### Running Specific Tests
 
-For all of the above tests, we can filter out only specific ones to be run by using the `test-filter=<regex>` parameter to specify a filter pattern to use.
+For all of the above tests, we can specify individual tests, or tests matching a pattern, using the `test-filter=<regex>` parameter to specify a filter pattern to use.
 
 ```bash
 # Run with a specific prefix (ex. run all tests that start with TestSet)
@@ -211,6 +211,10 @@ make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:
 #### Test Reports and Results
 
 Alongside terminal output, test reports are generated in `reports` folder.
+
+An example of what the report looks like when an error occurs:
+
+![Image of HIncrByFloat Failing](docs/images/FailingTestReportExample.png)
 
 ### Generate protobuf files
 
