@@ -504,7 +504,7 @@ mod standalone_client_tests {
                 &monitoring_client_config,
             );
             monitoring_client_request.cluster_mode_enabled = false; // Ensure standalone
-                                                                    // No need to set tls_mode explicitly, create_connection_request handles it based on USE_TLS
+            // No need to set tls_mode explicitly, create_connection_request handles it based on USE_TLS
 
             let mut monitoring_client = GlideClient::new(monitoring_client_request.into(), None)
                 .await
@@ -513,7 +513,9 @@ mod standalone_client_tests {
             let clients_before_lazy_init = get_connected_clients(&mut monitoring_client).await;
             logger_core::log_info(
                 "Test",
-                format!("Clients before lazy client init (protocol={protocol:?}): {clients_before_lazy_init}"),
+                format!(
+                    "Clients before lazy client init (protocol={protocol:?}): {clients_before_lazy_init}"
+                ),
             );
 
             // 2. Create the ConnectionRequest for the lazy client
@@ -525,7 +527,7 @@ mod standalone_client_tests {
                 &lazy_client_config,
             );
             lazy_client_connection_request.cluster_mode_enabled = false; // Ensure standalone
-                                                                         // No need to set tls_mode explicitly
+            // No need to set tls_mode explicitly
 
             // 3. Create the "lazy" glide_core::client::Client
             let (push_sender, _push_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -539,7 +541,9 @@ mod standalone_client_tests {
             let clients_after_lazy_init = get_connected_clients(&mut monitoring_client).await;
             logger_core::log_info(
                 "Test",
-                format!("Clients after lazy client init (protocol={protocol:?}): {clients_after_lazy_init}"),
+                format!(
+                    "Clients after lazy client init (protocol={protocol:?}): {clients_after_lazy_init}"
+                ),
             );
             assert_eq!(
                 clients_after_lazy_init, clients_before_lazy_init,
@@ -568,7 +572,9 @@ mod standalone_client_tests {
             let clients_after_first_command = get_connected_clients(&mut monitoring_client).await;
             logger_core::log_info(
                 "Test",
-                format!("Clients after first command (protocol={protocol:?}): {clients_after_first_command}"),
+                format!(
+                    "Clients after first command (protocol={protocol:?}): {clients_after_first_command}"
+                ),
             );
             assert_eq!(
                 clients_after_first_command,
