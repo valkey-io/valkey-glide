@@ -62,7 +62,7 @@ docs/markdown/node/**
 docs/site/**
 copilot.yml
 memory-bank/
-CLAUDE.md
+CLAUDE*
 #cpp files
 cpp/benchmarks/build/
 cpp/build/
@@ -74,5 +74,3 @@ cpp/src/connection_request.pb.cc
 
 **/.claude/settings.local.json
 copilot-instructions.md
-
-**/CLAUDE.local.md
