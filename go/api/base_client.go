@@ -5021,7 +5021,7 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 //	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
+func (client *baseClient) echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err

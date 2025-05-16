@@ -216,6 +216,22 @@ func (client *GlideClient) DBSize() (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Echo the provided message back.
+// The command will be routed a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	return client.echo(message)
+}
+
 // Pings the server.
 //
 // Return value:
