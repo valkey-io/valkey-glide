@@ -277,7 +277,7 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs.clone()));
 
-                            let _client = GlideClient::new(connection_request.clone().into(), None)
+                            let _client = Client::new(connection_request.clone().into(), None)
                                 .await
                                 .unwrap();
 
@@ -287,9 +287,8 @@ mod cluster_client_tests {
                             connection_request.pubsub_subscriptions =
                                 protobuf::MessageField::from_option(Some(subs));
 
-                            let client_result =
-                                GlideClient::new(connection_request.into(), None).await;
-                            assert!(client_result.is_err());
+                            let client = Client::new(connection_request.into(), None).await;
+                            assert!(client.is_err());
                         }
                     }
                     _ => {
@@ -334,7 +333,7 @@ mod cluster_client_tests {
             let result = std::panic::catch_unwind(|| {
                 tokio::task::block_in_place(|| {
                     futures::executor::block_on(async {
-                        let _client = GlideClient::new(connection_request.clone().into(), None)
+                        let _client = Client::new(connection_request.clone().into(), None)
                             .await
                             .unwrap();
                     });
