@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
+import anyio
 from typing import Union, cast
 
 from glide.config import ProtocolVersion
@@ -26,7 +27,7 @@ async def get_standalone_client_count(client: GlideClient) -> int:
     return await get_client_list_output_count(result)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False, True])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 class TestLazyConnection:
@@ -109,6 +110,7 @@ class TestLazyConnection:
             # 6. Check client count after the first command
             # In cluster mode, the client count is not reliable due to the nature of cluster connections.
             if not cluster_mode:
+                await anyio.sleep(0.5)
                 clients_after_first_command = await get_standalone_client_count(
                     cast(GlideClient, monitoring_client)
                 )
