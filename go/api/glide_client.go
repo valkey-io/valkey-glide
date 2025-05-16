@@ -217,7 +217,6 @@ func (client *GlideClient) DBSize() (int64, error) {
 }
 
 // Echo the provided message back.
-// The command will be routed a random node.
 //
 // Parameters:
 //
