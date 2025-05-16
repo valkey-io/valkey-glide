@@ -198,8 +198,22 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ matrix.host.CONTAINER_OPTIONS || 'none' }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
+            - name: Install git
+              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+              run: |
+                  apk update
+                  apk add git
+
+            - name: Setup access to self-hosted runner
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
@@ -207,9 +221,6 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
-
-            - name: Checkout code
-              uses: actions/checkout@v4
 
             - name: Setup Node
               uses: actions/setup-node@v4

@@ -28,6 +28,12 @@
         },
         "esm": true
     },
-    "include": ["src/**/*", "src/index.ts", "types/**/*.d.ts"],
-    "exclude": ["node_modules", "build-ts", "tests", "tests/**/*"]
+    "include": ["src/**/*.ts", "src/index.ts", "types/**/*.d.ts"],
+    "exclude": [
+        "node_modules",
+        "build-ts",
+        "tests",
+        "tests/**/*",
+        "src/native.*"
+    ]
 }
