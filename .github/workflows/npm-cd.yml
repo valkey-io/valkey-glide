@@ -6,7 +6,6 @@ on:
     pull_request:
         paths:
             - .github/workflows/npm-cd.yml
-            - .github/workflows/setup-musl-on-linux.yml
             - .github/json_matrices/**
             - node/package.json
             - node/npm/**
