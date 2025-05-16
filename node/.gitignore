@@ -92,3 +92,7 @@ proto/
 .npmignore
 
 package.json.tmpl
+
+native.js
+native.d.ts
+native.js.map

@@ -1,11 +1,17 @@
 /* eslint-disable no-var */
-import { beforeAll } from "@jest/globals";
+/// <reference types="jest" />
+import { afterEach, beforeAll } from "@jest/globals";
 import minimist from "minimist";
 import { Logger } from "../build-ts";
 
 beforeAll(() => {
     Logger.init("error", "log.log");
     // Logger.setLoggerConfig("off");
+});
+
+// Clear all timers after each test to prevent hanging handles
+afterEach(() => {
+    jest.clearAllTimers();
 });
 
 declare global {

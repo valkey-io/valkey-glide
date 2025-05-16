@@ -71,7 +71,7 @@ async function redisBenchmark(
     clients: IAsyncClient[],
     totalCommands: number,
     data: string,
-    actionLatencies: Record<ChosenAction, number[]>,
+    actionLatencies: Record<ChosenAction, number[]>
 ) {
     while (startedTasksCounter < totalCommands) {
         startedTasksCounter += 1;
@@ -102,14 +102,14 @@ async function createBenchTasks(
     totalCommands: number,
     numOfConcurrentTasks: number,
     data: string,
-    actionLatencies: Record<ChosenAction, number[]>,
+    actionLatencies: Record<ChosenAction, number[]>
 ) {
     startedTasksCounter = 0;
     const tic = process.hrtime();
 
     for (let i = 0; i < numOfConcurrentTasks; i++) {
         runningTasks.push(
-            redisBenchmark(clients, totalCommands, data, actionLatencies),
+            redisBenchmark(clients, totalCommands, data, actionLatencies)
         );
     }
 
@@ -120,7 +120,7 @@ async function createBenchTasks(
 
 function latencyResults(
     prefix: string,
-    latencies: number[],
+    latencies: number[]
 ): Record<string, number> {
     const result: Record<string, number> = {};
     result[prefix + "_p50_latency"] = calculateLatency(latencies, 50);
@@ -141,13 +141,13 @@ async function runClients(
     dataSize: number,
     data: string,
     clientDisposal: (client: IAsyncClient) => void,
-    isCluster: boolean,
+    isCluster: boolean
 ) {
     const now = new Date();
     console.log(
         `Starting ${clientName} data size: ${dataSize} concurrency: ${numOfConcurrentTasks} client count: ${
             clients.length
-        } isCluster: ${isCluster} ${now.toLocaleTimeString()}`,
+        } isCluster: ${isCluster} ${now.toLocaleTimeString()}`
     );
     const actionLatencies = {
         [ChosenAction.SET]: [],
@@ -160,7 +160,7 @@ async function runClients(
         totalCommands,
         numOfConcurrentTasks,
         data,
-        actionLatencies,
+        actionLatencies
     );
     const tps = Math.round(startedTasksCounter / time);
 
@@ -168,13 +168,13 @@ async function runClients(
         actionLatencies[ChosenAction.GET_NON_EXISTING];
     const getNonExistingLatencyResults = latencyResults(
         "get_non_existing",
-        getNonExistingLatencies,
+        getNonExistingLatencies
     );
 
     const getExistingLatencies = actionLatencies[ChosenAction.GET_EXISTING];
     const getExistingLatencyResults = latencyResults(
         "get_existing",
-        getExistingLatencies,
+        getExistingLatencies
     );
 
     const setLatencies = actionLatencies[ChosenAction.SET];
@@ -198,10 +198,10 @@ async function runClients(
 
 function createClients(
     clientCount: number,
-    createAction: () => Promise<IAsyncClient>,
+    createAction: () => Promise<IAsyncClient>
 ): Promise<IAsyncClient[]> {
     const creationActions = Array.from({ length: clientCount }, () =>
-        createAction(),
+        createAction()
     );
     return Promise.all(creationActions);
 }
@@ -215,7 +215,7 @@ async function main(
     clientCount: number,
     useTLS: boolean,
     clusterModeEnabled: boolean,
-    port: number,
+    port: number
 ) {
     const data = generateValue(dataSize);
 
@@ -227,7 +227,7 @@ async function main(
             clientClass.createClient({
                 addresses: [{ host, port }],
                 useTLS,
-            }),
+            })
         );
         await runClients(
             clients,
@@ -239,7 +239,7 @@ async function main(
             (client) => {
                 (client as GlideClient).close();
             },
-            clusterModeEnabled,
+            clusterModeEnabled
         );
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -273,7 +273,7 @@ async function main(
             (client) => {
                 (client as RedisClientType).disconnect();
             },
-            clusterModeEnabled,
+            clusterModeEnabled
         );
         await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -302,7 +302,7 @@ async function main(
             (client) => {
                 (client as RedisClientType).disconnect();
             },
-            clusterModeEnabled,
+            clusterModeEnabled
         );
     }
 }
@@ -318,20 +318,20 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
         const clientCount: string[] = receivedOptions.clientCount;
         const lambda: (
             numOfClients: string,
-            concurrentTasks: string,
+            concurrentTasks: string
         ) => [number, number, number] = (
             numOfClients: string,
-            concurrentTasks: string,
+            concurrentTasks: string
         ) => [parseInt(concurrentTasks), dataSize, parseInt(numOfClients)];
         const product: [number, number, number][] = concurrentTasks
             .flatMap((concurrentTasks: string) =>
                 clientCount.map((clientCount) =>
-                    lambda(clientCount, concurrentTasks),
-                ),
+                    lambda(clientCount, concurrentTasks)
+                )
             )
             .filter(
                 ([concurrentTasks, , clientCount]) =>
-                    clientCount <= concurrentTasks,
+                    clientCount <= concurrentTasks
             );
 
         for (const [concurrentTasks, dataSize, clientCount] of product) {
@@ -347,7 +347,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                 clientCount,
                 receivedOptions.tls,
                 receivedOptions.clusterModeEnabled,
-                receivedOptions.port,
+                receivedOptions.port
             );
         }
 
