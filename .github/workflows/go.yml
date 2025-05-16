@@ -46,7 +46,7 @@ on:
             rc-name:
                 required: false
                 type: string
-                description: "(Required for RC testing) Version name (vX.Y.Z-rcN)"
+                description: "(Required for RC) Version number (Format: vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string
@@ -128,8 +128,9 @@ jobs:
 
             - name: Install & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-testing == 'true' }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools
                   make -k integ-test
                   make -k pubsub-test
@@ -222,8 +223,9 @@ jobs:
 
             - name: Install & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-testing == 'true' }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools
                   make -k integ-test
                   make -k pubsub-test
@@ -272,8 +274,9 @@ jobs:
 
             - name: test
               working-directory: ./go
+              if: ${{ github.event.inputs.rc-testing == 'true' }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
@@ -331,8 +334,9 @@ jobs:
 
             - name: Install & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-testing == 'true' }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools
                   make -k long-timeout-test test-filter=TestLongTimeout
 
