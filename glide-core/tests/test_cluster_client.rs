@@ -10,12 +10,18 @@ mod cluster_client_tests {
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
     use glide_core::client::Client;
     use glide_core::connection_request::{
-        self, OpenTelemetryConfig, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
+        self,
+        ConnectionRequest,
+        OpenTelemetryConfig,
+        ProtocolVersion,
+        PubSubChannelsOrPatterns,
+        PubSubSubscriptions,
+        ReadFrom,
     };
-    use redis::InfoDict;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
+    use redis::{InfoDict, Value};
     use rstest::rstest;
     use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
@@ -344,7 +350,7 @@ mod cluster_client_tests {
     }
 
     // Helper function to get client count on shared cluster primaries using AllMasters routing
-    async fn get_total_clients_on_shared_cluster_primaries(client: &mut GlideClient) -> usize {
+    async fn get_total_clients_on_shared_cluster_primaries(client: &mut Client) -> usize {
         let mut cmd = redis::Cmd::new();
         cmd.arg("CLIENT").arg("LIST");
 
