@@ -161,47 +161,22 @@ tasks.withType(Test) {
 
 // JaCoCo section (code coverage by integration tests)
 jacocoTestReport {
-    reports {
-        xml.configure { enabled false }
-        csv.configure { enabled false }
-        html.configure { enabled true } 
-    }
-
     sourceDirectories.setFrom(files("${project.rootDir}/client/src/main/java"))
     classDirectories.setFrom(files("$buildDir/classes"))
     executionData.setFrom(
         files("$buildDir/jacoco/test.exec"),
         files("$buildDir/jacoco/pubsubTest.exec")
     )
-    
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
-    }
-    
 }
 jacocoTestCoverageVerification {
     violationRules {
         rule {
             element = 'CLASS'
             excludes = [
-                'glide.models.protobuf.*'
+                'glide.models.protobuf.*',
+                'glide.com.google.'
             ]
-            limit {
-                counter = 'LINE'
-                // minimum = 1.0 // TODO: Add more tests to satisfy this
-            }
-            limit {
-                counter = 'BRANCH'
-                // minimum = 1.0 // TODO: Add more tests to satisfy this
-            }
         }
-    }
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
     }
 }
 // End of JaCoCo section

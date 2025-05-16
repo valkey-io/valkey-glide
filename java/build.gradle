@@ -14,42 +14,16 @@ allprojects {
         toolVersion = "0.8.9"
     }
 
-    jacocoTestReport {
-        reports {
-            xml.configure { enabled false }
-            csv.configure { enabled false }
-            html.configure { enabled true } 
-        }
-
-        afterEvaluate {
-            classDirectories.setFrom(files(classDirectories.files.collect {
-                fileTree(dir: it)
-            }))
-        }
-    }
-
     jacocoTestCoverageVerification {
         violationRules {
             rule {
                 element = 'CLASS'
                 excludes = [
                     'glide.models.protobuf.*',
-                    'io.netty.*'
+                    'glide.connectors.resources.*',
+                    'glide.connectors.handlers.*'
                 ]
-                limit {
-                    counter = 'LINE'
-                    // minimum = 1.0 // TODO: Add more tests to satisfy this
-                }
-                limit {
-                    counter = 'BRANCH'
-                    // minimum = 1.0 // TODO: Add more tests to satisfy this
-                }
             }
-        }
-        afterEvaluate {
-            classDirectories.setFrom(files(classDirectories.files.collect {
-                fileTree(dir: it)
-            }))
         }
     }
 
