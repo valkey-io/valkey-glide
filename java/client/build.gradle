@@ -250,6 +250,8 @@ tasks.withType(Test) {
     }
     // This is needed for the FFI tests
     jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
 
 jar {
