@@ -303,6 +303,14 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -353,7 +361,19 @@ func (client *baseClient) executeCommandWithRoute(
 	)
 	client.mu.Unlock()
 
-	payload := <-resultChannel
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		return nil, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
 
 	client.mu.Lock()
 	if client.pending != nil {
@@ -388,6 +408,14 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	password string,
 	immediateAuth bool,
 ) (string, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return DefaultStringResponse, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -411,8 +439,19 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	)
 	client.mu.Unlock()
 
-	// Wait for response
-	payload := <-resultChannel
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		return DefaultStringResponse, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
 
 	client.mu.Lock()
 	if client.pending != nil {
