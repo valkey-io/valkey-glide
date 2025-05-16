@@ -69,7 +69,7 @@ pub unsafe extern "C-unwind" fn store_script(
 ///
 /// * `hash` must be a valid null-terminated C string created by [`store_script`].
 #[no_mangle]
-pub unsafe extern "C-unwind" fn drop_script(hash: *mut ScriptHash) {
+pub unsafe extern "C-unwind" fn drop_script(hash: *mut c_char) {
     let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
     scripts_container::remove_script(hash_str);
 }
