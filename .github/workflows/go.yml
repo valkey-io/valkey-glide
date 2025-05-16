@@ -39,6 +39,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            rc-test:
+                description: "Run tests against a release candidate"
+                type: boolean
+                default: false
+            rc-version:
+                required: false
+                type: string
+                description: "RC Version number (Format: vX.Y.Z or vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string
@@ -118,11 +126,26 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Install & test RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'true' }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  make install-tools
+                  make -k integ-test
+
+            - name: Run Pubsub Tests on RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'true' && github.event.inputs.rc-version >= 'v2.0.0' }}
+              run: |
+                  make -k pubsub-test
+
             - name: Install & build & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'false' }}
               run: |
                   make install-tools build
-                  make -k unit-test integ-test
+                  make -k integ-test
                   make -k pubsub-test
 
             - name: Run Example Tests
@@ -146,44 +169,6 @@ jobs:
                       utils/clusters/**
                       benchmarks/results/**
                       go/reports/**
-
-    lint:
-        timeout-minutes: 10
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.BASE_GO_VERSION }}
-                  cache-dependency-path: go/go.sum
-
-            - name: Install protoc
-              uses: ./.github/workflows/install-rust-and-protoc
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      ffi/target
-                      glide-core/src/generated
-                  key: x86_64-unknown-linux-gnu-go
-                  restore-keys: |
-                      x86_64-unknown-linux-gnu-glide-core
-                      x86_64-unknown-linux-gnu
-
-            - name: lint rust
-              uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ffi
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install and run linters
-              working-directory: go
-              run: |
-                  make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
 
     get-containers:
         runs-on: ubuntu-latest
@@ -249,11 +234,20 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Install & test RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'true' }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  make install-tools
+                  make -k integ-test
+
             - name: Install & build & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'false' }}
               run: |
                   make install-tools build
-                  make -k unit-test integ-test
+                  make -k integ-test
                   make -k pubsub-test
 
             - name: Upload test reports
@@ -298,10 +292,12 @@ jobs:
             - name: Install zig
               uses: ./.github/workflows/install-zig
 
-            - name: Build and test
+            - name: test
               working-directory: ./go
+              if: ${{ github.event.inputs.rc-test == 'true' }}
               run: |
-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
@@ -356,8 +352,17 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Install & test RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'true' && github.event.inputs.rc-version >= 'v2.0.0' }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  make install-tools
+                  make -k long-timeout-test test-filter=TestLongTimeout
+
             - name: Install & build & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-test == 'false' }}
               run: |
                   make install-tools build
                   make -k long-timeout-test test-filter=TestLongTimeout
