@@ -174,7 +174,8 @@ jacocoTestCoverageVerification {
             element = 'CLASS'
             excludes = [
                 'glide.models.protobuf.*',
-                'glide.com.google.'
+                'glide.com.google.*', // shadowed protobuf
+                'glide.io.netty.*' // shadowed netty
             ]
         }
     }
