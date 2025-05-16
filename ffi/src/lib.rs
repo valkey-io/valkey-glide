@@ -16,13 +16,12 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{ErrorKind, ObjectType};
 use redis::ScanStateRC;
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, RedisResult, Value};
+use redis::{ErrorKind, ObjectType};
 use std::ffi::CStr;
 use std::future::Future;
-use std::ptr::null;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -51,7 +50,10 @@ use tokio::runtime::Runtime;
 /// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
 /// * The returned C string must be freed by the caller.
 #[no_mangle]
-pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize) -> *mut c_char {
+pub unsafe extern "C-unwind" fn store_script(
+    script_bytes: *const u8,
+    script_len: usize,
+) -> *mut c_char {
     let script = unsafe { std::slice::from_raw_parts(script_bytes, script_len) };
     let hash = scripts_container::add_script(script);
     CString::new(hash).unwrap().into_raw()
@@ -67,7 +69,7 @@ pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize
 ///
 /// * `hash` must be a valid null-terminated C string created by [`store_script`].
 #[no_mangle]
-pub unsafe extern "C" fn drop_script(hash: *const c_char) {
+pub unsafe extern "C-unwind" fn drop_script(hash: *mut ScriptHash) {
     let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
     scripts_container::remove_script(hash_str);
 }
@@ -152,7 +154,7 @@ pub enum ResponseType {
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `message` is the value returned by the command. The 'message' is managed by Rust and is freed when the callback returns control back to the caller.
 pub type SuccessCallback =
-    unsafe extern "C" fn(index_ptr: usize, message: *const CommandResponse) -> ();
+    unsafe extern "C-unwind" fn(index_ptr: usize, message: *const CommandResponse) -> ();
 
 /// Failure callback that is called when a command fails.
 ///
@@ -161,7 +163,7 @@ pub type SuccessCallback =
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `error_message` is the error message returned by server for the failed command. The 'error_message' is managed by Rust and is freed when the callback returns control back to the caller.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
-pub type FailureCallback = unsafe extern "C" fn(
+pub type FailureCallback = unsafe extern "C-unwind" fn(
     index_ptr: usize,
     error_message: *const c_char,
     error_type: RequestErrorType,
@@ -186,7 +188,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 /// The pointers are only valid during the callback execution and will be freed
 /// automatically when the callback returns. Any data needed beyond the callback's
 /// execution must be copied.
-pub type PubSubCallback = unsafe extern "C" fn(
+pub type PubSubCallback = unsafe extern "C-unwind" fn(
     client_ptr: usize,
     kind: PushKind,
     message: *const u8,
@@ -249,7 +251,6 @@ pub struct CommandError {
 ///
 /// The caller must check which field is non-null before accessing its contents.
 /// Only one of the two fields (`response` or `command_error`) will be set.
-///
 #[repr(C)]
 pub struct CommandResult {
     pub response: *mut CommandResponse,
@@ -274,7 +275,7 @@ pub struct CommandResult {
 /// * If `command_error.command_error_message` is non-null, it must be a valid pointer obtained from Rust
 ///   and must outlive the `CommandError` itself.
 #[no_mangle]
-pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandResult) {
+pub unsafe extern "C-unwind" fn free_command_result(command_result_ptr: *mut CommandResult) {
     if command_result_ptr.is_null() {
         return;
     }
@@ -329,6 +330,7 @@ impl ClientAdapter {
     ///
     /// For async clients, spawns the future and returns null immediately.
     /// For sync clients, blocks on the future and returns a `CommandResult`.
+    #[must_use]
     fn execute_command<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
@@ -341,7 +343,7 @@ impl ClientAdapter {
                 // Spawn the request for async client
                 self.runtime.spawn(async move {
                     let result = request_future.await;
-                    Self::handle_result(
+                    let _ = Self::handle_result(
                         result,
                         Some(success_callback),
                         Some(failure_callback),
@@ -362,6 +364,7 @@ impl ClientAdapter {
     ///
     /// For async clients, invokes the appropriate callback and returns null.
     /// For sync clients, returns a `CommandResult`.
+    #[must_use]
     fn handle_result(
         result: RedisResult<Value>,
         success_callback: Option<SuccessCallback>,
@@ -415,6 +418,7 @@ impl ClientAdapter {
     /// # Returns
     /// - For async clients: Returns a null pointer after invoking the failure callback.
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
+    #[must_use]
     fn handle_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
         match self.core.client_type {
             ClientType::AsyncClient {
@@ -625,7 +629,7 @@ fn create_client_internal(
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 // TODO: Consider making this async
 #[no_mangle]
-pub unsafe extern "C" fn create_client(
+pub unsafe extern "C-unwind" fn create_client(
     connection_request_bytes: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
@@ -665,7 +669,7 @@ pub unsafe extern "C" fn create_client(
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
 #[no_mangle]
-pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
+pub unsafe extern "C-unwind" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
     unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
@@ -687,7 +691,7 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
 /// * The contained `connection_error_message` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * The contained `connection_error_message` must be valid until `free_connection_response` is called and it must outlive the `ConnectionResponse` that contains it.
 #[no_mangle]
-pub unsafe extern "C" fn free_connection_response(
+pub unsafe extern "C-unwind" fn free_connection_response(
     connection_response_ptr: *mut ConnectionResponse,
 ) {
     assert!(!connection_response_ptr.is_null());
@@ -703,7 +707,7 @@ pub unsafe extern "C" fn free_connection_response(
 ///
 /// Important: the returned pointer is a pointer to a constant string and should not be freed.
 #[no_mangle]
-pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
+pub extern "C-unwind" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
     let c_str = match response_type {
         ResponseType::Null => c"Null",
         ResponseType::Int => c"Int",
@@ -728,10 +732,10 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
 /// * `command_response_ptr` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * `command_response_ptr` must be valid until `free_command_response` is called.
 #[no_mangle]
-pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
+pub unsafe extern "C-unwind" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
         let command_response = unsafe { Box::from_raw(command_response_ptr) };
-        free_command_response_elements(*command_response);
+        free_command_response_elements(unsafe { *command_response });
     }
 }
 
@@ -796,7 +800,7 @@ fn free_command_response_elements(command_response: CommandResponse) {
 /// `free_error_message` can only be called once per `error_message`. Calling it twice is undefined
 /// behavior, since the address will be freed twice.
 #[no_mangle]
-pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
+pub unsafe extern "C-unwind" fn free_error_message(error_message: *mut c_char) {
     assert!(!error_message.is_null());
     drop(unsafe { CString::from_raw(error_message as *mut c_char) });
 }
@@ -831,7 +835,6 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
     (vec_ptr, len)
 }
 
-/// TODO: Avoid the use of expect and unwrap in the code and add a common error handling mechanism.
 fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse> {
     let mut command_response = CommandResponse::default();
     let result: RedisResult<CommandResponse> = match value {
@@ -879,52 +882,50 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             Ok(command_response)
         }
         Value::Array(array) => {
-            let vec: Vec<CommandResponse> = array
+            let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(|v| {
-                    valkey_value_to_command_response(v)
-                        .expect("Value couldn't be converted to CommandResponse")
-                })
+                .map(|v| valkey_value_to_command_response(v))
                 .collect();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
             command_response.response_type = ResponseType::Array;
             Ok(command_response)
         }
         Value::Map(map) => {
-            let result: Vec<CommandResponse> = map
+            let result: Result<Vec<CommandResponse>, RedisError> = map
                 .into_iter()
                 .map(|(key, val)| {
                     let mut map_response = CommandResponse::default();
 
-                    let map_key = valkey_value_to_command_response(key)
-                        .expect("Value couldn't be converted to CommandResponse");
+                    let map_key = match valkey_value_to_command_response(key) {
+                        Ok(map_key) => map_key,
+                        Err(err) => return Err(err),
+                    };
                     map_response.map_key = Box::into_raw(Box::new(map_key));
 
-                    let map_val = valkey_value_to_command_response(val)
-                        .expect("Value couldn't be converted to CommandResponse");
+                    let map_val = match valkey_value_to_command_response(val) {
+                        Ok(map_val) => map_val,
+                        Err(err) => return Err(err),
+                    };
                     map_response.map_value = Box::into_raw(Box::new(map_val));
 
-                    map_response
+                    Ok(map_response)
                 })
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<CommandResponse>, RedisError>>();
 
-            let (vec_ptr, len) = convert_vec_to_pointer(result);
+            let (vec_ptr, len) = convert_vec_to_pointer(result?);
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
             command_response.response_type = ResponseType::Map;
             Ok(command_response)
         }
         Value::Set(array) => {
-            let vec: Vec<CommandResponse> = array
+            let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(|v| {
-                    valkey_value_to_command_response(v)
-                        .expect("Value couldn't be converted to CommandResponse")
-                })
+                .map(|v| valkey_value_to_command_response(v))
                 .collect();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.sets_value = vec_ptr;
             command_response.sets_value_len = len;
             command_response.response_type = ResponseType::Sets;
@@ -953,7 +954,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
 /// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
-pub unsafe extern "C" fn command(
+pub unsafe extern "C-unwind" fn command(
     client_adapter_ptr: *const c_void,
     channel: usize,
     command_type: RequestType,
@@ -977,9 +978,13 @@ pub unsafe extern "C" fn command(
 
     // Create the command outside of the task to ensure that the command arguments passed
     // from "go" are still valid
-    let mut cmd = command_type
-        .get_command()
-        .expect("Couldn't fetch command type");
+    let mut cmd = match command_type.get_command() {
+        Some(cmd) => cmd,
+        None => {
+            let err = RedisError::from((ErrorKind::ClientError, "Couldn't fetch command type"));
+            return client_adapter.handle_error(err, channel);
+        }
+    };
     for command_arg in arg_vec {
         cmd.arg(command_arg);
     }
@@ -988,9 +993,13 @@ pub unsafe extern "C" fn command(
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
         match Routes::parse_from_bytes(r_bytes) {
             Ok(route) => route,
-            Err(err ) => {
-                let err = RedisError::from((ErrorKind::ParseError, "Decoding route failed", err.to_string()));
-                return ClientAdapter::handle_error(&client_adapter, err, channel);
+            Err(err) => {
+                let err = RedisError::from((
+                    ErrorKind::ClientError,
+                    "Decoding route failed",
+                    err.to_string(),
+                ));
+                return client_adapter.handle_error(err, channel);
             }
         }
     } else {
@@ -999,9 +1008,8 @@ pub unsafe extern "C" fn command(
 
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_command(channel, async move {
-        client
-            .send_command(&cmd, get_route(route, Some(&cmd)))
-            .await
+        let routing_info = get_route(route, Some(&cmd))?;
+        client.send_command(&cmd, routing_info).await
     })
 }
 
@@ -1064,9 +1072,12 @@ fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     (c_err_str, error_type)
 }
 
-fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
+fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
     use glide_core::command_request::routes::Value;
-    let route = route.value?;
+    let route = match route.value {
+        Some(route) => route,
+        None => return Ok(None),
+    };
     let get_response_policy = |cmd: Option<&Cmd>| {
         cmd.and_then(|cmd| {
             cmd.command()
@@ -1075,55 +1086,75 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
     };
     match route {
         Value::SimpleRoutes(simple_route) => {
-            let simple_route = simple_route.enum_value().unwrap();
+            let simple_route = match simple_route.enum_value() {
+                Ok(simple_route) => simple_route,
+                Err(value) => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "simple_route was not a valid enum variant",
+                        format!("Value: {}", value),
+                    )))
+                }
+            };
             match simple_route {
-                SimpleRoutes::AllNodes => Some(RoutingInfo::MultiNode((
+                SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode((
                     MultipleNodeRoutingInfo::AllNodes,
                     get_response_policy(cmd),
-                ))),
-                SimpleRoutes::AllPrimaries => Some(RoutingInfo::MultiNode((
+                )))),
+                SimpleRoutes::AllPrimaries => Ok(Some(RoutingInfo::MultiNode((
                     MultipleNodeRoutingInfo::AllMasters,
                     get_response_policy(cmd),
-                ))),
+                )))),
                 SimpleRoutes::Random => {
-                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                    Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
                 }
             }
         }
-        Value::SlotKeyRoute(slot_key_route) => Some(RoutingInfo::SingleNode(
+        Value::SlotKeyRoute(slot_key_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
                 redis::cluster_topology::get_slot(slot_key_route.slot_key.as_bytes()),
-                get_slot_addr(&slot_key_route.slot_type),
+                get_slot_addr(&slot_key_route.slot_type)?,
             )),
-        )),
-        Value::SlotIdRoute(slot_id_route) => Some(RoutingInfo::SingleNode(
+        ))),
+        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
                 slot_id_route.slot_id as u16,
-                get_slot_addr(&slot_id_route.slot_type),
+                get_slot_addr(&slot_id_route.slot_type)?,
             )),
-        )),
+        ))),
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
-            Ok(port) => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-                host: by_address_route.host.to_string(),
-                port,
-            })),
-            Err(_) => {
-                // TODO: Handle error propagation.
-                None
-            }
+            Ok(port) => Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::ByAddress {
+                    host: by_address_route.host.to_string(),
+                    port,
+                },
+            ))),
+            Err(_) => Err(RedisError::from((
+                ErrorKind::ClientError,
+                "by_address_route port could not be converted to u16.",
+                format!("Value: {}", by_address_route.port),
+            ))),
         },
-        _ => panic!("unknown route type"),
+        _ => Err(RedisError::from((
+            ErrorKind::ClientError,
+            "Unknown route type.",
+            format!("Value: {:?}", route),
+        ))),
     }
 }
 
-fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
-    slot_type
-        .enum_value()
-        .map(|slot_type| match slot_type {
-            SlotTypes::Primary => SlotAddr::Master,
-            SlotTypes::Replica => SlotAddr::ReplicaRequired,
-        })
-        .expect("Received unexpected slot id type")
+fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<SlotAddr> {
+    let slot_addr_result = slot_type.enum_value().map(|slot_type| match slot_type {
+        SlotTypes::Primary => SlotAddr::Master,
+        SlotTypes::Replica => SlotAddr::ReplicaRequired,
+    });
+    slot_addr_result.map_err(|_| {
+        RedisError::from((
+            ErrorKind::ClientError,
+            "Received unexpected slot id type",
+            format!("Value: {:?}", slot_type),
+        ))
+    })
 }
 
 // This struct is used to keep track of the cursor of a cluster scan.
@@ -1133,9 +1164,19 @@ pub struct ClusterScanCursor {
 }
 
 impl ClusterScanCursor {
+    /// Construct a new `ClusterScanCursor`.
+    ///
+    /// This smart constructor ensures that any valid `ClusterScanCursor` is a UTF-8 string.
+    /// This is necessary to enforce safety and avoid panicking in the `Drop` impl.
+    ///
+    /// # Safety
+    /// * Memory pointed to by `new_cursor` must contain a valid nul terminator at the end of the string.
+    /// * `new_cursor` must be valid for reads of bytes up to and including the nul terminator. This means in particular:
+    ///     * The entire memory range of this CStr must be contained within a single allocated object!
+    /// * The nul terminator must be within `isize::MAX` from `new_cursor`.
     #[no_mangle]
-    pub extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
-        if !new_cursor.is_null() {
+    pub unsafe extern "C-unwind" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
+        if !new_cursor.is_null() && unsafe { CStr::from_ptr(new_cursor) }.to_str().is_ok() {
             ClusterScanCursor { cursor: new_cursor }
         } else {
             ClusterScanCursor::default()
@@ -1157,6 +1198,9 @@ impl Default for ClusterScanCursor {
 }
 
 impl Drop for ClusterScanCursor {
+    // It is best practice to avoid panicking in Drop impls (https://doc.rust-lang.org/std/ops/trait.Drop.html#tymethod.drop)
+    // so we use a "smart constructor" to guarantee that a valid ClusterScanCursor
+    // is able to be safely dropped.
     fn drop(&mut self) {
         let c_str = unsafe { CStr::from_ptr(self.cursor) };
         let temp_str = c_str.to_str().expect("Must be UTF-8");
@@ -1182,7 +1226,7 @@ impl Drop for ClusterScanCursor {
 /// * `channel` must be valid until it is passed in a call to [`free_command_response`].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[no_mangle]
-pub unsafe extern "C" fn request_cluster_scan(
+pub unsafe extern "C-unwind" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
     channel: usize,
     cursor: ClusterScanCursor,
@@ -1196,32 +1240,79 @@ pub unsafe extern "C" fn request_cluster_scan(
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
-    let temp_str = c_str.to_str().expect("Must be UTF-8");
+    let temp_str = match c_str.to_str() {
+        Ok(temp_str) => temp_str,
+        Err(e) => return client_adapter.handle_error(RedisError::from(e), channel),
+    };
     let cursor_id = temp_str.to_string();
 
     let cluster_scan_args: ClusterScanArgs = if arg_count > 0 {
-        let arg_vec = unsafe {
-            convert_double_pointer_to_vec(args, arg_count, args_len)
-        };
+        let arg_vec = unsafe { convert_double_pointer_to_vec(args, arg_count, args_len) };
 
         let mut pattern: &[u8] = &[];
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
 
-        for i in 0..arg_count {
-            match arg_vec[i] {
-                b"MATCH" => pattern = arg_vec[i + 1],
-                b"TYPE" => object_type = arg_vec[i + 1],
-                b"COUNT" => count = arg_vec[i + 1],
-                _ => {}
+        debug_assert!(arg_count <= arg_vec.len(), "arg_count greater than arg_vec length. This is probably due to a bug in convert_double_pointer_to_vec.");
+
+        if arg_count < usize::MAX {
+            for i in 0..arg_count {
+                match arg_vec[i] {
+                    b"MATCH" => {
+                        pattern = match arg_vec.get(i + 1) {
+                            Some(pat) => pat,
+                            None => {
+                                let err = RedisError::from((
+                                    ErrorKind::ClientError,
+                                    "No argument following MATCH.",
+                                ));
+                                return client_adapter.handle_error(err, channel);
+                            }
+                        }
+                    }
+                    b"TYPE" => {
+                        object_type = match arg_vec.get(i + 1) {
+                            Some(obj_type) => obj_type,
+                            None => {
+                                let err = RedisError::from((
+                                    ErrorKind::ClientError,
+                                    "No argument following TYPE.",
+                                ));
+                                return client_adapter.handle_error(err, channel);
+                            }
+                        }
+                    }
+                    b"COUNT" => {
+                        count = match arg_vec.get(i + 1) {
+                            Some(count) => count,
+                            None => {
+                                let err = RedisError::from((
+                                    ErrorKind::ClientError,
+                                    "No argument following COUNT.",
+                                ));
+                                return client_adapter.handle_error(err, channel);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
             }
+        } else {
+            let err =
+                RedisError::from((ErrorKind::ClientError, "Maximum argument count exceeded."));
+            return client_adapter.handle_error(RedisError::from(err), channel);
         }
 
         // Convert back to proper types
         let converted_count = match str::from_utf8(count) {
             Ok(v) => {
                 if !count.is_empty() {
-                    str::parse::<u32>(v).unwrap()
+                    match str::parse::<u32>(v) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            return client_adapter.handle_error(RedisError::from(e), channel);
+                        }
+                    }
                 } else {
                     10 // default count value
                 }
@@ -1281,7 +1372,7 @@ pub unsafe extern "C" fn request_cluster_scan(
 /// * `channel` must be valid until it is passed in a call to [`free_command_response`].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[no_mangle]
-pub unsafe extern "C" fn update_connection_password(
+pub unsafe extern "C-unwind" fn update_connection_password(
     client_adapter_ptr: *const c_void,
     channel: usize,
     password: *const c_char,
@@ -1294,7 +1385,12 @@ pub unsafe extern "C" fn update_connection_password(
     };
 
     // argument conversion to be used in the async block
-    let password = unsafe { CStr::from_ptr(password).to_str().unwrap() };
+    let password = match unsafe { CStr::from_ptr(password).to_str() } {
+        Ok(password) => password,
+        Err(e) => {
+            return client_adapter.handle_error(RedisError::from(e), channel);
+        }
+    };
     let password_option = if password.is_empty() {
         None
     } else {
@@ -1343,7 +1439,7 @@ pub unsafe extern "C" fn update_connection_password(
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
 /// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[no_mangle]
-pub unsafe extern "C" fn invoke_script(
+pub unsafe extern "C-unwind" fn invoke_script(
     client_adapter_ptr: *const c_void,
     channel: usize,
     hash: *const c_char,
@@ -1363,7 +1459,12 @@ pub unsafe extern "C" fn invoke_script(
     };
 
     // Convert hash to Rust string
-    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
+    let hash_str = match unsafe { CStr::from_ptr(hash).to_str() } {
+        Ok(hash) => hash,
+        Err(e) => {
+            return client_adapter.handle_error(RedisError::from(e), channel);
+        }
+    };
 
     // Convert keys to Vec<&[u8]>
     let keys_vec: Vec<&[u8]> = if !keys.is_null() && !keys_len.is_null() && keys_count > 0 {
@@ -1384,9 +1485,13 @@ pub unsafe extern "C" fn invoke_script(
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
         match Routes::parse_from_bytes(r_bytes) {
             Ok(route) => route,
-            Err(err ) => {
-                let err = RedisError::from((ErrorKind::ParseError, "Decoding route failed", err.to_string()));
-                return ClientAdapter::handle_error(&client_adapter, err, channel);
+            Err(err) => {
+                let err = RedisError::from((
+                    ErrorKind::ClientError,
+                    "Decoding route failed",
+                    err.to_string(),
+                ));
+                return client_adapter.handle_error(err, channel);
             }
         }
     } else {
@@ -1395,8 +1500,9 @@ pub unsafe extern "C" fn invoke_script(
 
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_command(channel, async move {
+        let routing_info = get_route(route, None)?;
         client
-            .invoke_script(hash_str, &keys_vec, &args_vec, get_route(route, None))
+            .invoke_script(hash_str, &keys_vec, &args_vec, routing_info)
             .await
     })
 }
