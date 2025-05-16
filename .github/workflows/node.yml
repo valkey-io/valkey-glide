@@ -241,6 +241,7 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               run: |
+                  export PATH="$HOME/.cargo/bin:$PATH"
                   npm run build
                   npm run test
 
@@ -290,6 +291,7 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               run: |
+                  export PATH="$HOME/.cargo/bin:$PATH"
                   npm run build
                   npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
 
