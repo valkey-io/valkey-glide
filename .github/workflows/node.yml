@@ -203,16 +203,15 @@ jobs:
             - name: Install git and required tools
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
-                    yum install -y git tar curl
+                    yum install -y git tar
+                    yum install -y --allowerasing curl
                     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
-                    source $HOME/.cargo/env
+                    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
                     apk update
                     apk add git bash tar curl
                     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
-                    source $HOME/.cargo/env
+                    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   fi
 
             - name: Create directory structure if needed
