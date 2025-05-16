@@ -1908,14 +1908,14 @@ func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
-func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWriteWithoutRoute() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKillNoWrite(false)
 }
 
-func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWriteWithRoute() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
@@ -2034,7 +2034,7 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	}
 }
 
-func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillKeyBasedWriteFunction() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
