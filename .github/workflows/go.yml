@@ -39,6 +39,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            rc-testing:
+                description: "Run tests against a release candidate"
+                type: boolean
+                default: false
+            rc-name:
+                required: false
+                type: string
+                description: "(Required for RC testing) Version name (vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string

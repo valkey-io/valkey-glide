@@ -42,11 +42,13 @@ if [ "$os" = "Linux" ]; then
         # Linux
         sed -i -e 's|module github.com/valkey-io/valkey-glide/go|module github.com/valkey-io/valkey-glide/go-test-rc|' go.mod
         sed -i -e '/github.com\/stretchr\/testify/a\\tgithub.com/valkey-io/valkey-glide/go '"$VERSION"'' go.mod
+        sed -i -e 's|"redis-server",|CLI_COMMAND,|g' ../utils/cluster_manager.py # TEMPORARY FIX
 else
         # MacOS
         sed -i '' -e 's|module github.com/valkey-io/valkey-glide/go|module github.com/valkey-io/valkey-glide/go-test-rc|' go.mod
         sed -i '' -e '/github.com\/stretchr\/testify/ a\
         github.com\/valkey-io\/valkey-glide\/go '"$VERSION"'' go.mod
+        sed -i '' -e 's|"redis-server",|CLI_COMMAND,|g' ../utils/cluster_manager.py # TEMPORARY FIX
 fi
 
 echo "go.mod has been updated"
