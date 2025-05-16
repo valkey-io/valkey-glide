@@ -207,7 +207,7 @@ jobs:
                   apk add git
 
             - name: Setup access to self-hosted runner
-              run: chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: chown -R $(id -u):$(id -g) /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: Checkout code
               uses: actions/checkout@v4
@@ -265,7 +265,7 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              run: chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: chown -R $(id -u):$(id -g) /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
 
