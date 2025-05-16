@@ -1,0 +1,47 @@
+{
+    "name": "@valkey/valkey-glide-linux-x64-gnu",
+    "version": "$RELEASE_VERSION",
+    "description": "Native bindings for valkey-glide on linux-x64-gnu",
+    "bin": "glide-rs.linux-x64-gnu.node",
+    "main": "glide-rs.linux-x64-gnu.node",
+    "files": [
+        "glide-rs.linux-x64-gnu.node"
+    ],
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "glibc"
+    ],
+    "license": "Apache-2.0",
+    "licenses": [
+        {
+            "type": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+        }
+    ],
+    "keywords": [
+        "valkey",
+        "redis",
+        "client",
+        "driver",
+        "database",
+        "napi",
+        "typescript",
+        "rust",
+        "cross-platform",
+        "cluster",
+        "standalone",
+        "high-availability",
+        "performance",
+        "open-source",
+        "fault-tolerant",
+        "distributed",
+        "scalable",
+        "resilient",
+        "valkey-glide"
+    ]
+}
