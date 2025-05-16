@@ -183,7 +183,7 @@ pub(super) fn get_connection_info(
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
     Cluster { client: ClusterConnection },
-    Lazy(LazyClient),
+    Lazy(Box<LazyClient>),
 }
 
 /// A client wrapper that defers connection until the first command is executed.
@@ -1140,10 +1140,10 @@ impl Client {
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.lazy_connect {
-                ClientWrapper::Lazy(LazyClient {
+                ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
-                })
+                }))
             } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
                     .await
