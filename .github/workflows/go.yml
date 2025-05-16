@@ -118,10 +118,11 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Install & build & test
+            - name: Install & test
               working-directory: go
               run: |
-                  make install-tools build
+                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  make install-tools
                   make -k unit-test integ-test
                   make -k pubsub-test
 
@@ -249,10 +250,11 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Install & build & test
+            - name: Install & test
               working-directory: go
               run: |
-                  make install-tools build
+                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  make install-tools
                   make -k unit-test integ-test
                   make -k pubsub-test
 
@@ -298,10 +300,11 @@ jobs:
             - name: Install zig
               uses: ./.github/workflows/install-zig
 
-            - name: Build and test
+            - name: test
               working-directory: ./go
               run: |
-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
@@ -356,10 +359,11 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Install & build & test
+            - name: Install & test
               working-directory: go
               run: |
-                  make install-tools build
+                  ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  make install-tools
                   make -k long-timeout-test test-filter=TestLongTimeout
 
             - name: Upload logs and reports
