@@ -163,4 +163,20 @@ public interface IGenericCommands
     /// <param name="options">A <see cref="BatchOptions" /> object containing execution options.</param>
     /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
     Task<object?[]?> Exec(Batch batch, bool raiseOnError, BatchOptions options);
+
+    /// <summary>
+    /// Removes one or more keys. Returns the number of keys deleted.
+    /// </summary>
+    Task<long> Del(params GlideString[] keys);
+
+    /// <summary>
+    /// Copies the value at the source key to the destination key.
+    /// </summary>
+    /// <param name="source">The source key</param>
+    /// <param name="destination">The destination key</param>
+    /// <param name="destinationDb">Optional DB index for destination</param>
+    /// <param name="replace">If true, overwrite the destination if it exists</param>
+    Task<long> Copy(GlideString source, GlideString destination, int? destinationDb = null, bool replace = false);
 }
+
+
