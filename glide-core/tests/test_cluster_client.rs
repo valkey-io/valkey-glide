@@ -10,7 +10,7 @@ mod cluster_client_tests {
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
     use glide_core::client::Client;
     use glide_core::connection_request::{
-        self, ConnectionRequest, OpenTelemetryConfig, ProtocolVersion, PubSubChannelsOrPatterns,
+        self, OpenTelemetryConfig, ProtocolVersion, PubSubChannelsOrPatterns,
         PubSubSubscriptions, ReadFrom,
     };
     use redis::cluster_routing::{
