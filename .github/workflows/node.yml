@@ -200,11 +200,20 @@ jobs:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
-            - name: Install git
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+            - name: Install git and required tools
               run: |
-                  apk update
-                  apk add git bash tar
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    yum install -y git tar curl
+                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                    echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+                    source $HOME/.cargo/env
+                  elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
+                    apk update
+                    apk add git bash tar curl
+                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                    echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+                    source $HOME/.cargo/env
+                  fi
 
             - name: Create directory structure if needed
               run: mkdir -p $GITHUB_WORKSPACE
@@ -216,14 +225,6 @@ jobs:
 
             - name: Set permissions after checkout
               run: chown -R $(id -u):$(id -g) $GITHUB_WORKSPACE
-
-            - name: Install shared dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
 
             - name: Setup Node
               uses: actions/setup-node@v4
