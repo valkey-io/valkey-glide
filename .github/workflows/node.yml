@@ -206,13 +206,16 @@ jobs:
                   apk update
                   apk add git
 
-            - name: Setup access to self-hosted runner
-              run: chown -R $(id -u):$(id -g) /home/ubuntu/actions-runner/_work/valkey-glide
+            - name: Create directory structure if needed
+              run: mkdir -p $GITHUB_WORKSPACE
 
             - name: Checkout code
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+
+            - name: Set permissions after checkout
+              run: chown -R $(id -u):$(id -g) $GITHUB_WORKSPACE
 
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies
