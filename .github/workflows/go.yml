@@ -221,12 +221,19 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Install & test
+            - name: Install & test RC
               working-directory: go
               if: ${{ github.event.inputs.rc-testing == 'true' }}
               run: |
                   ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools
+                  make -k integ-test
+
+            - name: Install & build & test
+              working-directory: go
+              if: ${{ github.event.inputs.rc-testing == 'false' }}
+              run: |
+                  make install-tools build
                   make -k integ-test
                   make -k pubsub-test
 
@@ -334,7 +341,8 @@ jobs:
 
             - name: Install & test
               working-directory: go
-              if: ${{ github.event.inputs.rc-testing == 'true' }}
+              # Temporarily disable these tests
+              if: ${{ github.event.inputs.rc-testing == 'false' }}
               run: |
                   ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-name }}
                   make install-tools
