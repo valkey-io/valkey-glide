@@ -204,7 +204,7 @@ jobs:
                   cp -r *.node $target_dir/
                   cp -r ../README.md $target_dir/
                   cp -r ../../LICENSE $target_dir/
-                  
+
                   # List the contents of the target directory
                   echo "Contents of target directory:"
                   tree ../npm/
