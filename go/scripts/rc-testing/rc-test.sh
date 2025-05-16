@@ -27,7 +27,7 @@ if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+-rc[0-9]+$ ]]; then
 
     # Checkout release branch
     echo "Checking out $BRANCH branch..."
-    git checkout $BRANCH
+    # git checkout $BRANCH
 else
     echo "Error: Failed to extract version components"
     exit 1
