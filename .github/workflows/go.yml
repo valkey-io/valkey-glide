@@ -122,6 +122,8 @@ jobs:
               working-directory: go
               run: |
                   ./scripts/rc-testing/rc-test.sh v1.3.4-rc2
+                  which valkey-cli
+                  which redis-cli
                   make install-tools
                   make -k unit-test integ-test
                   make -k pubsub-test
