@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- These are individual for each asset project -->
+    <DisplayRuntimeIdentifier>Linux64Musl</DisplayRuntimeIdentifier>
+    <RuntimeIdentifier>linux-musl-x64</RuntimeIdentifier>
+    <Platform>x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RustTuple>x86_64-unknown-linux-musl</RustTuple>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+  <Import Project="$(MSBuildThisFileDirectory)../../props/assets.props"/>
+</Project>
