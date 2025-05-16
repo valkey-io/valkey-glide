@@ -1275,7 +1275,8 @@ public class BatchTests {
         batch.restore("key2", 0, "TEST".getBytes());
         results.add(Pair.of(Restore, buildArgs("key2", "0", "TEST")));
 
-        batch.restore("key3", 0, "TEST".getBytes(), RestoreOptions.builder().replace().idletime(100L).build());
+        batch.restore(
+                "key3", 0, "TEST".getBytes(), RestoreOptions.builder().replace().idletime(100L).build());
         results.add(Pair.of(Restore, buildArgs("key3", "0", "TEST", "REPLACE", "IDLETIME", "100")));
 
         batch.lcs("key1", "key2");

@@ -5286,7 +5286,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull RestoreOptions restoreOptions) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
-                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions.toArgs())));
+                buildCommand(
+                        Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions.toArgs())));
         return getThis();
     }
 

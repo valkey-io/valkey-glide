@@ -4782,10 +4782,9 @@ public abstract class BaseClient
             long ttl,
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
-        GlideString[] arguments = concatenateArrays(
-            new GlideString[] {key, gs(Long.toString(ttl)), gs(value)},
-            restoreOptions.toArgs()
-        );
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key, gs(Long.toString(ttl)), gs(value)}, restoreOptions.toArgs());
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 
