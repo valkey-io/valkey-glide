@@ -490,6 +490,14 @@ func (client *GlideClusterClient) clusterScan(
 	cursor *options.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -532,7 +540,19 @@ func (client *GlideClusterClient) clusterScan(
 	)
 	client.mu.Unlock()
 
-	payload := <-resultChannel
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		return nil, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
 
 	client.mu.Lock()
 	if client.pending != nil {
