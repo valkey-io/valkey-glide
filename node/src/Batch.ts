@@ -272,7 +272,7 @@ import {
     createZUnion,
     createZUnionStore,
 } from "./Commands";
-import { command_request } from "./ProtobufMessage";
+import { command_request } from "../build-ts/ProtobufMessage";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
