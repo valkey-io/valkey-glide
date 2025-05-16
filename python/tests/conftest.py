@@ -323,7 +323,7 @@ async def glide_client(
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
     client = await create_client(
-        request, cluster_mode, protocol=protocol, request_timeout=5000
+        request, cluster_mode, protocol=protocol, request_timeout=5000, lazy_connect=False # Explicitly false for general test client
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -367,7 +367,7 @@ async def management_client(
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
-    client = await create_client(request, cluster_mode, protocol=protocol)
+    client = await create_client(request, cluster_mode, protocol=protocol, lazy_connect=False)
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
@@ -397,6 +397,7 @@ async def acl_glide_client(
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
         request_timeout=2000,
+        lazy_connect=False,
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -426,6 +427,7 @@ async def create_client(
     valkey_cluster: Optional[ValkeyCluster] = None,
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     if use_tls is not None:
@@ -453,6 +455,7 @@ async def create_client(
             advanced_config=AdvancedGlideClusterClientConfiguration(
                 connection_timeout, tls_config=tls_adv_conf
             ),
+            lazy_connect=lazy_connect,
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -474,6 +477,7 @@ async def create_client(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             reconnect_strategy=reconnect_strategy,
+            lazy_connect=lazy_connect,
         )
         return await GlideClient.create(config)
 
