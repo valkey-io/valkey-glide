@@ -1,12 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import pytest
-import anyio
 from typing import Union, cast
+
+import anyio
+import pytest
 
 from glide.config import ProtocolVersion
 from glide.glide_client import GlideClient, GlideClusterClient
-
 from tests.conftest import create_client
 
 
