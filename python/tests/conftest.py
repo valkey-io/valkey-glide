@@ -296,7 +296,11 @@ async def glide_client(
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
     client = await create_client(
-        request, cluster_mode, protocol=protocol, request_timeout=5000, lazy_connect=False # Explicitly false for general test client
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,  # Explicitly false for general test client
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -310,7 +314,9 @@ async def management_client(
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
-    client = await create_client(request, cluster_mode, protocol=protocol, lazy_connect=False)
+    client = await create_client(
+        request, cluster_mode, protocol=protocol, lazy_connect=False
+    )
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
