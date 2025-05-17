@@ -118,9 +118,15 @@ jobs:
             # Install npm dependencies
             - name: Build and Test
               working-directory: ./node
+              env:
+                  NODE_OPTIONS: ${{ matrix.host.OS == 'macos' && '--max-old-space-size=4096' || '' }}
               run: |
                   npm run build
-                  npm test
+                  if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
+                    npm test -- --maxWorkers=2
+                  else
+                    npm test
+                  fi
 
             # Additional tests for specific configurations
             - name: Test hybrid node modules - commonjs
