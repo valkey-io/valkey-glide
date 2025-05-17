@@ -58,6 +58,8 @@ excluded_symbol_list = [
     "FtAggregateKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    # python/python/glide/opentelemetry.py:
+    "GlideSpan",  # ClassDef
 ]
 
 
