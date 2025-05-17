@@ -181,7 +181,7 @@ pub struct ConnectionResponse {
 /// # Safety
 ///
 /// The pointer `command_error_message` must remain valid and not be freed until after
-/// [`free_command_result`] or [`free_error_message`] is called.
+/// [`free_command_result`] is called.
 ///
 #[repr(C)]
 pub struct CommandError {
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
         if !command_result.command_error.is_null() {
             let command_error = Box::from_raw(command_result.command_error);
             if !command_error.command_error_message.is_null() {
-                free_error_message(command_error.command_error_message as *mut c_char);
+                _ = CString::from_raw(command_error.command_error_message as *mut c_char);
             }
         }
     }
@@ -400,6 +400,7 @@ impl ClientAdapter {
     fn send_async_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
         let (c_err_str, error_type) = to_c_error(err);
         unsafe { (failure_callback)(channel, c_err_str, error_type) };
+        _ = unsafe { CString::from_raw(c_err_str as *mut c_char) };
     }
 }
 
@@ -691,7 +692,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
 pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
         let command_response = unsafe { Box::from_raw(command_response_ptr) };
-        free_command_response_elements(*command_response);
+        unsafe { free_command_response_elements(*command_response) };
     }
 }
 
@@ -709,7 +710,7 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 /// * The contained `map_key` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 /// * The contained `map_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * The contained `map_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
-fn free_command_response_elements(command_response: CommandResponse) {
+unsafe fn free_command_response_elements(command_response: CommandResponse) {
     let string_value = command_response.string_value;
     let string_value_len = command_response.string_value_len;
     let array_value = command_response.array_value;
@@ -726,7 +727,7 @@ fn free_command_response_elements(command_response: CommandResponse) {
         let len = array_value_len as usize;
         let vec = unsafe { Vec::from_raw_parts(array_value, len, len) };
         for element in vec.into_iter() {
-            free_command_response_elements(element);
+            unsafe { free_command_response_elements(element) };
         }
     }
     if !map_key.is_null() {
@@ -739,26 +740,9 @@ fn free_command_response_elements(command_response: CommandResponse) {
         let len = sets_value_len as usize;
         let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
         for element in vec.into_iter() {
-            free_command_response_elements(element);
+            unsafe { free_command_response_elements(element) };
         }
     }
-}
-
-/// Frees the error_message received on a command failure.
-/// TODO: Add a test case to check for memory leak.
-///
-/// # Panics
-///
-/// This functions panics when called with a null `c_char` pointer.
-///
-/// # Safety
-///
-/// `free_error_message` can only be called once per `error_message`. Calling it twice is undefined
-/// behavior, since the address will be freed twice.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
-    assert!(!error_message.is_null());
-    drop(unsafe { CString::from_raw(error_message as *mut c_char) });
 }
 
 /// Converts a double pointer to a vec.
@@ -972,7 +956,7 @@ pub unsafe extern "C" fn command(
 /// - `err`: The `RedisError` to be converted into a `CommandError`.
 ///
 /// # Returns
-/// A raw pointer to a `CommandResult`. This must be freed using [`free_error_message`]
+/// A raw pointer to a `CommandResult`. This must be freed using [`free_command_result`]
 /// to avoid memory leaks.
 ///
 /// # Safety
@@ -1005,9 +989,6 @@ fn create_error_result(err: RedisError) -> *mut CommandResult {
 ///
 /// # Panics
 /// This function will panic if the error message cannot be converted into a `CString`.
-///
-/// # Safety
-/// The returned C string must be freed using [`free_error_message`].
 fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     let message = errors::error_message(&err);
     let error_type = errors::error_type(&err);
