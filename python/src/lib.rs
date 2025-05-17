@@ -127,6 +127,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
     m.add_function(wrap_pyfunction!(create_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
+    m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -407,6 +408,59 @@ pub fn drop_otel_span(span_ptr: usize) {
     unsafe {
         Arc::from_raw(span_ptr as *const GlideSpan);
     }
+}
+
+#[pyfunction]
+pub fn init_opentelemetry(config: &PyAny) -> PyResult<()> {
+    let traces_endpoint = config.getattr("traces_collector_endpoint").ok().and_then(|v| v.extract::<Option<String>>().ok()).flatten();
+    let metrics_endpoint = config.getattr("metrics_collector_endpoint").ok().and_then(|v| v.extract::<Option<String>>().ok()).flatten();
+    let flush_interval_ms = config.getattr("flush_interval_ms").ok().and_then(|v| v.extract::<Option<i64>>().ok()).flatten();
+    let sample_percentage = config.getattr("sample_percentage").ok().and_then(|v| v.extract::<Option<u32>>().ok()).flatten();
+    
+    // At least one of traces or metrics must be provided
+    if traces_endpoint.is_none() && metrics_endpoint.is_none() {
+        return Err(PyTypeError::new_err(
+            "At least one of traces_collector_endpoint or metrics_collector_endpoint must be provided for OpenTelemetry configuration."
+        ));
+    }
+
+    let mut config_builder = glide_core::GlideOpenTelemetryConfigBuilder::default();
+    
+    // Initialize OpenTelemetry traces exporter
+    if let Some(traces) = traces_endpoint {
+        let exporter = glide_core::GlideOpenTelemetrySignalsExporter::from_str(&traces)
+            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {}", e)))?;
+        config_builder = config_builder.with_trace_exporter(exporter, sample_percentage);
+    }
+
+    // Initialize OpenTelemetry metrics exporter
+    if let Some(metrics) = metrics_endpoint {
+        let exporter = glide_core::GlideOpenTelemetrySignalsExporter::from_str(&metrics)
+            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {}", e)))?;
+        config_builder = config_builder.with_metrics_exporter(exporter);
+    }
+
+    // Set flush interval if provided
+    if let Some(interval) = flush_interval_ms {
+        if interval <= 0 {
+            return Err(PyTypeError::new_err(
+                format!("InvalidInput: flushIntervalMs must be a positive integer (got: {})", interval)
+            ));
+        }
+        config_builder = config_builder.with_flush_interval(std::time::Duration::from_millis(interval as u64));
+    }
+
+    // Initialize OpenTelemetry
+    if let Err(e) = GlideOpenTelemetry::initialise(config_builder.build()) {
+        log(
+            Level::Error,
+            "OpenTelemetry".to_string(),
+            format!("Failed to initialize OpenTelemetry: {}", e),
+        );
+        return Err(PyTypeError::new_err(format!("Failed to initialize OpenTelemetry: {}", e)));
+    }
+
+    Ok(())
 }
 
 #[pyfunction]
