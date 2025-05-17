@@ -73,6 +73,7 @@
 * Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))
 * Python: Fix restore command([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
 * Go: Remove redundant implementations of echo([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
+* Java: Add toArgs() to restore batch command([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
 
 #### Breaking Changes
 
