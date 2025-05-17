@@ -102,7 +102,7 @@ jobs:
               shell: bash
               run: |
                   if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
+                    R_VERSION="0.1.0"
                   elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
@@ -125,7 +125,7 @@ jobs:
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i $SED_FOR_MACOS "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
                   # Log the edited Cargo.toml file
                   cat Cargo.toml
 
@@ -228,7 +228,7 @@ jobs:
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  sed -i "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
 
             - name: Build source distributions
               uses: PyO3/maturin-action@v1
