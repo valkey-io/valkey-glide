@@ -40,8 +40,8 @@ class TestLazyConnection:
         monitoring_client = None
         lazy_glide_client = None
         mode_str = "Cluster" if cluster_mode else "Standalone"
-        
-        clients_before_lazy_init = 0 
+
+        clients_before_lazy_init = 0
         clients_after_lazy_init = 0
 
         try:
@@ -88,13 +88,13 @@ class TestLazyConnection:
 
             # 5. Send the first command using the lazy client
             ping_response = await lazy_glide_client.ping()
-            
-            decoded_ping_response = "" # Initialize
+
+            decoded_ping_response = ""  # Initialize
             if isinstance(ping_response, bytes):
                 decoded_ping_response = ping_response.decode()
             elif isinstance(ping_response, dict):
                 decoded_ping_response = {
-                    k: v.decode() if isinstance(v, bytes) else v 
+                    k: v.decode() if isinstance(v, bytes) else v
                     for k, v in ping_response.items()
                 }
             else:
@@ -102,10 +102,14 @@ class TestLazyConnection:
 
             # Assert PING success for both modes
             if cluster_mode:
-                assert decoded_ping_response == "PONG" or (isinstance(decoded_ping_response, dict) and all(v == "PONG" for v in decoded_ping_response.values())), \
-                    f"PING response was not 'PONG' or a dict of 'PONG's: {ping_response}"
+                assert decoded_ping_response == "PONG" or (
+                    isinstance(decoded_ping_response, dict)
+                    and all(v == "PONG" for v in decoded_ping_response.values())
+                ), f"PING response was not 'PONG' or a dict of 'PONG's: {ping_response}"
             else:
-                assert decoded_ping_response == "PONG", f"PING response was not 'PONG': {ping_response}"
+                assert (
+                    decoded_ping_response == "PONG"
+                ), f"PING response was not 'PONG': {ping_response}"
 
             # 6. Check client count after the first command
             # In cluster mode, the client count is not reliable due to the nature of cluster connections.
