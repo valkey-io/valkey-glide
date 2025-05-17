@@ -324,7 +324,7 @@ jobs:
                       aarch64-unknown-linux-gnu
 
             - name: test
-              run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
+              run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
 
             - name: Upload test reports
