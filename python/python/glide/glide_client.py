@@ -411,18 +411,18 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        # Create span if OpenTelemetry is configured
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
         span = None
         if (
             hasattr(self.config, "advanced_config")
             and self.config.advanced_config
             and self.config.advanced_config.opentelemetry_config
         ):
-
-            from glide.opentelemetry import GlideSpan
-
-            command_name = RequestType.Name(request_type)
-            span = GlideSpan(command_name)
+            from glide.opentelemetry import OpenTelemetry
+            if OpenTelemetry.should_sample():
+                from glide.opentelemetry import GlideSpan
+                command_name = RequestType.Name(request_type)
+                span = GlideSpan(command_name)
 
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
@@ -467,19 +467,19 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        # Create span if OpenTelemetry is configured
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
         span = None
         if (
             hasattr(self.config, "advanced_config")
             and self.config.advanced_config
             and self.config.advanced_config.opentelemetry_config
         ):
-
-            from glide.opentelemetry import GlideSpan
-
-            span = GlideSpan(
-                "Batch"
-            )  # Use "Batch" as span name for transactions, matching Node.js binding
+            from glide.opentelemetry import OpenTelemetry
+            if OpenTelemetry.should_sample():
+                from glide.opentelemetry import GlideSpan
+                span = GlideSpan(
+                    "Batch"
+                )  # Use "Batch" as span name for transactions, matching Node.js binding
 
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()

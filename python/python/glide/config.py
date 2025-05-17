@@ -149,10 +149,12 @@ class PeriodicChecksStatus(Enum):
 
 class OpenTelemetryConfig:
     """
-    Represents the configuration for OpenTelemetry.
+    Configuration for OpenTelemetry integration in the Python client.
 
+    This class allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+    
     Attributes:
-        traces_collector_endpoint (str): The client collector address to export the traces measurements.
+        traces_collector_endpoint (Optional[str]): The endpoint for exporting trace data. If None, trace data will not be exported.
             Supported protocols:
             - HTTP: Use `http://` prefix (e.g., `http://localhost:4318`)
             - HTTPS: Use `https://` prefix (e.g., `https://collector.example.com:4318`)
@@ -166,37 +168,55 @@ class OpenTelemetryConfig:
             - The parent directory must already exist. If it does not, the client will fail to initialize.
             - If the target file already exists, new data will be appended to it.
 
-        metrics_collector_endpoint (str): The client collector address to export the metrics.
+        metrics_collector_endpoint (Optional[str]): The endpoint for exporting metrics data. If None, metrics data will not be exported.
             Supports the same protocols as traces_collector_endpoint.
-        flush_interval_ms (Optional[int]): The duration in milliseconds the data will be exported to the collector.
-            If interval is not specified, 5000ms will be used.
+        sample_percentage (Optional[int]): The percentage of requests to sample and create a span for (0-100).
+            If None, a default value will be used.
+        flush_interval_ms (Optional[int]): Interval in milliseconds between consecutive exports of telemetry data.
+            If None, a default value of 5000ms will be used.
     """
 
     def __init__(
         self,
-        traces_collector_endpoint: str,
-        metrics_collector_endpoint: str,
+        traces_collector_endpoint: Optional[str] = None,
+        metrics_collector_endpoint: Optional[str] = None,
+        sample_percentage: Optional[int] = None,
         flush_interval_ms: Optional[int] = None,
     ):
+        # At least one of traces or metrics must be provided
+        if traces_collector_endpoint is None and metrics_collector_endpoint is None:
+            raise ConfigurationError(
+                "At least one of traces_collector_endpoint or metrics_collector_endpoint must be provided"
+            )
+            
         self.traces_collector_endpoint = traces_collector_endpoint
         self.metrics_collector_endpoint = metrics_collector_endpoint
+        self.sample_percentage = sample_percentage
         self.flush_interval_ms = flush_interval_ms
 
-        # Validate flush_interval_ms is not negative
-        if flush_interval_ms is not None and flush_interval_ms < 0:
-            raise ConfigurationError("InvalidInput: flushIntervalMs cannot be negative")
+        # Validate flush_interval_ms is positive
+        if flush_interval_ms is not None and flush_interval_ms <= 0:
+            raise ConfigurationError("InvalidInput: flushIntervalMs must be a positive integer")
+
+        # Validate sample_percentage is between 0 and 100
+        if sample_percentage is not None and (sample_percentage < 0 or sample_percentage > 100):
+            raise ConfigurationError("Trace sample percentage must be between 0 and 100")
 
         # Validate collector endpoints
         for endpoint in [traces_collector_endpoint, metrics_collector_endpoint]:
-            if not (
-                endpoint.startswith("http://")
-                or endpoint.startswith("https://")
-                or endpoint.startswith("grpc://")
-                or endpoint.startswith("file://")
-            ):
-                raise ConfigurationError(
-                    f"InvalidInput: Collector endpoint '{endpoint}' must start with http://, https://, grpc://, or file://"
-                )
+            if endpoint is not None:
+                if not (
+                    endpoint.startswith("http://")
+                    or endpoint.startswith("https://")
+                    or endpoint.startswith("grpc://")
+                    or endpoint.startswith("file://")
+                ):
+                    raise ConfigurationError(
+                        f"InvalidInput: Collector endpoint '{endpoint}' must start with http://, https://, grpc://, or file://"
+                    )
+                
+                if endpoint.startswith("file://") and not endpoint.startswith("file:///"):
+                    raise ConfigurationError("File path must start with 'file:///'")
 
 
 class AdvancedBaseClientConfiguration:
@@ -227,15 +247,21 @@ class AdvancedBaseClientConfiguration:
             request.connection_timeout = self.connection_timeout
 
         if self.opentelemetry_config:
-            request.opentelemetry_config.traces_collector_endpoint = (
-                self.opentelemetry_config.traces_collector_endpoint
-            )
-            request.opentelemetry_config.metrics_collector_endpoint = (
-                self.opentelemetry_config.metrics_collector_endpoint
-            )
+            if self.opentelemetry_config.traces_collector_endpoint:
+                request.opentelemetry_config.traces_collector_endpoint = (
+                    self.opentelemetry_config.traces_collector_endpoint
+                )
+            if self.opentelemetry_config.metrics_collector_endpoint:
+                request.opentelemetry_config.metrics_collector_endpoint = (
+                    self.opentelemetry_config.metrics_collector_endpoint
+                )
             if self.opentelemetry_config.flush_interval_ms is not None:
                 request.opentelemetry_config.flush_interval = (
                     self.opentelemetry_config.flush_interval_ms
+                )
+            if self.opentelemetry_config.sample_percentage is not None:
+                request.opentelemetry_config.sample_percentage = (
+                    self.opentelemetry_config.sample_percentage
                 )
 
         return request
