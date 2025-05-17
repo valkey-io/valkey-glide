@@ -203,21 +203,13 @@ jobs:
             - name: Install git and required tools
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    # Basic tools needed for actions to work properly
                     yum install -y git tar
                     yum install -y --allowerasing curl
-                    yum install -y gcc make
-                    # Install Protocol Buffers compiler
-                    yum install -y protobuf-compiler
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
+                    # Basic tools needed for actions to work properly
                     apk update
                     apk add git bash tar curl
-                    apk add build-base
-                    # Install Protocol Buffers compiler
-                    apk add protobuf-dev
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   fi
 
             - name: Create directory structure if needed
@@ -230,6 +222,15 @@ jobs:
 
             - name: Set permissions after checkout
               run: chown -R $(id -u):$(id -g) $GITHUB_WORKSPACE
+
+            # Install shared dependencies including Rust and Protocol Buffers
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Setup Node
               uses: actions/setup-node@v4
@@ -247,7 +248,6 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               run: |
-                  export PATH="$HOME/.cargo/bin:$PATH"
                   npm run build
                   npm run test
 
@@ -297,7 +297,6 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               run: |
-                  export PATH="$HOME/.cargo/bin:$PATH"
                   npm run build
                   npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
 
