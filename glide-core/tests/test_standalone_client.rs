@@ -679,7 +679,7 @@ mod standalone_client_tests {
             // For standalone lazy client, we'd expect to create a glide_core::client::Client
             // that internally holds a LazyClient configured for standalone.
             let core_connection_request: glide_core::connection_request::ConnectionRequest =
-                lazy_client_connection_request_pb.into();
+                lazy_client_connection_request_pb;
 
             // We need to use the generic Client::new for lazy loading behavior
             let mut lazy_glide_client_enum = GlideClient::new(core_connection_request.into(), None)
