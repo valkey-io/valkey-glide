@@ -1,26 +1,14 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    createLeakedOtelSpan,
-    dropOtelSpan,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
 import Long from "long";
 import * as net from "net";
+import { Buffer, BufferWriter, Long as ProtoLong, Reader, Writer } from "protobufjs/minimal";
 import {
-    Buffer,
-    BufferWriter,
-    Long as ProtoLong,
-    Reader,
-    Writer,
-} from "protobufjs";
+    command_request,
+    connection_request,
+    response,
+} from "../build-ts/ProtobufMessage";
 import {
     AggregationType,
     BaseScanOptions,
@@ -258,12 +246,18 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
-import { OpenTelemetry } from "./OpenTelemetry";
 import {
-    command_request,
-    connection_request,
-    response,
-} from "./ProtobufMessage";
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
+    getStatistics,
+    valueFromSplitPointer,
+} from "./native";
+import { OpenTelemetry } from "./OpenTelemetry";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
