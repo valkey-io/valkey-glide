@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
+import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "./native";
 import Long from "long";
 
 import {
@@ -21,7 +21,7 @@ import {
 import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient";
-import { command_request } from "./ProtobufMessage";
+import { command_request } from "../build-ts/ProtobufMessage";
 
 import RequestType = command_request.RequestType;
 
