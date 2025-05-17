@@ -24,6 +24,12 @@ If your Nodejs version is below the supported version specified in the client's 
 - openssl
 - openssl-dev
 - rustup
+- ziglang and zigbuild (for GNU Linux only)
+- valkey (for testing)
+
+**Valkey installation**
+
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 **Dependencies installation for Ubuntu**
 
@@ -56,8 +62,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-**Valkey Server and CLI**
-See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
+```
 
 #### Building and installation steps
 
