@@ -209,7 +209,7 @@ jobs:
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
                     # Basic tools needed for actions to work properly
                     apk update
-                    apk add git bash tar curl which build-base
+                    apk add git bash tar curl which build-base python3
                   fi
 
             - name: Create directory structure if needed
@@ -304,7 +304,7 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              run: chown -R $(id -u):$(id -g) /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
 
@@ -323,29 +323,9 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
-            - name: Build and Test
+            - name: test
+              run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
-              env:
-                  PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
-              run: |
-                  # Verify Rust is available
-                  which cargo || echo "Cargo not found in PATH"
-                  echo "Current PATH: $PATH"
-
-                  # Check where cargo is installed
-                  find / -name cargo -type f 2>/dev/null || echo "Could not find cargo executable"
-
-                  # Explicitly source cargo env before build
-                  if [ -f "$HOME/.cargo/env" ]; then
-                    source "$HOME/.cargo/env"
-                    echo "Sourced $HOME/.cargo/env"
-                  fi
-
-                  # Try to find rustc version
-                  rustc --version || echo "rustc command failed"
-
-                  npm run build
-                  npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
 
             - name: Upload test reports
               if: always()
