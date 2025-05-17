@@ -229,6 +229,7 @@ class BaseClientConfiguration:
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -241,6 +242,7 @@ class BaseClientConfiguration:
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
         self.advanced_config = advanced_config
+        self.lazy_connect = lazy_connect
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -301,6 +303,8 @@ class BaseClientConfiguration:
         if self.advanced_config:
             self.advanced_config._create_a_protobuf_conn_request(request)
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -414,6 +418,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -427,6 +432,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.database_id = database_id
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -586,6 +592,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -599,6 +606,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -637,6 +645,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 for channel_pattern in channels_patterns:
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:

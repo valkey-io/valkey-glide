@@ -27,6 +27,7 @@ pub struct ConnectionRequest {
     pub inflight_requests_limit: Option<u32>,
     pub otel_endpoint: Option<String>,
     pub otel_span_flush_interval_ms: Option<u64>,
+    pub lazy_connect: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
@@ -227,6 +228,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let otel_endpoint = chars_to_string_option(&value.opentelemetry_config.collector_end_point);
         let otel_span_flush_interval_ms = value.opentelemetry_config.span_flush_interval;
+        let lazy_connect = value.lazy_connect;
 
         ConnectionRequest {
             read_from,
@@ -245,6 +247,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             inflight_requests_limit,
             otel_endpoint,
             otel_span_flush_interval_ms,
+            lazy_connect,
         }
     }
 }
