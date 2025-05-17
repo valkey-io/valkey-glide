@@ -205,11 +205,13 @@ jobs:
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     yum install -y git tar
                     yum install -y --allowerasing curl
+                    yum install -y gcc make
                     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
                     echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
                     apk update
                     apk add git bash tar curl
+                    apk add build-base
                     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
                     echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $GITHUB_ENV
                   fi
