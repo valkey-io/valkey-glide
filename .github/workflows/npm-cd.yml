@@ -327,7 +327,7 @@ jobs:
 
             - name: Publish each platform package
               shell: bash
-              working-directory: ./node/npm
+              working-directory: node/npm
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
@@ -362,7 +362,7 @@ jobs:
 
             - name: Publish base package
               shell: bash
-              working-directory: ./node/npm/glide
+              working-directory: node/npm/glide
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
