@@ -413,79 +413,109 @@ mod cluster_client_tests {
     ) {
         block_on_all(async move {
             const USE_TLS: bool = false;
-            let base_client_config = TestConfiguration {
+
+            // 1. Base configuration for creating the DEDICATED cluster (Cluster A)
+            // and the monitoring client.
+            let base_config_for_dedicated_cluster = TestConfiguration {
                 use_tls: USE_TLS,
                 protocol,
-                shared_server: true,
+                shared_server: false, // <<<< This ensures a dedicated cluster is made
                 cluster_mode: ClusterMode::Enabled,
+                lazy_connect: false, // Monitoring client connects eagerly
                 ..Default::default()
             };
+
+            // 2. Setup the dedicated cluster (Cluster A) and the monitoring client.
+            // `monitoring_test_basics` now owns Cluster A.
             let monitoring_test_basics =
-                setup_test_basics_internal(base_client_config.clone()).await;
+                setup_test_basics_internal(base_config_for_dedicated_cluster.clone()).await;
             let mut monitoring_client = monitoring_test_basics.client;
 
+            // Get addresses from the DEDICATED Cluster A
+            let dedicated_cluster_addresses = monitoring_test_basics
+                .cluster
+                .as_ref()
+                .expect("Dedicated cluster (Cluster A) should have been created")
+                .get_server_addresses(); // This returns Vec<redis::ConnectionAddr>
+
+            // 3. Get initial client count on Cluster A.
             let clients_before_lazy_init =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients before lazy client init (protocol={:?}): {}",
+                    "Clients before lazy client init (protocol={:?} on dedicated cluster A): {}",
                     protocol, clients_before_lazy_init
                 ),
             );
-            let mut lazy_client_config = base_client_config.clone();
-            lazy_client_config.lazy_connect = true;
-            let lazy_test_basics = setup_test_basics_internal(lazy_client_config).await;
-            let mut lazy_glide_client = lazy_test_basics.client;
-            // Assert that no new connections were made yet by the lazy client
+
+            // 4. Manually create the ConnectionRequest for the lazy client,
+            //    pointing to the DEDICATED Cluster A.
+            //    We use the `base_config_for_dedicated_cluster` for other settings.
+            let mut lazy_connection_request_pb =
+                utilities::create_connection_request(&dedicated_cluster_addresses, &base_config_for_dedicated_cluster);
+            // Ensure lazy_connect is true for the protobuf request
+            lazy_connection_request_pb.lazy_connect = true;
+            // Ensure protocol is correctly set from the test parameter for the protobuf request
+            lazy_connection_request_pb.protocol = protocol.into();
+
+
+            // 5. Create the lazy client directly using Client::new
+            let mut lazy_glide_client = Client::new(lazy_connection_request_pb.into(), None) // .into() converts protobuf to core::ConnectionRequest
+                .await
+                .expect("Failed to create lazy client for Cluster A");
+
+            // 6. Assert that no new connections were made yet by the lazy client on Cluster A.
             let clients_after_lazy_init =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients after lazy client init (protocol={:?}): {}",
+                    "Clients after lazy client init (protocol={:?} on dedicated cluster A): {}",
                     protocol, clients_after_lazy_init
                 ),
             );
             assert_eq!(
                 clients_after_lazy_init, clients_before_lazy_init,
-                "Lazy client should not establish new connections before the first command. Before: {}, After: {}. protocol={:?}",
+                "Lazy client (on dedicated cluster A) should not establish new connections before the first command. Before: {}, After: {}. protocol={:?}",
                 clients_before_lazy_init, clients_after_lazy_init, protocol
             );
-            // Send the first command using the lazy client
+
+            // 7. Send the first command using the lazy client to Cluster A.
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Sending first command to lazy client (PING) (protocol={:?})",
+                    "Sending first command to lazy client (PING) (protocol={:?} on dedicated cluster A)",
                     protocol
                 ),
             );
             let ping_response = lazy_glide_client
-                .send_command(&redis::cmd("PING"), None) // redis::cmd("PING") returns a Cmd
+                .send_command(&redis::cmd("PING"), None)
                 .await;
             assert!(
                 ping_response.is_ok(),
-                "PING command failed: {:?}. protocol={:?}",
-                ping_response.err(),
+                "PING command failed (on dedicated cluster A): {:?}. protocol={:?}",
+                ping_response.as_ref().err(),
                 protocol
             );
             assert_eq!(
                 ping_response.unwrap(),
                 redis::Value::SimpleString("PONG".to_string())
             );
-            // Assert that new connections were made by the lazy client
+
+            // 8. Assert that new connections were made on Cluster A by the lazy client.
             let clients_after_first_command =
                 get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients after first command (protocol={:?}): {}",
+                    "Clients after first command (protocol={:?} on dedicated cluster A): {}",
                     protocol, clients_after_first_command
                 ),
             );
             assert!(
                 clients_after_first_command > clients_before_lazy_init,
-                "Lazy client should establish new connections after the first command. Before: {}, After: {}. protocol={:?}",
+                "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {}, After: {}. protocol={:?}",
                 clients_before_lazy_init,
                 clients_after_first_command,
                 protocol
