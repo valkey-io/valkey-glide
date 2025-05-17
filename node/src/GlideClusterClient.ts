@@ -2,9 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
-import { Writer } from "protobufjs";
+import { Writer } from "protobufjs/minimal";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -64,8 +63,11 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { command_request, connection_request } from "./ProtobufMessage";
-
+import { ClusterScanCursor, Script } from "./native";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**

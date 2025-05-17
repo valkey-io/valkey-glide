@@ -61,7 +61,7 @@ import {
     LolwutOptions,
     ScanOptions,
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
+import { connection_request } from "../build-ts/ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
