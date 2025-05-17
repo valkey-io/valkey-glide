@@ -323,6 +323,11 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
+            - name: Install and build
+              run: |
+                  npm install
+                  npm run build
+
             - name: test
               run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
