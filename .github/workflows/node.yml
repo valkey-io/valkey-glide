@@ -204,12 +204,12 @@ jobs:
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     # Basic tools needed for actions to work properly
-                    yum install -y git tar
+                    yum install -y git tar which
                     yum install -y --allowerasing curl
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
                     # Basic tools needed for actions to work properly
                     apk update
-                    apk add git bash tar curl
+                    apk add git bash tar curl which build-base
                   fi
 
             - name: Create directory structure if needed
@@ -259,16 +259,23 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               env:
-                  PATH: ${{ env.PATH }}:$HOME/.cargo/bin
+                  PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
               run: |
                   # Verify Rust is available
                   which cargo || echo "Cargo not found in PATH"
                   echo "Current PATH: $PATH"
 
+                  # Check where cargo is installed
+                  find / -name cargo -type f 2>/dev/null || echo "Could not find cargo executable"
+
                   # Explicitly source cargo env before build
                   if [ -f "$HOME/.cargo/env" ]; then
                     source "$HOME/.cargo/env"
+                    echo "Sourced $HOME/.cargo/env"
                   fi
+
+                  # Try to find rustc version
+                  rustc --version || echo "rustc command failed"
 
                   npm run build
                   npm run test
@@ -319,16 +326,23 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               env:
-                  PATH: ${{ env.PATH }}:$HOME/.cargo/bin
+                  PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
               run: |
                   # Verify Rust is available
                   which cargo || echo "Cargo not found in PATH"
                   echo "Current PATH: $PATH"
 
+                  # Check where cargo is installed
+                  find / -name cargo -type f 2>/dev/null || echo "Could not find cargo executable"
+
                   # Explicitly source cargo env before build
                   if [ -f "$HOME/.cargo/env" ]; then
                     source "$HOME/.cargo/env"
+                    echo "Sourced $HOME/.cargo/env"
                   fi
+
+                  # Try to find rustc version
+                  rustc --version || echo "rustc command failed"
 
                   npm run build
                   npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
