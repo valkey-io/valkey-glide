@@ -232,6 +232,17 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            # Ensure Rust is in PATH for container environments
+            - name: Setup Rust PATH
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
+                  source "$HOME/.cargo/env"
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+                  # Verify Rust is available
+                  which cargo || echo "Cargo still not found in PATH"
+                  echo "Current PATH: $PATH"
+
             - name: Setup Node
               uses: actions/setup-node@v4
               with:
@@ -247,7 +258,18 @@ jobs:
 
             - name: Build and Test
               working-directory: ./node
+              env:
+                  PATH: ${{ env.PATH }}:$HOME/.cargo/bin
               run: |
+                  # Verify Rust is available
+                  which cargo || echo "Cargo not found in PATH"
+                  echo "Current PATH: $PATH"
+
+                  # Explicitly source cargo env before build
+                  if [ -f "$HOME/.cargo/env" ]; then
+                    source "$HOME/.cargo/env"
+                  fi
+
                   npm run build
                   npm run test
 
@@ -296,7 +318,18 @@ jobs:
 
             - name: Build and Test
               working-directory: ./node
+              env:
+                  PATH: ${{ env.PATH }}:$HOME/.cargo/bin
               run: |
+                  # Verify Rust is available
+                  which cargo || echo "Cargo not found in PATH"
+                  echo "Current PATH: $PATH"
+
+                  # Explicitly source cargo env before build
+                  if [ -f "$HOME/.cargo/env" ]; then
+                    source "$HOME/.cargo/env"
+                  fi
+
                   npm run build
                   npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
 
