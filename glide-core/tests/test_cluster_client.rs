@@ -452,13 +452,14 @@ mod cluster_client_tests {
             // 4. Manually create the ConnectionRequest for the lazy client,
             //    pointing to the DEDICATED Cluster A.
             //    We use the `base_config_for_dedicated_cluster` for other settings.
-            let mut lazy_connection_request_pb =
-                utilities::create_connection_request(&dedicated_cluster_addresses, &base_config_for_dedicated_cluster);
+            let mut lazy_connection_request_pb = utilities::create_connection_request(
+                &dedicated_cluster_addresses,
+                &base_config_for_dedicated_cluster,
+            );
             // Ensure lazy_connect is true for the protobuf request
             lazy_connection_request_pb.lazy_connect = true;
             // Ensure protocol is correctly set from the test parameter for the protobuf request
             lazy_connection_request_pb.protocol = protocol.into();
-
 
             // 5. Create the lazy client directly using Client::new
             let mut lazy_glide_client = Client::new(lazy_connection_request_pb.into(), None) // .into() converts protobuf to core::ConnectionRequest
