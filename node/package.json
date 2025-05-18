@@ -4,7 +4,7 @@
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
-    "version": "$RELEASE_VERSION",
+    "version": "255.255.255",
     "licenses": [
         {
             "type": "Apache-2.0",
@@ -133,7 +133,8 @@
         ]
     },
     "engines": {
-        "node": ">=16"
+        "node": ">=16",
+        "npm": ">=11"
     },
     "napi": {
         "name": "valkey-glide",

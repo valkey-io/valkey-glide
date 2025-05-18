@@ -281,9 +281,16 @@ jobs:
                   echo "Version from tag (env): ${NAPI_RS_VERSION_FROM_TAG}"
                   echo "  Release npm tag (env): ${NPM_TAG}"
 
-                  # Replace version in package.json with the one from the tag
-                  # The version in package.json is set to "$RELEASE_VERSION" by default.
-                  sed -i "s/\$RELEASE_VERSION/${NAPI_RS_VERSION_FROM_TAG}/g" ./package.json
+                  # Set version in package.json using npm version
+                  # This replaces the placeholder 255.255.255 with the actual version
+                  # For rc versions, use the preid flag
+                  if [[ "${NAPI_RS_VERSION_FROM_TAG}" == *-rc* ]]; then
+                    RC_PART=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | grep -oE 'rc[0-9]+$')
+                    VERSION_BASE=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | sed 's/-rc[0-9]*$//')
+                    npm version "${VERSION_BASE}-${RC_PART}" --allow-same-version --preid "${RC_PART}"
+                  else
+                    npm version "${NAPI_RS_VERSION_FROM_TAG}" --allow-same-version
+                  fi
 
                   # prepublish napi api is used to add the optional dependencies to the package.json base on additional triples in the package.json and take all the native modules from the npm directory and align there versions to the one in the package.json
                   # pretty cool and helpful
