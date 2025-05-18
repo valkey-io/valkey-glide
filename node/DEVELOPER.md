@@ -86,7 +86,7 @@ The build process consists of multiple steps:
 2. `build-protobuf` - Generates optimized protobuf code (43% smaller than default)
 3. `build:rust-client` - Builds the native Rust client binding
 4. `build:ts` - Compiles TypeScript code into the build-ts directory
-   - When using `build:ts:release` - Applies additional optimizations with `--stripInternal --removeComments`
+    - When using `build:ts:release` - Applies additional optimizations with `--stripInternal --removeComments`
 
 These steps are orchestrated by npm scripts in package.json.
 
@@ -96,9 +96,9 @@ The TypeScript build uses different settings based on the build mode:
 
 - **Standard Build**: Uses default TypeScript settings from `tsconfig.json`
 - **Release Build**: Adds the following flags:
-  - `--stripInternal`: Removes documentation marked with @internal from declarations while preserving public documentation
-  - `--pretty`: Formats error messages for better readability
-  - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
+    - `--stripInternal`: Removes documentation marked with @internal from declarations while preserving public documentation
+    - `--pretty`: Formats error messages for better readability
+    - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
 
 These settings optimize the code for production use while maintaining full TypeScript type information.
 
@@ -204,20 +204,22 @@ Currently LTS versions are 20 and 22, and latest is 23.
 The npm packages are published in a two-stage process managed by GitHub Actions:
 
 1. Platform-specific packages are published first:
-   - Each contains platform-specific native modules (.node files)
-   - Named following the pattern `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
-   - Examples: `@valkey/valkey-glide-linux-arm64-gnu`, `@valkey/valkey-glide-darwin-arm64`
+
+    - Each contains platform-specific native modules (.node files)
+    - Named following the pattern `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
+    - Examples: `@valkey/valkey-glide-linux-arm64-gnu`, `@valkey/valkey-glide-darwin-arm64`
 
 2. The main package (`@valkey/valkey-glide`) is published next:
-   - Contains all TypeScript code compiled to JavaScript
-   - References platform packages as optional dependencies
-   - Includes support for npm tag differentiation:
-     - "latest" for stable releases
-     - "next" for release candidates (RC)
-     - "alpha" for alpha releases
-     - "beta" for beta releases
+    - Contains all TypeScript code compiled to JavaScript
+    - References platform packages as optional dependencies
+    - Includes support for npm tag differentiation:
+        - "latest" for stable releases
+        - "next" for release candidates (RC)
+        - "alpha" for alpha releases
+        - "beta" for beta releases
 
 The workflow handles version synchronization automatically across all packages using either:
+
 - Git tag information (for tag-based releases)
 - Manually specified version (for workflow dispatch)
 - Development placeholder (255.255.255) for pull requests
@@ -336,14 +338,14 @@ await cluster.ping();
 - Build system uses napi-rs CLI (`build`, `artifacts`, `prepublish`) for native module handling.
 - Cross-compilation (glibc, musl, macOS) uses Zig for deterministic platform-specific binaries.
 - TypeScript build process uses optimizations for production code:
-  - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
-  - `--pretty`: Formats error messages for better readability
-  - `--declaration`: Ensures declaration files are generated with full JSDoc/TSDoc documentation
+    - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
+    - `--pretty`: Formats error messages for better readability
+    - `--declaration`: Ensures declaration files are generated with full JSDoc/TSDoc documentation
 - Package organization:
-  - Base package: `@valkey/valkey-glide` (TypeScript code, requires platform packages)
-  - Platform packages: Named `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
-  - Base package uses `optionalDependencies` to reference platform packages
-  - Uses 255.255.255 version placeholder during development
+    - Base package: `@valkey/valkey-glide` (TypeScript code, requires platform packages)
+    - Platform packages: Named `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
+    - Base package uses `optionalDependencies` to reference platform packages
+    - Uses 255.255.255 version placeholder during development
 - The workflow now properly triggers on TypeScript file changes in `node/src/**/*.ts`
 
 ## Recommended VS Code Extensions

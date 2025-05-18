@@ -246,8 +246,7 @@ jobs:
                   npm install -g @napi-rs/cli prettier
 
                   # Set up the env parameters for the build
-                  if [[ "${{ matrix.build_type }}" == "musl" || "${{ matrix.build_type }}" == "gnu" ]]; then
-                    additional_suffix="-${{ matrix.build_type }}"
+                  if [[ "${{ matrix.build_type }}" == "musl" ]]; then
                     additional_param="--zig"
                   fi
 
@@ -273,26 +272,25 @@ jobs:
 
                   # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
                   else
-                    napi build --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
+                    napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
                   fi
 
                   # Create directory for this target's node file
-                  target_label="${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${additional_suffix}"
-                  mkdir -p ../node-files/$target_label
+                  mkdir -p ../${{ matrix.TARGET }}
 
                   # Copy just the node file to the target directory
-                  cp -r *.node ../node-files/$target_label/
+                  cp -r *.node ../${{ matrix.TARGET }}
 
                   # Report what we've built
-                  echo "Built native module for $target_label:"
-                  ls -la ../node-files/$target_label/
+                  echo "Built native module for ${{ matrix.TARGET }}:"
+                  ls -la ../${{ matrix.TARGET }}/
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
               uses: actions/upload-artifact@v4
               with:
-                  name: native-modules-${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${{ matrix.build_type == 'musl' && '-musl' || matrix.build_type == 'gnu' && '-gnu' || '' }}
-                  path: ./node/node-files/${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${{ matrix.build_type == 'musl' && '-musl' || matrix.build_type == 'gnu' && '-gnu' || '' }}
+                  name: bindings-${{ matrix.TARGET }}
+                  path: ./node/${{ matrix.TARGET }}
                   retention-days: 1
                   if-no-files-found: error
 
@@ -331,24 +329,38 @@ jobs:
             - name: Download all native modules
               uses: actions/download-artifact@v4
               with:
-                  pattern: native-modules-*
-                  path: ./node/native-modules
-                  merge-multiple: true
+                  path: ./node/artifacts
+
+            # Setup Node.js for TypeScript build with caching
+            - name: Setup Node.js with npm cache
+              uses: actions/setup-node@v4
+              with:
+                  node-version: latest
+                  cache: "npm"
+                  cache-dependency-path: ./node/package.json
+
+            # Install dependencies for the base package
+            - name: Install dependencies
+              working-directory: ./node
+              shell: bash
+              run: |
+                  # Install only production dependencies to speed up installation
+                  npm install --only=prod
+
+                  # Install only dev dependencies needed for building TypeScript
+                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli prettier
 
             # Setup npm package directories using NAPI-RS artifacts command
             - name: Setup npm package directories
               working-directory: ./node
               shell: bash
               run: |
-                  # Install NAPI-RS CLI if not already installed
-                  npm install -g @napi-rs/cli
-
                   # Ensure npm directory exists with base glide package
                   mkdir -p ./npm/glide
 
-                  # List downloaded native modules
-                  echo "Downloaded native modules:"
-                  find ./native-modules -type f -name "*.node" | sort
+                  # List downloaded native modules (initial structure after download)
+                  echo "Downloaded native modules (initial structure):"
+                  find ./artifacts -type f -name "*.node" -print | sort
 
                   # Copy LICENSE and README to base package
                   cp ../LICENSE ./npm/glide/
@@ -356,7 +368,7 @@ jobs:
 
                   # Use NAPI artifacts command to manage native module distribution
                   echo "Running NAPI artifacts command to copy native modules..."
-                  napi artifacts -d ./native-modules --dist ./npm
+                  npm run artifacts
 
                   # Add LICENSE and README to each platform package
                   echo "Adding LICENSE and README to platform packages..."
@@ -373,25 +385,11 @@ jobs:
                   echo "Final npm directory structure:"
                   find ./npm -type f | sort
 
-            # Setup Node.js for TypeScript build with caching
-            - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v4
-              with:
-                  node-version: latest
-                  cache: "npm"
-                  cache-dependency-path: ./node/package.json
-
             # Build TypeScript for base package with optimized settings
             - name: Build TypeScript
               working-directory: ./node
               shell: bash
               run: |
-                  # Install only production dependencies to speed up installation
-                  npm ci --omit=dev
-
-                  # Install only dev dependencies needed for building TypeScript
-                  npm install --no-save typescript protobufjs-cli replace
-
                   # Generate protobuf definitions
                   npm run build-protobuf
 
@@ -414,14 +412,6 @@ jobs:
                   cp ../LICENSE ./npm/glide/
                   cp ./README.md ./npm/glide/
                   cp ./package.json ./npm/glide/package.json
-
-            # Set up Node.js
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: latest
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "@valkey"
 
             - name: Install NAPI-RS CLI
               shell: bash
