@@ -1768,9 +1768,6 @@ describe("GlideClient", () => {
                 };
 
                 const clientsBeforeLazyInit = await getClientCount();
-                console.log(
-                    `Protocol: ${protocol}, Clients before lazy client init: ${clientsBeforeLazyInit}`,
-                );
 
                 // Create lazy client
                 const lazyClient = await GlideClient.createClient(
@@ -1787,9 +1784,6 @@ describe("GlideClient", () => {
                 try {
                     // Verify no new connections were established
                     const clientsAfterLazyInit = await getClientCount();
-                    console.log(
-                        `Protocol: ${protocol}, Clients after lazy client init: ${clientsAfterLazyInit}`,
-                    );
 
                     expect(clientsAfterLazyInit).toEqual(clientsBeforeLazyInit);
 
@@ -1799,9 +1793,6 @@ describe("GlideClient", () => {
 
                     // Check client count after first command
                     const clientsAfterFirstCommand = await getClientCount();
-                    console.log(
-                        `Protocol: ${protocol}, Clients after first command: ${clientsAfterFirstCommand}`,
-                    );
 
                     expect(clientsAfterFirstCommand).toEqual(
                         clientsBeforeLazyInit + 1,
