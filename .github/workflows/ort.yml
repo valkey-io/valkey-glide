@@ -223,7 +223,15 @@ jobs:
                       utils/unapproved_package_list.txt
                   retention-days: 30
 
-              ### TODO: Fail if there are unapproved packages ###
+            - name: Check for unapproved packages
+              run: |
+                  if [ -s utils/unapproved_package_list.txt ]; then
+                    echo "::error::Found unapproved packages. Please review utils/unapproved_package_list.txt"
+                    cat utils/unapproved_package_list.txt
+                    exit 1
+                  else
+                    echo "No unapproved packages found."
+                  fi
 
               ### Check for attributions diff ###
             - name: Check for diff
