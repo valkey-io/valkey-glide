@@ -21,7 +21,7 @@ This document describes how to set up your development environment to build and 
     - `tests/`: Jest tests.
     - `rust-client/`: napi-rs Rust crate (binds to `glide-core`).
     - `npm/`: Platform-specific packages for CD.
-        - Platform-specific directories (e.g., `linux-arm64-gnu/`, `darwin-x64/`) containing package.json and native binaries.
+        - Platform-specific directories (e.g., `linux-arm64-gnu/`, `darwin-arm64/`) containing package.json and native binaries.
         - `glide/`: Main package directory created during the build process that re-exports TypeScript APIs.
 - `valkey-glide/glide-core/`: The core Rust logic, shared across all language bindings.
 - `.github/`: CI/CD workflows and composite actions.
@@ -86,8 +86,21 @@ The build process consists of multiple steps:
 2. `build-protobuf` - Generates optimized protobuf code (43% smaller than default)
 3. `build:rust-client` - Builds the native Rust client binding
 4. `build:ts` - Compiles TypeScript code into the build-ts directory
+   - When using `build:ts:release` - Applies additional optimizations with `--stripInternal --removeComments`
 
 These steps are orchestrated by npm scripts in package.json.
+
+## TypeScript Build Options
+
+The TypeScript build uses different settings based on the build mode:
+
+- **Standard Build**: Uses default TypeScript settings from `tsconfig.json`
+- **Release Build**: Adds the following flags:
+  - `--stripInternal`: Removes documentation marked with @internal from declarations while preserving public documentation
+  - `--pretty`: Formats error messages for better readability
+  - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
+
+These settings optimize the code for production use while maintaining full TypeScript type information.
 
 ## Prerequisites
 
@@ -146,9 +159,9 @@ nvm install --lts
 nvm use --lts
 ```
 
-Supported node version for development is minimum 18, but it is recomended to use one of lts versions, or latest.
+Supported node version for development is minimum 18, but it is recommended to use one of the LTS versions, or latest.
 
-Currently lts are 20 and 22, and latest is 23. 23 is short lived, and will be deprecated in
+Currently LTS versions are 20 and 22, and latest is 23.
 
 ## Building & Running
 
@@ -185,6 +198,29 @@ Currently lts are 20 and 22, and latest is 23. 23 is short lived, and will be de
     ```bash
     npm test
     ```
+
+## CI/CD Package Publication
+
+The npm packages are published in a two-stage process managed by GitHub Actions:
+
+1. Platform-specific packages are published first:
+   - Each contains platform-specific native modules (.node files)
+   - Named following the pattern `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
+   - Examples: `@valkey/valkey-glide-linux-arm64-gnu`, `@valkey/valkey-glide-darwin-arm64`
+
+2. The main package (`@valkey/valkey-glide`) is published next:
+   - Contains all TypeScript code compiled to JavaScript
+   - References platform packages as optional dependencies
+   - Includes support for npm tag differentiation:
+     - "latest" for stable releases
+     - "next" for release candidates (RC)
+     - "alpha" for alpha releases
+     - "beta" for beta releases
+
+The workflow handles version synchronization automatically across all packages using either:
+- Git tag information (for tag-based releases)
+- Manually specified version (for workflow dispatch)
+- Development placeholder (255.255.255) for pull requests
 
 ## Local Development Notes
 
@@ -294,15 +330,21 @@ const cluster = await GlideClusterClient.createClient({
 await cluster.ping();
 ```
 
-## CI/CD Awareness
+## CI/CD Workflow
 
-- CD workflow lives under `.github/workflows/npm-cd.yml`.
-- Build system uses napi-rs CLI (`build`, `artifacts`, `prepublish`).
-- Cross-compilation (glibc, musl, macOS) uses Zig for building platform-specific binaries.
-- The CD workflow handles the modular TypeScript structure correctly.
-- Artifacts are prepared and published automatically via the GitHub Actions pipeline.
-- Package versioning is synchronized across all packages using the workflow inputs or git tag.
-- The main package depends on platform-specific packages as optional dependencies, which are resolved based on the user's platform at installation time.
+- CD workflow lives in `.github/workflows/npm-cd.yml`.
+- Build system uses napi-rs CLI (`build`, `artifacts`, `prepublish`) for native module handling.
+- Cross-compilation (glibc, musl, macOS) uses Zig for deterministic platform-specific binaries.
+- TypeScript build process uses optimizations for production code:
+  - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
+  - `--pretty`: Formats error messages for better readability
+  - `--declaration`: Ensures declaration files are generated with full JSDoc/TSDoc documentation
+- Package organization:
+  - Base package: `@valkey/valkey-glide` (TypeScript code, requires platform packages)
+  - Platform packages: Named `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
+  - Base package uses `optionalDependencies` to reference platform packages
+  - Uses 255.255.255 version placeholder during development
+- The workflow now properly triggers on TypeScript file changes in `node/src/**/*.ts`
 
 ## Recommended VS Code Extensions
 
@@ -318,3 +360,4 @@ await cluster.ping();
 - **Protobuf errors:** Ensure `protoc` is installed and in PATH.
 - **OpenSSL issues:** Verify OpenSSL development headers are installed (`libssl-dev` on Debian/Ubuntu).
 - **Module import errors:** Ensure imports use `.js` extension in TypeScript files (e.g., `import { X } from './Y.js'`), as this is necessary for proper ESM resolution when TypeScript compiles to JavaScript modules. This is a standard requirement of TypeScript's ESM output, not a project-specific convention.
+- **TypeScript build errors:** If you encounter TypeScript compilation errors with the optimized flags, try using the standard build command first to diagnose the issue.

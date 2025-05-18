@@ -11,6 +11,7 @@ on:
             - node/npm/**
             - node/rust-client/Cargo.toml
             - node/rust-client/src/**
+            - node/src/**/*.ts
     push:
         tags:
             - "v*.*.*" # e.g. v1.2.3, v1.2.3-rc1
@@ -20,8 +21,13 @@ on:
                 description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
                 required: true
             publish:
-                description: "Publish"
+                description: "Publish to NPM"
                 required: true
+                type: boolean
+                default: false
+            create_node_tag:
+                description: "Create git tag with -node suffix"
+                required: false
                 type: boolean
                 default: false
 
@@ -41,55 +47,127 @@ jobs:
             npm_tag: ${{ steps.get-params.outputs.npm_tag }}
             platform_matrix: ${{ steps.load-platform-matrix.outputs.platform_matrix }}
             should_publish: ${{ steps.get-params.outputs.should_publish }}
+            should_create_node_tag: ${{ steps.get-params.outputs.should_create_node_tag }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
-            - name: Get Build Parameters
-              id: get-params
+            - name: Determine event type
+              id: event-check
               shell: bash
               env:
                   GH_EVENT_NAME: ${{ github.event_name }}
                   GH_REF: ${{ github.ref }}
-                  INPUT_VER: ${{ github.event.inputs.version }}
-                  INPUT_PUB: ${{ github.event.inputs.publish }}
               run: |
                   echo "Event: $GH_EVENT_NAME  Ref: $GH_REF"
+                  echo "event_name=$GH_EVENT_NAME" >> $GITHUB_OUTPUT
+                  echo "ref=$GH_REF" >> $GITHUB_OUTPUT
 
-                  # pull_request: use dummy version and never publish
-                  if [[ "$GH_EVENT_NAME" == "pull_request" ]]; then
-                    RELEASE="255.255.255"
-                    SHOULD_PUB="false"
+            - name: Handle pull request event
+              id: pull-request-params
+              if: steps.event-check.outputs.event_name == 'pull_request'
+              shell: bash
+              run: |
+                  RELEASE="255.255.255"
+                  SHOULD_PUB="false"
+                  SHOULD_TAG="false"
+                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
+                  echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
+                  echo "Pull request detected - using development version $RELEASE"
 
-                  # workflow_dispatch: manual version input
-                  elif [[ "$GH_EVENT_NAME" == "workflow_dispatch" ]]; then
-                    VER_INPUT="$INPUT_VER"
-                    PUB_INPUT="$INPUT_PUB"
-                    if [[ -n "$VER_INPUT" && "$VER_INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
-                      RELEASE="$VER_INPUT"
-                      SHOULD_PUB="$PUB_INPUT"
-                    else
-                      echo "::error::Invalid manual version: '$VER_INPUT'"; exit 1
-                    fi
-
-                  # push on tags must be vX.Y.Z or vX.Y.Z-rcN
-                  elif [[ "$GH_EVENT_NAME" == "push" && \
-                          "$GH_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?)$ ]]; then
-                    RELEASE="${BASH_REMATCH[1]}"
-                    SHOULD_PUB="true"
-
-                  else
-                    echo "::error::Unrecognized event/ref '$GH_REF'"; exit 1
+            - name: Handle workflow dispatch event
+              id: workflow-dispatch-params
+              if: steps.event-check.outputs.event_name == 'workflow_dispatch'
+              shell: bash
+              env:
+                  INPUT_VER: ${{ github.event.inputs.version }}
+                  INPUT_PUB: ${{ github.event.inputs.publish }}
+                  INPUT_TAG: ${{ github.event.inputs.create_node_tag }}
+              run: |
+                  # Validate version exists
+                  if [[ -z "$INPUT_VER" ]]; then
+                    echo "::error::Version input is required for manual workflow runs"; exit 1
                   fi
 
-                  # npm-tag logic
-                  if [[ "$RELEASE" == *-rc* ]]; then TAG="next"; else TAG="latest"; fi
+                  # Validate version format (semver)
+                  if [[ ! "$INPUT_VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+                    echo "::error::Invalid version format: '$INPUT_VER'. Must be X.Y.Z or X.Y.Z-rcN"; exit 1
+                  fi
 
-                  echo "release_version=$RELEASE"  >> $GITHUB_OUTPUT
-                  echo "npm_tag=$TAG"             >> $GITHUB_OUTPUT
+                  # All good - set variables
+                  RELEASE="$INPUT_VER"
+                  SHOULD_PUB="$INPUT_PUB"
+                  SHOULD_TAG="$INPUT_TAG"
+                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
                   echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
+                  echo "Manual workflow run - using version $RELEASE (publish=$SHOULD_PUB, tag=$SHOULD_TAG)"
+
+            - name: Handle tag push event
+              id: tag-push-params
+              if: steps.event-check.outputs.event_name == 'push' && startsWith(steps.event-check.outputs.ref, 'refs/tags/v')
+              shell: bash
+              run: |
+                  if [[ "${{ steps.event-check.outputs.ref }}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?)$ ]]; then
+                    RELEASE="${BASH_REMATCH[1]}"
+                    SHOULD_PUB="true"
+                    SHOULD_TAG="false" # Auto tag creation only for manual workflow runs
+                    echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
+                    echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                    echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
+                    echo "Tag push detected - using version $RELEASE from tag"
+                  else
+                    echo "::error::Invalid tag format. Expected vX.Y.Z or vX.Y.Z-rcN"; exit 1
+                  fi
+
+            - name: Determine npm tag
+              id: determine-npm-tag
+              shell: bash
+              env:
+                  RELEASE: ${{ steps.pull-request-params.outputs.release_version || steps.workflow-dispatch-params.outputs.release_version || steps.tag-push-params.outputs.release_version }}
+              run: |
+                  # npm-tag logic - support rc, alpha, beta pre-releases
+                  if [[ "$RELEASE" == *-* ]]; then
+                    # Extract prerelease identifier (rc, alpha, beta, etc.)
+                    PRERELEASE_TYPE=$(echo "$RELEASE" | grep -oE '[-](rc|alpha|beta)[0-9]+' | cut -d'-' -f2 | grep -oE '[a-z]+')
+                    
+                    # Default to "next" for rc or unknown prerelease types
+                    if [[ "$PRERELEASE_TYPE" == "alpha" ]]; then
+                      TAG="alpha"
+                    elif [[ "$PRERELEASE_TYPE" == "beta" ]]; then
+                      TAG="beta"
+                    else
+                      TAG="next"
+                    fi
+                  else
+                    TAG="latest"
+                  fi
+
+                  echo "Using npm tag: $TAG"
+                  echo "npm_tag=$TAG" >> $GITHUB_OUTPUT
+
+            - name: Consolidate build parameters
+              id: get-params
+              shell: bash
+              env:
+                  RELEASE_VERSION: ${{ steps.pull-request-params.outputs.release_version || steps.workflow-dispatch-params.outputs.release_version || steps.tag-push-params.outputs.release_version }}
+                  NPM_TAG: ${{ steps.determine-npm-tag.outputs.npm_tag }}
+                  SHOULD_PUBLISH: ${{ steps.pull-request-params.outputs.should_publish || steps.workflow-dispatch-params.outputs.should_publish || steps.tag-push-params.outputs.should_publish }}
+                  SHOULD_CREATE_NODE_TAG: ${{ steps.pull-request-params.outputs.should_create_node_tag || steps.workflow-dispatch-params.outputs.should_create_node_tag || steps.tag-push-params.outputs.should_create_node_tag }}
+              run: |
+                  echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+                  echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
+                  echo "should_publish=$SHOULD_PUBLISH" >> $GITHUB_OUTPUT
+                  echo "should_create_node_tag=$SHOULD_CREATE_NODE_TAG" >> $GITHUB_OUTPUT
+
+                  echo "Final build parameters:"
+                  echo "- Version: $RELEASE_VERSION"
+                  echo "- NPM Tag: $NPM_TAG"
+                  echo "- Publish: $SHOULD_PUBLISH"
+                  echo "- Create Node Tag: $SHOULD_CREATE_NODE_TAG"
 
             - name: Load Platform Matrix
               id: load-platform-matrix
@@ -167,7 +245,7 @@ jobs:
               run: |
                   npm install -g @napi-rs/cli prettier
 
-                  # Set up the env parameters for the build and copy the files to the target directory
+                  # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" || "${{ matrix.build_type }}" == "gnu" ]]; then
                     additional_suffix="-${{ matrix.build_type }}"
                     additional_param="--zig"
@@ -198,15 +276,25 @@ jobs:
                     napi build --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
                   fi
 
-                  # Copy the built files to the target directory, including LICENSE and README.md
-                  target_dir="../npm/${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${additional_suffix}"
-                  cp -r *.node $target_dir/
-                  cp -r ../README.md $target_dir/
-                  cp -r ../../LICENSE $target_dir/
+                  # Create directory for this target's node file
+                  target_label="${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${additional_suffix}"
+                  mkdir -p ../node-files/$target_label
 
-                  # List the contents of the target directory
-                  echo "Contents of target directory:"
-                  tree ../npm/
+                  # Copy just the node file to the target directory
+                  cp -r *.node ../node-files/$target_label/
+
+                  # Report what we've built
+                  echo "Built native module for $target_label:"
+                  ls -la ../node-files/$target_label/
+
+            # Upload the native .node modules as artifacts
+            - name: Upload Native Modules
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-modules-${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${{ matrix.build_type == 'musl' && '-musl' || matrix.build_type == 'gnu' && '-gnu' || '' }}
+                  path: ./node/node-files/${{ matrix.NAMED_OS }}-${{ matrix.ARCH }}${{ matrix.build_type == 'musl' && '-musl' || matrix.build_type == 'gnu' && '-gnu' || '' }}
+                  retention-days: 1
+                  if-no-files-found: error
 
             # We want to use the native.js and native.d.ts files in the base package, but we don't have the glide dir yet so we upload them as artifacts
             - name: Upload Module js files
@@ -218,15 +306,14 @@ jobs:
                       ./node/src/native.js
                       ./node/src/native.d.ts
                       ./node/src/native.js.map
-                  retention-days: 1 # try not to keep them too long since our cache is limited
+                  retention-days: 1
                   if-no-files-found: error
 
-    prepare-and-publish-packages:
-        environment: AWS_ACTIONS
+    prepare-and-version-packages:
         needs: [get-build-parameters, build-native-modules]
         runs-on: ubuntu-latest
-        # Only run for actual publish events (tags or dispatch with publish=true)
-        if: needs.get-build-parameters.outputs.should_publish == 'true'
+        outputs:
+            release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -240,14 +327,82 @@ jobs:
                   name: js-files-${{ github.run_id }}
                   path: ./node/src
 
-            # Build TypeScript for base package
+            # Download all native modules
+            - name: Download all native modules
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: native-modules-*
+                  path: ./node/native-modules
+                  merge-multiple: true
+
+            # Setup npm package directories using NAPI-RS artifacts command
+            - name: Setup npm package directories
+              working-directory: ./node
+              shell: bash
+              run: |
+                  # Install NAPI-RS CLI if not already installed
+                  npm install -g @napi-rs/cli
+
+                  # Ensure npm directory exists with base glide package
+                  mkdir -p ./npm/glide
+
+                  # List downloaded native modules
+                  echo "Downloaded native modules:"
+                  find ./native-modules -type f -name "*.node" | sort
+
+                  # Copy LICENSE and README to base package
+                  cp ../LICENSE ./npm/glide/
+                  cp ./README.md ./npm/glide/
+
+                  # Use NAPI artifacts command to manage native module distribution
+                  echo "Running NAPI artifacts command to copy native modules..."
+                  napi artifacts -d ./native-modules --dist ./npm
+
+                  # Add LICENSE and README to each platform package
+                  echo "Adding LICENSE and README to platform packages..."
+                  for dir in ./npm/*/; do
+                    if [[ "$dir" != "./npm/glide/" ]]; then
+                      platform_dir=$(basename "$dir")
+                      echo "Adding files to $platform_dir package..."
+                      cp ../LICENSE "$dir"
+                      cp ./README.md "$dir"
+                    fi
+                  done
+
+                  # Show the final directory structure
+                  echo "Final npm directory structure:"
+                  find ./npm -type f | sort
+
+            # Setup Node.js for TypeScript build with caching
+            - name: Setup Node.js with npm cache
+              uses: actions/setup-node@v4
+              with:
+                  node-version: latest
+                  cache: "npm"
+                  cache-dependency-path: ./node/package.json
+
+            # Build TypeScript for base package with optimized settings
             - name: Build TypeScript
               working-directory: ./node
               shell: bash
               run: |
-                  npm install # To install tsc and other build deps
+                  # Install only production dependencies to speed up installation
+                  npm ci --omit=dev
+
+                  # Install only dev dependencies needed for building TypeScript
+                  npm install --no-save typescript protobufjs-cli replace
+
+                  # Generate protobuf definitions
                   npm run build-protobuf
-                  npm run build:ts:release
+
+                  # Build TypeScript with optimized settings - preserving documentation
+                  echo "Building TypeScript with optimizations..."
+                  npx tsc --stripInternal --pretty --declaration
+
+                  # Check the build output
+                  echo "TypeScript build complete. Generated files:"
+                  find ./build-ts -type f | wc -l
+                  du -sh ./build-ts
 
             # Copy necessary files to npm/glide directory
             - name: Prepare base package
@@ -260,7 +415,155 @@ jobs:
                   cp ./README.md ./npm/glide/
                   cp ./package.json ./npm/glide/package.json
 
-            # Set up Node.js with npm registry access
+            # Set up Node.js
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: latest
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "@valkey"
+
+            - name: Install NAPI-RS CLI
+              shell: bash
+              run: npm install -g @napi-rs/cli
+
+            # Set version for all packages
+            - name: Set package versions
+              shell: bash
+              working-directory: ./node
+              env:
+                  NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
+              run: |
+                  echo "Setting version to: ${NAPI_RS_VERSION_FROM_TAG}"
+
+                  # Set the version in base package first
+                  echo "Setting version in base package..."
+                  cd ./npm/glide
+                  if [[ "${NAPI_RS_VERSION_FROM_TAG}" == *-rc* ]]; then
+                    RC_PART=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | grep -oE 'rc[0-9]+$')
+                    VERSION_BASE=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | sed 's/-rc[0-9]*$//')
+                    npm version "${VERSION_BASE}-${RC_PART}" --allow-same-version --preid "${RC_PART}"
+                  else
+                    npm version "${NAPI_RS_VERSION_FROM_TAG}" --allow-same-version
+                  fi
+
+                  echo "Base package version set to: $(cat package.json | jq -r .version)"
+                  cd ../..
+
+            # Use NAPI prepublish to set up everything properly
+            - name: Run NAPI prepublish
+              shell: bash
+              working-directory: ./node/npm/glide
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  echo "Running napi prepublish to set up dependencies and versions..."
+                  napi prepublish \
+                    --config "./package.json" \
+                    --prefix "../" \
+                    --skip-gh-release
+
+                  echo "Optional dependencies configured:"
+                  cat ./package.json | jq .optionalDependencies
+
+                  echo "Checking all platform package versions set by napi prepublish:"
+                  for dir in ../*; do
+                    if [ -d "$dir" ] && [ "$(basename "$dir")" != "glide" ]; then
+                      platform_name=$(basename "$dir")
+                      if [ -f "$dir/package.json" ]; then
+                        platform_version=$(cat "$dir/package.json" | jq -r .version)
+                        echo "  Package $platform_name: version=$platform_version"
+                      fi
+                    fi
+                  done
+
+            # Verify all packages have correct versions and content
+            - name: Validate package content
+              shell: bash
+              working-directory: ./node/npm
+              run: |
+                  echo "Validating package content..."
+
+                  # Check all package.json files for correct versions
+                  echo "Checking package versions:"
+                  for dir in ./*; do
+                    if [ -d "$dir" ]; then
+                      if [ -f "${dir}/package.json" ]; then
+                        package_dir=$(basename "$dir")
+                        version=$(cat "${dir}/package.json" | jq -r .version)
+                        echo "Package ${package_dir}: version=${version}"
+                        
+                        # Verify .node files exist in platform packages
+                        if [ "$package_dir" != "glide" ]; then
+                          node_files=$(find "$dir" -name "*.node")
+                          if [ -z "$node_files" ]; then
+                            echo "::error::No .node files found in $package_dir package"
+                            exit 1
+                          else
+                            echo "  Found native module(s): $node_files"
+                          fi
+                        fi
+                        
+                        # Verify LICENSE and README files exist
+                        if [ ! -f "${dir}/LICENSE" ]; then
+                          echo "::error::LICENSE file missing in $package_dir package"
+                          exit 1
+                        fi
+                        
+                        if [ ! -f "${dir}/README.md" ]; then
+                          echo "::error::README.md file missing in $package_dir package"
+                          exit 1
+                        fi
+                      fi
+                    fi
+                  done
+
+                  # Verify base package has correct structure
+                  if [ -d "./glide" ]; then
+                    if [ ! -d "./glide/build-ts" ]; then
+                      echo "::error::build-ts directory missing in base package"
+                      exit 1
+                    fi
+                    
+                    # Check for required files in the base package
+                    for file in "package.json" "LICENSE" "README.md"; do
+                      if [ ! -f "./glide/$file" ]; then
+                        echo "::error::$file missing in base package"
+                        exit 1
+                      fi
+                    done
+                    
+                    # Check if optionalDependencies are correctly set in base package
+                    opt_deps=$(cat "./glide/package.json" | jq -r '.optionalDependencies | length')
+                    if [ "$opt_deps" -eq 0 ]; then
+                      echo "::error::No optionalDependencies found in base package"
+                      exit 1
+                    else
+                      echo "  Base package has $opt_deps optional dependencies"
+                    fi
+                  else
+                    echo "::error::Base package directory not found"
+                    exit 1
+                  fi
+
+                  echo "All packages validated successfully"
+
+            # Upload all packages as artifacts for publishing
+            - name: Upload packages for publishing
+              uses: actions/upload-artifact@v4
+              with:
+                  name: npm-packages-${{ github.run_id }}
+                  path: ./node/npm
+                  retention-days: 1
+                  if-no-files-found: error
+
+    publish-platform-packages:
+        environment: AWS_ACTIONS
+        needs: [prepare-and-version-packages, get-build-parameters]
+        runs-on: ubuntu-latest
+        # Only run for actual publish events (tags or dispatch with publish=true)
+        if: needs.get-build-parameters.outputs.should_publish == 'true'
+        steps:
             - name: Setup Node.js and NPM
               uses: actions/setup-node@v4
               with:
@@ -270,62 +573,17 @@ jobs:
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
-            - name: Install NAPI-RS CLI
-              shell: bash
-              run: npm install -g @napi-rs/cli
-
-            # Set version for base package
-            - name: Set package version
-              shell: bash
-              working-directory: ./node/npm/glide
-              env:
-                  NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
-              run: |
-                  echo "Version from tag: ${NAPI_RS_VERSION_FROM_TAG}"
-
-                  # Set version based on whether it's an RC or not
-                  if [[ "${NAPI_RS_VERSION_FROM_TAG}" == *-rc* ]]; then
-                    RC_PART=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | grep -oE 'rc[0-9]+$')
-                    VERSION_BASE=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | sed 's/-rc[0-9]*$//')
-                    npm version "${VERSION_BASE}-${RC_PART}" --allow-same-version --preid "${RC_PART}"
-                  else
-                    npm version "${NAPI_RS_VERSION_FROM_TAG}" --allow-same-version
-                  fi
-
-                  echo "Version set to: $(cat package.json | jq -r .version)"
-
-            # Run napi prepublish to set up optional dependencies
-            - name: Run NAPI prepublish
-              shell: bash
-              working-directory: ./node/npm/glide
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: |
-                  napi prepublish \
-                    --config "./package.json" \
-                    --prefix "../" \
-                    --skip-gh-release
-
-                  echo "Optional dependencies:"
-                  cat ./package.json | jq .optionalDependencies
-
-            # Verify all packages have correct versions
-            - name: Verify package versions
-              shell: bash
-              working-directory: ./node/npm
-              run: |
-                  echo "Checking all package.json files for correct versions:"
-                  for dir in ./*; do
-                    if [ -f "${dir}/package.json" ]; then
-                      echo "Package: ${dir}"
-                      cat "${dir}/package.json" | jq -r .version
-                    fi
-                  done
+            # Download prepared packages
+            - name: Download prepared packages
+              uses: actions/download-artifact@v4
+              with:
+                  name: npm-packages-${{ github.run_id }}
+                  path: ./npm-packages
 
             # Publish all platform packages first
             - name: Publish platform packages
               shell: bash
-              working-directory: ./node/npm
+              working-directory: ./npm-packages
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
@@ -334,28 +592,95 @@ jobs:
                   for dir in ./*; do
                     # Check if the directory is not the base package and contains a package.json file
                     if [[ "$dir" != "./glide" && -d "$dir" && -f "${dir}/package.json" ]]; then
-                      echo "Publishing ${dir}..."
+                      package_name=$(cat "${dir}/package.json" | jq -r .name)
+                      version=$(cat "${dir}/package.json" | jq -r .version)
+                      echo "Publishing ${package_name}@${version}..."
                       (cd "${dir}" && npm publish --tag "${NPM_TAG}" --access public)
                     fi
                   done
 
+    publish-base-package:
+        needs:
+            [
+                publish-platform-packages,
+                prepare-and-version-packages,
+                get-build-parameters,
+            ]
+        environment: AWS_ACTIONS
+        runs-on: ubuntu-latest
+        if: needs.get-build-parameters.outputs.should_publish == 'true'
+        steps:
+            - name: Setup Node.js and NPM
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "@valkey"
+                  always-auth: true
+                  token: ${{ secrets.NPM_AUTH_TOKEN }}
+
+            # Download prepared packages
+            - name: Download prepared packages
+              uses: actions/download-artifact@v4
+              with:
+                  name: npm-packages-${{ github.run_id }}
+                  path: ./npm-packages
+
             # Then publish the base package after platform packages are available
             - name: Publish base package
               shell: bash
-              working-directory: ./node/npm/glide
+              working-directory: ./npm-packages/glide
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
-                  echo "Publishing base package with tag ${NPM_TAG}"
+                  package_name=$(cat package.json | jq -r .name)
+                  version=$(cat package.json | jq -r .version)
+                  echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
                   npm publish --tag ${NPM_TAG} --access public
+
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
                       echo "::error::Base package publish failed"; exit 1
                   fi
 
+                  echo "Base package published successfully"
+
+    create-node-tag:
+        needs:
+            [publish-base-package, test-published-release, get-build-parameters]
+        if: |
+            needs.get-build-parameters.outputs.should_publish == 'true' && 
+            needs.get-build-parameters.outputs.should_create_node_tag == 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create and push Node tag
+              shell: bash
+              env:
+                  VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
+              run: |
+                  # Create node version tag
+                  NODE_TAG="v${VERSION}-node"
+                  echo "Creating node tag: ${NODE_TAG}"
+
+                  # Configure git
+                  git config --global user.name "GitHub Actions"
+                  git config --global user.email "actions@github.com"
+
+                  # Create and push the tag
+                  git tag -a "${NODE_TAG}" -m "Node.js release ${VERSION}"
+                  git push origin "${NODE_TAG}"
+
+                  echo "Successfully created and pushed tag: ${NODE_TAG}"
+
     test-published-release:
-        needs: [prepare-and-publish-packages, get-build-parameters]
+        needs: [publish-base-package, get-build-parameters]
         if: needs.get-build-parameters.outputs.should_publish == 'true'
         strategy:
             matrix:
@@ -402,18 +727,37 @@ jobs:
 
             - name: Install Valkey
               run: |
-                  # Install the latest version of Valkey
+                  # Install Valkey (preferred) or Redis as fallback
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
-                      apt update
-                      apt install valkey
+                      echo "Installing Valkey on GNU/Linux..."
+                      sudo apt update
+                      sudo apt install -y valkey || { 
+                          echo "Valkey not found in default repos, trying alternative source..."
+                          curl -fsSL https://packages.redis.io/valkey/setup-valkey | sudo bash -
+                          sudo apt install -y valkey || {
+                              echo "Falling back to Redis..."
+                              sudo apt install -y redis-server
+                          }
+                      }
                   elif [[ "${{ matrix.TARGET }}" == *"musl"* ]]; then
+                      echo "Installing Valkey on Alpine Linux..."
                       apk update
-                      apk add valkey
+                      apk add --no-cache valkey || apk add --no-cache redis
                   elif [[ "${{ matrix.TARGET }}" == *"mac"* ]]; then
+                      echo "Installing Valkey on macOS..."
                       brew update
-                      brew install valkey
+                      brew install valkey || brew install redis
                   else
                       echo "::error::Unsupported target: ${{ matrix.TARGET }}"; exit 1
+                  fi
+
+                  # Verify installation - prefer valkey-server over redis-server
+                  if command -v valkey-server &> /dev/null; then
+                      echo "✓ Valkey server is available"
+                  elif command -v redis-server &> /dev/null; then
+                      echo "✓ Redis server is available (fallback)"
+                  else
+                      echo "::error::Neither Valkey nor Redis server found"; exit 1
                   fi
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
@@ -423,13 +767,64 @@ jobs:
                   npm run build:utils
                   npm test
 
-    unpublish-on-failure:
+    attach-to-release:
+        needs:
+            [publish-base-package, test-published-release, get-build-parameters]
+        if: needs.get-build-parameters.outputs.should_publish == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Download packages for release
+              uses: actions/download-artifact@v4
+              with:
+                  name: npm-packages-${{ github.run_id }}
+                  path: ./packages-for-release
+
+            - name: Zip packages for release
+              run: |
+                  cd ./packages-for-release
+                  zip -r ../valkey-glide-npm-packages-${{ needs.get-build-parameters.outputs.release_version }}.zip .
+
+            - name: Attach to GitHub release
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: ./valkey-glide-npm-packages-${{ needs.get-build-parameters.outputs.release_version }}.zip
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  tag_name: v${{ needs.get-build-parameters.outputs.release_version }}
+                  prerelease: ${{ contains(needs.get-build-parameters.outputs.release_version, '-rc') }}
+                  name: "Valkey GLIDE v${{ needs.get-build-parameters.outputs.release_version }} NPM Packages"
+                  draft: false
+                  fail_on_unmatched_files: true
+                  append_body: true
+                  body: |
+                      ## NPM Packages
+                      This release contains pre-built npm packages for the Valkey GLIDE Node.js client.
+                      - Base package: `@valkey/valkey-glide@${{ needs.get-build-parameters.outputs.release_version }}`
+                      - NPM tag: `${{ needs.get-build-parameters.outputs.npm_tag }}`
+
+    cleanup-artifacts:
         needs:
             [
-                prepare-and-publish-packages,
+                publish-base-package,
                 test-published-release,
                 get-build-parameters,
+                attach-to-release,
             ]
+        if: always() && needs.get-build-parameters.outputs.should_publish == 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Delete artifacts
+              uses: geekyeggo/delete-artifact@v2
+              with:
+                  name: |
+                      npm-packages-${{ github.run_id }}
+                      native-modules-*
+                      js-files-${{ github.run_id }}
+
+    unpublish-on-failure:
+        needs:
+            [publish-base-package, test-published-release, get-build-parameters]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
         steps:
@@ -445,23 +840,43 @@ jobs:
             - name: Unpublish Published Packages
               run: |
                   echo "Unpublishing due to failure…"
-                  # Main package
-                  npm unpublish @valkey/valkey-glide@${{ needs.get-build-parameters.outputs.release_version }} --force || echo "Failed to unpublish @valkey/valkey-glide, might not exist"
+                  VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
 
-                  # Platform packages
-                  for target in $(echo '${{ needs.get-build-parameters.outputs.platform_matrix }}' | jq -c '.[]'); do
+                  # NPM only allows unpublishing within 72 hours of publishing
+                  # Main package
+                  echo "Attempting to unpublish @valkey/valkey-glide@${VERSION}..."
+                  npm unpublish "@valkey/valkey-glide@${VERSION}" || echo "Note: Could not unpublish @valkey/valkey-glide@${VERSION}"
+
+                  # Platform packages - handle JSON parsing more robustly
+                  MATRIX_JSON='${{ needs.get-build-parameters.outputs.platform_matrix }}'
+
+                  # Validate JSON before processing
+                  if ! echo "$MATRIX_JSON" | jq -e . > /dev/null 2>&1; then
+                    echo "Warning: Invalid platform matrix JSON, unable to unpublish platform packages"
+                    exit 0
+                  fi
+
+                  # Process each platform package safely
+                  echo "$MATRIX_JSON" | jq -c '.[]' | while read -r target; do
                     # Extract the os-arch name from the matrix
-                    os=$(echo $target | jq -r '.NAMED_OS')
-                    arch=$(echo $target | jq -r '.ARCH')
-                    build_type=$(echo $target | jq -r '.build_type')
-                    if [[ "$build_type" == "musl" ]]; then
-                      additional_suffix="-musl"
-                    elif [[ "$build_type" == "gnu" ]]; then
-                      additional_suffix="-gnu"
-                    else
-                      additional_suffix=""
+                    if [[ -n "$target" ]]; then
+                      os=$(echo $target | jq -r '.NAMED_OS // empty')
+                      arch=$(echo $target | jq -r '.ARCH // empty')
+                      build_type=$(echo $target | jq -r '.build_type // empty')
+                      
+                      # Only proceed if we have valid data
+                      if [[ -n "$os" && -n "$arch" ]]; then
+                        if [[ "$build_type" == "musl" ]]; then
+                          additional_suffix="-musl"
+                        elif [[ "$build_type" == "gnu" ]]; then
+                          additional_suffix="-gnu"
+                        else
+                          additional_suffix=""
+                        fi
+                        
+                        package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
+                        echo "Attempting to unpublish ${package_name}@${VERSION}..."
+                        npm unpublish "${package_name}@${VERSION}" || echo "Note: Could not unpublish ${package_name}@${VERSION}"
+                      fi
                     fi
-                    package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
-                    echo "Unpublishing ${package_name}..."
-                    npm unpublish ${package_name}@${{ needs.get-build-parameters.outputs.npm_tag }} --force || echo "Failed to unpublish ${package_name}, might not exist"
                   done
