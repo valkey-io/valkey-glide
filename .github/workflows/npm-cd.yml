@@ -330,9 +330,6 @@ jobs:
                   node-version: latest
                   cache: "npm"
                   cache-dependency-path: ./node/package.json
-                  scope: "@valkey"
-                  registry-url: "https://registry.npmjs.org"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             # Install dependencies for the base package
             - name: Install dependencies
@@ -438,8 +435,6 @@ jobs:
             - name: Run NAPI prepublish
               shell: bash
               working-directory: ./node/npm/glide
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   echo "Running napi prepublish to set up dependencies and versions..."
                   napi prepublish --config "./package.json" --prefix "../" --skip-gh-release
@@ -464,7 +459,6 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: latest
-                  registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
@@ -727,9 +721,7 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: latest
-                  registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
-                  always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Unpublish Published Packages
