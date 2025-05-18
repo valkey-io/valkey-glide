@@ -1,8 +1,16 @@
 {
     "name": "@valkey/valkey-glide-linux-arm64-gnu",
-    "version": "255.255.255",
     "description": "Native bindings for valkey-glide on linux-arm64-gnu",
-    "bin": "valkey-glide.linux-arm64-gnu.node",
+    "version": "0.0.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://valkey.io/valkey-glide/node/",
+    "author": "Valkey GLIDE Maintainers",
+    "publishConfig": {
+        "access": "public"
+    },
     "main": "valkey-glide.linux-arm64-gnu.node",
     "files": [
         "valkey-glide.linux-arm64-gnu.node"

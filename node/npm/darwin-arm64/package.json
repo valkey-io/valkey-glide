@@ -1,8 +1,16 @@
 {
     "name": "@valkey/valkey-glide-darwin-arm64",
-    "version": "255.255.255",
+    "version": "0.0.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://valkey.io/valkey-glide/node/",
+    "author": "Valkey GLIDE Maintainers",
+    "publishConfig": {
+        "access": "public"
+    },
     "description": "Native bindings for valkey-glide on darwin-arm64",
-    "bin": "valkey-glide.darwin-arm64.node",
     "main": "valkey-glide.darwin-arm64.node",
     "files": [
         "valkey-glide.darwin-arm64.node"

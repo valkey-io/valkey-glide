@@ -4,13 +4,7 @@
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
-    "version": "255.255.255",
-    "licenses": [
-        {
-            "type": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-        }
-    ],
+    "version": "0.0.0",
     "exports": {
         ".": {
             "import": {
@@ -33,7 +27,9 @@
         "type": "git",
         "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
-    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
+    "homepage": "https://valkey.io/valkey-glide/node/",
+    "author": "Valkey GLIDE Maintainers",
+    "license": "Apache-2.0",
     "dependencies": {
         "long": "5",
         "protobufjs-minimal": "6.11.5"
@@ -106,8 +102,6 @@
         "typescript": "5",
         "uuid": "11"
     },
-    "author": "Valkey GLIDE Maintainers",
-    "license": "Apache-2.0",
     "lint-staged": {
         "*.@(js|ts|tsx)": [
             "npx eslint -c ../eslint.config.mjs --fix"
@@ -131,7 +125,8 @@
             ".ort.yml",
             "tsconfig.json",
             "THIRD_PARTY_LICENSES_NODE"
-        ]
+        ],
+        "access": "public"
     },
     "engines": {
         "node": ">=16",
