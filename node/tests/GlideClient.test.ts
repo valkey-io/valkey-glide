@@ -1738,6 +1738,84 @@ describe("GlideClient", () => {
             }
         },
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lazy connection establishes only on first command_%p",
+        async (protocol) => {
+            // Create a monitoring client (eagerly connected)
+            const monitoringClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    lazyConnect: false, // Explicit eager connection
+                    requestTimeout: 3000,
+                }),
+            );
+
+            try {
+                // Get initial client count
+                const getClientCount = async (): Promise<number> => {
+                    const result = await monitoringClient.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    if (result === null) return 0;
+
+                    const text = Buffer.isBuffer(result)
+                        ? result.toString()
+                        : String(result);
+                    const lines = text.trim().split("\n");
+                    return lines.filter((line) => line.trim().length > 0)
+                        .length;
+                };
+
+                const clientsBeforeLazyInit = await getClientCount();
+                console.log(
+                    `Protocol: ${protocol}, Clients before lazy client init: ${clientsBeforeLazyInit}`,
+                );
+
+                // Create lazy client
+                const lazyClient = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        {
+                            lazyConnect: true, // Lazy connection
+                            requestTimeout: 3000,
+                        },
+                    ),
+                );
+
+                try {
+                    // Verify no new connections were established
+                    const clientsAfterLazyInit = await getClientCount();
+                    console.log(
+                        `Protocol: ${protocol}, Clients after lazy client init: ${clientsAfterLazyInit}`,
+                    );
+
+                    expect(clientsAfterLazyInit).toEqual(clientsBeforeLazyInit);
+
+                    // Send first command with lazy client
+                    const pingResponse = await lazyClient.ping();
+                    expect(pingResponse).toEqual("PONG");
+
+                    // Check client count after first command
+                    const clientsAfterFirstCommand = await getClientCount();
+                    console.log(
+                        `Protocol: ${protocol}, Clients after first command: ${clientsAfterFirstCommand}`,
+                    );
+
+                    expect(clientsAfterFirstCommand).toEqual(
+                        clientsBeforeLazyInit + 1,
+                    );
+                } finally {
+                    await lazyClient.close();
+                }
+            } finally {
+                await monitoringClient.close();
+            }
+        },
+        TIMEOUT, // Using the same timeout as other connection tests
+    );
+
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(
