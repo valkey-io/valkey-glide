@@ -221,27 +221,27 @@ jobs:
                   retention-days: 1 # try not to keep them too long since our cache is limited
                   if-no-files-found: error
 
-    prepare-and-version-packages:
+    prepare-and-publish-packages:
+        environment: AWS_ACTIONS
         needs: [get-build-parameters, build-native-modules]
         runs-on: ubuntu-latest
-        outputs:
-            prepared_base_package_artifact_name: "prepared-base-package"
-            versioned_platform_packages_artifact_name: "versioned-platform-packages"
+        # Only run for actual publish events (tags or dispatch with publish=true)
+        if: needs.get-build-parameters.outputs.should_publish == 'true'
         steps:
-            - name: Checkout repository (for root package.json and build scripts)
+            - name: Checkout repository
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
-            # Put the native.js and native.d.ts files in the src directory, so it would be available for the base package build
+            # Put the native.js and native.d.ts files in the src directory
             - name: Download Module js files
               uses: actions/download-artifact@v4
               with:
                   name: js-files-${{ github.run_id }}
                   path: ./node/src
 
-            # We already built the native modules, so no need for full build
-            - name: Build TypeScript (for base package)
+            # Build TypeScript for base package
+            - name: Build TypeScript
               working-directory: ./node
               shell: bash
               run: |
@@ -249,41 +249,41 @@ jobs:
                   npm run build-protobuf
                   npm run build:ts:release
 
-            - name: Copy TS build output, package files to base_package_content
+            # Copy necessary files to npm/glide directory
+            - name: Prepare base package
               working-directory: ./node
               shell: bash
               run: |
                   mkdir -p ./npm/glide/build-ts
-                  # Copy built TypeScript files into glide build directory
                   cp -r ./build-ts/* ./npm/glide/build-ts/
                   cp ../LICENSE ./npm/glide/
                   cp ./README.md ./npm/glide/
                   cp ./package.json ./npm/glide/package.json
 
-            - name: Setup Node.js
+            # Set up Node.js with npm registry access
+            - name: Setup Node.js and NPM
               uses: actions/setup-node@v4
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
+                  always-auth: true
+                  token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Install NAPI-RS CLI
               shell: bash
               run: npm install -g @napi-rs/cli
 
-            - name: Run napi prepublish
+            # Set version for base package
+            - name: Set package version
               shell: bash
               working-directory: ./node/npm/glide
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
-                  echo "Version from tag (env): ${NAPI_RS_VERSION_FROM_TAG}"
-                  echo "  Release npm tag (env): ${NPM_TAG}"
+                  echo "Version from tag: ${NAPI_RS_VERSION_FROM_TAG}"
 
-                  # Set version in package.json using npm version
-                  # This replaces the placeholder 255.255.255 with the actual version
-                  # For rc versions, use the preid flag
+                  # Set version based on whether it's an RC or not
                   if [[ "${NAPI_RS_VERSION_FROM_TAG}" == *-rc* ]]; then
                     RC_PART=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | grep -oE 'rc[0-9]+$')
                     VERSION_BASE=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | sed 's/-rc[0-9]*$//')
@@ -292,102 +292,70 @@ jobs:
                     npm version "${NAPI_RS_VERSION_FROM_TAG}" --allow-same-version
                   fi
 
-                  # prepublish napi api is used to add the optional dependencies to the package.json base on additional triples in the package.json and take all the native modules from the npm directory and align there versions to the one in the package.json
-                  # pretty cool and helpful
+                  echo "Version set to: $(cat package.json | jq -r .version)"
+
+            # Run napi prepublish to set up optional dependencies
+            - name: Run NAPI prepublish
+              shell: bash
+              working-directory: ./node/npm/glide
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
                   napi prepublish \
                     --config "./package.json" \
                     --prefix "../" \
                     --skip-gh-release
 
-                  # echo some stuff, mainly for debugging
-
-                  echo "napi prepublish completed. Root package.json version:"
+                  echo "Optional dependencies:"
                   cat ./package.json | jq .optionalDependencies
 
-                  echo "napi prepublish completed. Root package.json version:"
-                  cat "./package.json" | jq .version
-
-                  # Checking all package.json files in the npm directory for the version
-                  echo "Checking all package.json files in the npm directory for the version:"
-                  for dir in ../*; do
+            # Verify all packages have correct versions
+            - name: Verify package versions
+              shell: bash
+              working-directory: ./node/npm
+              run: |
+                  echo "Checking all package.json files for correct versions:"
+                  for dir in ./*; do
                     if [ -f "${dir}/package.json" ]; then
                       echo "Package: ${dir}"
-                      cat "${dir}/package.json" | jq .version
+                      cat "${dir}/package.json" | jq -r .version
                     fi
                   done
 
-    publish-platform-packages:
-        environment: AWS_ACTIONS
-        needs: [prepare-and-version-packages, get-build-parameters]
-        runs-on: ubuntu-latest
-        # Only run for actual publish events (tags or dispatch with publish=true)
-        if: needs.get-build-parameters.outputs.should_publish == 'true'
-        steps:
-            - name: Setup Node.js and NPM
-              uses: actions/setup-node@v4
-              with:
-                  node-version: latest
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "@valkey"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-
-            - name: Publish each platform package
+            # Publish all platform packages first
+            - name: Publish platform packages
               shell: bash
-              working-directory: node/npm
+              working-directory: ./node/npm
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
-                  echo "Publishing platform packages from ./npm with tag ${NPM_TAG}"
+                  echo "Publishing platform packages with tag ${NPM_TAG}"
                   for dir in ./*; do
                     # Check if the directory is not the base package and contains a package.json file
                     if [[ "$dir" != "./glide" && -d "$dir" && -f "${dir}/package.json" ]]; then
                       echo "Publishing ${dir}..."
                       (cd "${dir}" && npm publish --tag "${NPM_TAG}" --access public)
-                      # Add error handling and unpublish logic here if needed
                     fi
                   done
 
-    publish-base-package:
-        needs: [
-                publish-platform-packages,
-                prepare-and-version-packages,
-                get-build-parameters,
-            ] # Depends on platform packages being published for optionalDeps
-        runs-on: ubuntu-latest
-        if: needs.get-build-parameters.outputs.should_publish == 'true'
-        steps:
-            - name: Setup Node.js and NPM
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "latest"
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "@valkey"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
+            # Then publish the base package after platform packages are available
             - name: Publish base package
               shell: bash
-              working-directory: node/npm/glide
+              working-directory: ./node/npm/glide
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
               run: |
                   echo "Publishing base package with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG}  --access public
+                  npm publish --tag ${NPM_TAG} --access public
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
-                      echo "::error::Publish failed"; exit 1
+                      echo "::error::Base package publish failed"; exit 1
                   fi
 
     test-published-release:
-        needs: [publish-base-package, get-build-parameters]
+        needs: [prepare-and-publish-packages, get-build-parameters]
         if: needs.get-build-parameters.outputs.should_publish == 'true'
         strategy:
             matrix:
@@ -457,7 +425,11 @@ jobs:
 
     unpublish-on-failure:
         needs:
-            [publish-base-package, test-published-release, get-build-parameters]
+            [
+                prepare-and-publish-packages,
+                test-published-release,
+                get-build-parameters,
+            ]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
         steps:
