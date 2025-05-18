@@ -1,13 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.commands.batch import (
+from .commands.batch import (
     Batch,
     ClusterBatch,
     ClusterTransaction,
     TBatch,
     Transaction,
 )
-from glide.commands.bitmap import (
+from .commands.bitmap import (
     BitEncoding,
     BitFieldGet,
     BitFieldIncrBy,
@@ -24,8 +24,8 @@ from glide.commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
-from glide.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
-from glide.commands.core_options import (
+from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
+from .commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -40,8 +40,8 @@ from glide.commands.core_options import (
     PubSubMsg,
     UpdateOptions,
 )
-from glide.commands.server_modules import ft, glide_json, json_batch
-from glide.commands.server_modules.ft_options.ft_aggregate_options import (
+from .commands.server_modules import ft, glide_json, json_batch
+from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateClause,
     FtAggregateFilter,
@@ -52,7 +52,7 @@ from glide.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateSortBy,
     FtAggregateSortProperty,
 )
-from glide.commands.server_modules.ft_options.ft_create_options import (
+from .commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
@@ -68,21 +68,21 @@ from glide.commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
-from glide.commands.server_modules.ft_options.ft_profile_options import (
+from .commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
     QueryType,
 )
-from glide.commands.server_modules.ft_options.ft_search_options import (
+from .commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     FtSearchOptions,
     ReturnField,
 )
-from glide.commands.server_modules.glide_json import (
+from .commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.commands.sorted_set import (
+from .commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
     GeoSearchByRadius,
@@ -97,7 +97,7 @@ from glide.commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.commands.stream import (
+from .commands.stream import (
     ExclusiveIdBound,
     IdBound,
     MaxId,
@@ -113,7 +113,7 @@ from glide.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.config import (
+from glide.shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -126,7 +126,8 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.constants import (
+from .protobuf.command_request_pb2 import RequestType
+from glide.shared.constants import (
     OK,
     TOK,
     FtAggregateResponse,
@@ -145,7 +146,7 @@ from glide.constants import (
     TXInfoStreamFullResponse,
     TXInfoStreamResponse,
 )
-from glide.exceptions import (
+from glide.shared.exceptions import (
     ClosingError,
     ConfigurationError,
     ConnectionError,
@@ -154,10 +155,9 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
-from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
-from glide.logger import Level as LogLevel
-from glide.logger import Logger
-from glide.routes import (
+from glide.glide_async.python.glide.logger import Level as LogLevel
+from glide.glide_async.python.glide.logger import Logger
+from glide.shared.routes import (
     AllNodes,
     AllPrimaries,
     ByAddressRoute,
@@ -170,15 +170,52 @@ from glide.routes import (
 
 from glide.glide_async.python.glide.glide import ClusterScanCursor, Script
 
+
+# try:
+#     from glide.glide_async.python.glide import TGlideClient
+#     from glide.glide_async.python.glide import GlideClient as AsyncGlideClient
+#     from glide.glide_async.python.glide import GlideClusterClient as AsyncGlideClusterClient
+#     GlideClient = AsyncGlideClient
+#     GlideClusterClient = AsyncGlideClusterClient
+# except ImportError:
+#     try:
+#         from glide.glide_sync.glide_sync import TGlideClient
+#         from glide.glide_sync.glide_sync import GlideClient as SyncGlideClient
+#         from glide.glide_sync.glide_sync import GlideClusterClient as SyncGlideClusterClient
+#         GlideClient = SyncGlideClient
+#         GlideClusterClient = SyncGlideClusterClient
+#     except ImportError as e:
+#         raise ImportError(
+#             f"GlideClient not available — please install with either "
+#             "`valkey-glide[async]` or `valkey-glide[sync]`.\n{e}"
+#         )
+
+# # Optional named exports if both are installed
+# try:
+#     from glide.glide_sync.glide_sync import TGlideClient
+#     from glide.glide_sync.glide_sync import GlideClient as SyncGlideClient
+#     from glide.glide_sync.glide_sync import GlideClusterClient as SyncGlideClusterClient
+# except ImportError:
+#     SyncGlideClient = None
+#     SyncGlideClusterClient = None
+
+# try:
+#     from glide.glide_async.python.glide import TGlideClient
+#     from glide.glide_async.python.glide import GlideClient as AsyncGlideClient
+#     from glide.glide_async.python.glide import GlideClusterClient as AsyncGlideClusterClient
+# except ImportError:
+#     AsyncGlideClient = None
+#     AsyncGlideClusterClient = None
+
 __all__ = [
     # Client
-    "GlideClient",
-    "GlideClusterClient",
+    # "GlideClient",
+    # "GlideClusterClient",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",
     "Transaction",
-    "TGlideClient",
+    # "TGlideClient",
     "TBatch",
     # Config
     "AdvancedGlideClientConfiguration",
@@ -329,4 +366,6 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # protobuf
+    "RequestType",
 ]

@@ -1,9 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-from glide.protobuf.command_request_pb2 import CommandRequest, RequestType
-from glide.protobuf.response_pb2 import Response
-from glide.protobuf_codec import PartialMessageException, ProtobufCodec
+from .protobuf.command_request_pb2 import CommandRequest, RequestType
+from .protobuf.response_pb2 import Response
+from .protobuf_codec import PartialMessageException, ProtobufCodec
 
 
 class TestProtobufCodec:

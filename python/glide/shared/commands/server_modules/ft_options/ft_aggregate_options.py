@@ -2,9 +2,9 @@
 from abc import ABC, abstractmethod
 from typing import List, Mapping, Optional
 
-from glide.commands.command_args import OrderBy
-from glide.commands.server_modules.ft_options.ft_constants import FtAggregateKeywords
-from glide.constants import TEncodable
+from ...command_args import OrderBy
+from .ft_constants import FtAggregateKeywords
+from glide.shared.constants import TEncodable
 
 
 class FtAggregateClause(ABC):

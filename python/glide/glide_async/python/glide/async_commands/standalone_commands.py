@@ -5,17 +5,17 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Union, cast
 
 from ..async_commands import CoreCommands
-from glide.commands.batch import Batch
-from glide.commands.command_args import ObjectType
-from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
-from glide.constants import (
+from glide.shared.commands.batch import Batch
+from glide.shared.commands.command_args import ObjectType
+from glide.shared.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
+from glide.shared.constants import (
     TOK,
     TEncodable,
     TFunctionListResponse,
     TFunctionStatsFullResponse,
     TResult,
 )
-from glide.protobuf.command_request_pb2 import RequestType
+from glide.shared.protobuf.command_request_pb2 import RequestType
 
 from glide.glide_async.python.glide.glide import Script
 

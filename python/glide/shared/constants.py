@@ -2,9 +2,9 @@
 
 from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
-from glide.protobuf.command_request_pb2 import CommandRequest
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.routes import ByAddressRoute, RandomNode, SlotIdRoute, SlotKeyRoute
+from .protobuf.command_request_pb2 import CommandRequest
+from .protobuf.connection_request_pb2 import ConnectionRequest
+from glide.shared.routes import ByAddressRoute, RandomNode, SlotIdRoute, SlotKeyRoute
 
 OK: str = "OK"
 DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)

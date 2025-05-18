@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: test-glide-meta
+Version: 0.1.0
+Summary: Meta client for test-glide-meta, combining sync and async clients
+License: MIT
+Provides-Extra: sync
+Requires-Dist: test-glide-async; extra == "sync"
+Provides-Extra: async
+Requires-Dist: test-glide-sync; extra == "async"
+Provides-Extra: full
+Requires-Dist: test-glide-async; extra == "full"
+Requires-Dist: test-glide-sync; extra == "full"

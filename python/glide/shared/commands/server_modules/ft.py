@@ -5,20 +5,20 @@ module for `vector search` commands.
 
 from typing import List, Mapping, Optional, cast
 
-from glide.commands.server_modules.ft_options.ft_aggregate_options import (
+from .ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
-from glide.commands.server_modules.ft_options.ft_constants import (
+from .ft_options.ft_constants import (
     CommandNames,
     FtCreateKeywords,
 )
-from glide.commands.server_modules.ft_options.ft_create_options import (
+from .ft_options.ft_create_options import (
     Field,
     FtCreateOptions,
 )
-from glide.commands.server_modules.ft_options.ft_profile_options import FtProfileOptions
-from glide.commands.server_modules.ft_options.ft_search_options import FtSearchOptions
-from glide.constants import (
+from .ft_options.ft_profile_options import FtProfileOptions
+from .ft_options.ft_search_options import FtSearchOptions
+from glide.shared.constants import (
     TOK,
     FtAggregateResponse,
     FtInfoResponse,
@@ -48,7 +48,7 @@ async def create(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> schema: List[Field] = [TextField("title")]
         >>> prefixes: List[str] = ["blog:post:"]
         >>> await ft.create(glide_client, "my_idx1", schema, FtCreateOptions(DataType.HASH, prefixes))
@@ -77,7 +77,7 @@ async def dropindex(client: TGlideClient, index_name: TEncodable) -> TOK:
 
     Examples:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
-        >>> from glide import ft
+        >>> from shared import ft
         >>> index_name = "idx"
         >>> await ft.dropindex(glide_client, index_name)
             'OK'  # Indicates successful deletion/dropping of index named 'idx'
@@ -97,7 +97,7 @@ async def list(client: TGlideClient) -> List[TEncodable]:
         List[TEncodable]: An array of index names.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.list(glide_client)
             [b"index1", b"index2"]
     """
@@ -132,7 +132,7 @@ async def search(
         - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
         - A key named {json:}1 with value {"a":1, "b":2}
 
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.search(
         ...     glide_client,
         ...     "idx",
@@ -169,7 +169,7 @@ async def aliasadd(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.aliasadd(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful addition of the alias named "myalias" for the index.
     """
@@ -189,7 +189,7 @@ async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.aliasdel(glide_client, "myalias")
             'OK'  # Indicates the successful deletion of the alias named "myalias"
     """
@@ -212,7 +212,7 @@ async def aliasupdate(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.aliasupdate(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful update of the alias to point to the index named "myindex"
     """
@@ -234,7 +234,7 @@ async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
     Examples:
         An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this
         example.
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.info(glide_client, "myIndex")
             [
                 b'index_name',
@@ -307,7 +307,7 @@ async def explain(
         TEncodable: A string containing the parsed results representing the execution plan.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.explain(glide_client, indexName="myIndex", query="@price:[0 10]")
             b'Field {\n  price\n  0\n  10\n}\n' # Parsed results.
     """
@@ -330,7 +330,7 @@ async def explaincli(
         List[TEncodable]: An array containing the execution plan.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.explaincli(glide_client, indexName="myIndex", query="@price:[0 10]")
             [b'Field {', b'  price', b'  0', b'  10', b'}', b''] # Parsed results.
     """
@@ -359,7 +359,7 @@ async def aggregate(
             of the command.
 
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft.aggregate(
         ...     glide_client,
         ...     "myIndex",
@@ -452,7 +452,7 @@ async def aliaslist(client: TGlideClient) -> Mapping[TEncodable, TEncodable]:
     Returns:
         Mapping[TEncodable, TEncodable]: A map of index aliases for indices being aliased.
     Examples:
-        >>> from glide import ft
+        >>> from shared import ft
         >>> await ft._aliaslist(glide_client)
             {b'alias': b'index1', b'alias-bytes': b'index2'}
     """

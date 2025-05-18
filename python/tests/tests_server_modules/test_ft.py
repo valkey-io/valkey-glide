@@ -7,10 +7,10 @@ import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
-from glide.commands.command_args import OrderBy
-from glide.commands.server_modules import ft
-from glide.commands.server_modules import glide_json as GlideJson
-from glide.commands.server_modules.ft_options.ft_aggregate_options import (
+from glide.shared.commands.command_args import OrderBy
+from glide.shared.commands.server_modules import ft
+from glide.shared.commands.server_modules import glide_json as GlideJson
+from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateGroupBy,
     FtAggregateOptions,
@@ -18,7 +18,7 @@ from glide.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateSortBy,
     FtAggregateSortProperty,
 )
-from glide.commands.server_modules.ft_options.ft_create_options import (
+from glide.shared.commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
@@ -32,14 +32,14 @@ from glide.commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
-from glide.commands.server_modules.ft_options.ft_profile_options import FtProfileOptions
-from glide.commands.server_modules.ft_options.ft_search_options import (
+from glide.shared.commands.server_modules.ft_options.ft_profile_options import FtProfileOptions
+from glide.shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
-from glide.config import ProtocolVersion
-from glide.constants import OK, FtSearchResponse, TEncodable
-from glide.exceptions import RequestError
+from glide.shared.config import ProtocolVersion
+from glide.shared.constants import OK, FtSearchResponse, TEncodable
+from glide.shared.exceptions import RequestError
 from glide.glide_async.python.glide import GlideClusterClient
 
 

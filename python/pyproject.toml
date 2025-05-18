@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-glide-meta"
+version = "0.1.0"
+description = "Meta client for test-glide-meta, combining sync and async clients"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+sync = ["test-glide-async"]
+async = ["test-glide-sync"]
+full = ["test-glide-async", "test-glide-sync"]
+
+[tool.setuptools]
+packages = ["test-glide-meta"]
+package-dir = {"" = ".."}

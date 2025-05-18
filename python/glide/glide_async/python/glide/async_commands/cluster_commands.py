@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Union, cast
 
 from ..async_commands.core import CoreCommands
-from glide.commands.batch import ClusterBatch
-from glide.commands.command_args import ObjectType
-from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
-from glide.constants import (
+from glide.shared.commands.batch import ClusterBatch
+from glide.shared.commands.command_args import ObjectType
+from glide.shared.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
+from glide.shared.constants import (
     TOK,
     TClusterResponse,
     TEncodable,
@@ -17,8 +17,8 @@ from glide.constants import (
     TResult,
     TSingleNodeRoute,
 )
-from glide.protobuf.command_request_pb2 import RequestType
-from glide.routes import Route
+from glide.shared.protobuf.command_request_pb2 import RequestType
+from glide.shared.routes import Route
 
 from glide.glide_async.python.glide.glide import ClusterScanCursor, Script
 

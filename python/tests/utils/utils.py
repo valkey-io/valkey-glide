@@ -4,16 +4,16 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
-from glide.commands.core_options import InfoSection
-from glide.constants import (
+from glide.shared.commands.core_options import InfoSection
+from glide.shared.constants import (
     TClusterResponse,
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
 from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
-from glide.routes import AllNodes
-from glide.glide_sync import TGlideClient as TSyncGlideClient
+from glide.shared.routes import AllNodes
+from glide.glide_sync.glide_sync import TGlideClient as TSyncGlideClient
 from packaging import version
 
 T = TypeVar("T")

@@ -3,9 +3,9 @@
 import asyncio
 
 import pytest
-from glide.config import ProtocolVersion
-from glide.constants import OK
-from glide.exceptions import RequestError
+from glide.shared.config import ProtocolVersion
+from glide.shared.constants import OK
+from glide.shared.exceptions import RequestError
 from glide.glide_async.python.glide import TGlideClient
 
 from tests.conftest import (

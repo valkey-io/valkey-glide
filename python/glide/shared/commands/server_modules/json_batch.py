@@ -3,7 +3,7 @@
 
 Examples:
     >>> import json
-    >>> from glide import json_batch
+    >>> from shared import json_batch
     >>> batch = ClusterBatch(is_atomic=True)
     >>> value = {'a': 1.0, 'b': 2}
     >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
@@ -22,14 +22,14 @@ Examples:
 
 from typing import List, Optional, Union
 
-from glide.commands.batch import TBatch
-from glide.commands.core_options import ConditionalChange
-from glide.commands.server_modules.glide_json import (
+from glide.shared.commands.batch import TBatch
+from glide.shared.commands.core_options import ConditionalChange
+from glide.shared.commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.constants import TEncodable
+from glide.shared.constants import TEncodable
 
 
 def set(

@@ -1,0 +1,10 @@
+
+[async]
+test-glide-sync
+
+[full]
+test-glide-async
+test-glide-sync
+
+[sync]
+test-glide-async

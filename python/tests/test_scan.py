@@ -2,10 +2,10 @@ import asyncio
 from typing import AsyncGenerator, List, cast
 
 import pytest
-from glide import ByAddressRoute
-from glide.commands.command_args import ObjectType
-from glide.config import ProtocolVersion
-from glide.exceptions import RequestError
+from glide.shared.routes import ByAddressRoute
+from glide.shared.commands.command_args import ObjectType
+from glide.shared.config import ProtocolVersion
+from glide.shared.exceptions import RequestError
 from glide.glide_async.python.glide.glide import ClusterScanCursor
 from glide.glide_async.python.glide import GlideClient, GlideClusterClient
 

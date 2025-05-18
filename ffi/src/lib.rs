@@ -950,7 +950,7 @@ pub unsafe extern "C" fn command(
     } else {
         Routes::default()
     };
-
+    
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_command(channel, async move {
         client

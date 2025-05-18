@@ -4,7 +4,7 @@ import random
 from typing import AsyncGenerator, Generator, List, Optional, Union
 
 import pytest
-from glide.config import (
+from glide.shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -15,14 +15,14 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.exceptions import ClosingError
+from glide.shared.exceptions import ClosingError
 from glide.glide_async.python.glide import GlideClient, GlideClusterClient, TGlideClient # TODO: change that to support both sync client
-from glide.logger import Level as logLevel
-from glide.logger import Logger
-from glide.routes import AllNodes
-from glide.glide_sync.glide_client import GlideClient as SyncGlideClient
-from glide.glide_sync import GlideClusterClient as SyncGlideClusterClient
-from glide.glide_sync import TGlideClient as TSyncGlideClient
+from glide.glide_async.python.glide.logger import Level as logLevel
+from glide.glide_async.python.glide.logger import Logger
+from glide.shared.routes import AllNodes
+from glide.glide_sync.glide_sync.glide_client import GlideClient as SyncGlideClient
+from glide.glide_sync.glide_sync import GlideClusterClient as SyncGlideClusterClient
+from glide.glide_sync.glide_sync import TGlideClient as TSyncGlideClient
 
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (

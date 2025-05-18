@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.config import (
+from glide.shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -12,9 +12,9 @@ from glide.config import (
     PeriodicChecksStatus,
     ReadFrom,
 )
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
-from glide.protobuf.connection_request_pb2 import TlsMode
+from .protobuf.connection_request_pb2 import ConnectionRequest
+from .protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
+from .protobuf.connection_request_pb2 import TlsMode
 
 
 def test_default_client_config():

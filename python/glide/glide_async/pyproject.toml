@@ -3,7 +3,7 @@ requires = ["maturin==0.14.17"]
 build-backend = "maturin"
 
 [project]
-name = "valkey-glide"
+name = "test-glide-async"
 description = "An open source Valkey client library that supports Valkey and Redis open source 6.2, 7.0, 7.2 and 8.0."
 requires-python = ">=3.9"
 dependencies = [

@@ -8,11 +8,11 @@ from cffi import FFI
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
-from glide.config import BaseClientConfiguration, GlideClusterClientConfiguration
-from glide.constants import OK, TEncodable, TResult
-from glide.exceptions import ClosingError, RequestError, get_request_error_class
-from glide.protobuf.command_request_pb2 import RequestType
-from glide.routes import Route
+from glide.shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
+from glide.shared.constants import OK, TEncodable, TResult
+from glide.shared.exceptions import ClosingError, RequestError, get_request_error_class
+from shared.protobuf.command_request_pb2 import RequestType
+from glide.shared.routes import Route
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -21,7 +21,7 @@ else:
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
-ROOT_DIR = CURR_DIR.parent.parent.parent
+ROOT_DIR = CURR_DIR.parent.parent.parent.parent
 FFI_DIR = ROOT_DIR / "ffi"
 LIB_FILE = FFI_DIR / "target" / "debug" / "libglide_ffi.so"
 

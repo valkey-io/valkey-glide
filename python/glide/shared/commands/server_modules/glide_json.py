@@ -3,7 +3,7 @@
 
 Examples:
 
-    >>> from glide import glide_json
+    >>> from shared import glide_json
     >>> import json
     >>> value = {'a': 1.0, 'b': 2}
     >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
@@ -19,8 +19,8 @@ Examples:
 """
 from typing import List, Optional, Union, cast
 
-from glide.commands.core_options import ConditionalChange
-from glide.constants import TOK, TEncodable, TJsonResponse, TJsonUniversalResponse
+from glide.shared.commands.core_options import ConditionalChange
+from glide.shared.constants import TOK, TEncodable, TJsonResponse, TJsonUniversalResponse
 from glide.glide_async.python.glide.glide_client import TGlideClient # TODO: change that to support both sync client
 
 
@@ -137,7 +137,7 @@ async def set(
             If `value` isn't set because of `set_condition`, returns None.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value)
@@ -187,7 +187,7 @@ async def get(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json, JsonGetOptions
+        >>> from shared import glide_json, JsonGetOptions
         >>> import json
         >>> json_str = await glide_json.get(client, "doc", "$")
         >>> json.loads(str(json_str)) # Parse JSON string to Python data
@@ -244,7 +244,7 @@ async def arrappend(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
@@ -307,7 +307,7 @@ async def arrindex(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
         >>> await glide_json.arrindex(client, "doc", "$[*]", '"b"')
@@ -371,7 +371,7 @@ async def arrinsert(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
             'OK'
         >>> await glide_json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
@@ -417,7 +417,7 @@ async def arrlen(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'  # JSON is successfully set for doc
         >>> await glide_json.arrlen(client, "doc", "$")
@@ -476,7 +476,7 @@ async def arrpop(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(
         ...     client,
         ...     "doc",
@@ -551,7 +551,7 @@ async def arrtrim(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
         >>> await glide_json.arrtrim(client, "doc", "$[*]", 0, 1)
@@ -594,7 +594,7 @@ async def clear(
         If `key doesn't exist, an error is raised.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(
         ...     client,
         ...     "doc",
@@ -676,7 +676,7 @@ async def debug_fields(
         For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
         >>> await glide_json.debug_fields(client, "k1", "$[*]")
@@ -742,7 +742,7 @@ async def debug_memory(
         For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
         >>> await glide_json.debug_memory(client, "k1", "$[*]")
@@ -798,7 +798,7 @@ async def delete(
         If `key` or `path` doesn't exist, returns 0.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
         >>> await glide_json.delete(client, "doc", "$..a")
@@ -833,7 +833,7 @@ async def forget(
         If `key` or `path` doesn't exist, returns 0.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
         >>> await glide_json.forget(client, "doc", "$..a")
@@ -883,7 +883,7 @@ async def mget(
 
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
         >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
@@ -929,7 +929,7 @@ async def numincrby(
             If the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
         >>> await glide_json.numincrby(client, "doc", "$.d[*]", 10)
@@ -972,7 +972,7 @@ async def nummultby(
             If the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
         >>> await glide_json.nummultby(client, "doc", "$.d[*]", 2)
@@ -1014,7 +1014,7 @@ async def objlen(
 
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
         >>> await glide_json.objlen(client, "doc", "$")
@@ -1068,7 +1068,7 @@ async def objkeys(
         For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
         >>> await glide_json.objkeys(client, "doc", "$")
@@ -1127,7 +1127,7 @@ async def resp(
         For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'
         >>> await glide_json.resp(client, "doc", "$..a")
@@ -1178,7 +1178,7 @@ async def strappend(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
@@ -1227,7 +1227,7 @@ async def strlen(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
@@ -1276,7 +1276,7 @@ async def toggle(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> import json
         >>> await glide_json.set(
         ...     client,
@@ -1327,7 +1327,7 @@ async def type(
         For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import glide_json
+        >>> from shared import glide_json
         >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'
         >>> await glide_json.type(client, "doc", "$.nested")
