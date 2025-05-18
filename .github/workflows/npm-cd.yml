@@ -129,20 +129,12 @@ jobs:
               env:
                   RELEASE: ${{ steps.pull-request-params.outputs.release_version || steps.workflow-dispatch-params.outputs.release_version || steps.tag-push-params.outputs.release_version }}
               run: |
-                  # npm-tag logic - support rc, alpha, beta pre-releases
-                  if [[ "$RELEASE" == *-* ]]; then
-                    # Extract prerelease identifier (rc, alpha, beta, etc.)
-                    PRERELEASE_TYPE=$(echo "$RELEASE" | grep -oE '[-](rc|alpha|beta)[0-9]+' | cut -d'-' -f2 | grep -oE '[a-z]+')
-                    
-                    # Default to "next" for rc or unknown prerelease types
-                    if [[ "$PRERELEASE_TYPE" == "alpha" ]]; then
-                      TAG="alpha"
-                    elif [[ "$PRERELEASE_TYPE" == "beta" ]]; then
-                      TAG="beta"
-                    else
-                      TAG="next"
-                    fi
+                  # npm-tag logic - simple latest/next determination
+                  if [[ "$RELEASE" == *-rc* ]]; then
+                    # Any release candidate version gets "next" tag
+                    TAG="next"
                   else
+                    # Regular releases get "latest" tag
                     TAG="latest"
                   fi
 
@@ -338,6 +330,9 @@ jobs:
                   node-version: latest
                   cache: "npm"
                   cache-dependency-path: ./node/package.json
+                  scope: "@valkey"
+                  registry-url: "https://registry.npmjs.org"
+                  token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             # Install dependencies for the base package
             - name: Install dependencies
@@ -438,7 +433,6 @@ jobs:
                   fi
 
                   echo "Base package version set to: $(cat package.json | jq -r .version)"
-                  cd ../..
 
             # Use NAPI prepublish to set up everything properly
             - name: Run NAPI prepublish
@@ -448,95 +442,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   echo "Running napi prepublish to set up dependencies and versions..."
-                  napi prepublish \
-                    --config "./package.json" \
-                    --prefix "../" \
-                    --skip-gh-release
-
-                  echo "Optional dependencies configured:"
-                  cat ./package.json | jq .optionalDependencies
-
-                  echo "Checking all platform package versions set by napi prepublish:"
-                  for dir in ../*; do
-                    if [ -d "$dir" ] && [ "$(basename "$dir")" != "glide" ]; then
-                      platform_name=$(basename "$dir")
-                      if [ -f "$dir/package.json" ]; then
-                        platform_version=$(cat "$dir/package.json" | jq -r .version)
-                        echo "  Package $platform_name: version=$platform_version"
-                      fi
-                    fi
-                  done
-
-            # Verify all packages have correct versions and content
-            - name: Validate package content
-              shell: bash
-              working-directory: ./node/npm
-              run: |
-                  echo "Validating package content..."
-
-                  # Check all package.json files for correct versions
-                  echo "Checking package versions:"
-                  for dir in ./*; do
-                    if [ -d "$dir" ]; then
-                      if [ -f "${dir}/package.json" ]; then
-                        package_dir=$(basename "$dir")
-                        version=$(cat "${dir}/package.json" | jq -r .version)
-                        echo "Package ${package_dir}: version=${version}"
-                        
-                        # Verify .node files exist in platform packages
-                        if [ "$package_dir" != "glide" ]; then
-                          node_files=$(find "$dir" -name "*.node")
-                          if [ -z "$node_files" ]; then
-                            echo "::error::No .node files found in $package_dir package"
-                            exit 1
-                          else
-                            echo "  Found native module(s): $node_files"
-                          fi
-                        fi
-                        
-                        # Verify LICENSE and README files exist
-                        if [ ! -f "${dir}/LICENSE" ]; then
-                          echo "::error::LICENSE file missing in $package_dir package"
-                          exit 1
-                        fi
-                        
-                        if [ ! -f "${dir}/README.md" ]; then
-                          echo "::error::README.md file missing in $package_dir package"
-                          exit 1
-                        fi
-                      fi
-                    fi
-                  done
-
-                  # Verify base package has correct structure
-                  if [ -d "./glide" ]; then
-                    if [ ! -d "./glide/build-ts" ]; then
-                      echo "::error::build-ts directory missing in base package"
-                      exit 1
-                    fi
-                    
-                    # Check for required files in the base package
-                    for file in "package.json" "LICENSE" "README.md"; do
-                      if [ ! -f "./glide/$file" ]; then
-                        echo "::error::$file missing in base package"
-                        exit 1
-                      fi
-                    done
-                    
-                    # Check if optionalDependencies are correctly set in base package
-                    opt_deps=$(cat "./glide/package.json" | jq -r '.optionalDependencies | length')
-                    if [ "$opt_deps" -eq 0 ]; then
-                      echo "::error::No optionalDependencies found in base package"
-                      exit 1
-                    else
-                      echo "  Base package has $opt_deps optional dependencies"
-                    fi
-                  else
-                    echo "::error::Base package directory not found"
-                    exit 1
-                  fi
-
-                  echo "All packages validated successfully"
+                  napi prepublish --config "./package.json" --prefix "../" --skip-gh-release
 
             # Upload all packages as artifacts for publishing
             - name: Upload packages for publishing
@@ -560,7 +466,6 @@ jobs:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
-                  always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
             # Download prepared packages
@@ -801,7 +706,7 @@ jobs:
                 get-build-parameters,
                 attach-to-release,
             ]
-        if: always() && needs.get-build-parameters.outputs.should_publish == 'true'
+        if: always()
         runs-on: ubuntu-latest
         steps:
             - name: Delete artifacts
@@ -809,7 +714,7 @@ jobs:
               with:
                   name: |
                       npm-packages-${{ github.run_id }}
-                      native-modules-*
+                      artifacts-*
                       js-files-${{ github.run_id }}
 
     unpublish-on-failure:
