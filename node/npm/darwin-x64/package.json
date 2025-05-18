@@ -1,6 +1,6 @@
 {
     "name": "@valkey/valkey-glide-darwin-x64",
-    "version": "$RELEASE_VERSION",
+    "version": "255.255.255",
     "description": "Native bindings for valkey-glide on darwin-x64",
     "bin": "glide-rs.darwin-x64.node",
     "main": "glide-rs.darwin-x64.node",

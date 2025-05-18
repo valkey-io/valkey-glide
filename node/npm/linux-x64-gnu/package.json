@@ -1,6 +1,6 @@
 {
     "name": "@valkey/valkey-glide-linux-x64-gnu",
-    "version": "$RELEASE_VERSION",
+    "version": "255.255.255",
     "description": "Native bindings for valkey-glide on linux-x64-gnu",
     "bin": "glide-rs.linux-x64-gnu.node",
     "main": "glide-rs.linux-x64-gnu.node",
