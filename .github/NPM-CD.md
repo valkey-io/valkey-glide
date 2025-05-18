@@ -25,10 +25,8 @@ Determines the appropriate version number, npm tag, and platform matrix based on
 - For manual triggers: Uses the user-provided version
 - For PRs: Uses a placeholder version (255.255.255)
 - Sets npm tag based on release type:
-  - "latest" for stable releases (1.0.0)
-  - "next" for release candidates (1.0.0-rc1)
-  - "alpha" for alpha releases (1.0.0-alpha1)
-  - "beta" for beta releases (1.0.0-beta1)
+    - "latest" for stable releases (1.0.0)
+    - "next" for release candidates (1.0.0-rc1)
 - Also determines whether packages should be published based on trigger type
 
 ### 2. Native Module Building (build-native-modules)
@@ -114,9 +112,9 @@ The workflow includes an optimized TypeScript build process:
 1. Uses npm caching for faster builds
 2. Installs only the necessary dependencies for building
 3. Compiles TypeScript with the following optimizations:
-   - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
-   - `--pretty`: Formats error messages for better readability
-   - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
+    - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
+    - `--pretty`: Formats error messages for better readability
+    - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
 4. Reports build statistics for monitoring output size
 
 ## Adding New Platforms
@@ -132,16 +130,15 @@ To add support for a new platform:
 The workflow triggers on:
 
 1. Pull requests that modify:
-   - Workflow file itself (.github/workflows/npm-cd.yml)
-   - JSON matrices (.github/json_matrices/**)
-   - Package configuration (node/package.json)
-   - NPM directory structure (node/npm/**)
-   - Rust client files (node/rust-client/Cargo.toml, node/rust-client/src/**)
-   - TypeScript sources (node/src/**/*.ts)
-   
-2. Pushing tags that match the pattern "v*.*.*" (e.g., v1.2.3, v1.2.3-rc1)
+    - Workflow file itself (.github/workflows/npm-cd.yml)
+    - JSON matrices (.github/json_matrices/\*\*)
+    - Package configuration (node/package.json)
+    - NPM directory structure (node/npm/\*\*)
+    - Rust client files (node/rust-client/Cargo.toml, node/rust-client/src/\*\*)
+    - TypeScript sources (node/src/\*_/_.ts)
+2. Pushing tags that match the pattern "v*.*.\*" (e.g., v1.2.3, v1.2.3-rc1)
 
 3. Manual workflow dispatch with:
-   - Version input (required)
-   - Publish option (boolean)
-   - Create node tag option (boolean)
+    - Version input (required)
+    - Publish option (boolean)
+    - Create node tag option (boolean)
