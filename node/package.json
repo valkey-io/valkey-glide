@@ -60,8 +60,8 @@
         "valkey-glide"
     ],
     "scripts": {
-        "clean:build": "rm -rf build-ts dist/*/target rust-client/target rust-client/glide-rs.*.node src/glide-rs.*.node build/*.tsbuildinfo",
-        "clean": "rm -rf build-ts dist/*/target node_modules rust-client/node_modules */node_modules rust-client/target glide-logs rust-client/glide-rs.*.node src/glide-rs.*.node rust-client/index.* src/ProtobufMessage.* *.tsbuildinfo test-report*.html yarn.lock package-lock.json rust-client/package-lock.json rust-client/Cargo.lock",
+        "clean:build": "rm -rf build-ts dist/*/target rust-client/target rust-client/valkey-glide.*.node src/valkey-glide.*.node build/*.tsbuildinfo",
+        "clean": "rm -rf build-ts dist/*/target node_modules rust-client/node_modules */node_modules rust-client/target glide-logs rust-client/valkey-glide.*.node src/valkey-glide.*.node rust-client/index.* src/ProtobufMessage.* *.tsbuildinfo test-report*.html yarn.lock package-lock.json rust-client/package-lock.json rust-client/Cargo.lock",
         "prebuild": "npm run clean:build",
         "build": "BUILD_MODE=dev npm run build:flow",
         "build:release": "BUILD_MODE=release npm run build:flow",
@@ -83,7 +83,8 @@
         "prettier:check": "prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
         "staged": "lint-staged",
-        "prereq": "npm install"
+        "prereq": "npm install",
+        "artifacts": "napi artifacts"
     },
     "devDependencies": {
         "@jest/globals": "29",

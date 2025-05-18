@@ -2,10 +2,10 @@
     "name": "@valkey/valkey-glide-darwin-x64",
     "version": "255.255.255",
     "description": "Native bindings for valkey-glide on darwin-x64",
-    "bin": "glide-rs.darwin-x64.node",
-    "main": "glide-rs.darwin-x64.node",
+    "bin": "valkey-glide.darwin-x64.node",
+    "main": "valkey-glide.darwin-x64.node",
     "files": [
-        "glide-rs.darwin-x64.node"
+        "valkey-glide.darwin-x64.node"
     ],
     "os": [
         "darwin"
