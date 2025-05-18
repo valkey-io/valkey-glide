@@ -2951,7 +2951,7 @@ where
                     let future: Option<
                         RequestState<Pin<Box<dyn Future<Output = OperationResult> + Send>>>,
                     > = if let Some(moved_redirect) = moved_redirect {
-                        // record moved error metric if telemetry is initialized
+                            // record moved error metric if telemetry is initialized
                             if let Err(e) = GlideOpenTelemetry::record_moved_error() {
                                 log_error(
                                     "OpenTelemetry:moved_error",
