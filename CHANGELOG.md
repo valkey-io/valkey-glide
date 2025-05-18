@@ -88,6 +88,7 @@
 * Go: Remove redundant implementations of echo ([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
 * Java: Add toArgs() to restore batch command ([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
 * Java: Add error restore command ([#3905](https://github.com/valkey-io/valkey-glide/pull/3905))
+* Core: Add reference counting to Script container to support multiple instances ([#3897](https://github.com/valkey-io/valkey-glide/pull/3897))
 
 #### Breaking Changes
 
