@@ -328,8 +328,6 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: latest
-                  cache: "npm"
-                  cache-dependency-path: ./node/package.json
 
             # Install dependencies for the base package
             - name: Install dependencies
@@ -409,29 +407,19 @@ jobs:
               shell: bash
               run: npm install -g @napi-rs/cli
 
-            # Set version for all packages
+            # Set version for base package
             - name: Set package versions
               shell: bash
               working-directory: ./node
               env:
                   NAPI_RS_VERSION_FROM_TAG: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
-                  echo "Setting version to: ${NAPI_RS_VERSION_FROM_TAG}"
-
-                  # Set the version in base package first
-                  echo "Setting version in base package..."
+                  echo "Setting version in base package using sed..."
                   cd ./npm/glide
-                  if [[ "${NAPI_RS_VERSION_FROM_TAG}" == *-rc* ]]; then
-                    RC_PART=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | grep -oE 'rc[0-9]+$')
-                    VERSION_BASE=$(echo "${NAPI_RS_VERSION_FROM_TAG}" | sed 's/-rc[0-9]*$//')
-                    npm version "${VERSION_BASE}-${RC_PART}" --allow-same-version --preid "${RC_PART}"
-                  else
-                    npm version "${NAPI_RS_VERSION_FROM_TAG}" --allow-same-version
-                  fi
+                  sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
+                  echo "Base package version is now: $(jq -r .version package.json)"
 
-                  echo "Base package version set to: $(cat package.json | jq -r .version)"
-
-            # Use NAPI prepublish to set up everything properly
+            # Use NAPI prepublish to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
             - name: Run NAPI prepublish
               shell: bash
               working-directory: ./node/npm/glide
@@ -656,50 +644,9 @@ jobs:
                   npm run build:utils
                   npm test
 
-    attach-to-release:
-        needs:
-            [publish-base-package, test-published-release, get-build-parameters]
-        if: needs.get-build-parameters.outputs.should_publish == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        steps:
-            - name: Download packages for release
-              uses: actions/download-artifact@v4
-              with:
-                  name: npm-packages-${{ github.run_id }}
-                  path: ./packages-for-release
-
-            - name: Zip packages for release
-              run: |
-                  cd ./packages-for-release
-                  zip -r ../valkey-glide-npm-packages-${{ needs.get-build-parameters.outputs.release_version }}.zip .
-
-            - name: Attach to GitHub release
-              uses: softprops/action-gh-release@v1
-              with:
-                  files: ./valkey-glide-npm-packages-${{ needs.get-build-parameters.outputs.release_version }}.zip
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  tag_name: v${{ needs.get-build-parameters.outputs.release_version }}
-                  prerelease: ${{ contains(needs.get-build-parameters.outputs.release_version, '-rc') }}
-                  name: "Valkey GLIDE v${{ needs.get-build-parameters.outputs.release_version }} NPM Packages"
-                  draft: false
-                  fail_on_unmatched_files: true
-                  append_body: true
-                  body: |
-                      ## NPM Packages
-                      This release contains pre-built npm packages for the Valkey GLIDE Node.js client.
-                      - Base package: `@valkey/valkey-glide@${{ needs.get-build-parameters.outputs.release_version }}`
-                      - NPM tag: `${{ needs.get-build-parameters.outputs.npm_tag }}`
-
     cleanup-artifacts:
         needs:
-            [
-                publish-base-package,
-                test-published-release,
-                get-build-parameters,
-                attach-to-release,
-            ]
+            [publish-base-package, test-published-release, get-build-parameters]
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -757,6 +704,16 @@ jobs:
                           additional_suffix="-musl"
                         elif [[ "$build_type" == "gnu" ]]; then
                           additional_suffix="-gnu"
+                        else
+                          additional_suffix=""
+                        fi
+                        
+                        package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
+                        echo "Attempting to unpublish ${package_name}@${VERSION}..."
+                        npm unpublish "${package_name}@${VERSION}" || echo "Note: Could not unpublish ${package_name}@${VERSION}"
+                      fi
+                    fi
+                  done
                         else
                           additional_suffix=""
                         fi
