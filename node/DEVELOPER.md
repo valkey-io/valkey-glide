@@ -334,9 +334,13 @@ await cluster.ping();
 
 ## CI/CD Workflow
 
-- CD workflow lives in `.github/workflows/npm-cd.yml`.
+- NPM CD workflow lives in `.github/workflows/npm-cd.yml`.
+- NPM CI workflow lives in `.github/workflows/node.yml`.
 - Build system uses napi-rs CLI (`build`, `artifacts`, `prepublish`) for native module handling.
 - Cross-compilation (glibc, musl, macOS) uses Zig for deterministic platform-specific binaries.
+    - GNU builds use Zig with ABI suffix 2.17 for better backward compatibility.
+    - musl builds use Zig with clean environment for portability.
+    - macOS builds include ARM64 and x86_64 architectures.
 - TypeScript build process uses optimizations for production code:
     - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
     - `--pretty`: Formats error messages for better readability
@@ -344,9 +348,21 @@ await cluster.ping();
 - Package organization:
     - Base package: `@valkey/valkey-glide` (TypeScript code, requires platform packages)
     - Platform packages: Named `@valkey/valkey-glide-{os}-{arch}[-{libc}]`
+        - Example: `@valkey/valkey-glide-darwin-arm64`, `@valkey/valkey-glide-linux-x64-gnu`
+    - Each platform package contains platform-specific .node native binary
     - Base package uses `optionalDependencies` to reference platform packages
     - Uses 255.255.255 version placeholder during development
-- The workflow now properly triggers on TypeScript file changes in `node/src/**/*.ts`
+- The NPM CD workflow:
+    - Triggers on tag pushes (v*.*.\*, e.g., v1.0.0, v1.2.3-rc1)
+    - Triggers on manual workflow dispatch with version input
+    - Triggers on PRs that modify package.json, workflow files, or TypeScript sources
+    - Builds across all supported platforms in parallel for efficiency
+    - Tests published packages with valkey/redis server
+    - Provides npm tags based on version type:
+        - "latest" for stable releases (e.g., 1.0.0)
+        - "next" for release candidates (e.g., 1.0.0-rc1)
+    - Creates Node.js specific git tags (vX.Y.Z-node) when requested
+    - Includes safety mechanisms to unpublish packages on test failures
 
 ## Recommended VS Code Extensions
 
