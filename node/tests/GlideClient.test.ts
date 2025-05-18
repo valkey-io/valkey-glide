@@ -1804,7 +1804,7 @@ describe("GlideClient", () => {
                 await monitoringClient.close();
             }
         },
-        TIMEOUT, // Using the same timeout as other connection tests
+        TIMEOUT,
     );
 
     runBaseTests({
