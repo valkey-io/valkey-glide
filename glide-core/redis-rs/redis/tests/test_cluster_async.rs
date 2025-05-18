@@ -1671,9 +1671,30 @@ mod cluster_async {
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_refresh_topology_even_with_zero_retries() {
+        // # Test: Non-Head-of-Line Blocking During Slot Refresh
+        //
+        // This test verifies that the Redis Cluster client implementation does not exhibit head-of-line blocking
+        // when a slot refresh operation is in progress. When the client receives a MOVED error and begins
+        // refreshing its slot mappings, it should still be able to process other requests to different keys
+        // without waiting for the slot refresh to complete.
+        //
+        // ## Test Flow:
+        //
+        // 1. Send a GET request for key "test". This returns a MOVED error from port 6379, triggering a slot refresh.
+        //
+        // 2. Immediately send a GET request for key "foo". If the client properly avoids head-of-line
+        //    blocking, this request should succeed immediately without waiting for the slot refresh.
+        //
+        // 3. Send a second GET request for key "test". Since the slot refresh is still in progress,
+        //    this MUST still receive a MOVED error, confirming that the refresh is still ongoing.
+        //
+        // 4. Wait for slot refresh to complete.
+        //
+        // 5. Send a final GET request for key "test", which should now succeed as the slot refresh has completed.
         let name = "test_async_cluster_refresh_topology_even_with_zero_retries";
 
-        let should_refresh = atomic::AtomicBool::new(false);
+        // Flag to track when we've done the initial GET that triggered MOVED
+        let initiated_refresh = atomic::AtomicBool::new(false);
 
         let MockEnv {
             runtime,
@@ -1686,7 +1707,7 @@ mod cluster_async {
             .slots_refresh_rate_limit(Duration::from_secs(0), 0),
             name,
             move |cmd: &[u8], port| {
-                if !should_refresh.load(atomic::Ordering::SeqCst) {
+                if !initiated_refresh.load(atomic::Ordering::SeqCst) {
                     respond_startup(name, cmd)?;
                 }
 
@@ -1716,17 +1737,24 @@ mod cluster_async {
                 }
 
                 if contains_slice(cmd, b"GET") {
-                    let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
-                    match port {
-                        6380 => get_response,
-                        // Respond that the key exists on a node that does not yet have a connection:
-                        _ => {
-                            // Should not attempt to refresh slots more than once:
-                            assert!(!should_refresh.swap(true, Ordering::SeqCst));
+                    if contains_slice(cmd, b"test") {
+                        // Mark that we've started the refresh process
+                        initiated_refresh.store(true, Ordering::SeqCst);
+                        // Port-based routing for 'test' key
+                        if port == 6379 {
                             Err(parse_redis_value(
-                                format!("-MOVED 123 {name}:6380\r\n").as_bytes(),
+                                format!("-MOVED 6918 {name}:6380\r\n").as_bytes(),
                             ))
+                        } else if port == 6380 {
+                            Err(Ok(Value::BulkString(b"test-value".to_vec())))
+                        } else {
+                            Err(Ok(Value::Nil))
                         }
+                    } else if contains_slice(cmd, b"foo") {
+                        // For 'foo' key, always succeed regardless of port
+                        Err(Ok(Value::BulkString(b"foo-value".to_vec())))
+                    } else {
+                        panic!("unexpected key")
                     }
                 } else {
                     panic!("unexpected command {cmd:?}")
@@ -1734,29 +1762,67 @@ mod cluster_async {
             },
         );
 
+        // STEP 1: First GET to 'test' triggers MOVED error and slot refresh
         let value = runtime.block_on(
             cmd("GET")
                 .arg("test")
-                .query_async::<_, Option<i32>>(&mut connection),
+                .query_async::<_, String>(&mut connection),
         );
 
-        // The user should receive an initial error, because there are no retries and the first request failed.
+        // This should return MOVED error
+        assert!(value.is_err());
+        assert_eq!(value.unwrap_err().kind(), ErrorKind::Moved);
+
+        // STEP 2: While slot refresh is happening, send request to 'foo'
+        let foo_value = runtime.block_on(
+            cmd("GET")
+                .arg("foo")
+                .query_async::<_, String>(&mut connection),
+        );
+
+        // This should succeed immediately, demonstrating non-blocking behavior
         assert_eq!(
-            value,
-            Err(RedisError::from((
-                ErrorKind::Moved,
-                "An error was signalled by the server",
-                "test_async_cluster_refresh_topology_even_with_zero_retries:6380".to_string()
-            )))
+            foo_value,
+            Ok("foo-value".to_string()),
+            "Request for 'foo' should succeed even during slot refresh"
         );
 
-        let value = runtime.block_on(
+        // STEP 3: Try 'test' again to verify refresh is still ongoing
+        let second_test_value = runtime.block_on(
             cmd("GET")
                 .arg("test")
-                .query_async::<_, Option<i32>>(&mut connection),
+                .query_async::<_, String>(&mut connection),
         );
 
-        assert_eq!(value, Ok(Some(123)));
+        // This should still fail with MOVED error
+        assert!(
+            second_test_value.is_err(),
+            "Second request for 'test' should fail"
+        );
+        assert_eq!(
+            second_test_value.unwrap_err().kind(),
+            ErrorKind::Moved,
+            "Second request for 'test' should fail with MOVED error"
+        );
+
+        // STEP 4: Wait for slot refresh to complete
+        runtime.block_on(async {
+            sleep(futures_time::time::Duration::from_millis(200)).await;
+        });
+
+        // STEP 5: Final request after refresh should work
+        let final_value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, String>(&mut connection),
+        );
+
+        // This should now succeed
+        assert_eq!(
+            final_value,
+            Ok("test-value".to_string()),
+            "Request for 'test' after refresh should succeed"
+        );
     }
 
     #[test]
