@@ -325,6 +325,11 @@ jobs:
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
 
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
             - name: Publish each platform package
               shell: bash
               working-directory: node/npm
@@ -465,13 +470,14 @@ jobs:
                   npm unpublish @valkey/valkey-glide@${{ needs.get-build-parameters.outputs.release_version }} --force || echo "Failed to unpublish @valkey/valkey-glide, might not exist"
 
                   # Platform packages
-                  for target in ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}; do
+                  for target in $(echo '${{ needs.get-build-parameters.outputs.platform_matrix }}' | jq -c '.[]'); do
                     # Extract the os-arch name from the matrix
                     os=$(echo $target | jq -r '.NAMED_OS')
                     arch=$(echo $target | jq -r '.ARCH')
-                    if [[ ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix.build_type) }} == "musl" ]]; then
+                    build_type=$(echo $target | jq -r '.build_type')
+                    if [[ "$build_type" == "musl" ]]; then
                       additional_suffix="-musl"
-                    elif [[ ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix.build_type) }} == "gnu" ]]; then
+                    elif [[ "$build_type" == "gnu" ]]; then
                       additional_suffix="-gnu"
                     else
                       additional_suffix=""
