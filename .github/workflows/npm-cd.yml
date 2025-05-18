@@ -299,7 +299,9 @@ jobs:
                   retention-days: 1
                   if-no-files-found: error
 
-    prepare-and-version-packages:
+    prepare-and-publish:
+        environment: AWS_ACTIONS
+        if: github.repository_owner == 'valkey-io'
         needs: [get-build-parameters, build-native-modules]
         runs-on: ubuntu-latest
         outputs:
@@ -323,11 +325,16 @@ jobs:
               with:
                   path: ./node/artifacts
 
-            # Setup Node.js for TypeScript build with caching
+            # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
               uses: actions/setup-node@v4
               with:
                   node-version: latest
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "@valkey"
+                  token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  cache: "npm"
+                  cache-dependency-path: node/package.json
 
             # Install dependencies for the base package
             - name: Install dependencies
@@ -403,10 +410,6 @@ jobs:
                   cp ./README.md ./npm/glide/
                   cp ./package.json ./npm/glide/package.json
 
-            - name: Install NAPI-RS CLI
-              shell: bash
-              run: npm install -g @napi-rs/cli
-
             # Set version for base package
             - name: Set package versions
               shell: bash
@@ -419,94 +422,15 @@ jobs:
                   sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
                   echo "Base package version is now: $(jq -r .version package.json)"
 
-            # Use NAPI prepublish to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
-            - name: Run NAPI prepublish
+            - name: Install NAPI-RS CLI
+              shell: bash
+              run: npm install -g @napi-rs/cli
+
+            # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
+            - name: Publish packages
+              if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
               shell: bash
               working-directory: ./node/npm/glide
-              run: |
-                  echo "Running napi prepublish to set up dependencies and versions..."
-                  napi prepublish --config "./package.json" --prefix "../" --skip-gh-release
-
-            # Upload all packages as artifacts for publishing
-            - name: Upload packages for publishing
-              uses: actions/upload-artifact@v4
-              with:
-                  name: npm-packages-${{ github.run_id }}
-                  path: ./node/npm
-                  retention-days: 1
-                  if-no-files-found: error
-
-    publish-platform-packages:
-        environment: AWS_ACTIONS
-        needs: [prepare-and-version-packages, get-build-parameters]
-        runs-on: ubuntu-latest
-        # Only run for actual publish events (tags or dispatch with publish=true)
-        if: needs.get-build-parameters.outputs.should_publish == 'true'
-        steps:
-            - name: Setup Node.js and NPM
-              uses: actions/setup-node@v4
-              with:
-                  node-version: latest
-                  scope: "@valkey"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            # Download prepared packages
-            - name: Download prepared packages
-              uses: actions/download-artifact@v4
-              with:
-                  name: npm-packages-${{ github.run_id }}
-                  path: ./npm-packages
-
-            # Publish all platform packages first
-            - name: Publish platform packages
-              shell: bash
-              working-directory: ./npm-packages
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-                  NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
-              run: |
-                  echo "Publishing platform packages with tag ${NPM_TAG}"
-                  for dir in ./*; do
-                    # Check if the directory is not the base package and contains a package.json file
-                    if [[ "$dir" != "./glide" && -d "$dir" && -f "${dir}/package.json" ]]; then
-                      package_name=$(cat "${dir}/package.json" | jq -r .name)
-                      version=$(cat "${dir}/package.json" | jq -r .version)
-                      echo "Publishing ${package_name}@${version}..."
-                      (cd "${dir}" && npm publish --tag "${NPM_TAG}" --access public)
-                    fi
-                  done
-
-    publish-base-package:
-        needs:
-            [
-                publish-platform-packages,
-                prepare-and-version-packages,
-                get-build-parameters,
-            ]
-        environment: AWS_ACTIONS
-        runs-on: ubuntu-latest
-        if: needs.get-build-parameters.outputs.should_publish == 'true'
-        steps:
-            - name: Setup Node.js and NPM
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "latest"
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "@valkey"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            # Download prepared packages
-            - name: Download prepared packages
-              uses: actions/download-artifact@v4
-              with:
-                  name: npm-packages-${{ github.run_id }}
-                  path: ./npm-packages
-
-            # Then publish the base package after platform packages are available
-            - name: Publish base package
-              shell: bash
-              working-directory: ./npm-packages/glide
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
@@ -521,11 +445,21 @@ jobs:
                       echo "::error::Base package publish failed"; exit 1
                   fi
 
-                  echo "Base package published successfully"
+                  echo "Packages published successfully"
+
+              # Delete artifacts if not published
+            - name: Delete artifacts
+              if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
+              uses: geekyeggo/delete-artifact@v2
+              with:
+                  name: |
+                      npm-packages-${{ github.run_id }}
+                      artifacts-*
+                      js-files-${{ github.run_id }}
 
     create-node-tag:
-        needs:
-            [publish-base-package, test-published-release, get-build-parameters]
+        needs: [get-build-parameters, prepare-and-publish]
+        # Only create the tag if the publish was successful and the tag creation is requested
         if: |
             needs.get-build-parameters.outputs.should_publish == 'true' && 
             needs.get-build-parameters.outputs.should_create_node_tag == 'true'
@@ -557,7 +491,8 @@ jobs:
                   echo "Successfully created and pushed tag: ${NODE_TAG}"
 
     test-published-release:
-        needs: [publish-base-package, get-build-parameters]
+        needs: [get-build-parameters, prepare-and-publish]
+        # Only run tests if the publish was successful
         if: needs.get-build-parameters.outputs.should_publish == 'true'
         strategy:
             matrix:
@@ -645,9 +580,8 @@ jobs:
                   npm test
 
     cleanup-artifacts:
-        needs:
-            [publish-base-package, test-published-release, get-build-parameters]
-        if: always()
+        needs: [test-published-release, get-build-parameters]
+        if: always() && needs.get-build-parameters.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
         steps:
             - name: Delete artifacts
@@ -659,8 +593,7 @@ jobs:
                       js-files-${{ github.run_id }}
 
     unpublish-on-failure:
-        needs:
-            [publish-base-package, test-published-release, get-build-parameters]
+        needs: [test-published-release, get-build-parameters]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
         steps:

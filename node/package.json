@@ -80,7 +80,8 @@
         "prettier:format": "prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
         "staged": "lint-staged",
         "prereq": "npm install",
-        "artifacts": "napi artifacts"
+        "artifacts": "napi artifacts",
+        "prepublishOnly": "napi prepublish -t ../npm"
     },
     "devDependencies": {
         "@jest/globals": "29",
