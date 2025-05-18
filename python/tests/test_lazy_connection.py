@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Union, cast
+from typing import Any, Union, cast
 
 import anyio
 import pytest
@@ -23,8 +23,8 @@ async def get_client_list_output_count(output: Union[bytes, str, None]) -> int:
 
 async def get_standalone_client_count(client: GlideClient) -> int:
     """Gets client count for a standalone server."""
-    result = await client.custom_command(["CLIENT", "LIST"])
-    return await get_client_list_output_count(result)
+    result: Any = await client.custom_command(["CLIENT", "LIST"])
+    return await get_client_list_output_count(cast(Union[bytes, str, None], result))
 
 
 @pytest.mark.anyio
@@ -33,12 +33,12 @@ async def get_standalone_client_count(client: GlideClient) -> int:
 class TestLazyConnection:
     async def test_lazy_connection_establishes_on_first_command(
         self,
-        request,
+        request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
     ):
-        monitoring_client = None
-        lazy_glide_client = None
+        monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
+        lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
         mode_str = "Cluster" if cluster_mode else "Standalone"
 
         clients_before_lazy_init = 0
@@ -55,9 +55,9 @@ class TestLazyConnection:
                 connection_timeout=3000,
             )
             if cluster_mode:
-                assert type(monitoring_client) is GlideClusterClient
+                assert isinstance(monitoring_client, GlideClusterClient)
             else:
-                assert type(monitoring_client) is GlideClient
+                assert isinstance(monitoring_client, GlideClient)
             await monitoring_client.ping()
 
             # 2. Get initial client count (standalone mode only)
@@ -87,29 +87,39 @@ class TestLazyConnection:
                 )
 
             # 5. Send the first command using the lazy client
-            ping_response = await lazy_glide_client.ping()
+            ping_response: Any = await lazy_glide_client.ping()
 
-            decoded_ping_response = ""  # Initialize
+            decoded_ping_response: Union[str, dict[str, str]]
             if isinstance(ping_response, bytes):
                 decoded_ping_response = ping_response.decode()
-            elif isinstance(ping_response, dict):
-                decoded_ping_response = {
-                    k: v.decode() if isinstance(v, bytes) else v
-                    for k, v in ping_response.items()
-                }
-            else:
+            elif isinstance(ping_response, str):
                 decoded_ping_response = ping_response
+            elif isinstance(ping_response, dict):
+                decoded_ping_response = {}
+                for k, v_bytes_or_str in ping_response.items():
+                    key_str = k.decode() if isinstance(k, bytes) else str(k)
+                    val_str = (
+                        v_bytes_or_str.decode()
+                        if isinstance(v_bytes_or_str, bytes)
+                        else str(v_bytes_or_str)
+                    )
+                    decoded_ping_response[key_str] = val_str
+            else:
+                decoded_ping_response = str(ping_response)
 
             # Assert PING success for both modes
             if cluster_mode:
-                assert decoded_ping_response == "PONG" or (
-                    isinstance(decoded_ping_response, dict)
-                    and all(v == "PONG" for v in decoded_ping_response.values())
-                ), f"PING response was not 'PONG' or a dict of 'PONG's: {ping_response}"
+                is_pong_str = decoded_ping_response == "PONG"
+                is_pong_dict = isinstance(decoded_ping_response, dict) and all(
+                    v == "PONG" for v in decoded_ping_response.values()
+                )
+                assert (
+                    is_pong_str or is_pong_dict
+                ), f"PING response was not 'PONG' or a dict of 'PONG's: {decoded_ping_response}"
             else:
                 assert (
                     decoded_ping_response == "PONG"
-                ), f"PING response was not 'PONG': {ping_response}"
+                ), f"PING response was not 'PONG': {decoded_ping_response}"
 
             # 6. Check client count after the first command
             # In cluster mode, the client count is not reliable due to the nature of cluster connections.
