@@ -10,7 +10,7 @@ import {
     GlideClient,
     GlideClusterClient,
     OpenTelemetry,
-    ProtocolVersion
+    ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
 import {

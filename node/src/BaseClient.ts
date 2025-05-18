@@ -1294,6 +1294,7 @@ export class BaseClient {
             singleCommand: isBatch ? undefined : command,
             batch,
             route,
+            rootSpanPtr: commandSpanPtr,
         });
 
         this.writeOrBufferRequest(
