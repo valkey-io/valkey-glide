@@ -5584,7 +5584,7 @@ class ClusterBatch(BaseBatch):
     # TODO: add all CLUSTER commands
 
 
-@deprecated("Use ClusterBatch(is_atomic=True) instead.")
+@deprecated("Use Batch(is_atomic=True) instead.")
 class Transaction(Batch):
     def __init__(self):
         super().__init__(is_atomic=True)
