@@ -2667,7 +2667,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.9.0
+Package: bitflags:2.9.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18179,7 +18179,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi-build:2.1.6
+Package: napi-build:2.2.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -40007,7 +40007,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-core:0.61.0
+Package: windows-core:0.61.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -41152,7 +41152,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-result:0.3.2
+Package: windows-result:0.3.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -41610,7 +41610,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-strings:0.4.0
+Package: windows-strings:0.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50174,7 +50174,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: protobufjs:7.5.1
+Package: protobufjs:7.5.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50540,7 +50540,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:22.15.17
+Package: @types:node:22.15.18
 
 The following copyrights and licenses were found in the source code of this package:
 
