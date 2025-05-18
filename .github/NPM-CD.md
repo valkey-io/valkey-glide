@@ -11,6 +11,7 @@ The NPM CD workflow uses a comprehensive, multi-stage approach to build, package
 - Universal binary support for macOS (ARM64 + x86_64)
 - Smart version management for different types of releases
 - Thorough testing of published packages
+- Optimized TypeScript build process
 
 ## Workflow Structure
 
@@ -23,7 +24,11 @@ Determines the appropriate version number, npm tag, and platform matrix based on
 - For tags: Extracts version from the tag name (e.g., `v1.2.3` → `1.2.3`)
 - For manual triggers: Uses the user-provided version
 - For PRs: Uses a placeholder version (255.255.255)
-- Sets npm tag to "next" for release candidates, otherwise "latest"
+- Sets npm tag based on release type:
+  - "latest" for stable releases (1.0.0)
+  - "next" for release candidates (1.0.0-rc1)
+  - "alpha" for alpha releases (1.0.0-alpha1)
+  - "beta" for beta releases (1.0.0-beta1)
 - Also determines whether packages should be published based on trigger type
 
 ### 2. Native Module Building (build-native-modules)
@@ -34,18 +39,19 @@ Builds the native bindings for each platform in the matrix:
 - Sets up the appropriate build environment (glibc, musl, macOS)
 - Installs Rust, Zig, and other required dependencies
 - Builds native Node.js modules (.node files) with napi-rs
-- Copies native modules directly to the npm/<platform> directories
-- Uploads only the JS interface files (native.js/native.d.ts) as artifacts
+- Uploads the native modules as artifacts for later assembly
+- Uploads JS interface files (native.js/native.d.ts) as artifacts
 
 ### 3. Package Preparation (prepare-and-version-packages)
 
 Prepares artifacts for publishing:
 
-- Downloads only the generated JS interface files (native.js and native.d.ts)
-- Builds TypeScript source code for the base package
-- Uses files already placed into platform-specific directories during the build step
-- Sets up the package.json files with correct version information
+- Downloads native modules and JS interface files
+- Uses the NAPI artifacts command to distribute native modules to the correct package folders
+- Builds TypeScript source code with optimized settings (--stripInternal --removeComments --declaration)
+- Sets correct versions in all package.json files
 - Uses napi-rs prepublish to configure optional dependencies between packages and align versions
+- Validates package contents to ensure all files are in place
 - Organizes artifacts under the `node/npm/` directory for publishing
 
 ### 4. Platform Package Publishing (publish-platform-packages)
@@ -71,19 +77,47 @@ Publishes the main TypeScript package:
 Tests the published packages across platforms:
 
 - Runs a matrix strategy to test on each supported platform
-- Installs Valkey as a prerequisite for testing
+- Installs Valkey (or Redis as fallback) as a prerequisite for testing
 - Installs the published package from npm
 - Runs utils/node tests to verify functionality
 - Reports test results
 
-### 7. Failure Handling (unpublish-on-failure)
+### 7. Node Tag Creation (create-node-tag)
+
+Creates a Node.js-specific git tag when requested:
+
+- Creates and pushes a tag in the format `vX.Y.Z-node`
+- Only runs when explicitly requested via workflow input
+- Helps track Node.js-specific releases
+
+### 8. GitHub Release Attachment (attach-to-release)
+
+Attaches the built npm packages to the GitHub release:
+
+- Zips all the packages for distribution
+- Attaches them to the corresponding GitHub release
+- Includes descriptive release notes
+
+### 9. Failure Handling (unpublish-on-failure)
 
 Handles failures in the publish or test process:
 
 - Triggers only if publishing was enabled and previous jobs failed
 - Sets up Node.js and NPM with authentication
 - Unpublishes the base package and all platform packages to prevent broken releases
-- Uses the --force flag to ensure unpublish works even if packages were just published
+- Uses robust JSON parsing to handle potential errors
+
+## TypeScript Build Process
+
+The workflow includes an optimized TypeScript build process:
+
+1. Uses npm caching for faster builds
+2. Installs only the necessary dependencies for building
+3. Compiles TypeScript with the following optimizations:
+   - `--stripInternal`: Removes @internal marked items from declarations while preserving public documentation
+   - `--pretty`: Formats error messages for better readability
+   - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
+4. Reports build statistics for monitoring output size
 
 ## Adding New Platforms
 
@@ -95,8 +129,19 @@ To add support for a new platform:
 
 ## Triggers
 
-The workflow can be triggered by:
+The workflow triggers on:
 
-1. Pull requests that modify relevant workflow files or source code
+1. Pull requests that modify:
+   - Workflow file itself (.github/workflows/npm-cd.yml)
+   - JSON matrices (.github/json_matrices/**)
+   - Package configuration (node/package.json)
+   - NPM directory structure (node/npm/**)
+   - Rust client files (node/rust-client/Cargo.toml, node/rust-client/src/**)
+   - TypeScript sources (node/src/**/*.ts)
+   
 2. Pushing tags that match the pattern "v*.*.*" (e.g., v1.2.3, v1.2.3-rc1)
-3. Manual workflow dispatch with version input and publish option
+
+3. Manual workflow dispatch with:
+   - Version input (required)
+   - Publish option (boolean)
+   - Create node tag option (boolean)
