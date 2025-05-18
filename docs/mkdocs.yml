@@ -45,47 +45,47 @@ nav:
           - ValkeyError: node/Errors/classes/ValkeyError.md
       - Logger: node/Logger/classes/Logger.md
 theme:
-    name: material
-    palette:
-        scheme: valkey-glide
-    features:
-        - navigation.sections
-        - content.code.copy
-        - navigation.path
-        - navigation.footer
-        - navigation.top
-    highlightjs: true
-    font:
-        text: Roboto
-        code: Roboto Mono
+  name: material
+  palette: 
+    scheme: valkey-glide
+  features:
+    - navigation.sections
+    - content.code.copy
+    - navigation.path
+    - navigation.footer
+    - navigation.top
+  highlightjs: true
+  font:
+    text: Roboto
+    code: Roboto Mono
 markdown_extensions:
-    - pymdownx.keys
-    - admonition
-    - pymdownx.highlight
-    - pymdownx.superfences
-    - pymdownx.tabbed:
-          alternate_style: true
-    - pymdownx.tasklist:
-          custom_checkbox: true
+  - pymdownx.keys
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
 plugins:
-    - mkdocstrings:
-          handlers:
-              python:
-                  options:
-                      show_symbol_type_heading: true
-                      show_symbol_type_toc: true
-                      show_root_heading: true
-    - search
-    - mkdocs-breadcrumbs-plugin:
-          delimiter: " / " # separator between sections
-          log_level: "CRITICAL" # "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
-          exclude_paths:
-              - "docs/mkdocs/**"
-              - "docs/mkdocs" # avoid generating index.md
-          additional_index_folders:
-              - temp_dir
-          generate_home_index: false
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_root_heading: true
+  - search
+  - mkdocs-breadcrumbs-plugin:
+      delimiter: " / " # separator between sections
+      log_level: "CRITICAL" # "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+      exclude_paths:
+        - "docs/mkdocs/**"
+        - "docs/mkdocs" # avoid generating index.md
+      additional_index_folders:
+        - temp_dir
+      generate_home_index: false
 extra:
-    generator: false
+  generator: false
 extra_css:
-    - style.css
+  - style.css
