@@ -1,5 +1,5 @@
 {
-    "name": "glide-rs",
+    "name": "valkey-glide",
     "version": "0.1.0",
     "description": "node binary for valkey-glide",
     "license": "Apache-2.0",
@@ -8,7 +8,7 @@
         "build:benchmark": "npm install && napi build --release --features testing_utilities --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
         "build:release": "npm install && napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags && npm run postbuild:copy-node",
         "build:release:gnu": "npm install && napi build --release --strip --platform --zig --zig-abi-suffix=2.17 --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe \"prettier -w\" $npm_config_build_flags",
-        "postbuild:copy-node": "cp glide-rs.*.node ../build-ts/",
+        "postbuild:copy-node": "cp valkey-glide.*.node ../build-ts/",
         "format": "npm run format:prettier && npm run format:rs",
         "format:prettier": "prettier . -w",
         "format:rs": "cargo fmt"
@@ -27,6 +27,6 @@
         ]
     },
     "napi": {
-        "name": "glide-rs"
+        "name": "valkey-glide"
     }
 }

@@ -2,10 +2,10 @@
     "name": "@valkey/valkey-glide-linux-x64-musl",
     "version": "255.255.255",
     "description": "Native bindings for valkey-glide on linux-x64-musl",
-    "bin": "glide-rs.linux-x64-musl.node",
-    "main": "glide-rs.linux-x64-musl.node",
+    "bin": "valkey-glide.linux-x64-musl.node",
+    "main": "valkey-glide.linux-x64-musl.node",
     "files": [
-        "glide-rs.linux-x64-musl.node"
+        "valkey-glide.linux-x64-musl.node"
     ],
     "os": [
         "linux"
