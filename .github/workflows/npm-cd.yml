@@ -614,9 +614,29 @@ jobs:
                   VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
                   DEPRECATION_MESSAGE="This version (${VERSION}) was part of a failed release process and should not be used. It may be removed in the future."
 
+                  # Function to attempt deprecation with retries
+                  attempt_deprecate() {
+                      local package_spec="$1"
+                      local message="$2"
+                      local retries=5
+                      local delay=10 # seconds
+
+                      echo "Attempting to deprecate ${package_spec}..."
+                      for i in $(seq 1 $retries); do
+                          if npm deprecate "${package_spec}" "${message}"; then
+                              echo "Successfully deprecated ${package_spec}."
+                              return 0
+                          else
+                              echo "Attempt $i of $retries failed for ${package_spec}. Retrying in ${delay} seconds..."
+                              sleep $delay
+                          fi
+                      done
+                      echo "Note: Could not deprecate ${package_spec} after $retries attempts (it might not have been published or was already deprecated/unpublished)."
+                      return 1
+                  }
+
                   # Main package
-                  echo "Attempting to deprecate @valkey/valkey-glide@${VERSION}..."
-                  npm deprecate "@valkey/valkey-glide@${VERSION}" "${DEPRECATION_MESSAGE}" || echo "Note: Could not deprecate @valkey/valkey-glide@${VERSION} (it might not have been published or was already deprecated/unpublished)."
+                  attempt_deprecate "@valkey/valkey-glide@${VERSION}" "${DEPRECATION_MESSAGE}"
 
                   # Platform packages
                   MATRIX_JSON='${{ needs.get-build-parameters.outputs.platform_matrix }}'
@@ -650,8 +670,7 @@ jobs:
                       fi
                       
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
-                      echo "Attempting to deprecate ${package_name}@${VERSION}..."
-                      npm deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}" || echo "Note: Could not deprecate ${package_name}@${VERSION} (it might not have been published or was already deprecated/unpublished)."
+                      attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
                     else
                       echo "Warning: Incomplete data in matrix object, cannot form package name. Object: $target_json_line"
                     fi
