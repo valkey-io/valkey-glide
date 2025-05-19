@@ -301,7 +301,7 @@ jobs:
 
     prepare-and-publish:
         environment: AWS_ACTIONS
-        if: github.repository_owner == 'valkey-io'
+        if: github.repository_owner == 'valkey-io' && needs.get-build-parameters.outputs.should_publish == 'true'
         needs: [get-build-parameters, build-native-modules]
         runs-on: ubuntu-latest
         outputs:
@@ -392,7 +392,7 @@ jobs:
 
                   # Build TypeScript with optimized settings - preserving documentation
                   echo "Building TypeScript with optimizations..."
-                  npx tsc --stripInternal --pretty --declaration
+                  npx tsc --sourceMap false --declarationMap false --stripInternal --pretty --declaration
 
                   # Check the build output
                   echo "TypeScript build complete. Generated files:"
@@ -438,7 +438,7 @@ jobs:
                   package_name=$(cat package.json | jq -r .name)
                   version=$(cat package.json | jq -r .version)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public
+                  npm publish --tag ${NPM_TAG} --access public --scope=@valkey
 
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
@@ -458,11 +458,13 @@ jobs:
                       js-files-${{ github.run_id }}
 
     create-node-tag:
-        needs: [get-build-parameters, prepare-and-publish]
-        # Only create the tag if the publish was successful and the tag creation is requested
+        needs: [get-build-parameters, test-published-release]
+        # Only create the tag if the publish was successful, tests passed, and the tag creation is requested
         if: |
             needs.get-build-parameters.outputs.should_publish == 'true' && 
             needs.get-build-parameters.outputs.should_create_node_tag == 'true'
+        permissions:
+            contents: write
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
@@ -540,7 +542,7 @@ jobs:
             - name: Install Valkey
               run: |
                   # Install Valkey (preferred) or Redis as fallback
-                  if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
+                  if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       echo "Installing Valkey on GNU/Linux..."
                       sudo apt update
                       sudo apt install -y valkey || { 
@@ -551,16 +553,16 @@ jobs:
                               sudo apt install -y redis-server
                           }
                       }
-                  elif [[ "${{ matrix.TARGET }}" == *"musl"* ]]; then
+                  elif [[ "${{ matrix.build_type }}" == "musl" ]]; then
                       echo "Installing Valkey on Alpine Linux..."
                       apk update
                       apk add --no-cache valkey || apk add --no-cache redis
-                  elif [[ "${{ matrix.TARGET }}" == *"mac"* ]]; then
+                  elif [[ "${{ matrix.build_type }}" == "mac" ]]; then
                       echo "Installing Valkey on macOS..."
                       brew update
                       brew install valkey || brew install redis
                   else
-                      echo "::error::Unsupported target: ${{ matrix.TARGET }}"; exit 1
+                      echo "::error::Unsupported target: ${{ matrix.TARGET }} (build_type: ${{ matrix.build_type }})"; exit 1
                   fi
 
                   # Verify installation - prefer valkey-server over redis-server
@@ -571,10 +573,10 @@ jobs:
                   else
                       echo "::error::Neither Valkey nor Redis server found"; exit 1
                   fi
+
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
               run: |
-                  npm install
                   npm install @valkey/valkey-glide@${{ needs.get-build-parameters.outputs.npm_tag }} --save
                   npm run build:utils
                   npm test
@@ -589,10 +591,10 @@ jobs:
               with:
                   name: |
                       npm-packages-${{ github.run_id }}
-                      artifacts-*
+                      bindings-*
                       js-files-${{ github.run_id }}
 
-    unpublish-on-failure:
+    deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
         if: failure() && needs.get-build-parameters.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
@@ -601,59 +603,56 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: latest
-                  scope: "@valkey"
+                  registry-url: "https://registry.npmjs.org"
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  scope: "@valkey"
 
-            - name: Unpublish Published Packages
+            - name: Deprecate Published Packages
               run: |
-                  echo "Unpublishing due to failure…"
+                  echo "Deprecating packages due to failure…"
                   VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
+                  DEPRECATION_MESSAGE="This version (${VERSION}) was part of a failed release process and should not be used. It may be removed in the future."
 
-                  # NPM only allows unpublishing within 72 hours of publishing
                   # Main package
-                  echo "Attempting to unpublish @valkey/valkey-glide@${VERSION}..."
-                  npm unpublish "@valkey/valkey-glide@${VERSION}" || echo "Note: Could not unpublish @valkey/valkey-glide@${VERSION}"
+                  echo "Attempting to deprecate @valkey/valkey-glide@${VERSION}..."
+                  npm deprecate "@valkey/valkey-glide@${VERSION}" "${DEPRECATION_MESSAGE}" || echo "Note: Could not deprecate @valkey/valkey-glide@${VERSION} (it might not have been published or was already deprecated/unpublished)."
 
-                  # Platform packages - handle JSON parsing more robustly
+                  # Platform packages
                   MATRIX_JSON='${{ needs.get-build-parameters.outputs.platform_matrix }}'
 
                   # Validate JSON before processing
                   if ! echo "$MATRIX_JSON" | jq -e . > /dev/null 2>&1; then
-                    echo "Warning: Invalid platform matrix JSON, unable to unpublish platform packages"
+                    echo "Warning: Invalid platform matrix JSON, unable to deprecate platform packages."
+                    # Optionally exit 1 here if this should be a hard failure,
+                    # or exit 0 to allow other cleanup steps to run.
                     exit 0
                   fi
 
-                  # Process each platform package safely
-                  echo "$MATRIX_JSON" | jq -c '.[]' | while read -r target; do
-                    # Extract the os-arch name from the matrix
-                    if [[ -n "$target" ]]; then
-                      os=$(echo $target | jq -r '.NAMED_OS // empty')
-                      arch=$(echo $target | jq -r '.ARCH // empty')
-                      build_type=$(echo $target | jq -r '.build_type // empty')
+                  echo "Processing platform packages for deprecation..."
+                  echo "$MATRIX_JSON" | jq -c '.[]' | while read -r target_json_line; do
+                    if [[ -z "$target_json_line" ]]; then
+                      echo "Warning: Skipping empty line from matrix JSON."
+                      continue
+                    fi
+
+                    # Extract details from the matrix JSON object for each platform
+                    os=$(echo "$target_json_line" | jq -r '.NAMED_OS // empty')
+                    arch=$(echo "$target_json_line" | jq -r '.ARCH // empty')
+                    build_type=$(echo "$target_json_line" | jq -r '.build_type // empty') # build_type is used to determine -gnu or -musl suffix
+
+                    if [[ -n "$os" && -n "$arch" && -n "$build_type" ]]; then
+                      additional_suffix=""
+                      if [[ "$build_type" == "musl" ]]; then
+                        additional_suffix="-musl"
+                      elif [[ "$build_type" == "gnu" ]]; then
+                        additional_suffix="-gnu"
+                      fi
                       
-                      # Only proceed if we have valid data
-                      if [[ -n "$os" && -n "$arch" ]]; then
-                        if [[ "$build_type" == "musl" ]]; then
-                          additional_suffix="-musl"
-                        elif [[ "$build_type" == "gnu" ]]; then
-                          additional_suffix="-gnu"
-                        else
-                          additional_suffix=""
-                        fi
-                        
-                        package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
-                        echo "Attempting to unpublish ${package_name}@${VERSION}..."
-                        npm unpublish "${package_name}@${VERSION}" || echo "Note: Could not unpublish ${package_name}@${VERSION}"
-                      fi
+                      package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
+                      echo "Attempting to deprecate ${package_name}@${VERSION}..."
+                      npm deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}" || echo "Note: Could not deprecate ${package_name}@${VERSION} (it might not have been published or was already deprecated/unpublished)."
+                    else
+                      echo "Warning: Incomplete data in matrix object, cannot form package name. Object: $target_json_line"
                     fi
                   done
-                        else
-                          additional_suffix=""
-                        fi
-                        
-                        package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
-                        echo "Attempting to unpublish ${package_name}@${VERSION}..."
-                        npm unpublish "${package_name}@${VERSION}" || echo "Note: Could not unpublish ${package_name}@${VERSION}"
-                      fi
-                    fi
-                  done
+                  echo "Finished deprecation attempts for platform packages."
