@@ -144,6 +144,7 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	j := uint32(jitter)
 	expected := &protobuf.ConnectionRequest{
+		ClusterModeEnabled: true,
 		Addresses: []*protobuf.NodeAddress{
 			{Host: host, Port: uint32(port)},
 		},
