@@ -2069,6 +2069,138 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_refresh_topology_non_blocking() {
+        // # Test: Non-Head-of-Line Blocking During Slot Refresh
+        //
+        // ## Purpose
+        // This test verifies that the implementation of `spawn_refresh_slots_task` successfully
+        // prevents head-of-line blocking during cluster topology refresh operations. Prior to this
+        // implementation, when a MOVED error triggered a topology refresh, all subsequent commands
+        // would be blocked until the refresh completed, causing potential timeouts and performance
+        // degradation.
+        //
+        // ## Background
+        // In Valkey Cluster, when a client receives a MOVED error (indicating topology changes),
+        // it needs to refresh its slot mapping. In the previous implementation, this would cause
+        // all subsequent commands to wait for the refresh to complete, leading to head-of-line
+        // blocking. The `spawn_refresh_slots_task` improvement moves this refresh operation to a
+        // background task, allowing other commands to proceed concurrently.
+        //
+        // ## Test Strategy
+        // The test employs the following strategy to verify non-blocking behavior:
+        //
+        // 1. **Trigger Slot Refresh**: Send a GET command to an incorrect route to trigger a MOVED
+        //    error, which initiates a background slot refresh operation.
+        //
+        // 2. **Delay Refresh Completion**: In the same pipeline, issue a CLIENT PAUSE command to
+        //    artificially delay the node's response during the refresh operation.
+        //
+        // 3. **Verify Non-Blocking Behavior**: While the first operation is still pending (due to
+        //    the pause), send a second GET command to a different node in the cluster.
+        //
+        // 4. **Assert Success**: The second GET should succeed immediately without waiting for
+        //    the first operation to complete, demonstrating that the slot refresh is truly
+        //    happening in the background.
+        //
+        // ## Expected Outcomes
+        // - With the old implementation (blocking): The second GET would time out waiting for the
+        //   slot refresh to complete.
+        // - With the new implementation (non-blocking): The second GET completes successfully while
+        //   the refresh is still in progress.
+        //
+        // ## Technical Implementation
+        // - We use a 3-node cluster for a realistic test environment
+        // - The response timeout is set to match the CLIENT PAUSE duration (2000ms)
+        // - We ensure test keys map to different nodes in the cluster
+        // - A deliberate wrong route is chosen to guarantee a MOVED error
+        // - The CLIENT PAUSE command ensures the refresh operation doesn't complete immediately
+        // - Success of the test is determined by the second GET command returning without timeout
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3, // Use 3 nodes for a realistic test scenario
+            0,
+            |builder| {
+                builder
+                    .use_protocol(ProtocolVersion::RESP3)
+                    .response_timeout(Duration::from_millis(2000)) // Match with CLIENT PAUSE timeout
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+                    .retries(0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            // 1. Set up initial data - create keys on two different nodes
+            let key1 = "test_key1"; // Will be used to trigger the MOVED error
+            let key2 = "test_key2"; // Will be used to test non-blocking behavior
+
+            // Calculate slots for our test keys to ensure they're on different nodes
+            let slot1 = get_slot(key1.as_bytes());
+            let slot2 = get_slot(key2.as_bytes());
+
+            // Ensure the keys are on different nodes
+            assert_ne!(
+                slot1 / 5461,
+                slot2 / 5461,
+                "Test keys must be on different nodes for a valid test"
+            );
+
+            // Set initial values
+            let _: () = connection.set(key1, "value1").await?;
+            let _: () = connection.set(key2, "value2").await?;
+
+            // 2. Create a route that will definitely cause a MOVED error
+            let wrong_route = Route::new(
+                (slot1 + 6000) % 16384, // Create a slot far from original to ensure MOVED error
+                SlotAddr::Master,
+            );
+
+            // 3. Send the pipeline that will trigger background refresh and pause the node
+            let mut pipe = redis::pipe();
+            pipe.atomic()
+                .cmd("GET")                
+                .arg(key1)
+                .ignore()
+                .cmd("CLIENT")
+                .arg("PAUSE")
+                .arg(2000) // Pause for 2 seconds
+                .ignore();
+
+            // Send pipeline to wrong route to trigger MOVED error and background refresh
+            let _ = connection
+                .route_pipeline(
+                    &pipe,
+                    0,
+                    2,
+                    Some(SingleNodeRoutingInfo::SpecificNode(wrong_route)),
+                    None,
+                )
+                .await;
+
+            // 4. Immediately try to get the second key while refresh is happening in background
+            // This command should not be blocked despite the ongoing refresh
+            let result: RedisResult<String> = connection.get(key2).await;
+
+            // 5. Assert that the command completed successfully without timing out
+            assert!(
+                result.is_ok(),
+                "The second GET command should succeed while refresh is in progress"
+            );
+
+            assert_eq!(
+                result.unwrap(),
+                "value2",
+                "The second GET command returned incorrect value"
+            );
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
         // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
         // stored on the primary node of another shard.
