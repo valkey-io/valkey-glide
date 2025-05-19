@@ -557,6 +557,7 @@ jobs:
                       echo "Installing Valkey on Alpine Linux..."
                       apk update
                       apk add --no-cache valkey || apk add --no-cache redis
+                      apk add --no-cache valkey-cli || apk add --no-cache redis-cli
                   elif [[ "${{ matrix.build_type }}" == "mac" ]]; then
                       echo "Installing Valkey on macOS..."
                       brew update
