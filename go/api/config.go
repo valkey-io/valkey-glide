@@ -137,6 +137,10 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		}
 	}
 
+	if config.reconnectStrategy != nil {
+		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+	}
+
 	return &request, nil
 }
 
@@ -215,9 +219,6 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 		return nil, err
 	}
 	request.ClusterModeEnabled = false
-	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
-	}
 
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
