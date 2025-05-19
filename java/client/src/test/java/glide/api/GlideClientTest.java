@@ -14056,14 +14056,59 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<String> response =
                 service.restore(
-                        key,
-                        ttl,
-                        value,
-                        RestoreOptions.builder().replace().absttl().idletime(10L).frequency(5L).build());
+                        key, ttl, value, RestoreOptions.builder().replace().absttl().idletime(10L).build());
 
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_with_restoreOptions_throwsError() {
+        // setup
+        GlideString key = gs("testKey");
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+        Long idletime = 10L;
+        Long frequency = 5L;
+
+        GlideString[] arg =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(ttl)),
+                    gs(value),
+                    gs("REPLACE"),
+                    gs("ABSTTL"),
+                    gs("IDLETIME"),
+                    gs("10"),
+                    gs("FREQ"),
+                    gs("5")
+                };
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
+                .thenReturn(testResponse);
+
+        IllegalArgumentException illegalArgumentException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                service.restore(
+                                        key,
+                                        ttl,
+                                        value,
+                                        RestoreOptions.builder()
+                                                .replace()
+                                                .absttl()
+                                                .idletime(10L)
+                                                .frequency(5L)
+                                                .build()));
+        assertEquals(
+                "IDLETIME and FREQ cannot be set at the same time.", illegalArgumentException.getMessage());
     }
 
     @SneakyThrows
