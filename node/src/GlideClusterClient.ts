@@ -5,6 +5,10 @@
 import * as net from "net";
 import { Writer } from "protobufjs/minimal";
 import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
+import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
@@ -64,10 +68,6 @@ import {
     createUnWatch,
 } from "./Commands";
 import { ClusterScanCursor, Script } from "./native";
-import {
-    command_request,
-    connection_request,
-} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**

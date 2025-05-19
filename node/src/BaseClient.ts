@@ -4,6 +4,11 @@
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs/minimal";
 import {
+    command_request,
+    connection_request,
+    response,
+} from "../build-ts/ProtobufMessage";
+import {
     AggregationType,
     BaseScanOptions,
     BatchOptions,
@@ -249,11 +254,6 @@ import {
     getStatistics,
     valueFromSplitPointer,
 } from "./native";
-import {
-    command_request,
-    connection_request,
-    response,
-} from "../build-ts/ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
