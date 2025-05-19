@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional
 
 from glide.exceptions import RequestError
-from glide.protobuf.command_request_pb2 import CommandRequest, SimpleRoutes
+from glide.protobuf.command_request_pb2 import CommandRequest, Routes, SimpleRoutes
 from glide.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 
 
@@ -125,23 +125,33 @@ def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
     )
 
 
-def set_protobuf_route(request: CommandRequest, route: Optional[Route]) -> None:
+def build_protobuf_route(route: Optional[Route]) -> Optional[Routes]:
     if route is None:
-        return
-    elif isinstance(route, AllNodes):
-        request.route.simple_routes = SimpleRoutes.AllNodes
+        return None
+
+    protobuf_route = Routes()
+    if isinstance(route, AllNodes):
+        protobuf_route.simple_routes = SimpleRoutes.AllNodes
     elif isinstance(route, AllPrimaries):
-        request.route.simple_routes = SimpleRoutes.AllPrimaries
+        protobuf_route.simple_routes = SimpleRoutes.AllPrimaries
     elif isinstance(route, RandomNode):
-        request.route.simple_routes = SimpleRoutes.Random
+        protobuf_route.simple_routes = SimpleRoutes.Random
     elif isinstance(route, SlotKeyRoute):
-        request.route.slot_key_route.slot_type = to_protobuf_slot_type(route.slot_type)
-        request.route.slot_key_route.slot_key = route.slot_key
+        protobuf_route.slot_key_route.slot_type = to_protobuf_slot_type(route.slot_type)
+        protobuf_route.slot_key_route.slot_key = route.slot_key
     elif isinstance(route, SlotIdRoute):
-        request.route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
-        request.route.slot_id_route.slot_id = route.slot_id
+        protobuf_route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
+        protobuf_route.slot_id_route.slot_id = route.slot_id
     elif isinstance(route, ByAddressRoute):
-        request.route.by_address_route.host = route.host
-        request.route.by_address_route.port = route.port
+        protobuf_route.by_address_route.host = route.host
+        protobuf_route.by_address_route.port = route.port
     else:
         raise RequestError(f"Received invalid route type: {type(route)}")
+
+    return protobuf_route
+
+
+def set_protobuf_route(request: CommandRequest, route: Optional[Route]) -> None:
+    protobuf_route = build_protobuf_route(route)
+    if protobuf_route:
+        request.route.CopyFrom(protobuf_route)

@@ -14,7 +14,7 @@ from glide.constants import OK, TEncodable, TResult
 from glide.exceptions import ClosingError, RequestError
 from glide.glide_client import get_request_error_class
 from glide.protobuf.command_request_pb2 import RequestType
-from glide.routes import Route
+from glide.routes import Route, build_protobuf_route
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -337,9 +337,14 @@ class BaseClient(CoreCommands):
 
         # Convert the arguments to C-compatible pointers
         c_args, c_lengths, buffers = self._to_c_strings(args)
-        # Call the command function
-        route_bytes = b""  # TODO: add support for route
-        route_ptr = self.ffi.new("unsigned char[]", route_bytes)
+
+        proto_route = build_protobuf_route(route)
+        if proto_route:
+            route_bytes = proto_route.SerializeToString()
+            route_ptr = self.ffi.from_buffer(route_bytes)
+        else:
+            route_bytes = b""
+            route_ptr = self.ffi.NULL
 
         result = self.lib.command(
             client_adapter_ptr,  # Client pointer
