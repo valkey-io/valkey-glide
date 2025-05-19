@@ -1,10 +1,22 @@
 import json
 import random
 import string
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 import pytest
 from glide.commands.core_options import InfoSection
+from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+    ReadFrom,
+    ServerCredentials,
+)
 from glide.constants import (
     TClusterResponse,
     TFunctionListResponse,
@@ -12,11 +24,19 @@ from glide.constants import (
     TResult,
 )
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.logger import Level as logLevel
 from glide.routes import AllNodes
 from glide.sync import TGlideClient as TSyncGlideClient
 from packaging import version
 
+from tests.utils.cluster import ValkeyCluster
+
 T = TypeVar("T")
+DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
+USERNAME = "username"
+INITIAL_PASSWORD = "initial_password"
+NEW_PASSWORD = "new_secure_password"
+WRONG_PASSWORD = "wrong_password"
 
 version_str = ""
 
@@ -414,3 +434,82 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
         return await client.custom_command(
             ["ACL", "DELUSER", username], route=AllNodes()
         )
+
+
+def create_client_config(
+    request,
+    cluster_mode: bool,
+    credentials: Optional[ServerCredentials] = None,
+    database_id: int = 0,
+    addresses: Optional[List[NodeAddress]] = None,
+    client_name: Optional[str] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
+    cluster_mode_pubsub: Optional[
+        GlideClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        GlideClientConfiguration.PubSubSubscriptions
+    ] = None,
+    inflight_requests_limit: Optional[int] = None,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
+    reconnect_strategy: Optional[BackoffStrategy] = None,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
+    use_tls = request.config.getoption("--tls")
+    if cluster_mode:
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        assert database_id == 0
+        k = min(3, len(valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
+        config = GlideClusterClientConfiguration(
+            addresses=seed_nodes if addresses is None else addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            pubsub_subscriptions=cluster_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
+        )
+    else:
+        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
+        config = GlideClientConfiguration(
+            addresses=(
+                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
+            ),
+            use_tls=use_tls,
+            credentials=credentials,
+            database_id=database_id,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            pubsub_subscriptions=standalone_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
+            reconnect_strategy=reconnect_strategy,
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+        )
+    return config
+
+
+def run_with_timeout(func, timeout, on_timeout=None):
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except Exception:
+            if on_timeout:
+                on_timeout()
+            raise TimeoutError("Function did not return within timeout")
+    finally:
+        # Shutdown with cancel_futures=True to prevent hanging
+        executor.shutdown(wait=False, cancel_futures=True)
