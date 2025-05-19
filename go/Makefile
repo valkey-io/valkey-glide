@@ -11,6 +11,11 @@ TARGET_DIR := $(GLIDE_FFI_PATH)/target
 UNAME := $(shell uname)
 ARCH := $(shell uname -m)
 
+# Set default values for GLIDE_NAME and GLIDE_VERSION
+# GLIDE_VERSION is modifiable by changing the env var, to allow for changing it during CD
+GLIDE_NAME = GlideGo
+GLIDE_VERSION ?= unknown
+
 ifeq ($(UNAME), Darwin)
     TARGET_TRIPLET := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
 	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
@@ -78,7 +83,7 @@ libglide_ffi:
 	mkdir -p $(DEST_PATH)
 	cd $(GLIDE_FFI_PATH) && \
 	$(CARGO_FIX_CMD) && \
-	cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
+    GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
 	$(CARGO_POSTFIX_CMD) && \
 	$(STRIP_CMD) $(TARGET_DIR)/libglide_ffi.a && \
 	cp $(TARGET_DIR)/libglide_ffi.a $(GO_DIR)/$(DEST_PATH)
