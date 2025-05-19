@@ -126,6 +126,38 @@ func TestGlideClient_BackoffStrategy_withJitter(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
+func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
+	host := "localhost"
+	port := 6379
+	retries, factor, base, jitter := 5, 2, 3, 25
+
+	strategy := NewBackoffStrategy(retries, factor, base).WithJitterPercent(jitter)
+
+	config := NewGlideClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: host, Port: port}).
+		WithReconnectStrategy(strategy)
+
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
+
+	j := uint32(jitter)
+	expected := &protobuf.ConnectionRequest{
+		Addresses: []*protobuf.NodeAddress{
+			{Host: host, Port: uint32(port)},
+		},
+		ConnectionRetryStrategy: &protobuf.ConnectionRetryStrategy{
+			NumberOfRetries: uint32(retries),
+			Factor:          uint32(factor),
+			ExponentBase:    uint32(base),
+			JitterPercent:   &j,
+		},
+	}
+
+	assert.Equal(t, expected, result)
+}
+
 func TestNodeAddress(t *testing.T) {
 	parameters := []struct {
 		input    NodeAddress
