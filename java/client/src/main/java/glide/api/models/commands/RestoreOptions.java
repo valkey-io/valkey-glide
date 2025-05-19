@@ -51,12 +51,8 @@ public final class RestoreOptions {
      *
      * @return a <code>GlideString</code> array that holds the subcommands and their arguments.
      */
-    public GlideString[] toArgs(GlideString key, long ttl, byte[] value) {
+    public GlideString[] toArgs() {
         List<GlideString> resultList = new ArrayList<>();
-
-        resultList.add(key);
-        resultList.add(gs(Long.toString(ttl)));
-        resultList.add(gs(value));
 
         if (hasReplace) {
             resultList.add(gs(REPLACE_VALKEY_API));
