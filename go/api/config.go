@@ -91,14 +91,14 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout time.Duration
-	clientName     string
-	clientAZ       string
-	reconnectStrategy  *BackoffStrategy
+	addresses         []NodeAddress
+	useTLS            bool
+	credentials       *ServerCredentials
+	readFrom          ReadFrom
+	requestTimeout    time.Duration
+	clientName        string
+	clientAZ          string
+	reconnectStrategy *BackoffStrategy
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -168,9 +168,9 @@ type BackoffStrategy struct {
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
 	return &BackoffStrategy{
-		numOfRetries:  numOfRetries,
-		factor:        factor,
-		exponentBase:  exponentBase,
+		numOfRetries: numOfRetries,
+		factor:       factor,
+		exponentBase: exponentBase,
 	}
 }
 
@@ -179,7 +179,6 @@ func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy 
 	strategy.jitterPercent = &jitter
 	return strategy
 }
-
 
 func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
 	protoStrategy := &protobuf.ConnectionRetryStrategy{
@@ -195,7 +194,6 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 
 	return protoStrategy
 }
-
 
 // GlideClientConfiguration represents the configuration settings for a Standalone client.
 type GlideClientConfiguration struct {
@@ -424,7 +422,9 @@ func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *Gl
 
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
-func (config *GlideClusterClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *GlideClusterClientConfiguration {
+func (config *GlideClusterClientConfiguration) WithReconnectStrategy(
+	strategy *BackoffStrategy,
+) *GlideClusterClientConfiguration {
 	config.reconnectStrategy = strategy
 	return config
 }
