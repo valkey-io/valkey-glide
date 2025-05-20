@@ -143,7 +143,7 @@ jobs:
                   cd package1
                   yarn install
                   rm -rf node_modules/@valkey/valkey-glide/build-ts/*
-                  cp ../../build-ts ./node_modules/@valkey/valkey-glide/build-ts
+                  cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
                   yarn run build
                   cd ../package2
                   yarn install
