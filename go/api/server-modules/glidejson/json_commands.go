@@ -2,6 +2,8 @@
 package glidejson
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/errors"
 	jsonOptions "github.com/valkey-io/valkey-glide/go/api/server-modules/glidejson/options"
@@ -12,12 +14,17 @@ const (
 	JsonGet = "JSON.GET"
 )
 
-func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap bool) (interface{}, error) {
+func executeCommandWithReturnMap(
+	ctx context.Context,
+	client api.BaseClient,
+	args []string,
+	returnMap bool,
+) (interface{}, error) {
 	switch client := client.(type) {
 	case *api.GlideClient:
-		return client.CustomCommand(args)
+		return client.CustomCommand(ctx, args)
 	case *api.GlideClusterClient:
-		result, err := client.CustomCommand(args)
+		result, err := client.CustomCommand(ctx, args)
 		if result.IsEmpty() {
 			return nil, err
 		}
@@ -31,8 +38,8 @@ func executeCommandWithReturnMap(client api.BaseClient, args []string, returnMap
 	}
 }
 
-func executeCommand(client api.BaseClient, args []string) (interface{}, error) {
-	return executeCommandWithReturnMap(client, args, false)
+func executeCommand(ctx context.Context, client api.BaseClient, args []string) (interface{}, error) {
+	return executeCommandWithReturnMap(ctx, client, args, false)
 }
 
 // Sets the JSON value at the specified `path` stored at `key`. This definition of JSON.SET command
@@ -55,12 +62,13 @@ func executeCommand(client api.BaseClient, args []string) (interface{}, error) {
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func Set(
+	ctx context.Context,
 	client api.BaseClient,
 	key string,
 	path string,
 	value string,
 ) (string, error) {
-	result, err := executeCommand(client, []string{JsonSet, key, path, value})
+	result, err := executeCommand(ctx, client, []string{JsonSet, key, path, value})
 	if err != nil {
 		return api.DefaultStringResponse, err
 	}
@@ -92,6 +100,7 @@ func Set(
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func SetWithOptions(
+	ctx context.Context,
 	client api.BaseClient,
 	key string,
 	path string,
@@ -104,7 +113,7 @@ func SetWithOptions(
 		return api.CreateNilStringResult(), err
 	}
 	args = append(args, optionalArgs...)
-	result, err := executeCommand(client, args)
+	result, err := executeCommand(ctx, client, args)
 	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
 	}
@@ -127,8 +136,8 @@ func SetWithOptions(
 //	If `key` doesn't exist, returns api.CreateNilStringResult().
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
-func Get(client api.BaseClient, key string) (api.Result[string], error) {
-	result, err := executeCommand(client, []string{JsonGet, key})
+func Get(ctx context.Context, client api.BaseClient, key string) (api.Result[string], error) {
+	result, err := executeCommand(ctx, client, []string{JsonGet, key})
 	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
 	}
@@ -152,14 +161,19 @@ func Get(client api.BaseClient, key string) (api.Result[string], error) {
 //	If `key` doesn't exist, returns api.CreateNilStringResult().
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
-func GetWithOptions(client api.BaseClient, key string, options jsonOptions.JsonGetOptions) (api.Result[string], error) {
+func GetWithOptions(
+	ctx context.Context,
+	client api.BaseClient,
+	key string,
+	options jsonOptions.JsonGetOptions,
+) (api.Result[string], error) {
 	args := []string{JsonGet, key}
 	optionalArgs, err := options.ToArgs()
 	if err != nil {
 		return api.CreateNilStringResult(), err
 	}
 	args = append(args, optionalArgs...)
-	result, err := executeCommand(client, args)
+	result, err := executeCommand(ctx, client, args)
 	if err != nil || result == nil {
 		return api.CreateNilStringResult(), err
 	}

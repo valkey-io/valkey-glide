@@ -120,19 +120,22 @@ const (
 // Example:
 //
 //	// Command failed:
-//	value, err := clusterClient.CustomCommand(args)
+//	value, err := clusterClient.CustomCommand(context.Background(), args)
 //	value.IsEmpty(): true
 //	err != nil: true
 //
 //	// Command returns response from multiple nodes:
-//	value, _ := clusterClient.Info()
+//	value, _ := clusterClient.Info(context.Background())
 //	for node, nodeResponse := range value.MultiValue() {
 //	    response := nodeResponse
 //	    // `node` stores cluster node IP/hostname, `response` stores the command output from that node
 //	}
 //
 //	// Command returns a response from single node:
-//	value, _ := clusterClient.InfoWithOptions(api.ClusterInfoOptions{InfoOptions: nil, Route: api.RandomRoute.ToPtr()})
+//	value, _ := clusterClient.InfoWithOptions(context.Background(), api.ClusterInfoOptions{InfoOptions: nil, Route:
+//
+// api.RandomRoute.ToPtr()})
+//
 //	response := value.SingleValue()
 //	// `response` stores the command output from a cluster node
 type ClusterValue[T any] struct {

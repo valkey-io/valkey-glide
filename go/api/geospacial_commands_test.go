@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -17,7 +18,7 @@ func ExampleGlideClient_GeoAdd() {
 		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
 	}
 
-	result, err := client.GeoAdd(uuid.New().String(), membersToCoordinates)
+	result, err := client.GeoAdd(context.Background(), uuid.New().String(), membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -36,7 +37,7 @@ func ExampleGlideClusterClient_GeoAdd() {
 		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
 	}
 
-	result, err := client.GeoAdd(uuid.New().String(), membersToCoordinates)
+	result, err := client.GeoAdd(context.Background(), uuid.New().String(), membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -56,13 +57,13 @@ func ExampleGlideClient_GeoHash() {
 	}
 
 	// Add the coordinates
-	_, err := client.GeoAdd(key, membersToCoordinates)
+	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Test getting geohash for multiple members
-	geoHashResults, err := client.GeoHash(key, []string{"Palermo", "Catania"})
+	geoHashResults, err := client.GeoHash(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -81,13 +82,13 @@ func ExampleGlideClusterClient_GeoHash() {
 	}
 
 	// Add the coordinates
-	_, err := client.GeoAdd(key, membersToCoordinates)
+	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Test getting geohash for multiple members
-	geoHashResults, err := client.GeoHash(key, []string{"Palermo", "Catania"})
+	geoHashResults, err := client.GeoHash(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -101,7 +102,7 @@ func ExampleGlideClient_GeoPos() {
 	client := getExampleGlideClient()
 
 	key := uuid.New().String()
-	_, err := client.GeoAdd(key, map[string]options.GeospatialData{
+	_, err := client.GeoAdd(context.Background(), key, map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
 	})
@@ -109,7 +110,7 @@ func ExampleGlideClient_GeoPos() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	positions, err := client.GeoPos(key, []string{"Palermo", "Catania"})
+	positions, err := client.GeoPos(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -124,7 +125,7 @@ func ExampleGlideClusterClient_GeoPos() {
 	client := getExampleGlideClusterClient()
 
 	key := uuid.New().String()
-	_, err := client.GeoAdd(key, map[string]options.GeospatialData{
+	_, err := client.GeoAdd(context.Background(), key, map[string]options.GeospatialData{
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
 	})
@@ -132,7 +133,7 @@ func ExampleGlideClusterClient_GeoPos() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	positions, err := client.GeoPos(key, []string{"Palermo", "Catania"})
+	positions, err := client.GeoPos(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -154,13 +155,13 @@ func ExampleGlideClient_GeoDist() {
 	}
 
 	// Add the coordinates
-	_, err := client.GeoAdd(key, membersToCoordinates)
+	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Test getting geodist for multiple members
-	result, err := client.GeoDist(key, member1, member2)
+	result, err := client.GeoDist(context.Background(), key, member1, member2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -181,12 +182,12 @@ func ExampleGlideClusterClient_GeoDist() {
 	}
 
 	// Add the coordinates
-	_, err := client.GeoAdd(key, membersToCoordinates)
+	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	// Test getting geodist for multiple members
-	result, err := client.GeoDist(key, member1, member2)
+	result, err := client.GeoDist(context.Background(), key, member1, member2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -203,7 +204,7 @@ func ExampleGlideClient_GeoSearch() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearch(
+	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -225,7 +226,7 @@ func ExampleGlideClusterClient_GeoSearch() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearch(
+	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -247,7 +248,7 @@ func ExampleGlideClient_GeoSearchWithResultOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithResultOptions(
+	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -270,7 +271,7 @@ func ExampleGlideClusterClient_GeoSearchWithResultOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithResultOptions(
+	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -293,7 +294,7 @@ func ExampleGlideClient_GeoSearchWithFullOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithFullOptions(
+	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -317,7 +318,7 @@ func ExampleGlideClusterClient_GeoSearchWithFullOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithFullOptions(
+	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -341,7 +342,7 @@ func ExampleGlideClient_GeoSearchWithInfoOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithInfoOptions(
+	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -364,7 +365,7 @@ func ExampleGlideClusterClient_GeoSearchWithInfoOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithInfoOptions(
+	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, options.GeoUnitKilometers),
@@ -388,7 +389,7 @@ func ExampleGlideClient_GeoSearchStore() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStore(
+	result, err := client.GeoSearchStore(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -412,7 +413,7 @@ func ExampleGlideClusterClient_GeoSearchStore() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStore(
+	result, err := client.GeoSearchStore(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -436,7 +437,7 @@ func ExampleGlideClient_GeoSearchStoreWithInfoOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithInfoOptions(
+	result, err := client.GeoSearchStoreWithInfoOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -461,7 +462,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithInfoOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithInfoOptions(
+	result, err := client.GeoSearchStoreWithInfoOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -486,7 +487,7 @@ func ExampleGlideClient_GeoSearchStoreWithResultOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithResultOptions(
+	result, err := client.GeoSearchStoreWithResultOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -511,7 +512,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithResultOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithResultOptions(
+	result, err := client.GeoSearchStoreWithResultOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -536,7 +537,7 @@ func ExampleGlideClient_GeoSearchStoreWithFullOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithFullOptions(
+	result, err := client.GeoSearchStoreWithFullOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -562,7 +563,7 @@ func ExampleGlideClusterClient_GeoSearchStoreWithFullOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithFullOptions(
+	result, err := client.GeoSearchStoreWithFullOptions(context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -585,7 +586,7 @@ func AddInitialGeoData(client BaseClient, key string) {
 		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
 	}
 
-	_, err := client.GeoAdd(key, membersToCoordinates)
+	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("GeoSearch glide example failed with an error: ", err)
 	}

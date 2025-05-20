@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strconv"
@@ -60,7 +61,7 @@ func getExampleGlideClient() *GlideClient {
 	config := NewGlideClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
-	client, err := NewGlideClient(config)
+	client, err := NewGlideClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -69,7 +70,7 @@ func getExampleGlideClient() *GlideClient {
 	standaloneClients = append(standaloneClients, thisClient)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = thisClient.FlushAllWithOptions(options.SYNC)
+	_, err = thisClient.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -85,7 +86,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 		WithAddress(&clusterAddresses[0]).
 		WithRequestTimeout(5 * time.Second)
 
-	client, err := NewGlideClusterClient(cConfig)
+	client, err := NewGlideClusterClient(context.Background(), cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -95,7 +96,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 
 	// Flush the database before each test to ensure a clean state.
 	mode := options.SYNC
-	_, err = thisClient.FlushAllWithOptions(
+	_, err = thisClient.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
@@ -116,7 +117,7 @@ func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPatt
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
-	client, err := NewGlideClient(config)
+	client, err := NewGlideClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -125,7 +126,7 @@ func getExampleGlideClientWithSubscription(mode PubSubChannelMode, channelOrPatt
 	standaloneClients = append(standaloneClients, thisClient)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = thisClient.FlushAllWithOptions(options.SYNC)
+	_, err = thisClient.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -144,7 +145,7 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
-	client, err := NewGlideClusterClient(ccConfig)
+	client, err := NewGlideClusterClient(context.Background(), ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -154,7 +155,7 @@ func getExampleGlideClusterClientWithSubscription(mode PubSubClusterChannelMode,
 
 	// Flush the database before each test to ensure a clean state.
 	syncmode := options.SYNC
-	_, err = thisClient.FlushAllWithOptions(
+	_, err = thisClient.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
