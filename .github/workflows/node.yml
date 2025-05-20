@@ -177,8 +177,8 @@ jobs:
             - name: Test
               shell: bash
               run: |
-                npm run build
-                npm run test
+                  npm run build
+                  npm run test
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
