@@ -145,7 +145,7 @@ jobs:
               if: ${{ github.event.inputs.rc-test == 'false' }}
               run: |
                   make install-tools build
-                  make -k integ-test
+                  make -k unit-test integ-test
                   make -k pubsub-test
 
             - name: Run Example Tests
@@ -247,7 +247,7 @@ jobs:
               if: ${{ github.event.inputs.rc-test == 'false' }}
               run: |
                   make install-tools build
-                  make -k integ-test
+                  make -k unit-test integ-test
                   make -k pubsub-test
 
             - name: Upload test reports
