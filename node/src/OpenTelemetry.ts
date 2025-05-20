@@ -13,6 +13,8 @@
  *       - `grpc://` for gRPC
  *       - `file://` for local file export (see below)
  *     - **samplePercentage**: (optional) The percentage of requests to sample and create a span for, used to measure command duration. Must be between 0 and 100. Defaults to 1 if not specified.
+ *       Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+ *       It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
  *   - **metrics**: (optional) Configure metrics exporting.
  *     - **endpoint**: The collector endpoint for metrics. Same protocol rules as above.
  *   - **flushIntervalMs**: (optional) Interval in milliseconds for flushing data to the collector. Must be a positive integer. Defaults to 5000ms if not specified.
@@ -99,6 +101,20 @@ export class OpenTelemetry {
      */
     public static getSamplePercentage() {
         return this.openTelemetryConfig?.traces?.samplePercentage;
+    }
+
+    /**
+     * Determines if the current request should be sampled for OpenTelemetry tracing.
+     * Uses the configured sample percentage to randomly decide whether to create a span for this request.
+     * @returns true if the request should be sampled, false otherwise
+     */
+    public static shouldSample(): boolean {
+        const percentage = this.getSamplePercentage();
+        return (
+            this.isInitialized() &&
+            percentage !== undefined &&
+            Math.random() * 100 < percentage
+        );
     }
 
     /**

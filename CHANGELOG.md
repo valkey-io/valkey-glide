@@ -1,6 +1,5 @@
 #### Changes
-* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830)) 
-* Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
+
 * Python: Add support for Trio ([#3465](https://github.com/valkey-io/valkey-glide/pull/3465))
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
@@ -9,6 +8,8 @@
 * Python: Add Batch support ([#3555](https://github.com/valkey-io/valkey-glide/pull/3555))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
+* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830)) 
+* Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
 * Core/Node: Create openTelemetry span to measure command latency ([#3391](https://github.com/valkey-io/valkey-glide/pull/3391))
 * Core: Add `opentelemetry` metrics support ([#3466](https://github.com/valkey-io/valkey-glide/pull/3466))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))

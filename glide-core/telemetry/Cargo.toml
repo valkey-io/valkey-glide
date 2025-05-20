@@ -18,8 +18,8 @@ async-trait = "0.1"
 serial_test = "2" 
 
 opentelemetry = { version = "0.27", features = ["metrics"] }
-opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics", "rt-tokio-current-thread"] }
-opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client", "metrics", "tonic"] }
+opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics"] }
+opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
 once_cell = "1.18"
 
 [dev-dependencies]

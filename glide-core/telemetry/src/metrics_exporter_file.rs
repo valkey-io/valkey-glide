@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use opentelemetry_sdk::metrics::data::ResourceMetrics;
-use opentelemetry_sdk::metrics::data::{Gauge, Histogram, Sum};
-use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::MetricError;
 use opentelemetry_sdk::metrics::MetricResult;
 use opentelemetry_sdk::metrics::Temporality;
+use opentelemetry_sdk::metrics::data::ResourceMetrics;
+use opentelemetry_sdk::metrics::data::{Gauge, Histogram, Sum};
+use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use serde_json::{Map, Value};
 use std::any::Any;
 use std::fs::OpenOptions;

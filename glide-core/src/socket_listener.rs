@@ -535,7 +535,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             true => match request.command {
                 Some(action) => match action {
                     command_request::Command::ClusterScan(cluster_scan_command) => {
-                        //ToDo: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
+                        //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {

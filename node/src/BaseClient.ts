@@ -1098,15 +1098,6 @@ export class BaseClient {
         }
     }
 
-    private shouldSample() {
-        const percentage = OpenTelemetry.getSamplePercentage();
-        return (
-            OpenTelemetry.isInitialized() &&
-            percentage !== undefined &&
-            Math.random() * 100 < percentage
-        );
-    }
-
     /**
      * @internal
      *
@@ -1133,7 +1124,7 @@ export class BaseClient {
             // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
 
-            if (this.shouldSample()) {
+            if (OpenTelemetry.shouldSample()) {
                 const commandName =
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]

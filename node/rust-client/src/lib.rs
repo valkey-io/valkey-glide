@@ -1,10 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::Telemetry;
 use glide_core::errors::error_message;
 use glide_core::{
-    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
-    GlideSpan, Telemetry, DEFAULT_FLUSH_SIGNAL_INTERVAL_MS,
+    DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
+    GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 use redis::GlideConnectionOptions;
 
@@ -17,9 +16,9 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
-use glide_core::client::get_or_init_runtime;
-use glide_core::client::ConnectionError;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::client::ConnectionError;
+use glide_core::client::get_or_init_runtime;
 use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
@@ -90,13 +89,17 @@ pub struct OpenTelemetryConfig {
 ///   - For gRPC: `grpc://host:port`
 ///   - For HTTP: `http://host:port` or `https://host:port`
 ///   - For file exporter: `file:///absolute/path/to/folder/file.json`
-/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_PERCENTAGE will be used.
+///   Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+///   It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
 #[napi(object)]
 #[derive(Clone)]
 pub struct OpenTelemetryTracesConfig {
     /// The endpoint to which trace data will be exported.
     pub endpoint: String,
-    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value will be used.
+    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_PERCENTAGE will be used.
+    /// Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+    /// It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
     pub sample_percentage: Option<u32>,
 }
 
