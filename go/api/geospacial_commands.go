@@ -3,6 +3,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -13,29 +15,38 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#geo-spatial
 type GeoSpatialCommands interface {
-	GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error)
+	GeoAdd(ctx context.Context, key string, membersToGeospatialData map[string]options.GeospatialData) (int64, error)
 
 	GeoAddWithOptions(
+		ctx context.Context,
 		key string,
 		membersToGeospatialData map[string]options.GeospatialData,
 		options options.GeoAddOptions,
 	) (int64, error)
 
-	GeoHash(key string, members []string) ([]string, error)
+	GeoHash(ctx context.Context, key string, members []string) ([]string, error)
 
-	GeoPos(key string, members []string) ([][]float64, error)
+	GeoPos(ctx context.Context, key string, members []string) ([][]float64, error)
 
-	GeoDist(key string, member1 string, member2 string) (Result[float64], error)
+	GeoDist(ctx context.Context, key string, member1 string, member2 string) (Result[float64], error)
 
-	GeoDistWithUnit(key string, member1 string, member2 string, unit options.GeoUnit) (Result[float64], error)
+	GeoDistWithUnit(
+		ctx context.Context,
+		key string,
+		member1 string,
+		member2 string,
+		unit options.GeoUnit,
+	) (Result[float64], error)
 
 	GeoSearch(
+		ctx context.Context,
 		key string,
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
 	) ([]string, error)
 
 	GeoSearchWithInfoOptions(
+		ctx context.Context,
 		key string,
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
@@ -43,6 +54,7 @@ type GeoSpatialCommands interface {
 	) ([]options.Location, error)
 
 	GeoSearchWithResultOptions(
+		ctx context.Context,
 		key string,
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
@@ -50,6 +62,7 @@ type GeoSpatialCommands interface {
 	) ([]string, error)
 
 	GeoSearchWithFullOptions(
+		ctx context.Context,
 		key string,
 		searchFrom options.GeoSearchOrigin,
 		searchByShape options.GeoSearchShape,
@@ -58,6 +71,7 @@ type GeoSpatialCommands interface {
 	) ([]options.Location, error)
 
 	GeoSearchStore(
+		ctx context.Context,
 		destinationKey string,
 		sourceKey string,
 		searchFrom options.GeoSearchOrigin,
@@ -65,6 +79,7 @@ type GeoSpatialCommands interface {
 	) (int64, error)
 
 	GeoSearchStoreWithInfoOptions(
+		ctx context.Context,
 		destinationKey string,
 		sourceKey string,
 		searchFrom options.GeoSearchOrigin,
@@ -73,6 +88,7 @@ type GeoSpatialCommands interface {
 	) (int64, error)
 
 	GeoSearchStoreWithResultOptions(
+		ctx context.Context,
 		destinationKey string,
 		sourceKey string,
 		searchFrom options.GeoSearchOrigin,
@@ -81,6 +97,7 @@ type GeoSpatialCommands interface {
 	) (int64, error)
 
 	GeoSearchStoreWithFullOptions(
+		ctx context.Context,
 		destinationKey string,
 		sourceKey string,
 		searchFrom options.GeoSearchOrigin,

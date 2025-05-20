@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Generic Commands" group for standalone and cluster clients.
 //
@@ -10,79 +14,94 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/?group=Generic
 type GenericBaseCommands interface {
-	Del(keys []string) (int64, error)
+	Del(ctx context.Context, keys []string) (int64, error)
 
-	Exists(keys []string) (int64, error)
+	Exists(ctx context.Context, keys []string) (int64, error)
 
-	Expire(key string, seconds int64) (bool, error)
+	Expire(ctx context.Context, key string, seconds int64) (bool, error)
 
-	ExpireWithOptions(key string, seconds int64, expireCondition options.ExpireCondition) (bool, error)
+	ExpireWithOptions(ctx context.Context, key string, seconds int64, expireCondition options.ExpireCondition) (bool, error)
 
-	ExpireAt(key string, unixTimestampInSeconds int64) (bool, error)
+	ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error)
 
-	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition options.ExpireCondition) (bool, error)
+	ExpireAtWithOptions(
+		ctx context.Context,
+		key string,
+		unixTimestampInSeconds int64,
+		expireCondition options.ExpireCondition,
+	) (bool, error)
 
-	PExpire(key string, milliseconds int64) (bool, error)
+	PExpire(ctx context.Context, key string, milliseconds int64) (bool, error)
 
-	PExpireWithOptions(key string, milliseconds int64, expireCondition options.ExpireCondition) (bool, error)
+	PExpireWithOptions(
+		ctx context.Context,
+		key string,
+		milliseconds int64,
+		expireCondition options.ExpireCondition,
+	) (bool, error)
 
-	PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error)
+	PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error)
 
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition options.ExpireCondition) (bool, error)
+	PExpireAtWithOptions(
+		ctx context.Context,
+		key string,
+		unixTimestampInMilliSeconds int64,
+		expireCondition options.ExpireCondition,
+	) (bool, error)
 
-	ExpireTime(key string) (int64, error)
+	ExpireTime(ctx context.Context, key string) (int64, error)
 
-	PExpireTime(key string) (int64, error)
+	PExpireTime(ctx context.Context, key string) (int64, error)
 
-	TTL(key string) (int64, error)
+	TTL(ctx context.Context, key string) (int64, error)
 
-	PTTL(key string) (int64, error)
+	PTTL(ctx context.Context, key string) (int64, error)
 
-	Unlink(keys []string) (int64, error)
+	Unlink(ctx context.Context, keys []string) (int64, error)
 
-	Touch(keys []string) (int64, error)
+	Touch(ctx context.Context, keys []string) (int64, error)
 
-	Type(key string) (string, error)
+	Type(ctx context.Context, key string) (string, error)
 
-	Rename(key string, newKey string) (string, error)
+	Rename(ctx context.Context, key string, newKey string) (string, error)
 
-	RenameNX(key string, newKey string) (bool, error)
+	RenameNX(ctx context.Context, key string, newKey string) (bool, error)
 
-	Persist(key string) (bool, error)
+	Persist(ctx context.Context, key string) (bool, error)
 
-	Restore(key string, ttl int64, value string) (string, error)
+	Restore(ctx context.Context, key string, ttl int64, value string) (string, error)
 
-	RestoreWithOptions(key string, ttl int64, value string, option options.RestoreOptions) (string, error)
+	RestoreWithOptions(ctx context.Context, key string, ttl int64, value string, option options.RestoreOptions) (string, error)
 
-	ObjectEncoding(key string) (Result[string], error)
+	ObjectEncoding(ctx context.Context, key string) (Result[string], error)
 
-	Dump(key string) (Result[string], error)
+	Dump(ctx context.Context, key string) (Result[string], error)
 
-	ObjectFreq(key string) (Result[int64], error)
+	ObjectFreq(ctx context.Context, key string) (Result[int64], error)
 
-	ObjectIdleTime(key string) (Result[int64], error)
+	ObjectIdleTime(ctx context.Context, key string) (Result[int64], error)
 
-	ObjectRefCount(key string) (Result[int64], error)
+	ObjectRefCount(ctx context.Context, key string) (Result[int64], error)
 
-	Sort(key string) ([]Result[string], error)
+	Sort(ctx context.Context, key string) ([]Result[string], error)
 
-	SortWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]Result[string], error)
 
-	SortStore(key string, destination string) (int64, error)
+	SortStore(ctx context.Context, key string, destination string) (int64, error)
 
-	SortStoreWithOptions(key string, destination string, sortOptions options.SortOptions) (int64, error)
+	SortStoreWithOptions(ctx context.Context, key string, destination string, sortOptions options.SortOptions) (int64, error)
 
-	SortReadOnly(key string) ([]Result[string], error)
+	SortReadOnly(ctx context.Context, key string) ([]Result[string], error)
 
-	SortReadOnlyWithOptions(key string, sortOptions options.SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]Result[string], error)
 
-	Wait(numberOfReplicas int64, timeout int64) (int64, error)
+	Wait(ctx context.Context, numberOfReplicas int64, timeout int64) (int64, error)
 
-	Copy(source string, destination string) (bool, error)
+	Copy(ctx context.Context, source string, destination string) (bool, error)
 
-	CopyWithOptions(source string, destination string, option options.CopyOptions) (bool, error)
+	CopyWithOptions(ctx context.Context, source string, destination string, option options.CopyOptions) (bool, error)
 
-	UpdateConnectionPassword(password string, immediateAuth bool) (string, error)
+	UpdateConnectionPassword(ctx context.Context, password string, immediateAuth bool) (string, error)
 
-	ResetConnectionPassword() (string, error)
+	ResetConnectionPassword(ctx context.Context) (string, error)
 }

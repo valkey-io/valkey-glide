@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
@@ -15,7 +17,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := api.NewGlideClusterClientConfiguration().
 			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClusterClient(config)
+		glideClient, err := api.NewGlideClusterClient(context.Background(), config)
 		if err != nil {
 			return err
 		}
@@ -26,7 +28,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := api.NewGlideClientConfiguration().
 			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClient(config)
+		glideClient, err := api.NewGlideClient(context.Background(), config)
 		if err != nil {
 			return err
 		}
@@ -37,7 +39,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) get(key string) (string, error) {
-	result, err := glideBenchmarkClient.client.Get(key)
+	result, err := glideBenchmarkClient.client.Get(context.Background(), key)
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +48,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) get(key string) (string, error
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) set(key string, value string) (string, error) {
-	return glideBenchmarkClient.client.Set(key, value)
+	return glideBenchmarkClient.client.Set(context.Background(), key, value)
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) close() error {

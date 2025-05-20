@@ -3,6 +3,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -12,118 +14,146 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#sorted-set
 type SortedSetCommands interface {
-	ZAdd(key string, membersScoreMap map[string]float64) (int64, error)
+	ZAdd(ctx context.Context, key string, membersScoreMap map[string]float64) (int64, error)
 
-	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts options.ZAddOptions) (int64, error)
+	ZAddWithOptions(
+		ctx context.Context,
+		key string,
+		membersScoreMap map[string]float64,
+		opts options.ZAddOptions,
+	) (int64, error)
 
-	ZAddIncr(key string, member string, increment float64) (Result[float64], error)
+	ZAddIncr(ctx context.Context, key string, member string, increment float64) (Result[float64], error)
 
-	ZAddIncrWithOptions(key string, member string, increment float64, opts options.ZAddOptions) (Result[float64], error)
+	ZAddIncrWithOptions(
+		ctx context.Context,
+		key string,
+		member string,
+		increment float64,
+		opts options.ZAddOptions,
+	) (Result[float64], error)
 
-	ZIncrBy(key string, increment float64, member string) (float64, error)
+	ZIncrBy(ctx context.Context, key string, increment float64, member string) (float64, error)
 
-	ZPopMin(key string) (map[string]float64, error)
+	ZPopMin(ctx context.Context, key string) (map[string]float64, error)
 
-	ZPopMinWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
+	ZPopMinWithOptions(ctx context.Context, key string, options options.ZPopOptions) (map[string]float64, error)
 
-	ZPopMax(key string) (map[string]float64, error)
+	ZPopMax(ctx context.Context, key string) (map[string]float64, error)
 
-	ZPopMaxWithOptions(key string, options options.ZPopOptions) (map[string]float64, error)
+	ZPopMaxWithOptions(ctx context.Context, key string, options options.ZPopOptions) (map[string]float64, error)
 
-	ZRem(key string, members []string) (int64, error)
+	ZRem(ctx context.Context, key string, members []string) (int64, error)
 
-	ZCard(key string) (int64, error)
+	ZCard(ctx context.Context, key string) (int64, error)
 
-	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMin(ctx context.Context, keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	BZMPop(keys []string, scoreFilter options.ScoreFilter, timeoutSecs float64) (Result[KeyWithArrayOfMembersAndScores], error)
+	BZMPop(
+		ctx context.Context,
+		keys []string,
+		scoreFilter options.ScoreFilter,
+		timeoutSecs float64,
+	) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
+		ctx context.Context,
 		keys []string,
 		scoreFilter options.ScoreFilter,
 		timeoutSecs float64,
 		options options.ZMPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)
 
-	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
+	ZRange(ctx context.Context, key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	BZPopMax(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+	BZPopMax(ctx context.Context, keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	ZMPop(keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
+	ZMPop(ctx context.Context, keys []string, scoreFilter options.ScoreFilter) (Result[KeyWithArrayOfMembersAndScores], error)
 
 	ZMPopWithOptions(
+		ctx context.Context,
 		keys []string,
 		scoreFilter options.ScoreFilter,
 		opts options.ZPopOptions,
 	) (Result[KeyWithArrayOfMembersAndScores], error)
 
-	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
+	ZRangeWithScores(ctx context.Context, key string, rangeQuery options.ZRangeQueryWithScores) ([]MemberAndScore, error)
 
-	ZRangeStore(destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
+	ZRangeStore(ctx context.Context, destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 
-	ZRank(key string, member string) (Result[int64], error)
+	ZRank(ctx context.Context, key string, member string) (Result[int64], error)
 
-	ZRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+	ZRankWithScore(ctx context.Context, key string, member string) (Result[int64], Result[float64], error)
 
-	ZRevRank(key string, member string) (Result[int64], error)
+	ZRevRank(ctx context.Context, key string, member string) (Result[int64], error)
 
-	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
+	ZRevRankWithScore(ctx context.Context, key string, member string) (Result[int64], Result[float64], error)
 
-	ZScore(key string, member string) (Result[float64], error)
+	ZScore(ctx context.Context, key string, member string) (Result[float64], error)
 
-	ZCount(key string, rangeOptions options.ZCountRange) (int64, error)
+	ZCount(ctx context.Context, key string, rangeOptions options.ZCountRange) (int64, error)
 
-	ZScan(key string, cursor string) (string, []string, error)
+	ZScan(ctx context.Context, key string, cursor string) (string, []string, error)
 
-	ZScanWithOptions(key string, cursor string, options options.ZScanOptions) (string, []string, error)
+	ZScanWithOptions(ctx context.Context, key string, cursor string, options options.ZScanOptions) (string, []string, error)
 
-	ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error)
+	ZRemRangeByLex(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error)
 
-	ZRemRangeByRank(key string, start int64, stop int64) (int64, error)
+	ZRemRangeByRank(ctx context.Context, key string, start int64, stop int64) (int64, error)
 
-	ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error)
+	ZRemRangeByScore(ctx context.Context, key string, rangeQuery options.RangeByScore) (int64, error)
 
-	ZDiff(keys []string) ([]string, error)
+	ZDiff(ctx context.Context, keys []string) ([]string, error)
 
-	ZDiffWithScores(keys []string) ([]MemberAndScore, error)
+	ZDiffWithScores(ctx context.Context, keys []string) ([]MemberAndScore, error)
 
-	ZRandMember(key string) (Result[string], error)
+	ZRandMember(ctx context.Context, key string) (Result[string], error)
 
-	ZRandMemberWithCount(key string, count int64) ([]string, error)
+	ZRandMemberWithCount(ctx context.Context, key string, count int64) ([]string, error)
 
-	ZRandMemberWithCountWithScores(key string, count int64) ([]MemberAndScore, error)
+	ZRandMemberWithCountWithScores(ctx context.Context, key string, count int64) ([]MemberAndScore, error)
 
-	ZMScore(key string, members []string) ([]Result[float64], error)
+	ZMScore(ctx context.Context, key string, members []string) ([]Result[float64], error)
 
-	ZDiffStore(destination string, keys []string) (int64, error)
+	ZDiffStore(ctx context.Context, destination string, keys []string) (int64, error)
 
-	ZInter(keys options.KeyArray) ([]string, error)
+	ZInter(ctx context.Context, keys options.KeyArray) ([]string, error)
 
-	ZInterWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options options.ZInterOptions) ([]MemberAndScore, error)
+	ZInterWithScores(
+		ctx context.Context,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options options.ZInterOptions,
+	) ([]MemberAndScore, error)
 
-	ZInterStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+	ZInterStore(ctx context.Context, destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
 	ZInterStoreWithOptions(
+		ctx context.Context,
 		destination string,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		options options.ZInterOptions,
 	) (int64, error)
 
-	ZUnion(keys options.KeyArray) ([]string, error)
+	ZUnion(ctx context.Context, keys options.KeyArray) ([]string, error)
 
-	ZUnionWithScores(keysOrWeightedKeys options.KeysOrWeightedKeys, options *options.ZUnionOptions) ([]MemberAndScore, error)
+	ZUnionWithScores(
+		ctx context.Context,
+		keysOrWeightedKeys options.KeysOrWeightedKeys,
+		options *options.ZUnionOptions,
+	) ([]MemberAndScore, error)
 
-	ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
+	ZUnionStore(ctx context.Context, destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
 
 	ZUnionStoreWithOptions(
+		ctx context.Context,
 		destination string,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
 		zUnionOptions *options.ZUnionOptions,
 	) (int64, error)
 
-	ZInterCard(keys []string) (int64, error)
+	ZInterCard(ctx context.Context, keys []string) (int64, error)
 
-	ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) (int64, error)
+	ZInterCardWithOptions(ctx context.Context, keys []string, options *options.ZInterCardOptions) (int64, error)
 
-	ZLexCount(key string, rangeQuery *options.RangeByLex) (int64, error)
+	ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error)
 }
