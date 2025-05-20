@@ -119,8 +119,35 @@ jobs:
             - name: Build and Test
               working-directory: ./node
               run: |
+                  npm install
                   npm run build
-                  npm test
+
+            - name: Install Yarn
+              id: install-yarn
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              shell: bash
+              run: |
+                  curl -o- -L https://yarnpkg.com/install.sh | bash
+            - name: Add Yarn to PATH
+              id: add-yarn-to-path
+              if: ${{ steps.install-yarn.outcome == 'success' }}
+              run: |
+                  echo "$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin" >> $GITHUB_PATH
+                  echo "Yarn PATH configured"
+
+            - name: Test yarn compatibility and correct typescript
+              if: ${{ steps.add-yarn-to-path.outcome == 'success' }}
+              working-directory: ./node/pm-and-types-tests
+              shell: bash
+              run: |
+                  cd package1
+                  yarn install
+                  rm -rf node_modules/@valkey/valkey-glide/build-ts/*
+                  cp ../../build-ts ./node_modules/@valkey/valkey-glide/build-ts
+                  yarn run build
+                  cd ../package2
+                  yarn install
+                  yarn run build
 
             # Additional tests for specific configurations
             - name: Test hybrid node modules - commonjs
@@ -147,19 +174,11 @@ jobs:
               with:
                   language-flag: -node
 
-            - name: Test yarn compatibility and correct typescript
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
-              working-directory: ./node/pm-and-types-tests
-              shell: bash
-              run: |
-                  npm install -g yarn
-                  curl --compressed -o- -L https://yarnpkg.com/install.sh | bash
-                  cd package1
-                  yarn install
-                  yarn run build
-                  cd ../package2
-                  yarn install
-                  yarn run build
+            - name: Test
+              run: npm run test
+              working-directory: ./node
+              env:
+                  JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
 
             - name: Upload test reports
               if: always()
