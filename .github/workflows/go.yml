@@ -129,8 +129,10 @@ jobs:
             - name: Install & test RC
               working-directory: go
               if: ${{ github.event.inputs.rc-test == 'true' }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
                   make install-tools
                   make -k integ-test
 
@@ -275,8 +277,10 @@ jobs:
             - name: Install & test RC
               working-directory: go
               if: ${{ github.event.inputs.rc-test == 'true' }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
                   make install-tools
                   make -k integ-test
 
@@ -333,8 +337,10 @@ jobs:
             - name: test
               working-directory: ./go
               if: ${{ github.event.inputs.rc-test == 'true' }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
                   make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
@@ -393,8 +399,10 @@ jobs:
             - name: Install & test RC
               working-directory: go
               if: ${{ github.event.inputs.rc-test == 'true' && github.event.inputs.rc-version >= 'v2.0.0' }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  ./scripts/rc-testing/rc-test.sh ${{ github.event.inputs.rc-version }}
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
                   make install-tools
                   make -k long-timeout-test test-filter=TestLongTimeout
 
