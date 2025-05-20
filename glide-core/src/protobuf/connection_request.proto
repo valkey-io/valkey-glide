@@ -80,6 +80,7 @@ message ConnectionRequest {
     string client_az = 15;
     uint32 connection_timeout = 16;
     OpenTelemetryConfig opentelemetry_config = 17;
+    bool lazy_connect = 18;
 }
 
 message ConnectionRetryStrategy {

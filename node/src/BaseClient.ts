@@ -544,6 +544,7 @@ export type ReadFrom =
  * - **Addresses**: Use the `addresses` property to specify the hostnames and ports of the server(s) to connect to.
  *   - **Cluster Mode**: In cluster mode, the client will discover other nodes based on the provided addresses.
  *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
+ * - **Lazy Connect**: Set `lazyConnect` to `true` to defer connection establishment until the first command is sent.
  *
  * ### Security Settings
  *
@@ -594,6 +595,7 @@ export type ReadFrom =
  *   clientAz: 'us-east-1a',
  *   defaultDecoder: Decoder.String,
  *   inflightRequestsLimit: 1000,
+ *   lazyConnect: true,
  * };
  * ```
  */
@@ -679,6 +681,33 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+    /**
+     * Enables lazy connection mode, where physical connections to the server(s) are deferred
+     * until the first command is sent. This can reduce startup latency and allow for client
+     * creation in disconnected environments.
+     *
+     * - **Default**: `false` – connections are established immediately during client creation.
+     *
+     * @remarks
+     * When `lazyConnect` is set to `true`, the client will not attempt to connect to the specified
+     * nodes during initialization. Instead, connections will be established only when a command is
+     * actually executed.
+     *
+     * This setting applies to both standalone and cluster modes. Note that if an operation is
+     * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+     *
+     * @example
+     * ```typescript
+     * const client = await GlideClient.createClient({
+     *   addresses: [{ host: "localhost", port: 6379 }],
+     *   lazyConnect: true
+     * });
+     *
+     * // No connection is made yet
+     * await client.ping(); // Now the client connects and sends the command
+     * ```
+     */
+    lazyConnect?: boolean;
 }
 
 /**
@@ -7784,6 +7813,7 @@ export class BaseClient {
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
+            lazyConnect: options.lazyConnect ?? false,
         };
     }
 
