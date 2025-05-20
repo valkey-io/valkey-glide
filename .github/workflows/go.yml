@@ -144,7 +144,7 @@ jobs:
 
             - name: Install & build & test
               working-directory: go
-              if: ${{ github.event.inputs.rc-test == 'false' }}
+              if: ${{ github.event.inputs.rc-test != 'true' }}
               run: |
                   make install-tools build
                   make -k unit-test integ-test
@@ -175,7 +175,7 @@ jobs:
     lint:
         timeout-minutes: 10
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.rc-test == 'false' }}
+        if: ${{ github.event.inputs.rc-test != 'true' }}
         steps:
             - uses: actions/checkout@v4
 
@@ -286,7 +286,7 @@ jobs:
 
             - name: Install & build & test
               working-directory: go
-              if: ${{ github.event.inputs.rc-test == 'false' }}
+              if: ${{ github.event.inputs.rc-test != 'true' }}
               run: |
                   make install-tools build
                   make -k unit-test integ-test
@@ -408,7 +408,7 @@ jobs:
 
             - name: Install & build & test
               working-directory: go
-              if: ${{ github.event.inputs.rc-test == 'false' }}
+              if: ${{ github.event.inputs.rc-test != 'true' }}
               run: |
                   make install-tools build
                   make -k long-timeout-test test-filter=TestLongTimeout
