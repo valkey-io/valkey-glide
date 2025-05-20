@@ -231,6 +231,12 @@ jobs:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: mkdir for js and d.ts
+              shell: bash
+              run: |
+                  # Create a build directory js, and d.ts
+                  mkdir -p ./node/build-ts
+
             - name: Build Native Modules
               working-directory: ./node/rust-client
               id: build-action
@@ -313,7 +319,7 @@ jobs:
             - name: Create Build Directory
               shell: bash
               run: |
-                  # Create a build directory for the artifacts
+                  # Create a build directory js, and d.ts
                   mkdir -p ./node/build-ts
 
             # Put the native.js and native.d.ts files in the src directory
