@@ -26,6 +26,17 @@ import (
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
+type ClientTypeFlag uint
+
+const (
+	StandaloneFlag ClientTypeFlag = 1 << iota
+	ClusterFlag
+)
+
+func (c ClientTypeFlag) Has(ctype ClientTypeFlag) bool {
+	return c&ctype != 0
+}
+
 type GlideTestSuite struct {
 	suite.Suite
 	standaloneHosts []api.NodeAddress
@@ -251,6 +262,11 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client api.BaseClie
 	suite.runWithClients(clients, test)
 }
 
+func (suite *GlideTestSuite) runWithSpecificClients(clientFlag ClientTypeFlag, test func(client api.BaseClient)) {
+	clients := suite.getSpecificClients(clientFlag)
+	suite.runWithClients(clients, test)
+}
+
 func (suite *GlideTestSuite) runWithTimeoutClients(test func(client api.BaseClient)) {
 	clients := suite.getTimeoutClients()
 	suite.runWithClients(clients, test)
@@ -267,7 +283,20 @@ func (suite *GlideTestSuite) runParallelizedWithDefaultClients(
 }
 
 func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
-	return []api.BaseClient{suite.defaultClient(), suite.defaultClusterClient()}
+	return suite.getSpecificClients(StandaloneFlag | ClusterFlag)
+}
+
+func (suite *GlideTestSuite) getSpecificClients(clientFlag ClientTypeFlag) []api.BaseClient {
+	clients := make([]api.BaseClient, 0)
+	if clientFlag.Has(StandaloneFlag) {
+		standaloneClient := suite.defaultClient()
+		clients = append(clients, standaloneClient)
+	}
+	if clientFlag.Has(ClusterFlag) {
+		clusterClient := suite.defaultClusterClient()
+		clients = append(clients, clusterClient)
+	}
+	return clients
 }
 
 func (suite *GlideTestSuite) getTimeoutClients() []api.BaseClient {
