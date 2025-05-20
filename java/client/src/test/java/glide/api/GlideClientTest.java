@@ -14040,8 +14040,6 @@ public class GlideClientTest {
                     gs(value),
                     gs("REPLACE"),
                     gs("ABSTTL"),
-                    gs("IDLETIME"),
-                    gs("10"),
                     gs("FREQ"),
                     gs("5")
                 };
