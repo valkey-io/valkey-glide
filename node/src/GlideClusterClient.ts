@@ -4,6 +4,7 @@
 
 import * as net from "net";
 import { Writer } from "protobufjs/minimal";
+import { ClusterScanCursor, Script } from "../build-ts/native";
 import {
     command_request,
     connection_request,
@@ -67,7 +68,6 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { ClusterScanCursor, Script } from "./native";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -654,7 +654,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                (resolveAns: [typeof cursor, GlideString[]]) => {
                     try {
                         resolve([
                             new ClusterScanCursor(resolveAns[0].toString()),

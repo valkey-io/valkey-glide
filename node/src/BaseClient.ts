@@ -5,6 +5,15 @@ import Long from "long";
 import * as net from "net";
 import { Buffer, BufferWriter, Long as ProtoLong, Reader, Writer } from "protobufjs/minimal";
 import {
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    getStatistics,
+    valueFromSplitPointer,
+} from "../build-ts/native";
+import {
     command_request,
     connection_request,
     response,
@@ -247,15 +256,8 @@ import {
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
     createLeakedOtelSpan,
-    dropOtelSpan,
-    getStatistics,
-    valueFromSplitPointer,
+    dropOtelSpan
 } from "./native";
 import { OpenTelemetry } from "./OpenTelemetry";
 
@@ -770,7 +772,7 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
-type BaseOptions = RouteOption & DecoderOption;
+export type BaseOptions = RouteOption & DecoderOption;
 export type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
