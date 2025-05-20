@@ -22,6 +22,7 @@ use redis::{Cmd, RedisResult, Value};
 use redis::{ErrorKind, ObjectType};
 use std::ffi::CStr;
 use std::future::Future;
+use std::mem::ManuallyDrop;
 use std::slice::from_raw_parts;
 use std::str;
 use std::sync::Arc;
@@ -32,6 +33,13 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+
+#[repr(C)]
+pub struct ScriptHashBuffer {
+    pub ptr: *mut u8,
+    pub len: usize,
+    pub capacity: usize,
+}
 
 /// Store a Lua script in the script cache and return its SHA1 hash.
 ///
@@ -48,30 +56,77 @@ use tokio::runtime::Runtime;
 /// # Safety
 ///
 /// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
-/// * The returned C string must be freed by the caller.
+/// * The returned buffer must be freed by the caller using [`free_script_hash_buffer`].
 #[no_mangle]
 pub unsafe extern "C-unwind" fn store_script(
     script_bytes: *const u8,
     script_len: usize,
-) -> *mut c_char {
+) -> *mut ScriptHashBuffer {
     let script = unsafe { std::slice::from_raw_parts(script_bytes, script_len) };
     let hash = scripts_container::add_script(script);
-    CString::new(hash).unwrap().into_raw()
+    let mut hash = ManuallyDrop::new(hash);
+    let script_hash_buffer = ScriptHashBuffer {
+        ptr: hash.as_mut_ptr(),
+        len: hash.len(),
+        capacity: hash.capacity(),
+    };
+    Box::into_raw(Box::new(script_hash_buffer))
+}
+
+/// Free a `ScriptHashBuffer` obtained from [`store_script`].
+///
+/// # Parameters
+///
+/// * `buffer`: Pointer to the `ScriptHashBuffer`.
+///
+/// # Safety
+///
+/// * `buffer` must be a pointer returned from [`store_script`].
+pub unsafe extern "C-unwind" fn free_script_hash_buffer(buffer: *mut ScriptHashBuffer) {
+    let buffer = unsafe { Box::from_raw(buffer) };
+    let _hash = unsafe { String::from_raw_parts(buffer.ptr, buffer.len, buffer.capacity) };
 }
 
 /// Remove a script from the script cache.
 ///
+/// Returns a null pointer if it succeeds and a C string error message if it fails.
+///
 /// # Parameters
 ///
-/// * `hash`: The SHA1 hash of the script to remove.
+/// * `hash`: The SHA1 hash of the script to remove as a byte array.
+/// * `len`: The length of `hash`.
 ///
 /// # Safety
 ///
-/// * `hash` must be a valid null-terminated C string created by [`store_script`].
+/// * `hash` must be a valid pointer to a UTF-8 string obtained from [`store_script`].
 #[no_mangle]
-pub unsafe extern "C-unwind" fn drop_script(hash: *mut c_char) {
-    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
-    scripts_container::remove_script(hash_str);
+pub unsafe extern "C-unwind" fn drop_script(hash: *mut u8, len: usize) -> *mut c_char {
+    if !hash.is_null() {
+        let slice = std::ptr::slice_from_raw_parts_mut(hash, len);
+        let Ok(hash_str) = str::from_utf8(unsafe { &*slice }) else {
+            return CString::new("Unable to convert hash to UTF-8 string.")
+                .unwrap()
+                .into_raw();
+        };
+        scripts_container::remove_script(hash_str);
+        std::ptr::null_mut()
+    } else {
+        CString::new("Hash pointer was null.").unwrap().into_raw()
+    }
+}
+
+/// Free an error message from a failed drop_script call.
+///
+/// # Parameters
+///
+/// * `error`: The error to free.
+///
+/// # Safety
+///
+/// * `error` must be an error returned by [`drop_script`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn free_drop_script_error(error: *mut c_char) {
+    _ = unsafe { CString::from_raw(error) };
 }
 
 /// The struct represents the response of the command.
