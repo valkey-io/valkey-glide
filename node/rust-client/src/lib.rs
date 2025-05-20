@@ -17,6 +17,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
+use glide_core::client::get_or_init_runtime;
 use glide_core::client::ConnectionError;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::start_socket_listener;
@@ -32,7 +33,6 @@ use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -192,11 +192,6 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
-fn ensure_tokio_runtime() -> &'static Runtime {
-    static TOKIO: OnceLock<Runtime> = OnceLock::new();
-    TOKIO.get_or_init(|| Runtime::new().expect("Failed to create Tokio runtime"))
-}
-
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
     // At least one of traces or metrics must be provided
@@ -244,8 +239,17 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
 
     config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
 
-    // Initialize OpenTelemetry synchronously
-    ensure_tokio_runtime().block_on(async {
+    let glide_rt = match get_or_init_runtime() {
+        Ok(handle) => handle,
+        Err(err) => {
+            return Err(napi::Error::new(
+                Status::Unknown,
+                format!("Failed to get or init runtime: {}", err),
+            ));
+        }
+    };
+
+    glide_rt.runtime.block_on(async {
         if let Err(e) = GlideOpenTelemetry::initialise(config.build()) {
             log(
                 Level::Error,
