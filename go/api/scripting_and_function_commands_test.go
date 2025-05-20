@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ redis.register_function{ function_name = 'myfunc', callback = function(keys, arg
 func ExampleGlideClient_FunctionLoad() {
 	client := getExampleGlideClient()
 
-	result, err := client.FunctionLoad(libraryCode, true)
+	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -35,7 +36,7 @@ func ExampleGlideClient_FunctionLoad() {
 func ExampleGlideClusterClient_FunctionLoad() {
 	client := getExampleGlideClusterClient()
 
-	result, err := client.FunctionLoad(libraryCode, true)
+	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -53,7 +54,7 @@ func ExampleGlideClusterClient_FunctionLoadWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	result, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	result, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -68,7 +69,7 @@ func ExampleGlideClusterClient_FunctionLoadWithRoute() {
 func ExampleGlideClient_FunctionFlush() {
 	client := getExampleGlideClient()
 
-	result, err := client.FunctionFlush()
+	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -82,7 +83,7 @@ func ExampleGlideClient_FunctionFlush() {
 func ExampleGlideClusterClient_FunctionFlush() {
 	client := getExampleGlideClusterClient()
 
-	result, err := client.FunctionFlush()
+	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -100,7 +101,7 @@ func ExampleGlideClusterClient_FunctionFlushWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	result, err := client.FunctionFlushWithRoute(opts)
+	result, err := client.FunctionFlushWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -114,7 +115,7 @@ func ExampleGlideClusterClient_FunctionFlushWithRoute() {
 func ExampleGlideClient_FunctionFlushSync() {
 	client := getExampleGlideClient()
 
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -128,7 +129,7 @@ func ExampleGlideClient_FunctionFlushSync() {
 func ExampleGlideClusterClient_FunctionFlushSync() {
 	client := getExampleGlideClient()
 
-	result, err := client.FunctionFlushSync()
+	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -146,7 +147,7 @@ func ExampleGlideClusterClient_FunctionFlushSyncWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	result, err := client.FunctionFlushSyncWithRoute(opts)
+	result, err := client.FunctionFlushSyncWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -160,7 +161,7 @@ func ExampleGlideClusterClient_FunctionFlushSyncWithRoute() {
 func ExampleGlideClient_FunctionFlushAsync() {
 	client := getExampleGlideClient()
 
-	result, err := client.FunctionFlushAsync()
+	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -174,7 +175,7 @@ func ExampleGlideClient_FunctionFlushAsync() {
 func ExampleGlideClusterClient_FunctionFlushAsync() {
 	client := getExampleGlideClusterClient()
 
-	result, err := client.FunctionFlushAsync()
+	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -189,7 +190,7 @@ func ExampleGlideClusterClient_FunctionFlushAsyncWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	result, err := client.FunctionFlushAsyncWithRoute(opts)
+	result, err := client.FunctionFlushAsyncWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -205,13 +206,13 @@ func ExampleGlideClient_FCall() {
 	client := getExampleGlideClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	fcallResult, err := client.FCall("myfunc")
+	fcallResult, err := client.FCall(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -226,13 +227,13 @@ func ExampleGlideClusterClient_FCall() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	fcallResult, err := client.FCall("myfunc")
+	fcallResult, err := client.FCall(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -251,13 +252,13 @@ func ExampleGlideClusterClient_FCallWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallWithRoute("myfunc", opts)
+	result, err := client.FCallWithRoute(context.Background(), "myfunc", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -275,7 +276,7 @@ func ExampleGlideClient_FCallWithKeysAndArgs() {
 	client := getExampleGlideClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -283,7 +284,7 @@ func ExampleGlideClient_FCallWithKeysAndArgs() {
 	// Call function
 	key1 := "{testKey}-" + uuid.New().String()
 	key2 := "{testKey}-" + uuid.New().String()
-	result, err := client.FCallWithKeysAndArgs("myfunc", []string{key1, key2}, []string{"3", "4"})
+	result, err := client.FCallWithKeysAndArgs(context.Background(), "myfunc", []string{key1, key2}, []string{"3", "4"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -298,7 +299,7 @@ func ExampleGlideClusterClient_FCallWithKeysAndArgs() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -306,7 +307,7 @@ func ExampleGlideClusterClient_FCallWithKeysAndArgs() {
 	// Call function
 	key1 := "{testKey}-" + uuid.New().String()
 	key2 := "{testKey}-" + uuid.New().String()
-	result, err := client.FCallWithKeysAndArgs("myfunc", []string{key1, key2}, []string{"3", "4"})
+	result, err := client.FCallWithKeysAndArgs(context.Background(), "myfunc", []string{key1, key2}, []string{"3", "4"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -321,13 +322,13 @@ func ExampleGlideClusterClient_FCallWithArgs() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallWithArgs("myfunc", []string{"1", "2"})
+	result, err := client.FCallWithArgs(context.Background(), "myfunc", []string{"1", "2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -346,13 +347,13 @@ func ExampleGlideClusterClient_FCallWithArgsWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCodeWithArgs, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCodeWithArgs, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallWithArgsWithRoute("myfunc", []string{"1", "2"}, opts)
+	result, err := client.FCallWithArgsWithRoute(context.Background(), "myfunc", []string{"1", "2"}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -370,13 +371,13 @@ func ExampleGlideClient_FCallReadOnly() {
 	client := getExampleGlideClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	fcallResult, err := client.FCallReadOnly("myfunc")
+	fcallResult, err := client.FCallReadOnly(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -391,13 +392,13 @@ func ExampleGlideClusterClient_FCallReadOnly() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	fcallResult, err := client.FCallReadOnly("myfunc")
+	fcallResult, err := client.FCallReadOnly(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -416,13 +417,13 @@ func ExampleGlideClusterClient_FCallReadOnlyWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallReadOnlyWithRoute("myfunc", opts)
+	result, err := client.FCallReadOnlyWithRoute(context.Background(), "myfunc", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -440,7 +441,7 @@ func ExampleGlideClient_FCallReadOnlyWithKeysAndArgs() {
 	client := getExampleGlideClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -448,7 +449,12 @@ func ExampleGlideClient_FCallReadOnlyWithKeysAndArgs() {
 	// Call function
 	key1 := "{testKey}-" + uuid.New().String()
 	key2 := "{testKey}-" + uuid.New().String()
-	result, err := client.FCallReadOnlyWithKeysAndArgs("myfunc", []string{key1, key2}, []string{"3", "4"})
+	result, err := client.FCallReadOnlyWithKeysAndArgs(
+		context.Background(),
+		"myfunc",
+		[]string{key1, key2},
+		[]string{"3", "4"},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -463,7 +469,7 @@ func ExampleGlideClusterClient_FCallReadOnlyWithKeysAndArgs() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -471,7 +477,12 @@ func ExampleGlideClusterClient_FCallReadOnlyWithKeysAndArgs() {
 	// Call function
 	key1 := "{testKey}-" + uuid.New().String()
 	key2 := "{testKey}-" + uuid.New().String()
-	result, err := client.FCallReadOnlyWithKeysAndArgs("myfunc", []string{key1, key2}, []string{"3", "4"})
+	result, err := client.FCallReadOnlyWithKeysAndArgs(
+		context.Background(),
+		"myfunc",
+		[]string{key1, key2},
+		[]string{"3", "4"},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -486,13 +497,13 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgs() {
 	client := getExampleGlideClusterClient()
 
 	// Load function
-	_, err := client.FunctionLoad(libraryCodeWithArgs, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallReadOnlyWithArgs("myfunc", []string{"1", "2"})
+	result, err := client.FCallReadOnlyWithArgs(context.Background(), "myfunc", []string{"1", "2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -511,13 +522,13 @@ func ExampleGlideClusterClient_FCallReadOnlyWithArgsWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCodeWithArgs, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCodeWithArgs, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
 	// Call function
-	result, err := client.FCallReadOnlyWithArgsWithRoute("myfunc", []string{"1", "2"}, opts)
+	result, err := client.FCallReadOnlyWithArgsWithRoute(context.Background(), "myfunc", []string{"1", "2"}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -535,14 +546,14 @@ func ExampleGlideClient_FunctionStats() {
 	client := getExampleGlideClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Get function statistics
-	stats, err := client.FunctionStats()
+	stats, err := client.FunctionStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -566,14 +577,14 @@ func ExampleGlideClusterClient_FunctionStats() {
 	client := getExampleGlideClusterClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Get function statistics
-	stats, err := client.FunctionStats()
+	stats, err := client.FunctionStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -604,14 +615,14 @@ func ExampleGlideClusterClient_FunctionStatsWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Get function statistics with route
-	stats, err := client.FunctionStatsWithRoute(opts)
+	stats, err := client.FunctionStatsWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -638,14 +649,14 @@ func ExampleGlideClient_FunctionDelete() {
 	client := getExampleGlideClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Delete function
-	result, err := client.FunctionDelete("mylib")
+	result, err := client.FunctionDelete(context.Background(), "mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -660,14 +671,14 @@ func ExampleGlideClusterClient_FunctionDelete() {
 	client := getExampleGlideClusterClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Delete function
-	result, err := client.FunctionDelete("mylib")
+	result, err := client.FunctionDelete(context.Background(), "mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -686,14 +697,14 @@ func ExampleGlideClusterClient_FunctionDeleteWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Delete function with route
-	result, err := client.FunctionDeleteWithRoute("mylib", opts)
+	result, err := client.FunctionDeleteWithRoute(context.Background(), "mylib", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -708,7 +719,7 @@ func ExampleGlideClient_FunctionKill() {
 	client := getExampleGlideClient()
 
 	// Try to kill when no function is running
-	_, err := client.FunctionKill()
+	_, err := client.FunctionKill(context.Background())
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -721,7 +732,7 @@ func ExampleGlideClusterClient_FunctionKill() {
 	client := getExampleGlideClusterClient()
 
 	// Try to kill when no function is running
-	_, err := client.FunctionKill()
+	_, err := client.FunctionKill(context.Background())
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -738,7 +749,7 @@ func ExampleGlideClusterClient_FunctionKillWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionKillWithRoute(opts)
+	_, err := client.FunctionKillWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -751,7 +762,7 @@ func ExampleGlideClient_FunctionList() {
 	client := getExampleGlideClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -762,7 +773,7 @@ func ExampleGlideClient_FunctionList() {
 		WithCode:    true,
 	}
 
-	libs, err := client.FunctionList(query)
+	libs, err := client.FunctionList(context.Background(), query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -784,7 +795,7 @@ func ExampleGlideClusterClient_FunctionList() {
 	client := getExampleGlideClusterClient()
 
 	// Load a function first
-	_, err := client.FunctionLoad(libraryCode, true)
+	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -795,7 +806,7 @@ func ExampleGlideClusterClient_FunctionList() {
 		WithCode:    true,
 	}
 
-	libs, err := client.FunctionList(query)
+	libs, err := client.FunctionList(context.Background(), query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -821,7 +832,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	opts := options.RouteOption{
 		Route: route,
 	}
-	_, err := client.FunctionLoadWithRoute(libraryCode, true, opts)
+	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -831,7 +842,7 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	query := FunctionListQuery{
 		WithCode: true,
 	}
-	result, err := client.FunctionListWithRoute(query, opts)
+	result, err := client.FunctionListWithRoute(context.Background(), query, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -859,7 +870,7 @@ func ExampleGlideClient_FunctionDump() {
 	client := getExampleGlideClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
-	dump, _ := client.FunctionDump()
+	dump, _ := client.FunctionDump(context.Background())
 	if len(dump) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
@@ -872,7 +883,7 @@ func ExampleGlideClusterClient_FunctionDump() {
 	client := getExampleGlideClusterClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
-	dump, _ := client.FunctionDump()
+	dump, _ := client.FunctionDump(context.Background())
 	if len(dump) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
@@ -885,7 +896,7 @@ func ExampleGlideClusterClient_FunctionDumpWithRoute() {
 	client := getExampleGlideClusterClient()
 
 	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
-	dump, _ := client.FunctionDumpWithRoute(config.RandomRoute)
+	dump, _ := client.FunctionDumpWithRoute(context.Background(), config.RandomRoute)
 	if len(dump.SingleValue()) > 0 {
 		fmt.Println("Function dump got a payload")
 	}
@@ -899,7 +910,7 @@ func ExampleGlideClient_FunctionRestore() {
 
 	// Attempt to restore with invalid dump data
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestore(invalidDump)
+	_, err := client.FunctionRestore(context.Background(), invalidDump)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -913,7 +924,7 @@ func ExampleGlideClusterClient_FunctionRestore() {
 
 	// Attempt to restore with invalid dump data
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestore(invalidDump)
+	_, err := client.FunctionRestore(context.Background(), invalidDump)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -928,7 +939,7 @@ func ExampleGlideClusterClient_FunctionRestoreWithRoute() {
 	// Attempt to restore with invalid dump data and route
 	invalidDump := "invalid_dump_data"
 	route := config.RandomRoute
-	_, err := client.FunctionRestoreWithRoute(invalidDump, route)
+	_, err := client.FunctionRestoreWithRoute(context.Background(), invalidDump, route)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -942,7 +953,7 @@ func ExampleGlideClient_FunctionRestoreWithPolicy() {
 
 	// Attempt to restore with invalid dump data and policy
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestoreWithPolicy(invalidDump, options.FlushPolicy)
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -956,7 +967,7 @@ func ExampleGlideClusterClient_FunctionRestoreWithPolicy() {
 
 	// Attempt to restore with invalid dump data and policy
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestoreWithPolicy(invalidDump, options.FlushPolicy)
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -971,7 +982,7 @@ func ExampleGlideClusterClient_FunctionRestoreWithPolicyWithRoute() {
 	// Attempt to restore with invalid dump data, policy and route
 	invalidDump := "invalid_dump_data"
 	route := config.RandomRoute
-	_, err := client.FunctionRestoreWithPolicyWithRoute(invalidDump, options.FlushPolicy, route)
+	_, err := client.FunctionRestoreWithPolicyWithRoute(context.Background(), invalidDump, options.FlushPolicy, route)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -987,7 +998,7 @@ func ExampleGlideClient_InvokeScript() {
 	script := options.NewScript("return 'Hello from Lua'")
 
 	// Execute the script
-	result, err := client.InvokeScript(*script)
+	result, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1006,7 +1017,7 @@ func ExampleGlideClusterClient_InvokeScript() {
 	script := options.NewScript("return 123")
 
 	// Execute the script
-	result, err := client.InvokeScript(*script)
+	result, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1039,7 +1050,7 @@ func ExampleGlideClient_InvokeScriptWithOptions() {
 		WithArgs([]string{"Hello World"})
 
 	// Execute the script with options
-	result, err := client.InvokeScriptWithOptions(*script, *scriptOptions)
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1067,7 +1078,7 @@ func ExampleGlideClusterClient_InvokeScriptWithOptions() {
 		WithArgs([]string{"10", "20"})
 
 	// Execute the script with options
-	result, err := client.InvokeScriptWithOptions(*script, *scriptOptions)
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1094,7 +1105,7 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	clusterScriptOptions.Route = config.AllPrimaries
 
 	// Execute the script with cluster options
-	result, err := client.InvokeScriptWithClusterOptions(*script, *clusterScriptOptions)
+	result, err := client.InvokeScriptWithClusterOptions(context.Background(), *script, *clusterScriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1118,9 +1129,9 @@ func ExampleGlideClient_ScriptExists() {
 
 	// Invoke a script
 	script := options.NewScript("return 'Hello World!'")
-	client.InvokeScript(*script)
+	client.InvokeScript(context.Background(), *script)
 
-	response, err := client.ScriptExists([]string{script.GetHash()})
+	response, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1138,9 +1149,9 @@ func ExampleGlideClusterClient_ScriptExists() {
 
 	// Invoke a script
 	script := options.NewScript("return 'Hello World!'")
-	client.InvokeScript(*script)
+	client.InvokeScript(context.Background(), *script)
 
-	response, err := client.ScriptExists([]string{script.GetHash()})
+	response, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1159,9 +1170,9 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 
 	// Invoke a script
 	script := options.NewScript("return 'Hello World!'")
-	client.InvokeScriptWithRoute(*script, route)
+	client.InvokeScriptWithRoute(context.Background(), *script, route)
 
-	response, err := client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
+	response, err := client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1179,14 +1190,14 @@ func ExampleGlideClient_ScriptFlush() {
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Verify script exists
-	exists, err := client.ScriptExists([]string{script.GetHash()})
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1194,7 +1205,7 @@ func ExampleGlideClient_ScriptFlush() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts
-	result, err := client.ScriptFlush()
+	result, err := client.ScriptFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1202,7 +1213,7 @@ func ExampleGlideClient_ScriptFlush() {
 	fmt.Println("Flush result:", result)
 
 	// Verify script no longer exists
-	exists, err = client.ScriptExists([]string{script.GetHash()})
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1223,14 +1234,14 @@ func ExampleGlideClient_ScriptFlushWithMode() {
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Verify script exists
-	exists, err := client.ScriptExists([]string{script.GetHash()})
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1238,7 +1249,7 @@ func ExampleGlideClient_ScriptFlushWithMode() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts with ASYNC mode
-	result, err := client.ScriptFlushWithMode(options.ASYNC)
+	result, err := client.ScriptFlushWithMode(context.Background(), options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1246,7 +1257,7 @@ func ExampleGlideClient_ScriptFlushWithMode() {
 	fmt.Println("Flush result:", result)
 
 	// Verify script no longer exists
-	exists, err = client.ScriptExists([]string{script.GetHash()})
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1267,14 +1278,14 @@ func ExampleGlideClusterClient_ScriptFlush() {
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Verify script exists
-	exists, err := client.ScriptExists([]string{script.GetHash()})
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1282,7 +1293,7 @@ func ExampleGlideClusterClient_ScriptFlush() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts
-	result, err := client.ScriptFlush()
+	result, err := client.ScriptFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1290,7 +1301,7 @@ func ExampleGlideClusterClient_ScriptFlush() {
 	fmt.Println("Flush result:", result)
 
 	// Verify script no longer exists
-	exists, err = client.ScriptExists([]string{script.GetHash()})
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1311,14 +1322,14 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Verify script exists
-	exists, err := client.ScriptExists([]string{script.GetHash()})
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1326,7 +1337,7 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts with ASYNC mode
-	result, err := client.ScriptFlushWithMode(options.ASYNC)
+	result, err := client.ScriptFlushWithMode(context.Background(), options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1334,7 +1345,7 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	fmt.Println("Flush result:", result)
 
 	// Verify script no longer exists
-	exists, err = client.ScriptExists([]string{script.GetHash()})
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1356,14 +1367,14 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 
 	// First, load a script on all primaries
 	script := options.NewScript("return 'Hello World!'")
-	_, err := client.InvokeScriptWithRoute(*script, route)
+	_, err := client.InvokeScriptWithRoute(context.Background(), *script, route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Verify script exists
-	exists, err := client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
+	exists, err := client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1372,7 +1383,7 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 
 	// Flush all scripts on all primaries with ASYNC mode
 	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(&route)
-	result, err := client.ScriptFlushWithOptions(*scriptFlushOptions)
+	result, err := client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1380,7 +1391,7 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 	fmt.Println("Flush result:", result)
 
 	// Verify script no longer exists
-	exists, err = client.ScriptExistsWithRoute([]string{script.GetHash()}, route)
+	exists, err = client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1400,7 +1411,7 @@ func ExampleGlideClient_ScriptKill() {
 	client := getExampleGlideClient()
 
 	// Try to kill scripts when no scripts are running
-	_, err := client.ScriptKill()
+	_, err := client.ScriptKill(context.Background())
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -1413,7 +1424,7 @@ func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
 	client := getExampleGlideClusterClient()
 
 	// Try to kill scripts when no scripts are running
-	_, err := client.ScriptKill()
+	_, err := client.ScriptKill(context.Background())
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -1432,7 +1443,7 @@ func ExampleGlideClusterClient_ScriptKill_withRoute() {
 	}
 
 	// Try to kill scripts when no scripts are running
-	_, err := client.ScriptKillWithRoute(route)
+	_, err := client.ScriptKillWithRoute(context.Background(), route)
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
@@ -1448,14 +1459,14 @@ func ExampleGlideClient_ScriptShow() {
 	// First, create and invoke a script
 	scriptText := "return 'Hello, World!'"
 	script := options.NewScript(scriptText)
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Now show the script source using ScriptShow
-	scriptSource, err := client.ScriptShow(script.GetHash())
+	scriptSource, err := client.ScriptShow(context.Background(), script.GetHash())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1473,14 +1484,14 @@ func ExampleGlideClusterClient_ScriptShow() {
 	// First, create and invoke a script
 	scriptText := "return 'Hello World'"
 	script := options.NewScript(scriptText)
-	_, err := client.InvokeScript(*script)
+	_, err := client.InvokeScript(context.Background(), *script)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 
 	// Now show the script source using ScriptShow
-	scriptSource, err := client.ScriptShow(script.GetHash())
+	scriptSource, err := client.ScriptShow(context.Background(), script.GetHash())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return

@@ -3,6 +3,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -12,62 +14,86 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#list
 type ListCommands interface {
-	LPush(key string, elements []string) (int64, error)
+	LPush(ctx context.Context, key string, elements []string) (int64, error)
 
-	LPop(key string) (Result[string], error)
+	LPop(ctx context.Context, key string) (Result[string], error)
 
-	LPopCount(key string, count int64) ([]string, error)
+	LPopCount(ctx context.Context, key string, count int64) ([]string, error)
 
-	LPos(key string, element string) (Result[int64], error)
+	LPos(ctx context.Context, key string, element string) (Result[int64], error)
 
-	LPosWithOptions(key string, element string, options options.LPosOptions) (Result[int64], error)
+	LPosWithOptions(ctx context.Context, key string, element string, options options.LPosOptions) (Result[int64], error)
 
-	LPosCount(key string, element string, count int64) ([]int64, error)
+	LPosCount(ctx context.Context, key string, element string, count int64) ([]int64, error)
 
-	LPosCountWithOptions(key string, element string, count int64, options options.LPosOptions) ([]int64, error)
+	LPosCountWithOptions(
+		ctx context.Context,
+		key string,
+		element string,
+		count int64,
+		options options.LPosOptions,
+	) ([]int64, error)
 
-	RPush(key string, elements []string) (int64, error)
+	RPush(ctx context.Context, key string, elements []string) (int64, error)
 
-	LRange(key string, start int64, end int64) ([]string, error)
+	LRange(ctx context.Context, key string, start int64, end int64) ([]string, error)
 
-	LIndex(key string, index int64) (Result[string], error)
+	LIndex(ctx context.Context, key string, index int64) (Result[string], error)
 
-	LTrim(key string, start int64, end int64) (string, error)
+	LTrim(ctx context.Context, key string, start int64, end int64) (string, error)
 
-	LLen(key string) (int64, error)
+	LLen(ctx context.Context, key string) (int64, error)
 
-	LRem(key string, count int64, element string) (int64, error)
+	LRem(ctx context.Context, key string, count int64, element string) (int64, error)
 
-	RPop(key string) (Result[string], error)
+	RPop(ctx context.Context, key string) (Result[string], error)
 
-	RPopCount(key string, count int64) ([]string, error)
+	RPopCount(ctx context.Context, key string, count int64) ([]string, error)
 
-	LInsert(key string, insertPosition options.InsertPosition, pivot string, element string) (int64, error)
+	LInsert(
+		ctx context.Context,
+		key string,
+		insertPosition options.InsertPosition,
+		pivot string,
+		element string,
+	) (int64, error)
 
-	BLPop(keys []string, timeoutSecs float64) ([]string, error)
+	BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
 
-	BRPop(keys []string, timeoutSecs float64) ([]string, error)
+	BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
 
-	RPushX(key string, elements []string) (int64, error)
+	RPushX(ctx context.Context, key string, elements []string) (int64, error)
 
-	LPushX(key string, elements []string) (int64, error)
+	LPushX(ctx context.Context, key string, elements []string) (int64, error)
 
-	LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error)
+	LMPop(ctx context.Context, keys []string, listDirection options.ListDirection) (map[string][]string, error)
 
-	LMPopCount(keys []string, listDirection options.ListDirection, count int64) (map[string][]string, error)
+	LMPopCount(
+		ctx context.Context,
+		keys []string,
+		listDirection options.ListDirection,
+		count int64,
+	) (map[string][]string, error)
 
-	BLMPop(keys []string, listDirection options.ListDirection, timeoutSecs float64) (map[string][]string, error)
+	BLMPop(
+		ctx context.Context,
+		keys []string,
+		listDirection options.ListDirection,
+		timeoutSecs float64,
+	) (map[string][]string, error)
 
 	BLMPopCount(
+		ctx context.Context,
 		keys []string,
 		listDirection options.ListDirection,
 		count int64,
 		timeoutSecs float64,
 	) (map[string][]string, error)
 
-	LSet(key string, index int64, element string) (string, error)
+	LSet(ctx context.Context, key string, index int64, element string) (string, error)
 
 	LMove(
+		ctx context.Context,
 		source string,
 		destination string,
 		whereFrom options.ListDirection,
@@ -75,6 +101,7 @@ type ListCommands interface {
 	) (Result[string], error)
 
 	BLMove(
+		ctx context.Context,
 		source string,
 		destination string,
 		whereFrom options.ListDirection,

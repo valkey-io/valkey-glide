@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 
 func ExampleGlideClusterClient_Ping() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Ping()
+	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -29,7 +30,7 @@ func ExampleGlideClusterClient_PingWithOptions() {
 		},
 		RouteOption: nil,
 	}
-	result, err := client.PingWithOptions(options)
+	result, err := client.PingWithOptions(context.Background(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -40,7 +41,7 @@ func ExampleGlideClusterClient_PingWithOptions() {
 
 func ExampleGlideClusterClient_Echo() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.Echo("Hello")
+	result, err := client.Echo(context.Background(), "Hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -51,7 +52,7 @@ func ExampleGlideClusterClient_Echo() {
 
 func ExampleGlideClusterClient_EchoWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.EchoWithOptions("Hello World", options.RouteOption{Route: config.RandomRoute})
+	result, err := client.EchoWithOptions(context.Background(), "Hello World", options.RouteOption{Route: config.RandomRoute})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -62,7 +63,7 @@ func ExampleGlideClusterClient_EchoWithOptions() {
 
 func ExampleGlideClusterClient_ClientId() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
-	result, err := client.ClientId()
+	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -75,7 +76,7 @@ func ExampleGlideClusterClient_ClientId() {
 func ExampleGlideClusterClient_ClientIdWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	opts := options.RouteOption{Route: nil}
-	result, err := client.ClientIdWithOptions(opts)
+	result, err := client.ClientIdWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -88,7 +89,7 @@ func ExampleGlideClusterClient_ClientIdWithOptions() {
 func ExampleGlideClusterClient_ClientSetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
-	result, err := client.ClientSetName(connectionName)
+	result, err := client.ClientSetName(context.Background(), connectionName)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -100,8 +101,8 @@ func ExampleGlideClusterClient_ClientSetName() {
 func ExampleGlideClusterClient_ClientGetName() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
-	client.ClientSetName(connectionName)
-	result, err := client.ClientGetName()
+	client.ClientSetName(context.Background(), connectionName)
+	result, err := client.ClientGetName(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -114,7 +115,7 @@ func ExampleGlideClusterClient_ClientSetNameWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
 	opts := options.RouteOption{Route: nil}
-	result, err := client.ClientSetNameWithOptions(connectionName, opts)
+	result, err := client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -127,8 +128,8 @@ func ExampleGlideClusterClient_ClientGetNameWithOptions() {
 	var client *GlideClusterClient = getExampleGlideClusterClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
 	opts := options.RouteOption{Route: nil}
-	client.ClientSetNameWithOptions(connectionName, opts)
-	result, err := client.ClientGetNameWithOptions(opts)
+	client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
+	result, err := client.ClientGetNameWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

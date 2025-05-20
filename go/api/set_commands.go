@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
@@ -10,41 +14,41 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#set
 type SetCommands interface {
-	SAdd(key string, members []string) (int64, error)
+	SAdd(ctx context.Context, key string, members []string) (int64, error)
 
-	SRem(key string, members []string) (int64, error)
+	SRem(ctx context.Context, key string, members []string) (int64, error)
 
-	SMembers(key string) (map[string]struct{}, error)
+	SMembers(ctx context.Context, key string) (map[string]struct{}, error)
 
-	SCard(key string) (int64, error)
+	SCard(ctx context.Context, key string) (int64, error)
 
-	SIsMember(key string, member string) (bool, error)
+	SIsMember(ctx context.Context, key string, member string) (bool, error)
 
-	SDiff(keys []string) (map[string]struct{}, error)
+	SDiff(ctx context.Context, keys []string) (map[string]struct{}, error)
 
-	SDiffStore(destination string, keys []string) (int64, error)
+	SDiffStore(ctx context.Context, destination string, keys []string) (int64, error)
 
-	SInter(keys []string) (map[string]struct{}, error)
+	SInter(ctx context.Context, keys []string) (map[string]struct{}, error)
 
-	SInterStore(destination string, keys []string) (int64, error)
+	SInterStore(ctx context.Context, destination string, keys []string) (int64, error)
 
-	SInterCard(keys []string) (int64, error)
+	SInterCard(ctx context.Context, keys []string) (int64, error)
 
-	SInterCardLimit(keys []string, limit int64) (int64, error)
+	SInterCardLimit(ctx context.Context, keys []string, limit int64) (int64, error)
 
-	SRandMember(key string) (Result[string], error)
+	SRandMember(ctx context.Context, key string) (Result[string], error)
 
-	SPop(key string) (Result[string], error)
+	SPop(ctx context.Context, key string) (Result[string], error)
 
-	SMIsMember(key string, members []string) ([]bool, error)
+	SMIsMember(ctx context.Context, key string, members []string) ([]bool, error)
 
-	SUnionStore(destination string, keys []string) (int64, error)
+	SUnionStore(ctx context.Context, destination string, keys []string) (int64, error)
 
-	SUnion(keys []string) (map[string]struct{}, error)
+	SUnion(ctx context.Context, keys []string) (map[string]struct{}, error)
 
-	SScan(key string, cursor string) (string, []string, error)
+	SScan(ctx context.Context, key string, cursor string) (string, []string, error)
 
-	SScanWithOptions(key string, cursor string, options options.BaseScanOptions) (string, []string, error)
+	SScanWithOptions(ctx context.Context, key string, cursor string, options options.BaseScanOptions) (string, []string, error)
 
-	SMove(source string, destination string, member string) (bool, error)
+	SMove(ctx context.Context, source string, destination string, member string) (bool, error)
 }
