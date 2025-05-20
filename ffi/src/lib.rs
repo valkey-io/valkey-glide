@@ -49,7 +49,7 @@ use tokio::runtime::Runtime;
 ///
 /// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
 /// * The returned C string must be freed by the caller.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize) -> *mut c_char {
     let script = unsafe { std::slice::from_raw_parts(script_bytes, script_len) };
     let hash = scripts_container::add_script(script);
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize
 /// # Safety
 ///
 /// * `hash` must be a valid null-terminated C string created by [`store_script`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_script(hash: *const c_char) {
     let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
     scripts_container::remove_script(hash_str);
@@ -1329,7 +1329,7 @@ pub unsafe extern "C" fn update_connection_password(
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
 /// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn invoke_script(
     client_adapter_ptr: *const c_void,
     channel: usize,
