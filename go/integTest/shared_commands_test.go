@@ -7138,8 +7138,9 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := uuid.New().String()
+	// Using standalone clients only as cluster client is not supported for sort by
+	suite.runWithSpecificClients(StandaloneFlag, func(client api.BaseClient) {
+		key := "sortKey"
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
 		client.Set(context.Background(), "weight_item1", "3")
@@ -7166,7 +7167,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithSpecificClients(StandaloneFlag, func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
@@ -7196,7 +7197,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithSpecificClients(StandaloneFlag, func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
