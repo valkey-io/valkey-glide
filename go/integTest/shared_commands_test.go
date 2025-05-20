@@ -10480,7 +10480,7 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 }
 
 func (suite *GlideTestSuite) TestScriptShow() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Create a unique script code
