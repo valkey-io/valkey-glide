@@ -144,11 +144,16 @@ def build_async_client(release: bool, no_cache: bool = False) -> None:
     print("[OK] Async client build completed")
 
 
-def build_sync_client() -> None:
-    print("[INFO] Building sync client...")
+def build_sync_client(glide_version) -> None:
+    print(f"[INFO] Building sync client with version={glide_version}...")
     generate_protobuf_files()
 
-    run_command(["cargo", "build"], cwd=FFI_DIR, label="cargo build ffi")
+    run_command(
+        ["cargo", "build"],
+        cwd=FFI_DIR,
+        label="cargo build ffi",
+        env={"GLIDE_NAME": "GlidePyFFI", "GLIDE_VERSION": glide_version, **os.environ},
+    )
 
     print("[OK] Sync client build completed")
 
@@ -255,6 +260,12 @@ Examples:
         action="store_true",
         help="Install Python dependencies without cache",
     )
+    build_parser.add_argument(
+        "--glide-version",
+        type=str,
+        default="unknown",
+        help="Specify the sync client version (meant to be used in CD)",
+    )
 
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
@@ -298,7 +309,7 @@ Examples:
             build_async_client(release, no_cache)
         if args.client in ["sync", "all"]:
             print("🛠 Building sync client...")
-            build_sync_client()
+            build_sync_client(glide_version=args.glide_version)
 
     print("[✅ DONE] Task completed successfully.")
 

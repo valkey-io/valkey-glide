@@ -109,8 +109,9 @@ class TestGlideClients:
         info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
-        assert "lib-name=GlideFFI" in info_str
-        assert "lib-ver=0.1.0" in info_str
+        print(info_str)
+        assert "lib-name=GlidePyFFI" in info_str
+        assert "lib-ver=unknown" in info_str
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
