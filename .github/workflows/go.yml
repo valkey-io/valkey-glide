@@ -170,6 +170,44 @@ jobs:
                       benchmarks/results/**
                       go/reports/**
 
+    lint:
+        timeout-minutes: 10
+        runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.rc-test == 'false' }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ env.BASE_GO_VERSION }}
+                  cache-dependency-path: go/go.sum
+
+            - name: Install protoc
+              uses: ./.github/workflows/install-rust-and-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-go
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+            - name: lint rust
+              uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ffi
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install and run linters
+              working-directory: go
+              run: |
+                  make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
