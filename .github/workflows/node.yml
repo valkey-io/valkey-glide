@@ -116,11 +116,11 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             # Install npm dependencies
-            - name: Build and Test
+            - name: Build
               working-directory: ./node
               run: |
                   npm install
-                  npm run build
+                  npm run build:release
 
             - name: Install Yarn
               id: install-yarn
@@ -143,7 +143,7 @@ jobs:
                   cd package1
                   yarn install
                   rm -rf node_modules/@valkey/valkey-glide/build-ts/*
-                  cp ../../build-ts ./node_modules/@valkey/valkey-glide/build-ts
+                  cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
                   yarn run build
                   cd ../package2
                   yarn install
@@ -175,7 +175,10 @@ jobs:
                   language-flag: -node
 
             - name: Test
-              run: npm run test
+              shell: bash
+              run: |
+                npm run build
+                npm run test
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html

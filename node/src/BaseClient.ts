@@ -772,8 +772,8 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
-export type BaseOptions = RouteOption & DecoderOption;
-export type WritePromiseOptions =
+type BaseOptions = RouteOption & DecoderOption;
+type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
