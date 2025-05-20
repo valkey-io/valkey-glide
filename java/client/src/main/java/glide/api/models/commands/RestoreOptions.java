@@ -62,6 +62,10 @@ public final class RestoreOptions {
             resultList.add(gs(ABSTTL_VALKEY_API));
         }
 
+        if (idletime != null && frequency != null) {
+            throw new IllegalArgumentException("IDLETIME and FREQ cannot be set at the same time.");
+        }
+
         if (idletime != null) {
             resultList.add(gs(IDLETIME_VALKEY_API));
             resultList.add(gs(Long.toString(idletime)));
