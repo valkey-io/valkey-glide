@@ -66,10 +66,21 @@
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
+* Go: Script eval/load([#3605](https://github.com/valkey-io/valkey-glide/pull/3605))
 * Benchmarks: Fix rust benchmark latencies calculation
+* Go: Add Script Exists ([#3649](https://github.com/valkey-io/valkey-glide/pull/3649))
 * Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
+* Go: Add script flush command([#3662](https://github.com/valkey-io/valkey-glide/pull/3662))
+* Go: Add Script Kill ([#3670](https://github.com/valkey-io/valkey-glide/pull/3670))
+* Go: Add Script Show ([#3668](https://github.com/valkey-io/valkey-glide/pull/3668))
 * Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
+* Java, Python, Node: Fix logger docs, add option to log an exception ([#3844](https://github.com/valkey-io/valkey-glide/pull/3844))
 * Core: Refactor socket listener to use a runtime that lives for the application lifetime [#3842](https://github.com/valkey-io/valkey-glide/pull/3842)
+* Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))
+* Python: Fix restore command ([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
+* Go: Remove redundant implementations of echo ([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
+* Java: Add toArgs() to restore batch command ([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
+* Java: Add error restore command ([#3905](https://github.com/valkey-io/valkey-glide/pull/3905))
 
 #### Breaking Changes
 
@@ -81,6 +92,8 @@
 * Go: Add support for `context` ([#3802](https://github.com/valkey-io/valkey-glide/pull/3802))
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
+* Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
+
 
 #### Fixes
 

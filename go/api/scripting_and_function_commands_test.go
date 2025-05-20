@@ -865,3 +865,640 @@ func ExampleGlideClusterClient_FunctionListWithRoute() {
 	//   Engine: LUA
 	//   Functions: 1
 }
+
+func ExampleGlideClient_FunctionDump() {
+	client := getExampleGlideClient()
+
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	dump, _ := client.FunctionDump(context.Background())
+	if len(dump) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClusterClient_FunctionDump() {
+	client := getExampleGlideClusterClient()
+
+	// Call FunctionDump to get the serialized payload of all loaded libraries
+	dump, _ := client.FunctionDump(context.Background())
+	if len(dump) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClusterClient_FunctionDumpWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
+	dump, _ := client.FunctionDumpWithRoute(context.Background(), config.RandomRoute)
+	if len(dump.SingleValue()) > 0 {
+		fmt.Println("Function dump got a payload")
+	}
+
+	// Output:
+	// Function dump got a payload
+}
+
+func ExampleGlideClient_FunctionRestore() {
+	client := getExampleGlideClient()
+
+	// Attempt to restore with invalid dump data
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestore(context.Background(), invalidDump)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestore() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestore(context.Background(), invalidDump)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data and route
+	invalidDump := "invalid_dump_data"
+	route := config.RandomRoute
+	_, err := client.FunctionRestoreWithRoute(context.Background(), invalidDump, route)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClient_FunctionRestoreWithPolicy() {
+	client := getExampleGlideClient()
+
+	// Attempt to restore with invalid dump data and policy
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithPolicy() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data and policy
+	invalidDump := "invalid_dump_data"
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClusterClient_FunctionRestoreWithPolicyWithRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Attempt to restore with invalid dump data, policy and route
+	invalidDump := "invalid_dump_data"
+	route := config.RandomRoute
+	_, err := client.FunctionRestoreWithPolicyWithRoute(context.Background(), invalidDump, options.FlushPolicy, route)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
+
+	// Output:
+	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
+}
+
+func ExampleGlideClient_InvokeScript() {
+	client := getExampleGlideClient()
+
+	// Create a simple Lua script that returns a string
+	script := options.NewScript("return 'Hello from Lua'")
+
+	// Execute the script
+	result, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// Hello from Lua
+}
+
+func ExampleGlideClusterClient_InvokeScript() {
+	client := getExampleGlideClusterClient()
+
+	// Create a simple Lua script that returns a number
+	script := options.NewScript("return 123")
+
+	// Execute the script
+	result, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// 123
+}
+
+func ExampleGlideClient_InvokeScriptWithOptions() {
+	client := getExampleGlideClient()
+
+	// Create a Lua script that uses keys and arguments
+	scriptText := `
+		local key = KEYS[1]
+		local value = ARGV[1]
+		redis.call('SET', key, value)
+		return redis.call('GET', key)
+	`
+	script := options.NewScript(scriptText)
+
+	// Create a unique key for testing
+	testKey := "test-key-" + uuid.New().String()
+
+	// Set up script options with keys and arguments
+	scriptOptions := options.NewScriptOptions().
+		WithKeys([]string{testKey}).
+		WithArgs([]string{"Hello World"})
+
+	// Execute the script with options
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// Hello World
+}
+
+func ExampleGlideClusterClient_InvokeScriptWithOptions() {
+	client := getExampleGlideClusterClient()
+
+	// Create a Lua script that performs calculations with arguments
+	scriptText := `
+		local a = tonumber(ARGV[1])
+		local b = tonumber(ARGV[2])
+		return a + b
+	`
+	script := options.NewScript(scriptText)
+
+	// Set up script options with arguments
+	scriptOptions := options.NewScriptOptions().
+		WithArgs([]string{"10", "20"})
+
+	// Execute the script with options
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(result)
+
+	// Output:
+	// 30
+}
+
+func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
+	client := getExampleGlideClusterClient()
+
+	// Create a Lua script.
+	scriptText := "return 'Hello'"
+
+	script := options.NewScript(scriptText)
+
+	// Set up cluster script options
+	clusterScriptOptions := options.NewClusterScriptOptions()
+
+	// Set the route
+	clusterScriptOptions.Route = config.AllPrimaries
+
+	// Execute the script with cluster options
+	result, err := client.InvokeScriptWithClusterOptions(context.Background(), *script, *clusterScriptOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Print the result. The result contains response from multiple nodes.
+	// We are checking and printing the response from only one node below.
+	for _, value := range result.MultiValue() {
+		if value != nil && value.(string) == "Hello" {
+			fmt.Println(value)
+			break
+		}
+	}
+
+	// Output:
+	// Hello
+}
+
+func ExampleGlideClient_ScriptExists() {
+	client := getExampleGlideClient()
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScript(context.Background(), *script)
+
+	response, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}
+
+func ExampleGlideClusterClient_ScriptExists() {
+	client := getExampleGlideClusterClient()
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScript(context.Background(), *script)
+
+	response, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}
+
+func ExampleGlideClusterClient_ScriptExistsWithRoute() {
+	client := getExampleGlideClusterClient()
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
+	// Invoke a script
+	script := options.NewScript("return 'Hello World!'")
+	client.InvokeScriptWithRoute(context.Background(), *script, route)
+
+	response, err := client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println(response)
+
+	// Cleanup
+	script.Close()
+
+	// Output: [true]
+}
+
+func ExampleGlideClient_ScriptFlush() {
+	client := getExampleGlideClient()
+
+	// First, load a script
+	script := options.NewScript("return 'Hello World!'")
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Verify script exists
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists before flush:", exists[0])
+
+	// Flush all scripts
+	result, err := client.ScriptFlush(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Flush result:", result)
+
+	// Verify script no longer exists
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists after flush:", exists[0])
+
+	// Cleanup
+	script.Close()
+
+	// Output:
+	// Script exists before flush: true
+	// Flush result: OK
+	// Script exists after flush: false
+}
+
+func ExampleGlideClient_ScriptFlushWithMode() {
+	client := getExampleGlideClient()
+
+	// First, load a script
+	script := options.NewScript("return 'Hello World!'")
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Verify script exists
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists before flush:", exists[0])
+
+	// Flush all scripts with ASYNC mode
+	result, err := client.ScriptFlushWithMode(context.Background(), options.ASYNC)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Flush result:", result)
+
+	// Verify script no longer exists
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists after flush:", exists[0])
+
+	// Cleanup
+	script.Close()
+
+	// Output:
+	// Script exists before flush: true
+	// Flush result: OK
+	// Script exists after flush: false
+}
+
+func ExampleGlideClusterClient_ScriptFlush() {
+	client := getExampleGlideClusterClient()
+
+	// First, load a script
+	script := options.NewScript("return 'Hello World!'")
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Verify script exists
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists before flush:", exists[0])
+
+	// Flush all scripts
+	result, err := client.ScriptFlush(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Flush result:", result)
+
+	// Verify script no longer exists
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists after flush:", exists[0])
+
+	// Cleanup
+	script.Close()
+
+	// Output:
+	// Script exists before flush: true
+	// Flush result: OK
+	// Script exists after flush: false
+}
+
+func ExampleGlideClusterClient_ScriptFlushWithMode() {
+	client := getExampleGlideClusterClient()
+
+	// First, load a script
+	script := options.NewScript("return 'Hello World!'")
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Verify script exists
+	exists, err := client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists before flush:", exists[0])
+
+	// Flush all scripts with ASYNC mode
+	result, err := client.ScriptFlushWithMode(context.Background(), options.ASYNC)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Flush result:", result)
+
+	// Verify script no longer exists
+	exists, err = client.ScriptExists(context.Background(), []string{script.GetHash()})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists after flush:", exists[0])
+
+	// Cleanup
+	script.Close()
+
+	// Output:
+	// Script exists before flush: true
+	// Flush result: OK
+	// Script exists after flush: false
+}
+
+func ExampleGlideClusterClient_ScriptFlushWithOptions() {
+	client := getExampleGlideClusterClient()
+	route := options.RouteOption{Route: config.AllPrimaries}
+
+	// First, load a script on all primaries
+	script := options.NewScript("return 'Hello World!'")
+	_, err := client.InvokeScriptWithRoute(context.Background(), *script, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Verify script exists
+	exists, err := client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists before flush:", exists[0])
+
+	// Flush all scripts on all primaries with ASYNC mode
+	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(&route)
+	result, err := client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Flush result:", result)
+
+	// Verify script no longer exists
+	exists, err = client.ScriptExistsWithRoute(context.Background(), []string{script.GetHash()}, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+	fmt.Println("Script exists after flush:", exists[0])
+
+	// Cleanup
+	script.Close()
+
+	// Output:
+	// Script exists before flush: true
+	// Flush result: OK
+	// Script exists after flush: false
+}
+
+func ExampleGlideClient_ScriptKill() {
+	client := getExampleGlideClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill(context.Background())
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
+	client := getExampleGlideClusterClient()
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKill(context.Background())
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+func ExampleGlideClusterClient_ScriptKill_withRoute() {
+	key := "{randomkey}1"
+	client := getExampleGlideClusterClient()
+
+	// Create a route with our specified key
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Try to kill scripts when no scripts are running
+	_, err := client.ScriptKillWithRoute(context.Background(), route)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	// Output:
+	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
+}
+
+// ScriptShow Examples
+func ExampleGlideClient_ScriptShow() {
+	client := getExampleGlideClient()
+
+	// First, create and invoke a script
+	scriptText := "return 'Hello, World!'"
+	script := options.NewScript(scriptText)
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Now show the script source using ScriptShow
+	scriptSource, err := client.ScriptShow(context.Background(), script.GetHash())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(scriptSource)
+
+	// Output:
+	// return 'Hello, World!'
+}
+
+func ExampleGlideClusterClient_ScriptShow() {
+	client := getExampleGlideClusterClient()
+
+	// First, create and invoke a script
+	scriptText := "return 'Hello World'"
+	script := options.NewScript(scriptText)
+	_, err := client.InvokeScript(context.Background(), *script)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	// Now show the script source using ScriptShow
+	scriptSource, err := client.ScriptShow(context.Background(), script.GetHash())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
+
+	fmt.Println(scriptSource)
+
+	// Output:
+	// return 'Hello World'
+}

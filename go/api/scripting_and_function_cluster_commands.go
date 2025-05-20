@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
 )
 
@@ -60,4 +61,35 @@ type ScriptingAndFunctionClusterCommands interface {
 		query FunctionListQuery,
 		route options.RouteOption,
 	) (ClusterValue[[]LibraryInfo], error)
+
+	FunctionDumpWithRoute(ctx context.Context, route config.Route) (ClusterValue[string], error)
+
+	FunctionRestoreWithRoute(ctx context.Context, payload string, route config.Route) (string, error)
+
+	FunctionRestoreWithPolicyWithRoute(
+		ctx context.Context,
+		payload string,
+		policy options.FunctionRestorePolicy,
+		route config.Route,
+	) (string, error)
+
+	InvokeScriptWithRoute(ctx context.Context, script options.Script, route options.RouteOption) (ClusterValue[any], error)
+
+	InvokeScriptWithClusterOptions(
+		ctx context.Context,
+		script options.Script,
+		clusterScriptOptions options.ClusterScriptOptions,
+	) (ClusterValue[any], error)
+
+	ScriptExists(ctx context.Context, sha1s []string) ([]bool, error)
+
+	ScriptExistsWithRoute(ctx context.Context, sha1s []string, route options.RouteOption) ([]bool, error)
+
+	ScriptFlush(ctx context.Context) (string, error)
+
+	ScriptFlushWithOptions(ctx context.Context, options options.ScriptFlushOptions) (string, error)
+
+	ScriptKill(ctx context.Context) (string, error)
+
+	ScriptKillWithRoute(ctx context.Context, route options.RouteOption) (string, error)
 }

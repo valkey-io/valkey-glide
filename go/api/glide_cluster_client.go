@@ -448,6 +448,22 @@ func (client *GlideClusterClient) FlushDBWithOptions(
 }
 
 // Echo the provided message back.
+// The command will be routed to a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *GlideClusterClient) Echo(ctx context.Context, message string) (Result[string], error) {
+	return client.echo(ctx, message)
+}
+
+// Echo the provided message back.
 //
 // Parameters:
 //
@@ -1920,4 +1936,348 @@ func (client *GlideClusterClient) PubSubShardNumSub(ctx context.Context, channel
 	}
 
 	return handleStringIntMapResponse(result)
+}
+
+// Returns the serialized payload of all loaded libraries.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *GlideClusterClient) FunctionDumpWithRoute(
+	ctx context.Context,
+	route config.Route,
+) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.FunctionDump, []string{}, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from dump operation.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithRoute(
+	ctx context.Context,
+	payload string,
+	route config.Route,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionRestore, []string{payload}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from dump operation.
+//	policy - A policy for handling existing libraries.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithPolicyWithRoute(
+	ctx context.Context,
+	payload string,
+	policy options.FunctionRestorePolicy,
+	route config.Route,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.FunctionRestore, []string{payload, string(policy)}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Executes a Lua script on the server with routing information.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// Note:
+//
+//	The command will be routed to a random node, unless `route` is provided.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	script - The Lua script to execute.
+//	route - Routing information for the script execution.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *GlideClusterClient) InvokeScriptWithRoute(
+	ctx context.Context,
+	script options.Script,
+	route options.RouteOption,
+) (ClusterValue[any], error) {
+	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, []string{}, route.Route)
+	if err != nil {
+		return createEmptyClusterValue[any](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[any](), err
+		}
+		return createClusterMultiValue[any](data), nil
+	}
+
+	return createClusterSingleValue[any](response), nil
+}
+
+// Executes a Lua script on the server with cluster script options.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
+//   - the command will be routed based on the Route specified in clusterScriptOptions.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	script - The script to execute.
+//	clusterScriptOptions - Combined options for script execution including keys, arguments, and routing information.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *GlideClusterClient) InvokeScriptWithClusterOptions(
+	ctx context.Context,
+	script options.Script,
+	clusterScriptOptions options.ClusterScriptOptions,
+) (ClusterValue[any], error) {
+	args := clusterScriptOptions.GetArgs()
+	route := clusterScriptOptions.Route
+
+	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, args, route)
+	if err != nil {
+		return createEmptyClusterValue[any](), err
+	}
+
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[any](), err
+		}
+		return createClusterMultiValue[any](data), nil
+	}
+
+	return createClusterSingleValue[any](response), nil
+}
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// Note:
+//
+//	The command will be routed to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *GlideClusterClient) ScriptExists(ctx context.Context, sha1s []string) ([]bool, error) {
+	response, err := client.executeCommand(ctx, C.ScriptExists, sha1s)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//	route - Specifies the routing configuration for the command. The client will route the
+//		    command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *GlideClusterClient) ScriptExistsWithRoute(
+	ctx context.Context,
+	sha1s []string,
+	route options.RouteOption,
+) ([]bool, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ScriptExists, sha1s, route.Route)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}
+
+// Removes all the scripts from the script cache.
+// The command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *GlideClusterClient) ScriptFlush(ctx context.Context) (string, error) {
+	return client.baseClient.ScriptFlush(ctx)
+}
+
+// Removes all the scripts from the script cache with the specified route options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	options - The ScriptFlushOptions containing the flush mode and route.
+//			  The mode can be either SYNC or ASYNC.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *GlideClusterClient) ScriptFlushWithOptions(
+	ctx context.Context,
+	options options.ScriptFlushOptions,
+) (string, error) {
+	args := []string{}
+	if options.Mode != "" {
+		args = append(args, string(options.Mode))
+	}
+	if options.Route == nil {
+		result, err := client.executeCommand(ctx, C.ScriptFlush, args)
+		if err != nil {
+			return DefaultStringResponse, err
+		}
+		return handleOkResponse(result)
+	}
+	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.Route.Route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *GlideClusterClient) ScriptKillWithRoute(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(
+		ctx,
+		C.ScriptKill,
+		[]string{},
+		route.Route,
+	)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }

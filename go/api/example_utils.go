@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/api/config"
 	"github.com/valkey-io/valkey-glide/go/api/options"
@@ -83,7 +84,7 @@ func getExampleGlideClusterClient() *GlideClusterClient {
 	})
 	cConfig := NewGlideClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 
 	client, err := NewGlideClusterClient(context.Background(), cConfig)
 	if err != nil {

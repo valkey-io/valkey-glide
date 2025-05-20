@@ -1465,9 +1465,7 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1624,9 +1622,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1687,9 +1683,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1755,9 +1749,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1888,9 +1880,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1906,9 +1896,7 @@ func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1929,14 +1917,14 @@ func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
-func (suite *GlideTestSuite) TestFunctionKillNoWriteWithoutRoute() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWriteWithoutRoute() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 	suite.testFunctionKillNoWrite(false)
 }
 
-func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWriteWithRoute() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
@@ -1944,9 +1932,7 @@ func (suite *GlideTestSuite) TestFunctionKillNoWriteWithRoute() {
 }
 
 func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write"
@@ -1988,7 +1974,7 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
@@ -2057,14 +2043,12 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	}
 }
 
-func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillKeyBasedWriteFunction() {
 	if !*longTimeoutTests {
 		suite.T().Skip("Timeout tests are disabled")
 	}
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_key_based_write_function"
@@ -2092,7 +2076,7 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), libName, result)
 
-	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10000)
+	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
 	testClient := suite.clusterClient(testConfig)
 	defer testClient.Close()
 
@@ -2129,4 +2113,438 @@ func (suite *GlideTestSuite) TestFunctionKillKeyBasedWriteFunction() {
 	// Wait for unkillable confirmation
 	foundUnkillable := <-unkillable
 	assert.True(suite.T(), foundUnkillable, "Function should be unkillable")
+}
+
+func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
+	client := suite.defaultClusterClient()
+
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	// Flush all functions first
+	suite.verifyOK(client.FunctionFlushSync(context.Background()))
+
+	// Dumping an empty lib
+	emptyDump, err := client.FunctionDump(context.Background())
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), emptyDump)
+	assert.Greater(suite.T(), len(emptyDump), 0)
+
+	name1 := "Foster"
+	libname1 := "FosterLib"
+	name2 := "Dogster"
+	libname2 := "DogsterLib"
+
+	// function name1 returns first argument
+	// function name2 returns argument array len
+	code := GenerateLuaLibCode(libname1, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+
+	// Load the functions
+	loadResult, err := client.FunctionLoad(context.Background(), code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname1, loadResult)
+
+	// Dump the library
+	dump, err := client.FunctionDump(context.Background())
+	assert.Nil(suite.T(), err)
+
+	// Restore without cleaning the lib and/or overwrite option causes an error
+	_, err = client.FunctionRestore(context.Background(), dump)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// APPEND policy also fails for the same reason (name collision)
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.AppendPolicy)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+libname1+" already exists")
+
+	// REPLACE policy succeeds
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy))
+
+	// Verify functions still work after replace
+	result1, err := client.FCallReadOnlyWithArgs(context.Background(), name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err := client.FCallReadOnlyWithArgs(context.Background(), name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
+
+	// create lib with another name, but with the same function names
+	suite.verifyOK(client.FunctionFlushSync(context.Background()))
+	code = GenerateLuaLibCode(libname2, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, true)
+	loadResult, err = client.FunctionLoad(context.Background(), code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), libname2, loadResult)
+
+	// REPLACE policy now fails due to a name collision
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy)
+	assert.NotNil(suite.T(), err)
+	errMsg := err.Error()
+	// valkey checks names in random order and blames on first collision
+	assert.True(suite.T(),
+		strings.Contains(errMsg, "Function "+name1+" already exists") ||
+			strings.Contains(errMsg, "Function "+name2+" already exists"))
+
+	// FLUSH policy succeeds, but deletes the second lib
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.FlushPolicy))
+
+	// Verify original functions work again
+	result1, err = client.FCallReadOnlyWithArgs(context.Background(), name1, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result1.IsSingleValue() {
+		assert.Equal(suite.T(), "meow", result1.SingleValue())
+	} else {
+		for _, value := range result1.MultiValue() {
+			assert.Equal(suite.T(), "meow", value)
+		}
+	}
+
+	result2, err = client.FCallReadOnlyWithArgs(context.Background(), name2, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	if result2.IsSingleValue() {
+		assert.Equal(suite.T(), int64(2), result2.SingleValue())
+	} else {
+		for _, value := range result2.MultiValue() {
+			assert.Equal(suite.T(), int64(2), value)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestInvokeScript() {
+	clusterClient := suite.defaultClusterClient()
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+
+	script1 := options.NewScript("return 'Hello'")
+	routeOption := options.RouteOption{Route: config.AllPrimaries}
+	// Test simple script that returns a string
+	clusterResponse, err := clusterClient.InvokeScriptWithRoute(context.Background(), *script1, routeOption)
+	assert.Nil(suite.T(), err)
+	for _, value := range clusterResponse.MultiValue() {
+		assert.Equal(suite.T(), "Hello", value)
+	}
+	script1.Close()
+
+	// Test script that sets a key with value
+	script2 := options.NewScript("return redis.call('SET', KEYS[1], ARGV[1])")
+
+	// Create ClusterScriptOptions for setting key1
+	scriptOptions := options.NewScriptOptions()
+	scriptOptions.WithKeys([]string{key1}).WithArgs([]string{"value1"})
+	setResponse, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", setResponse)
+
+	// Set another key with the same script
+	scriptOptions2 := options.NewScriptOptions()
+	scriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
+	setResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions2)
+	assert.Equal(suite.T(), "OK", setResponse2)
+	assert.Nil(suite.T(), err)
+	script2.Close()
+
+	// Test script that gets a key's value
+	script3 := options.NewScript("return redis.call('GET', KEYS[1])")
+
+	// Create ClusterScriptOptions for getting key1
+	scriptOptions3 := options.NewScriptOptions()
+	scriptOptions3.WithKeys([]string{key1})
+	getResponse1, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions3)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "value1", getResponse1)
+
+	// Get another key's value
+	scriptOptions4 := options.NewScriptOptions()
+	scriptOptions4.WithKeys([]string{key2})
+	getResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions4)
+	assert.Equal(suite.T(), "value2", getResponse2)
+	assert.Nil(suite.T(), err)
+	script3.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptExistsWithoutRoute() {
+	client := suite.defaultClusterClient()
+
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+
+	// Load script1
+	client.InvokeScript(context.Background(), *script1)
+
+	expected := []bool{true, false, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_2 := script2.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists(context.Background(), []string{sha1_1, sha1_2, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	script1.Close()
+	script2.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
+	client := suite.defaultClusterClient()
+	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, uuid.New().String())}
+
+	script1 := options.NewScript("return 'Hello'")
+	script2 := options.NewScript("return 'World'")
+	script3 := options.NewScript("return 'Hello World'")
+
+	// Load script1 and script3
+	client.InvokeScript(context.Background(), *script1)
+	client.InvokeScriptWithRoute(context.Background(), *script3, route)
+
+	expected := []bool{true, false, true, false}
+
+	// Get the SHA1 digests of the scripts
+	sha1_1 := script1.GetHash()
+	sha1_2 := script2.GetHash()
+	sha1_3 := script3.GetHash()
+	nonExistentSha1 := strings.Repeat("0", 40)
+
+	// Ensure scripts exist
+	response, err := client.ScriptExists(context.Background(), []string{sha1_1, sha1_2, sha1_3, nonExistentSha1})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, response)
+
+	routeResponse, err := client.ScriptExistsWithRoute(
+		context.Background(),
+		[]string{sha1_1, sha1_2, sha1_3, nonExistentSha1},
+		route,
+	)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expected, routeResponse)
+
+	script1.Close()
+	script2.Close()
+	script3.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
+	client := suite.defaultClusterClient()
+
+	// Create a script
+	script := options.NewScript("return 'Hello'")
+
+	// Load script
+	_, err := client.InvokeScript(context.Background(), *script)
+	assert.Nil(suite.T(), err)
+
+	// Check existence of script
+	scriptHash := script.GetHash()
+	result, err := client.ScriptExists(context.Background(), []string{scriptHash})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{true}, result)
+
+	// Flush the script cache
+	flushResult, err := client.ScriptFlush(context.Background())
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	// Create a script
+	script = options.NewScript("return 'Hello'")
+	routeOption := options.RouteOption{Route: config.AllPrimaries}
+
+	// Load script
+	_, err = client.InvokeScriptWithRoute(context.Background(), *script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	// Check existence of script
+	scriptHash = script.GetHash()
+	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{true}, result)
+
+	// Create ScriptFlushOptions with default mode (SYNC) and route
+	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&routeOption)
+
+	// Flush the script cache
+	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	// Check that the script no longer exists
+	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{false}, result)
+
+	// Test with ASYNC mode
+	_, err = client.InvokeScriptWithRoute(context.Background(), *script, routeOption)
+	assert.Nil(suite.T(), err)
+
+	// Create ScriptFlushOptions with ASYNC mode and route
+	scriptFlushOptions = options.NewScriptFlushOptions().
+		WithMode(options.ASYNC).
+		WithRoute(&routeOption)
+
+	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", flushResult)
+
+	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), []bool{false}, result)
+
+	script.Close()
+}
+
+func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKill(context.Background())
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(5, true)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScript(context.Background(), *script)
+
+	time.Sleep(1 * time.Second)
+
+	result, err := killClient.ScriptKill(context.Background())
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKill(context.Background())
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillWithRoute() {
+	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
+
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	randomKey := uuid.NewString()
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, randomKey),
+	}
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(6, true)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
+
+	time.Sleep(1 * time.Second)
+
+	result, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+	script.Close()
+
+	time.Sleep(1 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
+	key := uuid.NewString()
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKill(context.Background())
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	code := CreateLongRunningLuaScript(7, false)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
+
+	time.Sleep(1 * time.Second)
+
+	_, err = killClient.ScriptKill(context.Background())
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
+	script.Close()
+
+	// Wait until script finishes
+	time.Sleep(6 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKill(context.Background())
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
+	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
+
+	key := uuid.NewString()
+	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	killClient := suite.defaultClusterClient()
+
+	// key for routing to a primary node
+	route := options.RouteOption{
+		Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key),
+	}
+
+	// Ensure no script is running at the beginning
+	_, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Kill Running Code
+	code := CreateLongRunningLuaScript(7, false)
+	script := options.NewScript(code)
+
+	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
+
+	time.Sleep(1 * time.Second)
+
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "unkillable"))
+	script.Close()
+
+	// Wait until script finishes
+	time.Sleep(6 * time.Second)
+
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }

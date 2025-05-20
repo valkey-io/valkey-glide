@@ -237,7 +237,6 @@ func (client *GlideClient) DBSize(ctx context.Context) (int64, error) {
 }
 
 // Echo the provided message back.
-// The command will be routed a random node.
 //
 // See [valkey.io] for details.
 //
@@ -252,11 +251,7 @@ func (client *GlideClient) DBSize(ctx context.Context) (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *GlideClient) Echo(ctx context.Context, message string) (Result[string], error) {
-	result, err := client.executeCommand(ctx, C.Echo, []string{message})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
+	return client.echo(ctx, message)
 }
 
 // Pings the server.

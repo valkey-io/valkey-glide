@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 func ExampleNewGlideClient() {
@@ -26,7 +27,7 @@ func ExampleNewGlideClient() {
 func ExampleNewGlideClusterClient() {
 	config := NewGlideClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).
-		WithRequestTimeout(5000).
+		WithRequestTimeout(5 * time.Second).
 		WithUseTLS(false)
 	client, err := NewGlideClusterClient(context.Background(), config)
 	if err != nil {

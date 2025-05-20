@@ -476,17 +476,16 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
 //	password - The new password to update the connection with.
-//	immediateAuth - immediateAuth A boolean flag. If true, the client will
-//	    authenticate immediately with the new password against all connections, Using AUTH
-//	    command. If password supplied is an empty string, the client will not perform auth and a warning
-//	    will be returned. The default is `false`.
+//	immediateAuth - immediateAuth A boolean flag. If true, the client will authenticate immediately with the new password
+//					against all connections, Using AUTH command. If password supplied is an empty string, the client will
+//					not perform auth and a warning will be returned. The default is `false`.
 //
 // Return value:
 //
@@ -505,8 +504,8 @@ func (client *baseClient) UpdateConnectionPassword(ctx context.Context, password
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Parameters:
 //
@@ -1535,7 +1534,7 @@ func (client *baseClient) HScanWithOptions(
 // Return value:
 //
 //	A random field name from the hash stored at `key`, or `nil` when
-//	  the key does not exist.
+//	the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(ctx context.Context, key string) (Result[string], error) {
@@ -1559,12 +1558,13 @@ func (client *baseClient) HRandField(ctx context.Context, key string) (Result[st
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//		    If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	An array of random field names from the hash stored at `key`,
-//	   or an empty array when the key does not exist.
+//	or an empty array when the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, count int64) ([]string, error) {
@@ -1589,13 +1589,14 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//	  		If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	A 2D `array` of `[field, value]` arrays, where `field` is a random
-//	  field name from the hash and `value` is the associated value of the field name.
-//	  If the hash does not exist or is empty, the response will be an empty array.
+//	field name from the hash and `value` is the associated value of the field name.
+//	If the hash does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error) {
@@ -5295,20 +5296,7 @@ func (client *baseClient) ObjectEncoding(ctx context.Context, key string) (Resul
 	return handleStringOrNilResponse(result)
 }
 
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(ctx context.Context, message string) (Result[string], error) {
+func (client *baseClient) echo(ctx context.Context, message string) (Result[string], error) {
 	result, err := client.executeCommand(ctx, C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -8428,4 +8416,402 @@ func (client *baseClient) FunctionList(ctx context.Context, query FunctionListQu
 		return nil, err
 	}
 	return handleFunctionListResponse(response)
+}
+
+// Returns the serialized payload of all loaded libraries.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to a random node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *baseClient) FunctionDump(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestoreWithPolicy(
+	ctx context.Context,
+	payload string,
+	policy options.FunctionRestorePolicy,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Executes a Lua script on the server.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	script - The Lua script to execute.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *baseClient) InvokeScript(ctx context.Context, script options.Script) (any, error) {
+	response, err := client.executeScriptWithRoute(ctx, script.GetHash(), []string{}, []string{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyResponse(response)
+}
+
+// Executes a Lua script on the server with additional options.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//	When in cluster mode:
+//	- all `keys` in `scriptOptions` must map to the same hash slot.
+//	- if no `keys` are given, command will be routed to a random primary node.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	script - The Lua script to execute.
+//	scriptOptions - Options for script execution including keys and arguments.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *baseClient) InvokeScriptWithOptions(
+	ctx context.Context,
+	script options.Script,
+	scriptOptions options.ScriptOptions,
+) (any, error) {
+	keys := scriptOptions.GetKeys()
+	args := scriptOptions.GetArgs()
+
+	response, err := client.executeScriptWithRoute(ctx, script.GetHash(), keys, args, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyResponse(response)
+}
+
+// executeScriptWithRoute executes a Lua script with the given hash, keys, args, and routing information.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	hash - The SHA1 hash of the script to execute.
+//	keys - The keys that the script will access.
+//	args - The arguments to pass to the script.
+//	route - Optional routing information for the script execution.
+//
+// Return value:
+//
+//	A CommandResponse containing the result of the script execution.
+func (client *baseClient) executeScriptWithRoute(
+	ctx context.Context,
+	hash string,
+	keys []string,
+	args []string,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// Continue with execution
+	}
+	var cKeysPtr *C.uintptr_t = nil
+	var keysLengthsPtr *C.ulong = nil
+	if len(keys) > 0 {
+		cKeys, keysLengths := toCStrings(keys)
+		cKeysPtr = &cKeys[0]
+		keysLengthsPtr = &keysLengths[0]
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argsLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argsLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argsLengthsPtr = &argsLengths[0]
+	}
+
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := routeToProtobuf(route)
+		if err != nil {
+			return nil, &errors.RequestError{Msg: "ExecuteScript failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	C.invoke_script(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(hash),
+		C.size_t(len(keys)),
+		cKeysPtr,
+		keysLengthsPtr,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argsLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
+	)
+	client.mu.Unlock()
+
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		return nil, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+	return payload.value, nil
+}
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *baseClient) ScriptExists(ctx context.Context, sha1s []string) ([]bool, error) {
+	response, err := client.executeCommand(ctx, C.ScriptExists, sha1s)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}
+
+// Removes all the scripts from the script cache.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *baseClient) ScriptFlush(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ScriptFlush, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Removes all the scripts from the script cache with the specified flush mode.
+// The mode can be either SYNC or ASYNC.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	mode - The flush mode (SYNC or ASYNC).
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.ScriptFlush, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ScriptShow returns the original source code of a script in the script cache.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	sha1 - The SHA1 digest of the script.
+//
+// Return value:
+//
+//	The original source code of the script, if present in the cache.
+//	If the script is not found in the cache, an error is thrown.
+//
+// Since: Valkey 8.0.0
+//
+// [valkey.io]: https://valkey.io/commands/script-show
+func (client *baseClient) ScriptShow(ctx context.Context, sha1 string) (string, error) {
+	result, err := client.executeCommand(ctx, C.ScriptShow, []string{sha1})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *baseClient) ScriptKill(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ScriptKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }

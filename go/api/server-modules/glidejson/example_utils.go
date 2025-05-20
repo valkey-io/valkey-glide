@@ -4,6 +4,7 @@ package glidejson
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/api"
 )
@@ -30,7 +31,7 @@ func getExampleGlideClient() *api.GlideClient {
 func getExampleGlideClusterClient() *api.GlideClusterClient {
 	config := api.NewGlideClusterClientConfiguration().
 		WithAddress(&api.NodeAddress{Host: "localhost", Port: 7001}).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 
 	client, err := api.NewGlideClusterClient(context.Background(), config)
 	if err != nil {

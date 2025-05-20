@@ -1,4 +1,8 @@
 use rand::{distributions::Alphanumeric, Rng};
+use redis::{
+    cluster_async::ClusterConnection,
+    cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
+};
 use std::collections::HashMap;
 use versions::Versioning;
 
@@ -124,4 +128,18 @@ pub async fn engine_version_less_than(min_version: &str) -> bool {
         return true;
     }
     false
+}
+
+/// Terminates all client connections to all nodes in the cluster.
+pub async fn kill_all_connections(client: &mut ClusterConnection) {
+    let mut client_kill_cmd = redis::cmd("CLIENT");
+    client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+
+    let _ = client
+        .route_command(
+            &client_kill_cmd,
+            RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+        )
+        .await
+        .unwrap();
 }

@@ -1,13 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use futures::future::join_all;
 use redis::{
+    AsyncCommands, ConnectionAddr, ConnectionInfo, GlideConnectionOptions, RedisConnectionInfo,
+    RedisResult, Value,
     aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
     cluster::ClusterClientBuilder,
     cluster_async::ClusterConnection,
-    AsyncCommands, ConnectionAddr, ConnectionInfo, GlideConnectionOptions, RedisConnectionInfo,
-    RedisResult, Value,
 };
 use std::env;
 use tokio::runtime::{Builder, Runtime};
