@@ -12454,6 +12454,14 @@ public class SharedCommandTests {
                                                 RestoreOptions.builder().replace().frequency(-10L).build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Test that setting both idletime and frequency throws IllegalArgumentException
+        IllegalArgumentException illegalArgumentException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> RestoreOptions.builder().idletime(10L).frequency(5L).build().toArgs());
+        assertEquals(
+                "IDLETIME and FREQ cannot be set at the same time.", illegalArgumentException.getMessage());
     }
 
     @SneakyThrows
