@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -13,7 +14,7 @@ func ExampleNewGlideClient() {
 		WithUseTLS(false).
 		WithReconnectStrategy(NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
-	client, err := NewGlideClient(config)
+	client, err := NewGlideClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
@@ -28,7 +29,7 @@ func ExampleNewGlideClusterClient() {
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5 * time.Second).
 		WithUseTLS(false)
-	client, err := NewGlideClusterClient(config)
+	client, err := NewGlideClusterClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

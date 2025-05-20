@@ -2,7 +2,11 @@
 
 package api
 
-import "github.com/valkey-io/valkey-glide/go/api/options"
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/api/options"
+)
 
 // Supports commands and transactions for the "Connection Management" group of commands for cluster client.
 //
@@ -10,23 +14,27 @@ import "github.com/valkey-io/valkey-glide/go/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#connection
 type ConnectionManagementClusterCommands interface {
-	Ping() (string, error)
+	Ping(ctx context.Context) (string, error)
 
-	PingWithOptions(pingOptions options.ClusterPingOptions) (string, error)
+	PingWithOptions(ctx context.Context, pingOptions options.ClusterPingOptions) (string, error)
 
-	Echo(message string) (Result[string], error)
+	Echo(ctx context.Context, message string) (Result[string], error)
 
-	EchoWithOptions(message string, routeOptions options.RouteOption) (ClusterValue[string], error)
+	EchoWithOptions(ctx context.Context, message string, routeOptions options.RouteOption) (ClusterValue[string], error)
 
-	ClientId() (ClusterValue[int64], error)
+	ClientId(ctx context.Context) (ClusterValue[int64], error)
 
-	ClientIdWithOptions(routeOptions options.RouteOption) (ClusterValue[int64], error)
+	ClientIdWithOptions(ctx context.Context, routeOptions options.RouteOption) (ClusterValue[int64], error)
 
-	ClientSetName(connectionName string) (ClusterValue[string], error)
+	ClientSetName(ctx context.Context, connectionName string) (ClusterValue[string], error)
 
-	ClientSetNameWithOptions(connectionName string, routeOptions options.RouteOption) (ClusterValue[string], error)
+	ClientSetNameWithOptions(
+		ctx context.Context,
+		connectionName string,
+		routeOptions options.RouteOption,
+	) (ClusterValue[string], error)
 
-	ClientGetName() (ClusterValue[string], error)
+	ClientGetName(ctx context.Context) (ClusterValue[string], error)
 
-	ClientGetNameWithOptions(routeOptions options.RouteOption) (ClusterValue[string], error)
+	ClientGetNameWithOptions(ctx context.Context, routeOptions options.RouteOption) (ClusterValue[string], error)
 }

@@ -2,6 +2,8 @@
 
 package api
 
+import "context"
+
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // client.
 //
@@ -9,7 +11,7 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/?group=scripting
 type ScriptingAndFunctionStandaloneCommands interface {
-	FunctionStats() (map[string]FunctionStatsResult, error)
+	FunctionStats(ctx context.Context) (map[string]FunctionStatsResult, error)
 
-	FunctionDelete(libName string) (string, error)
+	FunctionDelete(ctx context.Context, libName string) (string, error)
 }
