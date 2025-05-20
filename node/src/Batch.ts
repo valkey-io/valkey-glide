@@ -3,15 +3,21 @@
  */
 
 import {
-    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ElementAndScore,
     GlideRecord,
     GlideString,
     HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    convertGlideRecord,
     Score,
-    ElementAndScore,
+    convertGlideRecord,
 } from "./BaseClient";
+
+import {
+    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./GlideClient";
+import {
+    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./GlideClusterClient";
 
 import {
     AggregationType,
@@ -269,47 +275,48 @@ import {
 import { command_request } from "./ProtobufMessage";
 
 /**
- * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
- * Transactions allow the execution of a group of commands in a single step.
+ * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
+ * ### Batch Response:
  *  An array of command responses is returned by the client exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
- * @example
- * ```typescript
- * const transaction = new BaseTransaction()
- *    .set("key", "value")
- *    .get("key");
- * const result = await client.exec(transaction);
- * console.log(result); // Output: ['OK', 'value']
- * ```
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
  */
-class BaseTransaction<T extends BaseTransaction<T>> {
+export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * @internal
      */
     readonly commands: command_request.Command[] = [];
     /**
-     * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
+     * Array of command indexes indicating commands that need to be converted into a `Set` within the batch.
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
 
     /**
-     * Adds a command to the transaction and returns the transaction instance.
+     * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
+     *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
+     *     executed as a non-atomic `pipeline`.
+     */
+    constructor(public readonly isAtomic: boolean) {}
+
+    /**
+     * Adds a command to the batch and returns the batch instance.
      * @param command - The command to add.
      * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
-     * @returns The updated transaction instance.
+     * @returns The updated batch instance.
      */
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet = false,
     ): T {
         if (shouldConvertToSet) {
-            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            // The command's index within the batch is saved for later conversion of its response to a Set type.
             this.setCommandsIndexes.push(this.commands.length);
         }
 
@@ -317,12 +324,12 @@ class BaseTransaction<T extends BaseTransaction<T>> {
         return this as unknown as T;
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      *
-     * Command Response - If `key` exists, returns the value of `key`. Otherwise, return null.
+     * Command Response - If `key` exists, returns the value of `key`. Otherwise, return `null`.
      */
     public get(key: GlideString): T {
         return this.addAndReturn(createGet(key));
@@ -413,6 +420,8 @@ class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Gets information and statistics about the server.
      *
+     * Starting from server version 7, command supports multiple section arguments.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
@@ -441,7 +450,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
      * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
-     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     * @remarks To execute a batch with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * @param key - The `key` to serialize.
      *
@@ -475,7 +484,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets the name of the connection on which the transaction is being executed.
+     * Gets the name of the connection on which the batch is being executed.
      *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
@@ -490,7 +499,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
-     * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the transaction fails with an error.
+     * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the command fails with an error.
      */
     public configRewrite(): T {
         return this.addAndReturn(createConfigRewrite());
@@ -765,7 +774,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param parameters - A map consisting of configuration parameters and their respective values to set.
      *
-     * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
+     * Command Response - "OK" when the configuration was set properly. Otherwise, the command fails with an error.
      */
     public configSet(parameters: Record<string, GlideString>): T {
         return this.addAndReturn(createConfigSet(parameters));
@@ -1000,8 +1009,8 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      *
      * Command Response - An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
@@ -1019,8 +1028,8 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      *
      * Command Response - A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
@@ -2544,6 +2553,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+     *
      * @see {@link https://valkey.io/commands/xadd/|valkey.io} for details.
      *
      * @param key - The key of the stream.
@@ -2878,7 +2888,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      *
      * Command Response - An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -2924,7 +2934,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      *
      * Command Response - An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -2965,7 +2975,8 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the stream.
      * @param groupName - The newly created consumer group name.
      * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     *     group's perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @param options - The group options {@link StreamGroupOptions}
      *
      * Command Response - `"OK"`.
      */
@@ -2986,7 +2997,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      *
      * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
      */
@@ -3390,7 +3401,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
-     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     * @remarks To execute a batch with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * Command Response - The serialized payload of all loaded libraries.
      */
@@ -3892,6 +3903,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - (Optional) The maximum number of popped elements.
      *
      * Command Response - A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      */
     public lmpop(
         keys: GlideString[],
@@ -4043,28 +4055,47 @@ class BaseTransaction<T extends BaseTransaction<T>> {
 }
 
 /**
- * Extends BaseTransaction class for Valkey standalone commands.
- * Transactions allow the execution of a group of commands in a single step.
+ * Batch implementation for standalone {@link GlideClient}.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
- *  An array of command responses is returned by the GlideClient.exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ * ### Batch Response:
+ *  An array of command responses is returned by the client {@link GlideClient.exec | exec} command, in the order they were given.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
+ *
+ * @see {@link https://valkey.io/docs/topics/transactions/ | Valkey Transactions (Atomic Batches)}
+ * @see {@link https://valkey.io/topics/pipelining | Valkey Pipelines (Non-Atomic Batches)}
+ * @remarks Standalone Batches are executed on the primary node.
+ *
  * @example
  * ```typescript
- * const transaction = new Transaction()
- *    .set("key", "value")
- *    .select(1)  /// Standalone command
- *    .get("key");
- * const result = await GlideClient.exec(transaction);
- * console.log(result); // Output: ['OK', 'OK', null]
+ * // Example of Atomic Batch (Transaction)
+ * const transaction = new Batch(true) // Atomic (Transactional)
+ *     .set("key", "value")
+ *     .get("key");
+ * const result = await client.exec(transaction, true);
+ * // result contains: OK and "value"
+ * console.log(result); // ["OK", "value"]
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Example of Non-Atomic Batch (Pipeline)
+ * const pipeline = new Batch(false) // Non-Atomic (Pipeline)
+ *     .set("key1", "value1")
+ *     .set("key2", "value2")
+ *     .get("key1")
+ *     .get("key2");
+ * const result = await client.exec(pipeline, true);
+ * // result contains: OK, OK, "value1", "value2"
+ * console.log(result); // ["OK", "OK", "value1", "value2"]
  * ```
  */
-export class Transaction extends BaseTransaction<Transaction> {
-    /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
-
+export class Batch extends BaseBatch<Batch> {
     /**
      * Change the currently selected database.
      *
@@ -4074,7 +4105,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - A simple `"OK"` response.
      */
-    public select(index: number): Transaction {
+    public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
     }
 
@@ -4100,7 +4131,7 @@ export class Transaction extends BaseTransaction<Transaction> {
         source: GlideString,
         destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
-    ): Transaction {
+    ): Batch {
         return this.addAndReturn(createCopy(source, destination, options));
     }
 
@@ -4115,7 +4146,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
      *     database or does not exist in the source database.
      */
-    public move(key: GlideString, dbIndex: number): Transaction {
+    public move(key: GlideString, dbIndex: number): Batch {
         return this.addAndReturn(createMove(key, dbIndex));
     }
 
@@ -4129,23 +4160,50 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      * Note that this value does not include subscriptions that configured on replicas.
      */
-    public publish(message: GlideString, channel: GlideString): Transaction {
+    public publish(message: GlideString, channel: GlideString): Batch {
         return this.addAndReturn(createPublish(message, channel));
     }
 }
 
 /**
- * Extends BaseTransaction class for cluster mode commands.
- * Transactions allow the execution of a group of commands in a single step.
+ * Batch implementation for standalone {@link GlideClusterClient | GlideClusterClient}.
+ * Batches allow the execution of a group of commands in a single step.
  *
- * Command Response:
- *  An array of command responses is returned by the GlideClusterClient.exec command, in the order they were given.
- *  Each element in the array represents a command given to the transaction.
+ * ### Batch Response:
+ *  An array of command responses is returned by the client {@link GlideClusterClient.exec | exec} command, in the order they were given.
+ *  Each element in the array represents a command given to the batch.
  *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
+ * @param isAtomic - Indicates whether the batch is atomic or non-atomic. If `true`, the batch will be executed as an atomic transaction.
+ * If `false`, the batch will be executed as a non-atomic pipeline.
+ *
+ * @see {@link https://valkey.io/docs/topics/transactions/ | Valkey Transactions (Atomic Batches)}
+ * @see {@link https://valkey.io/topics/pipelining | Valkey Pipelines (Non-Atomic Batches)}
+ *
+ * @example
+ * ```typescript
+ * // Example of Atomic Batch (Transaction) in a Cluster
+ * const transaction = new ClusterBatch(true) // Atomic (Transactional)
+ *     .set("key", "value")
+ *     .get("key");
+ * const result = await client.exec(transaction, true);
+ * console.log(result); // ["OK", "value"]
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Example of Non-Atomic Batch (Pipeline) in a Cluster
+ * const pipeline = new ClusterBatch(false) // Non-Atomic (Pipeline)
+ *     .set("key1", "value1")
+ *     .set("key2", "value2")
+ *     .get("key1")
+ *     .get("key2");
+ * const result = await client.exec(pipeline, true);
+ * console.log(result); // ["OK", "OK", "value1", "value2"]
+ * ```
  */
-export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
+export class ClusterBatch extends BaseBatch<ClusterBatch> {
     /// TODO: add all CLUSTER commands
 
     /**
@@ -4166,7 +4224,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         source: GlideString,
         destination: GlideString,
         options?: { replace?: boolean },
-    ): ClusterTransaction {
+    ): ClusterBatch {
         return this.addAndReturn(createCopy(source, destination, options));
     }
 
@@ -4187,7 +4245,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         message: GlideString,
         channel: GlideString,
         sharded = false,
-    ): ClusterTransaction {
+    ): ClusterBatch {
         return this.addAndReturn(createPublish(message, channel, sharded));
     }
 
@@ -4203,7 +4261,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
-    public pubsubShardChannels(pattern?: GlideString): ClusterTransaction {
+    public pubsubShardChannels(pattern?: GlideString): ClusterBatch {
         return this.addAndReturn(createPubsubShardChannels(pattern));
     }
 
@@ -4217,7 +4275,25 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * Command Response - A list of the shard channel names and their numbers of subscribers.
      */
-    public pubsubShardNumSub(channels: GlideString[]): ClusterTransaction {
+    public pubsubShardNumSub(channels: GlideString[]): ClusterBatch {
         return this.addAndReturn(createPubSubShardNumSub(channels));
+    }
+}
+
+/**
+ * @deprecated This class is deprecated and should no longer be used. Use {@link ClusterBatch} instead.
+ */
+export class ClusterTransaction extends ClusterBatch {
+    constructor() {
+        super(true);
+    }
+}
+
+/**
+ * @deprecated This class is deprecated and should no longer be used. Use {@link Batch} instead.
+ */
+export class Transaction extends Batch {
+    constructor() {
+        super(true);
     }
 }

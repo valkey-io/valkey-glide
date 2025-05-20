@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -39,7 +40,6 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1718,11 +1718,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction).get());
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
@@ -1767,10 +1767,11 @@ public class CommandTests {
         // check response from a routed transaction request
         assertDeepEquals(
                 new Object[][] {{binaryString}, {binaryString}},
-                clusterClient.exec(transaction, options).get());
+                clusterClient.exec(transaction, true, options).get());
         // if no route given, GLIDE should detect it automatically
         assertDeepEquals(
-                new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());
+                new Object[][] {{binaryString}, {binaryString}},
+                clusterClient.exec(transaction, true).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }

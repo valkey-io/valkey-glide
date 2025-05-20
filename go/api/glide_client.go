@@ -21,6 +21,7 @@ type GlideClientCommands interface {
 	BitmapCommands
 	ConnectionManagementCommands
 	ScriptingAndFunctionStandaloneCommands
+	PubSubStandaloneCommands
 }
 
 // Client used for connection to standalone servers.
@@ -174,6 +175,8 @@ func (client *GlideClient) Info() (string, error) {
 
 // Gets information and statistics about the server.
 //
+// Starting from server version 7, command supports multiple section arguments.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -214,7 +217,6 @@ func (client *GlideClient) DBSize() (int64, error) {
 }
 
 // Echo the provided message back.
-// The command will be routed a random node.
 //
 // Parameters:
 //
@@ -225,12 +227,8 @@ func (client *GlideClient) DBSize() (int64, error) {
 //	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClient) Echo(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	return client.echo(message)
 }
 
 // Pings the server.
@@ -610,4 +608,31 @@ func (client *GlideClient) FunctionDelete(libName string) (string, error) {
 		return DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClient) Publish(channel string, message string) (int64, error) {
+	args := []string{channel, message}
+	result, err := client.executeCommand(C.Publish, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }

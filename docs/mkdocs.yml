@@ -14,17 +14,23 @@ nav:
           - Core Commands: python/core.md
           - Cluster Commands: python/cluster_commands.md
           - Standalone Commands: python/standalone_commands.md
-          - Base Transaction: python/base_transaction.md
-          - Standalone Transaction: python/standalone_transaction.md
-          - Cluster Transaction: python/cluster_transaction.md
+          - Base Batch: python/base_batch.md
+          - Standalone Batch: python/standalone_batch.md
+          - Cluster Batch: python/cluster_batch.md
+          - Standalone Transaction (Deprecated): python/standalone_transaction.md
+          - Cluster Transaction (Deprecated): python/cluster_transaction.md
       - Exceptions: python/exceptions.md
       - Logger: python/logger.md
   - TypeScript:
-      - Client:
+      - Client and Commands:
           - Standalone: node/GlideClient/classes/GlideClient.md
           - Cluster: node/GlideClusterClient/classes/GlideClusterClient.md
           - Base: node/BaseClient/classes/BaseClient.md
-          - Transaction: node/Transaction/classes/Transaction.md
+          - Base Batch: node/Batch/classes/BaseBatch.md
+          - Standalone Batch: node/Batch/classes/Batch.md
+          - Cluster Batch: node/Batch/classes/ClusterBatch.md
+          - Transaction (Deprecated): node/Batch/classes/Transaction.md
+          - Cluster Transaction (Deprecated): node/Batch/classes/ClusterTransaction.md
       - config: node/BaseClient/interfaces/BaseClientConfiguration.md
       - Modules:
           - JSON: node/server-modules/GlideJson/classes/GlideJson.md
@@ -40,6 +46,8 @@ nav:
       - Logger: node/Logger/classes/Logger.md
 theme:
   name: material
+  palette: 
+    scheme: valkey-glide
   features:
     - navigation.sections
     - content.code.copy

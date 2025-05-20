@@ -137,38 +137,84 @@ Before starting this step, make sure you've installed all software requirements.
 
 ### Test
 
-To run tests, use the benefit on makefile. To run unit tests, run the following command:
+We run our tests using Go's `testing` package. For convenience, we bundled test configuration and logging into makefile commands to simplify the process.
+
+#### Test Categories
+
+The Valkey GLIDE Go wrapper has three main categories of tests:
+
+1. **Unit Tests**: Tests that verify individual components in isolation
+2. **Example Tests**: Runnable examples that serve as documentation and basic functionality tests
+3. **Integration Tests**: Tests that verify the integration with Valkey/Redis servers
+   - **Standard Integration Tests**: Tests basic functionality against Valkey/Redis servers
+   - **Module Tests**: Tests specific Valkey/Redis modules functionality
+   - **PubSub Tests**: Tests PubSub functionality
+   - **Long Timeout Tests**: Runs tests with timeouts that may take longer than normal tests
+
+To run unit tests, use:
 
 ```bash
 make unit-test
 ```
 
-To run integration tests, run:
+To run all examples:
+
+```bash
+make example-test
+```
+
+To run standard integration tests (excluding module tests):
 
 ```bash
 make integ-test
 ```
 
-To run modules tests, run:
+To run module-specific tests:
 
 ```bash
 make modules-test
 ```
 
-To execute a specific test, include `test-filter=<test_name>`. For example:
+To run pubsub tests:
 
 ```bash
-make unit-test test-filter=TestConnectionRequestProtobufGeneration_allFieldsSet
+make pubsub-test
 ```
 
+To run these tests:
+
+```bash
+make long-timeout-test
+```
+
+#### Running Specific Tests
+
+For all of the above tests, we can specify individual tests, or tests matching a pattern, using the `test-filter=<regex>` parameter to specify a filter pattern to use.
+
+```bash
+# Run with a specific prefix (ex. run all tests that start with TestSet)
+make integ-test test-filter=TestSet
+
+# Run with a specifc pattern (ex. run all tests that start with TestSet or TestGet)
+make integ-test test-filter="Test\(Set\|Get\)"
+```
+
+#### Additional Parameters
+
 Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
-By default, those test suite start standalone and cluster servers without TLS and stop them at the end.
+By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
 
 ```bash
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
-Test reports generated in `reports` folder.
+#### Test Reports and Results
+
+Alongside terminal output, test reports are generated in `reports` folder.
+
+An example of what the report looks like when an error occurs:
+
+![Image of HIncrByFloat Failing](docs/images/FailingTestReportExample.png)
 
 ### Generate protobuf files
 
@@ -405,3 +451,7 @@ func ExampleGlideClient_Get_keyIsNil { ... }
 
 - [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
 - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## Community and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

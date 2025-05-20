@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::Telemetry;
+use glide_core::errors::error_message;
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -12,8 +13,8 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
-use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::start_socket_listener;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
@@ -21,11 +22,10 @@ use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
-use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;
-use std::str;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum Level {
@@ -277,11 +277,13 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
         }
-        Value::ServerError(_) => Err(Error::new(
-            // TODO: add ServerError support
-            Status::GenericFailure,
-            "ServerError is not supported",
-        )),
+        Value::ServerError(error) => {
+            let err_msg = error_message(&error.into());
+            let err = Error::new(Status::Ok, err_msg);
+            let mut js_error = js_env.create_error(err)?;
+            js_error.set_named_property("name", "RequestError")?;
+            Ok(js_error.into_unknown())
+        }
     }
 }
 

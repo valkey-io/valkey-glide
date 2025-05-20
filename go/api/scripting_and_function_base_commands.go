@@ -42,4 +42,12 @@ type ScriptingAndFunctionBaseCommands interface {
 	ScriptShow(sha1 string) (string, error)
 
 	ScriptKill() (string, error)
+
+	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
+
+	FunctionDump() (string, error)
+
+	FunctionRestore(payload string) (string, error)
+
+	FunctionRestoreWithPolicy(payload string, policy options.FunctionRestorePolicy) (string, error)
 }

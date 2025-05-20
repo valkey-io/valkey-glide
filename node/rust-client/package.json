@@ -12,16 +12,14 @@
     "napi": {
         "name": "glide-rs",
         "triples": {
-            "defaults": true,
+            "default": false,
             "additional": [
                 "x86_64-unknown-linux-musl",
+                "x86_64-unknown-linux-gnu",
                 "aarch64-unknown-linux-gnu",
-                "armv7-unknown-linux-gnueabihf",
                 "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "x86_64-unknown-freebsd",
-                "aarch64-unknown-linux-musl",
-                "armv7-linux-androideabi"
+                "x86_64-apple-darwin",
+                "aarch64-unknown-linux-musl"
             ]
         }
     },
@@ -35,19 +33,19 @@
     "scripts": {
         "artifacts": "napi artifacts",
         "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
-        "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
-        "format": "run-p format:prettier format:rs",
+        "build:release": "npm run globals && npm install --omit=dev && npm run globals && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:benchmark": "npm run globals && npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
+        "format": "npm run format:prettier && npm run format:rs",
         "format:prettier": "prettier . -w",
         "format:rs": "cargo fmt",
         "prepublishOnly": "napi prepublish -t npm",
-        "version": "napi version"
+        "version": "napi version",
+        "globals": "npm install --global @napi-rs/cli prettier"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2.18.4",
-        "lint-staged": "^15.2.10",
-        "npm-run-all": "^4.1.5",
-        "prettier": "^3.3.3"
+        "@napi-rs/cli": "2",
+        "lint-staged": "15",
+        "prettier": "3"
     },
     "lint-staged": {
         "*.@(js|ts|tsx)": [
@@ -63,8 +61,5 @@
         "trailingComma": "all",
         "singleQuote": true,
         "arrowParens": "always"
-    },
-    "dependencies": {
-        "save": "^2.9.0"
     }
 }

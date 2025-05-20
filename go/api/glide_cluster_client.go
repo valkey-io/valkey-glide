@@ -24,6 +24,7 @@ type GlideClusterClientCommands interface {
 	ServerManagementClusterCommands
 	ConnectionManagementClusterCommands
 	ScriptingAndFunctionClusterCommands
+	PubSubClusterCommands
 }
 
 // Client used for connection to cluster servers.
@@ -126,6 +127,8 @@ func (client *GlideClusterClient) Info() (map[string]string, error) {
 // Gets information and statistics about the server.
 //
 // The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+//
+// Starting from server version 7, command supports multiple section arguments.
 //
 // See [valkey.io] for details.
 //
@@ -400,32 +403,40 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 }
 
 // Echo the provided message back.
-// The command will be routed a random node, unless `Route` in `echoOptions` is provided.
+// The command will be routed to a random node.
 //
 // Parameters:
 //
-//	echoOptions - The [ClusterEchoOptions] type.
+//	message - The provided message.
 //
 // Return value:
 //
-//	A map where each address is the key and its corresponding node response is the information for the default sections.
+//	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *GlideClusterClient) EchoWithOptions(echoOptions options.ClusterEchoOptions) (ClusterValue[string], error) {
-	args, err := echoOptions.ToArgs()
+func (client *GlideClient) Echo(message string) (Result[string], error) {
+	return client.echo(message)
+}
+
+// Echo the provided message back.
+//
+// Parameters:
+//
+//	message - The message to be echoed back.
+//	opts    - Specifies the routing configuration for the command. The client will route the
+//	          command to the nodes defined by `opts.Route`.
+//
+// Return value:
+//
+//	The message to be echoed back.
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *GlideClusterClient) EchoWithOptions(message string, opts options.RouteOption) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.Echo, []string{message}, opts.Route)
 	if err != nil {
 		return createEmptyClusterValue[string](), err
 	}
-	var route config.Route
-	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil {
-		route = echoOptions.RouteOption.Route
-	}
-	response, err := client.executeCommandWithRoute(C.Echo, args, route)
-	if err != nil {
-		return createEmptyClusterValue[string](), err
-	}
-	if echoOptions.RouteOption != nil && echoOptions.RouteOption.Route != nil &&
-		(echoOptions.RouteOption.Route).IsMultiNode() {
+	if (opts.Route).IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return createEmptyClusterValue[string](), err
@@ -1422,99 +1433,6 @@ func (client *GlideClusterClient) FCallReadOnlyWithArgs(function string, args []
 	return client.FCallReadOnlyWithArgsWithRoute(function, args, options.RouteOption{})
 }
 
-// Executes a Lua script on the server with routing information.
-//
-// This function simplifies the process of invoking scripts on the server by using an object that
-// represents a Lua script. The script loading and execution will all be handled internally. If
-// the script has not already been loaded, it will be loaded automatically using the
-// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
-// command.
-//
-// Note:
-//
-//	The command will be routed to a random node, unless `route` is provided.
-//
-// See [LOAD] and [EVALSHA] for details.
-//
-// Parameters:
-//
-//	script - The Lua script to execute.
-//	route - Routing information for the script execution.
-//
-// Return value:
-//
-//	The result of the script execution.
-//
-// [LOAD]: https://valkey.io/commands/script-load/
-// [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithRoute(
-	script options.Script,
-	route options.RouteOption,
-) (ClusterValue[any], error) {
-	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, route.Route)
-	if err != nil {
-		return createEmptyClusterValue[any](), err
-	}
-	if route.Route != nil && route.Route.IsMultiNode() {
-		data, err := handleStringToAnyMapResponse(response)
-		if err != nil {
-			return createEmptyClusterValue[any](), err
-		}
-		return createClusterMultiValue[any](data), nil
-	}
-
-	return createClusterSingleValue[any](response), nil
-}
-
-// Executes a Lua script on the server with cluster script options.
-//
-// This function simplifies the process of invoking scripts on the server by using an object that
-// represents a Lua script. The script loading, argument preparation, and execution will all be
-// handled internally. If the script has not already been loaded, it will be loaded automatically
-// using the `SCRIPT LOAD` command. After that, it will be invoked using the
-// `EVALSHA` command.
-//
-// Note:
-//
-//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
-//   - the command will be routed based on the Route specified in clusterScriptOptions.
-//
-// See [LOAD] and [EVALSHA] for details.
-//
-// Parameters:
-//
-//	script - The script to execute.
-//	clusterScriptOptions - Combined options for script execution including keys, arguments, and routing information.
-//
-// Return value:
-//
-//	The result of the script execution.
-//
-// [LOAD]: https://valkey.io/commands/script-load/
-// [EVALSHA]: https://valkey.io/commands/evalsha/
-func (client *GlideClusterClient) InvokeScriptWithClusterOptions(
-	script options.Script,
-	clusterScriptOptions options.ClusterScriptOptions,
-) (ClusterValue[any], error) {
-	args := clusterScriptOptions.GetArgs()
-	route := clusterScriptOptions.Route
-
-	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, args, route)
-	if err != nil {
-		return createEmptyClusterValue[any](), err
-	}
-
-	if route != nil && route.IsMultiNode() {
-		data, err := handleStringToAnyMapResponse(response)
-		if err != nil {
-			return createEmptyClusterValue[any](), err
-		}
-		return createClusterMultiValue[any](data), nil
-	}
-
-	return createClusterSingleValue[any](response), nil
-}
-
 // FunctionStats returns information about the function that's currently running and information about the
 // available execution engines.
 // The command will be routed to all nodes by default.
@@ -1673,6 +1591,347 @@ func (client *GlideClusterClient) FunctionKillWithRoute(route options.RouteOptio
 		return DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A [ClusterValue] containing a list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *GlideClusterClient) FunctionListWithRoute(
+	query FunctionListQuery,
+	route options.RouteOption,
+) (ClusterValue[[]LibraryInfo], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionList, query.ToArgs(), route.Route)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+
+	if route.Route != nil && route.Route.IsMultiNode() {
+		multiNodeLibs, err := handleFunctionListMultiNodeResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[[]LibraryInfo](), err
+		}
+		return createClusterMultiValue[[]LibraryInfo](multiNodeLibs), nil
+	}
+
+	libs, err := handleFunctionListResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[[]LibraryInfo](), err
+	}
+	return createClusterSingleValue[[]LibraryInfo](libs), nil
+}
+
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//	sharded - Whether the channel is sharded.
+//
+// Return value:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish
+func (client *GlideClusterClient) Publish(channel string, message string, sharded bool) (int64, error) {
+	args := []string{channel, message}
+
+	var requestType C.RequestType
+	if sharded {
+		requestType = C.SPublish
+	} else {
+		requestType = C.Publish
+	}
+	result, err := client.executeCommand(requestType, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns a list of all sharded channels.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	A list of shard channels.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
+func (client *GlideClusterClient) PubSubShardChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns a list of all sharded channels that match the given pattern.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - A glob-style pattern to match active shard channels.
+//
+// Return value:
+//
+//	A list of shard channels that match the given pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
+func (client *GlideClusterClient) PubSubShardChannelsWithPattern(pattern string) ([]string, error) {
+	result, err := client.executeCommand(C.PubSubShardChannels, []string{pattern})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns the number of subscribers for a sharded channel.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel to get the number of subscribers for.
+//
+// Return value:
+//
+//	The number of subscribers for the sharded channel.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
+func (client *GlideClusterClient) PubSubShardNumSub(channels ...string) (map[string]int64, error) {
+	result, err := client.executeCommand(C.PubSubShardNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
+}
+
+// Returns the serialized payload of all loaded libraries.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *GlideClusterClient) FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(C.FunctionDump, []string{}, route)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[string](), err
+		}
+		return createClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return createEmptyClusterValue[string](), err
+	}
+	return createClusterSingleValue[string](data), nil
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithRoute(payload string, route config.Route) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload.
+// The command will be routed to the nodes defined by the route parameter.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	payload - The serialized data from dump operation.
+//	policy - A policy for handling existing libraries.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *GlideClusterClient) FunctionRestoreWithPolicyWithRoute(
+	payload string,
+	policy options.FunctionRestorePolicy,
+	route config.Route,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(C.FunctionRestore, []string{payload, string(policy)}, route)
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Executes a Lua script on the server with routing information.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// Note:
+//
+//	The command will be routed to a random node, unless `route` is provided.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	script - The Lua script to execute.
+//	route - Routing information for the script execution.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *GlideClusterClient) InvokeScriptWithRoute(
+	script options.Script,
+	route options.RouteOption,
+) (ClusterValue[any], error) {
+	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, route.Route)
+	if err != nil {
+		return createEmptyClusterValue[any](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[any](), err
+		}
+		return createClusterMultiValue[any](data), nil
+	}
+
+	return createClusterSingleValue[any](response), nil
+}
+
+// Executes a Lua script on the server with cluster script options.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//   - all `keys` in `clusterScriptOptions` must map to the same hash slot.
+//   - the command will be routed based on the Route specified in clusterScriptOptions.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	script - The script to execute.
+//	clusterScriptOptions - Combined options for script execution including keys, arguments, and routing information.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *GlideClusterClient) InvokeScriptWithClusterOptions(
+	script options.Script,
+	clusterScriptOptions options.ClusterScriptOptions,
+) (ClusterValue[any], error) {
+	args := clusterScriptOptions.GetArgs()
+	route := clusterScriptOptions.Route
+
+	response, err := client.baseClient.executeScriptWithRoute(script.GetHash(), []string{}, args, route)
+	if err != nil {
+		return createEmptyClusterValue[any](), err
+	}
+
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return createEmptyClusterValue[any](), err
+		}
+		return createClusterMultiValue[any](data), nil
+	}
+
+	return createClusterSingleValue[any](response), nil
 }
 
 // Checks existence of scripts in the script cache by their SHA1 digest.

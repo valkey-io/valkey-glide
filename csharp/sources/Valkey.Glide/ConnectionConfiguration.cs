@@ -2,54 +2,31 @@
 
 using System.Runtime.InteropServices;
 
+using Valkey.Glide.Internals;
+
+using static Valkey.Glide.Internals.FFI;
+
 namespace Valkey.Glide;
 
 public abstract class ConnectionConfiguration
 {
     #region Structs and Enums definitions
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct ConnectionRequest
+    internal record ConnectionConfig
     {
-        public nuint AddressCount;
-        public IntPtr Addresses; // ** NodeAddress - array pointer
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasTlsMode;
-        public TlsMode TlsMode;
-        [MarshalAs(UnmanagedType.U1)]
+        public List<NodeAddress> Addresses = [];
+        public TlsMode? TlsMode;
         public bool ClusterMode;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasRequestTimeout;
-        public uint RequestTimeout;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasConnectionTimeout;
-        public uint ConnectionTimeout;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasReadFrom;
-        public ReadFrom ReadFrom;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasConnectionRetryStrategy;
-        public RetryStrategy ConnectionRetryStrategy;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasAuthenticationInfo;
-        public AuthenticationInfo AuthenticationInfo;
+        public uint? RequestTimeout;
+        public uint? ConnectionTimeout;
+        public ReadFrom? ReadFrom;
+        public RetryStrategy? RetryStrategy;
+        public AuthenticationInfo? AuthenticationInfo;
         public uint DatabaseId;
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasProtocol;
-        public Protocol Protocol;
-        [MarshalAs(UnmanagedType.LPStr)]
+        public Protocol? Protocol;
         public string? ClientName;
-        // TODO more config params, see ffi.rs
-    }
 
-    /// <summary>
-    /// Represents the address and port of a node in the cluster.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct NodeAddress
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Host;
-        public ushort Port;
+        internal FFI.ConnectionConfig ToFfi() =>
+            new(Addresses, TlsMode, ClusterMode, RequestTimeout, ConnectionTimeout, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
     }
 
     /// <summary>
@@ -77,21 +54,11 @@ public abstract class ConnectionConfiguration
         /// The exponent base configured for the strategy.
         /// </summary>
         public uint ExponentBase = exponentBase;
-    }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    internal struct AuthenticationInfo(string? username, string password)
-    {
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string? Username = username;
-        [MarshalAs(UnmanagedType.LPStr)]
-        public string Password = password;
-    }
-
-    internal enum TlsMode : uint
-    {
-        NoTls = 0,
-        SecureTls = 2,
+        /// <summary>
+        /// The Jitter precent configured for the strategy.
+        /// </summary>
+        public uint? JitterPrecent = null;
     }
 
     /// <summary>
@@ -187,9 +154,9 @@ public abstract class ConnectionConfiguration
     /// </summary>
     public abstract class BaseClientConfiguration
     {
-        internal ConnectionRequest Request;
+        internal ConnectionConfig Request = new();
 
-        internal ConnectionRequest ToRequest() => Request;
+        internal ConnectionConfig ToRequest() => Request;
     }
 
     /// <summary>
@@ -212,25 +179,23 @@ public abstract class ConnectionConfiguration
     /// Builder for configuration of common parameters for standalone and cluster client.
     /// </summary>
     /// <typeparam name="T">Derived builder class</typeparam>
-    public abstract class ClientConfigurationBuilder<T> : IDisposable
+    public abstract class ClientConfigurationBuilder<T>
         where T : ClientConfigurationBuilder<T>, new()
     {
-        internal ConnectionRequest Config;
+        internal ConnectionConfig Config;
 
         protected ClientConfigurationBuilder(bool clusterMode)
         {
-            Config = new ConnectionRequest { ClusterMode = clusterMode };
+            Config = new ConnectionConfig { ClusterMode = clusterMode };
         }
 
         #region address
-        private readonly List<NodeAddress> _addresses = [];
-
         /// <inheritdoc cref="Addresses"/>
         /// <b>Add</b> a new address to the list.<br />
         /// See also <seealso cref="Addresses"/>.
         protected (string? host, ushort? port) Address
         {
-            set => _addresses.Add(new NodeAddress
+            set => Config.Addresses.Add(new NodeAddress
             {
                 Host = value.host ?? DEFAULT_HOST,
                 Port = value.port ?? DEFAULT_PORT
@@ -306,11 +271,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public bool UseTls
         {
-            set
-            {
-                Config.HasTlsMode = true;
-                Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
-            }
+            set => Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
         }
         /// <inheritdoc cref="UseTls"/>
         public T WithTls(bool useTls)
@@ -334,11 +295,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public uint RequestTimeout
         {
-            set
-            {
-                Config.HasRequestTimeout = true;
-                Config.RequestTimeout = value;
-            }
+            set => Config.RequestTimeout = value;
         }
         /// <inheritdoc cref="RequestTimeout"/>
         public T WithRequestTimeout(uint requestTimeout)
@@ -356,11 +313,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public uint ConnectionTimeout
         {
-            set
-            {
-                Config.HasConnectionTimeout = true;
-                Config.ConnectionTimeout = value;
-            }
+            set => Config.ConnectionTimeout = value;
         }
         /// <inheritdoc cref="ConnectionTimeout"/>
         public T WithConnectionTimeout(uint connectionTimeout)
@@ -375,11 +328,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public ReadFrom ReadFrom
         {
-            set
-            {
-                Config.HasReadFrom = true;
-                Config.ReadFrom = value;
-            }
+            set => Config.ReadFrom = value;
         }
         /// <inheritdoc cref="ReadFrom"/>
         public T WithReadFrom(ReadFrom readFrom)
@@ -422,11 +371,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public Protocol ProtocolVersion
         {
-            set
-            {
-                Config.HasProtocol = true;
-                Config.Protocol = value;
-            }
+            set => Config.Protocol = value;
         }
 
         /// <inheritdoc cref="ProtocolVersion"/>
@@ -453,29 +398,7 @@ public abstract class ConnectionConfiguration
         }
         #endregion
 
-        public void Dispose() => Clean();
-
-        private void Clean()
-        {
-            if (Config.Addresses != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(Config.Addresses);
-                Config.Addresses = IntPtr.Zero;
-            }
-        }
-
-        internal ConnectionRequest Build()
-        {
-            Clean(); // memory leak protection on rebuilding a config from the builder
-            Config.AddressCount = (uint)_addresses.Count;
-            int addressSize = Marshal.SizeOf(typeof(NodeAddress));
-            Config.Addresses = Marshal.AllocHGlobal(addressSize * _addresses.Count);
-            for (int i = 0; i < _addresses.Count; i++)
-            {
-                Marshal.StructureToPtr(_addresses[i], Config.Addresses + (i * addressSize), false);
-            }
-            return Config;
-        }
+        internal ConnectionConfig Build() => Config;
     }
 
     /// <summary>
@@ -512,11 +435,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public RetryStrategy ConnectionRetryStrategy
         {
-            set
-            {
-                Config.HasConnectionRetryStrategy = true;
-                Config.ConnectionRetryStrategy = value;
-            }
+            set => Config.RetryStrategy = value;
         }
         /// <inheritdoc cref="ConnectionRetryStrategy"/>
         public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(RetryStrategy connectionRetryStrategy)

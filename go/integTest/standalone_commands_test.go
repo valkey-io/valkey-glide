@@ -123,9 +123,8 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 	client := suite.defaultClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	suite.verifyOK(client.ConfigSet(configMap))
 
@@ -180,9 +179,8 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 	client := suite.defaultClient()
 
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
 	suite.verifyOK(client.ConfigSet(configMap))
@@ -277,9 +275,8 @@ func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -305,9 +302,8 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -336,9 +332,8 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightAndGet() {
 	client := suite.defaultClient()
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
 	key := uuid.New().String()
 	client.LPush(key, []string{"item1", "item2", "item3"})
 
@@ -915,9 +910,7 @@ func (suite *GlideTestSuite) TestRandomKey() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -947,6 +940,41 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "one", functionResult)
 
+	// Test FunctionList
+	query := api.FunctionListQuery{
+		LibraryName: libName,
+		WithCode:    false,
+	}
+	functionList, err := client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo := functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+
+	// Check function info
+	assert.Len(suite.T(), libInfo.Functions, 1)
+	funcInfo := libInfo.Functions[0]
+	assert.Equal(suite.T(), funcName, funcInfo.Name)
+	assert.Empty(suite.T(), funcInfo.Description)
+	assert.Contains(suite.T(), funcInfo.Flags, "no-writes")
+
+	// Test FunctionList with WithCode and query for all libraries
+	query = api.FunctionListQuery{
+		WithCode: true,
+	}
+	functionList, err = client.FunctionList(query)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), functionList, 1)
+
+	// Check library info
+	libInfo = functionList[0]
+	assert.Equal(suite.T(), libName, libInfo.Name)
+	assert.Equal(suite.T(), "LUA", libInfo.Engine)
+	assert.Contains(suite.T(), libInfo.Code, libName) // Code should be present
+
 	// load new lib and delete it - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
 	result, err = client.FunctionLoad(anotherLib, true)
@@ -963,9 +991,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStats() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1033,9 +1059,7 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKill() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
-	}
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1048,6 +1072,189 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 	_, err = client.FunctionKill()
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	client := suite.defaultClient()
+	libName := "functionKill_no_write"
+	funcName := "deadlock"
+	key := libName
+	code := createLuaLibWithLongRunningFunction(libName, funcName, 6, readOnly)
+
+	// Flush all functions
+	result, err := client.FunctionFlushSync()
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Nothing to kill
+	_, err = client.FunctionKill()
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+
+	// Load the lib
+	result, err = client.FunctionLoad(code, true)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), libName, result)
+
+	testConfig := suite.defaultClientConfig().WithRequestTimeout(10 * time.Second)
+	testClient := suite.client(testConfig)
+	defer testClient.Close()
+
+	// Channel to signal when function is killed
+	killed := make(chan bool)
+
+	// Start a goroutine to kill the function
+	go func() {
+		defer close(killed)
+		timeout := time.After(4 * time.Second)
+		killTicker := time.NewTicker(100 * time.Millisecond) // interval of 100ms for kill attempts
+		defer killTicker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				killed <- false
+				return
+			case <-killTicker.C:
+				if readOnly {
+					result, err = client.FunctionKill()
+					if err == nil {
+						return
+					}
+				} else {
+					result, err = client.FunctionKill()
+					if err != nil && strings.Contains(strings.ToLower(err.Error()), "unkillable") {
+						return
+					}
+				}
+
+			}
+		}
+	}()
+
+	// Call the function - this should block until killed and return a script kill error
+	_, err = testClient.FCallWithKeysAndArgs(funcName, []string{key}, []string{})
+	if readOnly {
+		assert.Error(suite.T(), err)
+		assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+	} else {
+		assert.NoError(suite.T(), err)
+	}
+
+	// Wait for the function to complete
+	time.Sleep(6 * time.Second)
+}
+
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(true)
+}
+
+func (suite *GlideTestSuite) TestLongTimeoutFunctionKillWrite() {
+	if !*longTimeoutTests {
+		suite.T().Skip("Timeout tests are disabled")
+	}
+	suite.testFunctionKill(false)
+}
+
+func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
+	client := suite.defaultClient()
+
+	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+
+	// Flush all functions first
+	suite.verifyOK(client.FunctionFlushSync())
+
+	// Dumping an empty lib
+	emptyDump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), emptyDump)
+	assert.Greater(suite.T(), len(emptyDump), 0)
+
+	name1 := "Foster"
+	name2 := "Dogster"
+
+	// function name1 returns first argument
+	// function name2 returns argument array len
+	code := GenerateLuaLibCode(name1, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, false)
+
+	// Load the functions
+	loadResult, err := client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), name1, loadResult)
+
+	// Verify functions work
+	result1, err := client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err := client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
+
+	// Dump the library
+	dump, err := client.FunctionDump()
+	assert.Nil(suite.T(), err)
+
+	// Restore without cleaning the lib and/or overwrite option causes an error
+	_, err = client.FunctionRestore(dump)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
+
+	// APPEND policy also fails for the same reason (name collision)
+	_, err = client.FunctionRestoreWithPolicy(dump, options.AppendPolicy)
+	assert.NotNil(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
+
+	// REPLACE policy succeeds
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy))
+
+	// Functions still work the same after replace
+	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err = client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
+
+	// create lib with another name, but with the same function names
+	suite.verifyOK(client.FunctionFlushSync())
+	code = GenerateLuaLibCode(name2, map[string]string{
+		name1: "return args[1]",
+		name2: "return #args",
+	}, false)
+	loadResult, err = client.FunctionLoad(code, true)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), name2, loadResult)
+
+	// REPLACE policy now fails due to a name collision
+	_, err = client.FunctionRestoreWithPolicy(dump, options.ReplacePolicy)
+	assert.NotNil(suite.T(), err)
+	errMsg := err.Error()
+	// valkey checks names in random order and blames on first collision
+	assert.True(suite.T(),
+		strings.Contains(errMsg, "Function "+name1+" already exists") ||
+			strings.Contains(errMsg, "Function "+name2+" already exists"))
+
+	// FLUSH policy succeeds, but deletes the second lib
+	suite.verifyOK(client.FunctionRestoreWithPolicy(dump, options.FlushPolicy))
+
+	// Original functions work again
+	result1, err = client.FCallWithKeysAndArgs(name1, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "meow", result1)
+
+	result2, err = client.FCallWithKeysAndArgs(name2, []string{}, []string{"meow", "woem"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), result2)
 }
 
 func (suite *GlideTestSuite) TestScriptExists() {

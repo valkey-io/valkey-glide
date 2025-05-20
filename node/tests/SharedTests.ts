@@ -8,9 +8,9 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
-import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
+    Batch,
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -20,9 +20,11 @@ import {
     BitOverflowControl,
     BitmapIndexType,
     BitwiseOperation,
+    ClusterBatch,
     ClusterTransaction,
     ConditionalChange,
     Decoder,
+    ElementAndScore,
     ExpireOptions,
     FlushMode,
     GeoUnit,
@@ -39,6 +41,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    Score,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -46,6 +49,7 @@ import {
     SortOrder,
     SortedSetDataType,
     TimeUnit,
+    TimeoutError,
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
@@ -53,11 +57,14 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-    Score,
-    ElementAndScore,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
-import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
+import {
+    Client,
+    GetAndSetRandomValue,
+    getFirstResult,
+    getRandomKey,
+} from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -198,9 +205,9 @@ export function runBaseTests(config: {
         `custom command works_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value = uuidv4() + "0".repeat(Math.random() * 7);
+                const value = getRandomKey() + "0".repeat(Math.random() * 7);
                 const setResult = await client.customCommand([
                     "SET",
                     key,
@@ -218,12 +225,12 @@ export function runBaseTests(config: {
         `getting array return value works_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const key3 = "{key}" + uuidv4();
+                const key1 = "{key}" + getRandomKey();
+                const key2 = "{key}" + getRandomKey();
+                const key3 = "{key}" + getRandomKey();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value1 = uuidv4() + "0".repeat(Math.random() * 7);
-                const value2 = uuidv4() + "0".repeat(Math.random() * 7);
+                const value1 = getRandomKey() + "0".repeat(Math.random() * 7);
+                const value2 = getRandomKey() + "0".repeat(Math.random() * 7);
                 const setResult1 = await client.customCommand([
                     "SET",
                     key1,
@@ -252,10 +259,10 @@ export function runBaseTests(config: {
         `delete multiple existing keys and an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const key3 = "{key}" + uuidv4();
-                const value = uuidv4();
+                const key1 = "{key}" + getRandomKey();
+                const key2 = "{key}" + getRandomKey();
+                const key3 = "{key}" + getRandomKey();
+                const value = getRandomKey();
                 let result = await client.set(key1, value);
                 expect(result).toEqual("OK");
                 result = await client.set(key2, value);
@@ -268,7 +275,7 @@ export function runBaseTests(config: {
                     key3,
                 ]);
                 expect(deletedKeysNum).toEqual(3);
-                deletedKeysNum = await client.del([uuidv4()]);
+                deletedKeysNum = await client.del([getRandomKey()]);
                 expect(deletedKeysNum).toEqual(0);
             }, protocol);
         },
@@ -355,13 +362,20 @@ export function runBaseTests(config: {
                     ).forEach((v) => expect(v).toBeGreaterThan(yesterday));
                 }
 
-                const response =
-                    client instanceof GlideClient
-                        ? await client.exec(new Transaction().lastsave())
-                        : await client.exec(
-                              new ClusterTransaction().lastsave(),
-                          );
-                expect(response?.[0]).toBeGreaterThan(yesterday);
+                for (const isAtomic of [true, false]) {
+                    const response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic).lastsave(),
+                                  isAtomic,
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic).lastsave(),
+                                  isAtomic,
+                              );
+
+                    expect(response?.[0]).toBeGreaterThan(yesterday);
+                }
             }, protocol);
         },
         config.timeout,
@@ -371,10 +385,10 @@ export function runBaseTests(config: {
         `testing mset and mget with multiple existing keys and one non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const key3 = uuidv4();
-                const value = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const key3 = getRandomKey();
+                const value = getRandomKey();
                 const keyValueList = [
                     { key: key1, value },
                     { key: key2, value },
@@ -414,11 +428,11 @@ export function runBaseTests(config: {
         `msetnx test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key3 = "{key}-3" + uuidv4();
-                const nonExistingKey = uuidv4();
-                const value = uuidv4();
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const key3 = "{key}-3" + getRandomKey();
+                const nonExistingKey = getRandomKey();
+                const value = getRandomKey();
                 const keyValueMap1 = {
                     [key1]: value,
                     [key2]: value,
@@ -455,7 +469,7 @@ export function runBaseTests(config: {
         `incr, incrBy and incrByFloat with existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const keyEncoded = Buffer.from(key);
                 expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.incr(key)).toEqual(11);
@@ -476,9 +490,9 @@ export function runBaseTests(config: {
         `incr, incrBy and incrByFloat with non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const key3 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const key3 = getRandomKey();
                 /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.incr(key1)).toEqual(1);
                 expect(await client.get(key1)).toEqual("1");
@@ -495,7 +509,7 @@ export function runBaseTests(config: {
         `incr, incrBy and incrByFloat with a key that contains a value of string that can not be represented as integer_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 await expect(client.incr(key)).rejects.toThrow(
@@ -558,7 +572,7 @@ export function runBaseTests(config: {
         `decr and decrBy existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const keyEncoded = Buffer.from(key);
                 expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.decr(key)).toEqual(9);
@@ -576,8 +590,8 @@ export function runBaseTests(config: {
         `decr and decrBy with non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.get(key1)).toBeNull();
                 expect(await client.decr(key1)).toEqual(-1);
@@ -594,7 +608,7 @@ export function runBaseTests(config: {
         `decr and decrBy with a key that contains a value of string that can not be represented as integer_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 await expect(client.decr(key)).rejects.toThrow(
@@ -613,21 +627,21 @@ export function runBaseTests(config: {
         `bitop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const key3 = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const key3 = `{key}-${getRandomKey()}`;
                 const keys = [key1, key2];
                 const keysEncoded = [Buffer.from(key1), Buffer.from(key2)];
-                const destination = `{key}-${uuidv4()}`;
-                const nonExistingKey1 = `{key}-${uuidv4()}`;
-                const nonExistingKey2 = `{key}-${uuidv4()}`;
-                const nonExistingKey3 = `{key}-${uuidv4()}`;
+                const destination = `{key}-${getRandomKey()}`;
+                const nonExistingKey1 = `{key}-${getRandomKey()}`;
+                const nonExistingKey2 = `{key}-${getRandomKey()}`;
+                const nonExistingKey3 = `{key}-${getRandomKey()}`;
                 const nonExistingKeys = [
                     nonExistingKey1,
                     nonExistingKey2,
                     nonExistingKey3,
                 ];
-                const setKey = `{key}-${uuidv4()}`;
+                const setKey = `{key}-${getRandomKey()}`;
                 const value1 = "foobar";
                 const value2 = "abcdef";
 
@@ -749,9 +763,9 @@ export function runBaseTests(config: {
         `getbit test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const setKey = `{key}-${uuidv4()}`;
+                const key = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const setKey = `{key}-${getRandomKey()}`;
 
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.getbit(key, 1)).toEqual(1);
@@ -780,8 +794,8 @@ export function runBaseTests(config: {
         `setbit test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = `{key}-${uuidv4()}`;
-                const setKey = `{key}-${uuidv4()}`;
+                const key = `{key}-${getRandomKey()}`;
+                const setKey = `{key}-${getRandomKey()}`;
 
                 expect(await client.setbit(key, 1, 1)).toEqual(0);
                 expect(await client.setbit(Buffer.from(key), 1, 0)).toEqual(1);
@@ -810,9 +824,9 @@ export function runBaseTests(config: {
         `bitpos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const setKey = `{key}-${uuidv4()}`;
+                const key = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const setKey = `{key}-${getRandomKey()}`;
                 const value = "?f0obar"; // 00111111 01100110 00110000 01101111 01100010 01100001 01110010
 
                 expect(await client.set(key, value)).toEqual("OK");
@@ -933,10 +947,10 @@ export function runBaseTests(config: {
         `bitfield test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const setKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const setKey = `{key}-${getRandomKey()}`;
                 const foobar = "foobar";
                 const u2 = new UnsignedEncoding(2);
                 const u7 = new UnsignedEncoding(7);
@@ -1097,9 +1111,9 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const setKey = `{key}-${uuidv4()}`;
+                const key = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const setKey = `{key}-${getRandomKey()}`;
                 const foobar = "foobar";
                 const unsignedOffsetGet = new BitFieldGet(
                     new UnsignedEncoding(2),
@@ -1267,10 +1281,10 @@ export function runBaseTests(config: {
         `getdel test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const value1 = uuidv4();
+                const key1 = getRandomKey();
+                const value1 = getRandomKey();
                 const value1Encoded = Buffer.from(value1);
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
 
                 expect(await client.set(key1, value1)).toEqual("OK");
                 expect(await client.getdel(key1)).toEqual(value1);
@@ -1296,8 +1310,8 @@ export function runBaseTests(config: {
         `getrange test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonStringKey = uuidv4();
+                const key = getRandomKey();
+                const nonStringKey = getRandomKey();
                 const valueEncoded = Buffer.from("This is a string");
 
                 expect(await client.set(key, "This is a string")).toEqual("OK");
@@ -1361,10 +1375,10 @@ export function runBaseTests(config: {
         `testing hset and hget with multiple existing fields and one non existing field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
-                const value = uuidv4();
+                const key = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
+                const value = getRandomKey();
                 const fieldValueList: HashDataType = [
                     {
                         field: Buffer.from(field1),
@@ -1408,12 +1422,12 @@ export function runBaseTests(config: {
         `testing hkeys with exiting, an non exising key and error request key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const key2 = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
-                const value = uuidv4();
-                const value2 = uuidv4();
+                const key = getRandomKey();
+                const key2 = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
+                const value = getRandomKey();
+                const value2 = getRandomKey();
                 const fieldValueMap = {
                     [field1]: value,
                     [field2]: value2,
@@ -1447,7 +1461,7 @@ export function runBaseTests(config: {
         `hscan test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key1 = "{key}-1" + uuidv4();
+                const key1 = "{key}-1" + getRandomKey();
                 const initialCursor = "0";
                 const defaultCount = 20;
                 const resultCursorIndex = 0;
@@ -1505,7 +1519,7 @@ export function runBaseTests(config: {
 
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual(
-                    ["a", "0"].map(Buffer.from),
+                    ["a", "0"].map((str) => Buffer.from(str)),
                 );
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
@@ -1622,8 +1636,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
                     const initialCursor = "0";
                     const resultCursorIndex = 0;
                     const resultCollectionIndex = 1;
@@ -1705,8 +1719,8 @@ export function runBaseTests(config: {
         `encoder test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const value = uuidv4();
+                const key = getRandomKey();
+                const value = getRandomKey();
                 const valueEncoded = Buffer.from(value);
 
                 expect(await client.set(key, value)).toEqual("OK");
@@ -1736,11 +1750,11 @@ export function runBaseTests(config: {
         `hdel multiple existing fields, an non existing field and an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
-                const field3 = uuidv4();
-                const value = uuidv4();
+                const key = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
+                const field3 = getRandomKey();
+                const value = getRandomKey();
                 const fieldValueMap = {
                     [field1]: value,
                     [field2]: value,
@@ -1764,10 +1778,10 @@ export function runBaseTests(config: {
         `testing hmget with multiple existing fields, an non existing field and an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
-                const value = uuidv4();
+                const key = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
+                const value = getRandomKey();
                 const fieldValueMap = {
                     [field1]: value,
                     [field2]: value,
@@ -1796,9 +1810,9 @@ export function runBaseTests(config: {
         `hexists existing field, an non existing field and an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
+                const key = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
                 const fieldValueMap = {
                     [field1]: "value1",
                     [field2]: "value2",
@@ -1822,10 +1836,10 @@ export function runBaseTests(config: {
         `hgetall with multiple fields in an existing key and one non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
-                const value = uuidv4();
+                const key = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
+                const value = getRandomKey();
                 const fieldValueMap = {
                     [field1]: value,
                     [field2]: value,
@@ -1864,8 +1878,8 @@ export function runBaseTests(config: {
         `hincrBy and hincrByFloat with existing key and field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field = uuidv4();
+                const key = getRandomKey();
+                const field = getRandomKey();
                 const fieldValueMap = {
                     [field]: "10",
                 };
@@ -1894,9 +1908,9 @@ export function runBaseTests(config: {
         `hincrBy and hincrByFloat with non existing key and non existing field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const field = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const field = getRandomKey();
                 const fieldValueMap = {
                     [field]: "10",
                 };
@@ -1920,8 +1934,8 @@ export function runBaseTests(config: {
         `hincrBy and hincrByFloat with a field that contains a value of string that can not be represented as as integer or float_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const field = uuidv4();
+                const key = getRandomKey();
+                const field = getRandomKey();
                 const fieldValueMap = {
                     [field]: "foo",
                 };
@@ -1942,9 +1956,9 @@ export function runBaseTests(config: {
         `hlen test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
+                const key1 = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
                 const fieldValueList = [
                     {
                         field: field1,
@@ -1970,10 +1984,10 @@ export function runBaseTests(config: {
         `hvals test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
                 const fieldValueMap = {
                     [field1]: "value1",
                     [field2]: "value2",
@@ -2009,9 +2023,9 @@ export function runBaseTests(config: {
         `hsetnx test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const field = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const field = getRandomKey();
 
                 expect(await client.hsetnx(key1, field, "value")).toEqual(true);
                 expect(
@@ -2036,9 +2050,9 @@ export function runBaseTests(config: {
         `hstrlen test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const field = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const field = getRandomKey();
 
                 expect(await client.hset(key1, { field: "value" })).toBe(1);
                 expect(await client.hstrlen(key1, "field")).toBe(5);
@@ -2067,8 +2081,8 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
 
                 // key does not exist
                 expect(
@@ -2082,8 +2096,10 @@ export function runBaseTests(config: {
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
                 const fields = Object.keys(data);
                 const entries = Object.entries(data);
-                const encodedFields = fields.map(Buffer.from);
-                const encodedEntries = entries.map((e) => e.map(Buffer.from));
+                const encodedFields = fields.map((str) => Buffer.from(str));
+                const encodedEntries = entries.map((e) =>
+                    e.map((str) => Buffer.from(str)),
+                );
                 expect(await client.hset(key1, data)).toEqual(3);
 
                 expect(fields).toContain(await client.hrandfield(key1));
@@ -2132,8 +2148,8 @@ export function runBaseTests(config: {
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = Buffer.from(uuidv4());
+                const key1 = getRandomKey();
+                const key2 = Buffer.from(getRandomKey());
                 const valueList1 = ["value4", "value3", "value2", "value1"];
                 const valueList2 = ["value7", "value6", "value5"];
                 const encodedValues = [
@@ -2182,7 +2198,7 @@ export function runBaseTests(config: {
         `lpush, lpop and lrange with key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 await expect(client.lpush(key, ["bar"])).rejects.toThrow(
@@ -2203,9 +2219,9 @@ export function runBaseTests(config: {
         `lpushx list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const key3 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const key3 = getRandomKey();
                 expect(await client.lpush(key1, ["0"])).toEqual(1);
                 expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
                 expect(await client.lrange(key1, 0, -1)).toEqual([
@@ -2230,7 +2246,7 @@ export function runBaseTests(config: {
                 );
 
                 // test for binary key as input
-                const key4 = uuidv4();
+                const key4 = getRandomKey();
                 expect(await client.lpush(key4, ["0"])).toEqual(1);
                 expect(
                     await client.lpushx(Buffer.from(key4), [
@@ -2254,8 +2270,8 @@ export function runBaseTests(config: {
         `llen with existing, non-existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const valueList = ["value4", "value3", "value2", "value1"];
                 expect(await client.lpush(key1, valueList)).toEqual(4);
                 expect(await client.llen(key1)).toEqual(4);
@@ -2281,10 +2297,10 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
-                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const key1Encoded = Buffer.from("{key}-1" + getRandomKey());
+                const key2Encoded = Buffer.from("{key}-2" + getRandomKey());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
@@ -2369,7 +2385,7 @@ export function runBaseTests(config: {
                 // Non-existing source key
                 expect(
                     await client.lmove(
-                        "{key}-non_existing_key" + uuidv4(),
+                        "{key}-non_existing_key" + getRandomKey(),
                         key1,
                         ListDirection.LEFT,
                         ListDirection.LEFT,
@@ -2377,7 +2393,7 @@ export function runBaseTests(config: {
                 ).toEqual(null);
 
                 // Non-list source key
-                const key3 = "{key}-3" + uuidv4();
+                const key3 = "{key}-3" + getRandomKey();
                 expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.lmove(
@@ -2410,10 +2426,10 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
-                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const key1Encoded = Buffer.from("{key}-1" + getRandomKey());
+                const key2Encoded = Buffer.from("{key}-2" + getRandomKey());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
@@ -2511,7 +2527,7 @@ export function runBaseTests(config: {
                 // Non-existing source key with blocking
                 expect(
                     await client.blmove(
-                        "{key}-non_existing_key" + uuidv4(),
+                        "{key}-non_existing_key" + getRandomKey(),
                         key1,
                         ListDirection.LEFT,
                         ListDirection.LEFT,
@@ -2520,7 +2536,7 @@ export function runBaseTests(config: {
                 ).toEqual(null);
 
                 // Non-list source key with blocking
-                const key3 = "{key}-3" + uuidv4();
+                const key3 = "{key}-3" + getRandomKey();
                 expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.blmove(
@@ -2551,8 +2567,8 @@ export function runBaseTests(config: {
         `lset test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonExistingKey = uuidv4();
+                const key = getRandomKey();
+                const nonExistingKey = getRandomKey();
                 const index = 0;
                 const oobIndex = 10;
                 const negativeIndex = -1;
@@ -2596,7 +2612,7 @@ export function runBaseTests(config: {
                 );
 
                 //test lset for binary key and element values
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 expect(await client.lpush(key2, lpushArgs)).toEqual(4);
                 // assert lset result
                 expect(
@@ -2614,7 +2630,7 @@ export function runBaseTests(config: {
         `ltrim with existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const valueList = ["value4", "value3", "value2", "value1"];
                 expect(await client.lpush(key, valueList)).toEqual(4);
                 expect(await client.ltrim(key, 0, 1)).toEqual("OK");
@@ -2634,7 +2650,7 @@ export function runBaseTests(config: {
                 );
 
                 //test for binary key as input to the command
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 expect(await client.lpush(key2, valueList)).toEqual(4);
                 expect(await client.ltrim(Buffer.from(key2), 0, 1)).toEqual(
                     "OK",
@@ -2652,7 +2668,7 @@ export function runBaseTests(config: {
         `lrem with existing key and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
+                const key1 = getRandomKey();
                 const valueList = [
                     "value1",
                     "value2",
@@ -2679,7 +2695,7 @@ export function runBaseTests(config: {
                 );
 
                 // test for binary key and element as input to the command
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 expect(await client.lpush(key2, valueList)).toEqual(5);
                 expect(
                     await client.lrem(
@@ -2702,8 +2718,8 @@ export function runBaseTests(config: {
         `rpush and rpop with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = Buffer.from(uuidv4());
+                const key1 = getRandomKey();
+                const key2 = Buffer.from(getRandomKey());
                 const valueList1 = ["value1", "value2", "value3", "value4"];
                 const valueList2 = ["value5", "value6", "value7"];
                 expect(await client.rpush(key1, valueList1)).toEqual(4);
@@ -2736,7 +2752,7 @@ export function runBaseTests(config: {
         `rpush and rpop with key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 await expect(client.rpush(key, ["bar"])).rejects.toThrow(
@@ -2754,9 +2770,9 @@ export function runBaseTests(config: {
         `rpushx list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const key3 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const key3 = getRandomKey();
 
                 expect(await client.rpush(key1, ["0"])).toEqual(1);
                 expect(await client.rpushx(key1, ["1", "2", "3"])).toEqual(4);
@@ -2782,7 +2798,7 @@ export function runBaseTests(config: {
                 );
 
                 //test for binary key and elemnts as inputs to the command.
-                const key4 = uuidv4();
+                const key4 = getRandomKey();
                 expect(await client.rpush(key4, ["0"])).toEqual(1);
                 expect(
                     await client.rpushx(Buffer.from(key4), [
@@ -2806,7 +2822,7 @@ export function runBaseTests(config: {
         `sadd, srem, scard and smembers with existing set_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const keyEncoded = Buffer.from(key);
                 const valueList = ["member1", "member2", "member3", "member4"];
                 expect(await client.sadd(key, valueList)).toEqual(4);
@@ -2845,11 +2861,11 @@ export function runBaseTests(config: {
         `smove test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const key3 = "{key}" + uuidv4();
-                const string_key = "{key}" + uuidv4();
-                const non_existing_key = "{key}" + uuidv4();
+                const key1 = "{key}" + getRandomKey();
+                const key2 = "{key}" + getRandomKey();
+                const key3 = "{key}" + getRandomKey();
+                const string_key = "{key}" + getRandomKey();
+                const non_existing_key = "{key}" + getRandomKey();
 
                 expect(await client.sadd(key1, ["1", "2", "3"])).toEqual(3);
                 expect(await client.sadd(key2, ["2", "3"])).toEqual(2);
@@ -2927,7 +2943,7 @@ export function runBaseTests(config: {
         `sadd, srem, scard and smembers with with key that holds a value that is not a set_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 await expect(client.sadd(key, ["bar"])).rejects.toThrow(
@@ -2951,8 +2967,8 @@ export function runBaseTests(config: {
         `sinter test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
                 const non_existing_key = `{key}`;
                 const member1_list = ["a", "b", "c", "d"];
                 const member2_list = ["c", "d", "e"];
@@ -3001,10 +3017,10 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const stringKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const stringKey = `{key}-${getRandomKey()}`;
                 const member1_list = ["a", "b", "c", "d"];
                 const member2_list = ["b", "c", "d", "e"];
 
@@ -3065,11 +3081,11 @@ export function runBaseTests(config: {
         `sinterstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;
-                const nonExistingKey = `{key}-4-${uuidv4()}`;
-                const stringKey = `{key}-5-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const key3 = `{key}-3-${getRandomKey()}`;
+                const nonExistingKey = `{key}-4-${getRandomKey()}`;
+                const stringKey = `{key}-5-${getRandomKey()}`;
                 const member1_list = ["a", "b", "c"];
                 const member2_list = ["c", "d", "e"];
 
@@ -3126,10 +3142,10 @@ export function runBaseTests(config: {
         `sdiff test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const stringKey = `{key}-3-${uuidv4()}`;
-                const nonExistingKey = `{key}-4-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const stringKey = `{key}-3-${getRandomKey()}`;
+                const nonExistingKey = `{key}-4-${getRandomKey()}`;
                 const member1_list = ["a", "b", "c"];
                 const member2_list = ["c", "d", "e"];
 
@@ -3177,11 +3193,11 @@ export function runBaseTests(config: {
         `sdiffstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;
-                const stringKey = `{key}-4-${uuidv4()}`;
-                const nonExistingKey = `{key}-5-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const key3 = `{key}-3-${getRandomKey()}`;
+                const stringKey = `{key}-4-${getRandomKey()}`;
+                const nonExistingKey = `{key}-5-${getRandomKey()}`;
                 const member1_list = ["a", "b", "c"];
                 const member2_list = ["c", "d", "e"];
 
@@ -3254,7 +3270,7 @@ export function runBaseTests(config: {
         `sscan test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}-1" + uuidv4();
+                const key1 = "{key}-1" + getRandomKey();
                 const initialCursor = "0";
                 const defaultCount = 10;
 
@@ -3381,10 +3397,10 @@ export function runBaseTests(config: {
         `sunion test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}:${uuidv4()}`;
-                const key2 = `{key}:${uuidv4()}`;
-                const stringKey = `{key}:${uuidv4()}`;
-                const nonExistingKey = `{key}:${uuidv4()}`;
+                const key1 = `{key}:${getRandomKey()}`;
+                const key2 = `{key}:${getRandomKey()}`;
+                const stringKey = `{key}:${getRandomKey()}`;
+                const nonExistingKey = `{key}:${getRandomKey()}`;
                 const memberList1 = ["a", "b", "c"];
                 const memberList2 = ["b", "c", "d", "e"];
 
@@ -3427,12 +3443,12 @@ export function runBaseTests(config: {
         `sunionstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}:${uuidv4()}`;
-                const key2 = `{key}:${uuidv4()}`;
-                const key3 = `{key}:${uuidv4()}`;
-                const key4 = `{key}:${uuidv4()}`;
-                const stringKey = `{key}:${uuidv4()}`;
-                const nonExistingKey = `{key}:${uuidv4()}`;
+                const key1 = `{key}:${getRandomKey()}`;
+                const key2 = `{key}:${getRandomKey()}`;
+                const key3 = `{key}:${getRandomKey()}`;
+                const key4 = `{key}:${getRandomKey()}`;
+                const stringKey = `{key}:${getRandomKey()}`;
+                const nonExistingKey = `{key}:${getRandomKey()}`;
 
                 expect(await client.sadd(key1, ["a", "b", "c"])).toEqual(3);
                 expect(await client.sadd(key2, ["c", "d", "e"])).toEqual(3);
@@ -3492,8 +3508,8 @@ export function runBaseTests(config: {
         `sismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 expect(await client.sadd(key1, ["member1"])).toEqual(1);
                 expect(await client.sismember(key1, "member1")).toEqual(true);
                 expect(
@@ -3526,9 +3542,9 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key = uuidv4();
-                const stringKey = uuidv4();
-                const nonExistingKey = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
+                const nonExistingKey = getRandomKey();
 
                 expect(await client.sadd(key, ["a", "b"])).toEqual(2);
                 expect(
@@ -3561,8 +3577,8 @@ export function runBaseTests(config: {
         `spop and spopCount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const key2Encoded = Buffer.from(key2);
                 let members = ["member1", "member2", "member3"];
                 let members2 = ["member1", "member2", "member3"];
@@ -3605,7 +3621,7 @@ export function runBaseTests(config: {
         `srandmember and srandmemberCount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const members = ["member1", "member2", "member3"];
                 expect(await client.sadd(key, members)).toEqual(3);
 
@@ -3661,9 +3677,9 @@ export function runBaseTests(config: {
         `exists with existing keys, an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const value = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const value = getRandomKey();
                 expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.exists([key1])).toEqual(1);
                 expect(await client.set(key2, value)).toEqual("OK");
@@ -3684,10 +3700,10 @@ export function runBaseTests(config: {
         `unlink multiple existing keys and an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const key3 = "{key}" + uuidv4();
-                const value = uuidv4();
+                const key1 = "{key}" + getRandomKey();
+                const key2 = "{key}" + getRandomKey();
+                const key3 = "{key}" + getRandomKey();
+                const value = getRandomKey();
                 expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.set(key2, value)).toEqual("OK");
                 expect(await client.set(key3, value)).toEqual("OK");
@@ -3708,7 +3724,7 @@ export function runBaseTests(config: {
         `expire, pexpire and ttl with positive timeout_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.expire(key, 10)).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
@@ -3769,7 +3785,7 @@ export function runBaseTests(config: {
         `expireAt, pexpireAt and ttl with positive timeout_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
                     await client.expireAt(
@@ -3830,7 +3846,7 @@ export function runBaseTests(config: {
         `expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.ttl(key)).toEqual(-1);
                 expect(await client.expire(key, -10)).toEqual(true);
@@ -3870,7 +3886,7 @@ export function runBaseTests(config: {
         `expire, pexpire, expireAt, pexpireAt and ttl with non-existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.expire(key, 10)).toEqual(false);
                 expect(await client.pexpire(key, 10000)).toEqual(false);
                 expect(
@@ -3900,8 +3916,8 @@ export function runBaseTests(config: {
         `script test_decoder_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = Buffer.from(uuidv4());
-                const key2 = Buffer.from(uuidv4());
+                const key1 = Buffer.from(getRandomKey());
+                const key2 = Buffer.from(getRandomKey());
 
                 let script = new Script(Buffer.from("return 'Hello'"));
                 expect(
@@ -3962,8 +3978,8 @@ export function runBaseTests(config: {
         `script test_binary_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = Buffer.from(uuidv4());
-                const key2 = Buffer.from(uuidv4());
+                const key1 = Buffer.from(getRandomKey());
+                const key2 = Buffer.from(getRandomKey());
 
                 let script = new Script(Buffer.from("return 'Hello'"));
                 expect(await client.invokeScript(script)).toEqual("Hello");
@@ -4005,8 +4021,8 @@ export function runBaseTests(config: {
         `script test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
 
                 let script = new Script("return 'Hello'");
                 expect(await client.invokeScript(script)).toEqual("Hello");
@@ -4121,7 +4137,7 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const value = uuidv4();
+                const value = getRandomKey();
                 const code = `return '${value}'`;
                 const script = new Script(Buffer.from(code));
 
@@ -4144,7 +4160,7 @@ export function runBaseTests(config: {
         `zadd and zaddIncr test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 const newMembersScores: SortedSetDataType = [
                     { element: "one", score: 2 },
@@ -4188,7 +4204,7 @@ export function runBaseTests(config: {
         `zadd and zaddIncr with NX XX test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(
                     await client.zadd(key, membersScores, {
@@ -4224,7 +4240,7 @@ export function runBaseTests(config: {
         `zadd and zaddIncr with GT LT test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: -3, two: 2, three: 3 };
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
@@ -4264,7 +4280,7 @@ export function runBaseTests(config: {
         `zrem test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrem(Buffer.from(key), ["one"])).toEqual(1);
@@ -4287,7 +4303,7 @@ export function runBaseTests(config: {
         `zcard test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zcard(key)).toEqual(3);
@@ -4306,10 +4322,10 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = `{key}:${uuidv4()}`;
-                const key2 = `{key}:${uuidv4()}`;
-                const stringKey = `{key}:${uuidv4()}`;
-                const nonExistingKey = `{key}:${uuidv4()}`;
+                const key1 = `{key}:${getRandomKey()}`;
+                const key2 = `{key}:${getRandomKey()}`;
+                const stringKey = `{key}:${getRandomKey()}`;
+                const nonExistingKey = `{key}:${getRandomKey()}`;
                 const memberScores1 = { one: 1, two: 2, three: 3 };
                 const memberScores2 = { two: 2, three: 3, four: 4 };
 
@@ -4357,11 +4373,11 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const key3 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const stringKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const key3 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const stringKey = `{key}-${getRandomKey()}`;
 
                 const entries1 = {
                     one: 1.0,
@@ -4446,12 +4462,12 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const key3 = `{key}-${uuidv4()}`;
-                const key4 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const stringKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const key3 = `{key}-${getRandomKey()}`;
+                const key4 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const stringKey = `{key}-${getRandomKey()}`;
 
                 const entries1 = {
                     one: 1.0,
@@ -4533,8 +4549,8 @@ export function runBaseTests(config: {
         `zscore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zscore(key1, "one")).toEqual(1.0);
@@ -4551,7 +4567,7 @@ export function runBaseTests(config: {
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
 
-                const inf_key = uuidv4();
+                const inf_key = getRandomKey();
                 const infMembersScores: Record<string, Score> = {
                     infMember: "+inf",
                     negInfMember: "-inf",
@@ -4561,7 +4577,7 @@ export function runBaseTests(config: {
                     Infinity,
                 );
 
-                const inf_key2 = uuidv4();
+                const inf_key2 = getRandomKey();
                 expect(
                     await client.zadd(inf_key2, { infMember: -Infinity }),
                 ).toEqual(1);
@@ -4575,9 +4591,9 @@ export function runBaseTests(config: {
 
     // ZUnionStore command tests
     async function zunionStoreWithMaxAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4607,9 +4623,9 @@ export function runBaseTests(config: {
     }
 
     async function zunionStoreWithMinAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4639,9 +4655,9 @@ export function runBaseTests(config: {
     }
 
     async function zunionStoreWithSumAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4673,9 +4689,9 @@ export function runBaseTests(config: {
     }
 
     async function zunionStoreBasicTest(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4698,9 +4714,9 @@ export function runBaseTests(config: {
     }
 
     async function zunionStoreWithWeightsAndAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4737,8 +4753,8 @@ export function runBaseTests(config: {
     }
 
     async function zunionStoreEmptyCases(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -4795,9 +4811,9 @@ export function runBaseTests(config: {
                     return;
                 }
 
-                const key1 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
-                const stringKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
+                const stringKey = `{key}-${getRandomKey()}`;
 
                 const entries = {
                     one: 1.0,
@@ -4844,8 +4860,8 @@ export function runBaseTests(config: {
         `zcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(
@@ -4908,7 +4924,7 @@ export function runBaseTests(config: {
         `zrange by index test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -4950,7 +4966,7 @@ export function runBaseTests(config: {
         `zrange by score test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -5047,7 +5063,7 @@ export function runBaseTests(config: {
         `zrange by lex test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -5115,8 +5131,8 @@ export function runBaseTests(config: {
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-                    const key = "{testKey}:1-" + uuidv4();
-                    const destkey = "{testKey}:2-" + uuidv4();
+                    const key = "{testKey}:1-" + getRandomKey();
+                    const destkey = "{testKey}:2-" + getRandomKey();
                     const membersScores = { one: 1, two: 2, three: 3 };
                     expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -5171,8 +5187,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key = "{testKey}:1-" + uuidv4();
-                    const destkey = "{testKey}:2-" + uuidv4();
+                    const key = "{testKey}:1-" + getRandomKey();
+                    const destkey = "{testKey}:2-" + getRandomKey();
                     const membersScores = { one: 1, two: 2, three: 3 };
                     expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -5261,8 +5277,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key = "{testKey}:1-" + uuidv4();
-                    const destkey = "{testKey}:2-" + uuidv4();
+                    const key = "{testKey}:1-" + getRandomKey();
+                    const destkey = "{testKey}:2-" + getRandomKey();
                     const membersScores = { a: 1, b: 2, c: 3 };
                     expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -5353,9 +5369,9 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key = "{testKey}:1-" + uuidv4();
-                    const nonExistingKey = "{testKey}:2-" + uuidv4();
-                    const destkey = "{testKey}:3-" + uuidv4();
+                    const key = "{testKey}:1-" + getRandomKey();
+                    const nonExistingKey = "{testKey}:2-" + getRandomKey();
+                    const destkey = "{testKey}:3-" + getRandomKey();
 
                     // test non-existing key - return an empty set
                     expect(
@@ -5407,9 +5423,9 @@ export function runBaseTests(config: {
 
     // Zinterstore command tests
     async function zinterstoreWithAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -5468,9 +5484,9 @@ export function runBaseTests(config: {
     }
 
     async function zinterstoreBasicTest(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -5492,9 +5508,9 @@ export function runBaseTests(config: {
     }
 
     async function zinterstoreWithWeightsAndAggregation(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:3-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
+        const key3 = "{testKey}:3-" + getRandomKey();
         const range = {
             start: 0,
             end: -1,
@@ -5530,8 +5546,8 @@ export function runBaseTests(config: {
     }
 
     async function zinterstoreEmptyCases(client: BaseClient) {
-        const key1 = "{testKey}:1-" + uuidv4();
-        const key2 = "{testKey}:2-" + uuidv4();
+        const key1 = "{testKey}:1-" + getRandomKey();
+        const key2 = "{testKey}:2-" + getRandomKey();
 
         // Non existing key
         expect(
@@ -5564,8 +5580,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5598,8 +5614,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5632,8 +5648,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5671,8 +5687,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5705,8 +5721,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5739,8 +5755,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5777,7 +5793,7 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
 
                     // Non existing key zinter
                     expect(
@@ -5813,8 +5829,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5833,7 +5849,7 @@ export function runBaseTests(config: {
                                 decoder: Decoder.Bytes,
                             })
                         ).sort(),
-                    ).toEqual(expectedZunion.map(Buffer.from));
+                    ).toEqual(expectedZunion.map((str) => Buffer.from(str)));
                 },
                 protocol,
             );
@@ -5847,8 +5863,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5881,8 +5897,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5924,8 +5940,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5959,8 +5975,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -5996,8 +6012,8 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
-                    const key2 = "{testKey}:2-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
+                    const key2 = "{testKey}:2-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
                     const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -6037,7 +6053,7 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key1 = "{testKey}:1-" + getRandomKey();
 
                     const membersScores1 = { one: 1.0, two: 2.0 };
 
@@ -6075,7 +6091,7 @@ export function runBaseTests(config: {
         `type test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "value")).toEqual("OK");
                 expect(await client.type(key)).toEqual("string");
                 expect(await client.del([key])).toEqual(1);
@@ -6109,7 +6125,7 @@ export function runBaseTests(config: {
         `echo test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const message = uuidv4();
+                const message = getRandomKey();
                 expect(await client.echo(message)).toEqual(message);
                 expect(
                     client instanceof GlideClient
@@ -6148,8 +6164,8 @@ export function runBaseTests(config: {
         `strlen test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key1Value = uuidv4();
+                const key1 = getRandomKey();
+                const key1Value = getRandomKey();
                 const key1ValueLength = key1Value.length;
                 expect(await client.set(key1, key1Value)).toEqual("OK");
                 expect(await client.strlen(key1)).toEqual(key1ValueLength);
@@ -6159,8 +6175,8 @@ export function runBaseTests(config: {
                 );
 
                 const listName = "myList";
-                const listKey1Value = uuidv4();
-                const listKey2Value = uuidv4();
+                const listKey1Value = getRandomKey();
+                const listKey2Value = getRandomKey();
 
                 expect(
                     await client.lpush(listName, [
@@ -6179,10 +6195,10 @@ export function runBaseTests(config: {
         `lindex test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const listName = uuidv4();
-                const encodedListName = Buffer.from(uuidv4());
-                const listKey1Value = uuidv4();
-                const listKey2Value = uuidv4();
+                const listName = getRandomKey();
+                const encodedListName = Buffer.from(getRandomKey());
+                const listKey1Value = getRandomKey();
+                const listKey2Value = getRandomKey();
                 expect(
                     await client.lpush(listName, [
                         listKey1Value,
@@ -6221,11 +6237,11 @@ export function runBaseTests(config: {
         `linsert test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const key2Encoded = Buffer.from(key2);
-                const stringKey = uuidv4();
-                const nonExistingKey = uuidv4();
+                const stringKey = getRandomKey();
+                const nonExistingKey = getRandomKey();
 
                 expect(await client.lpush(key1, ["4", "3", "2", "1"])).toEqual(
                     4,
@@ -6315,7 +6331,7 @@ export function runBaseTests(config: {
         `zpopmin test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmin(Buffer.from(key))).toEqual(
@@ -6350,7 +6366,7 @@ export function runBaseTests(config: {
         `zpopmax test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmax(Buffer.from(key))).toEqual(
@@ -6386,9 +6402,9 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
-                    const key3 = "{key}-3" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
+                    const key3 = "{key}-3" + getRandomKey();
 
                     expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
                     expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
@@ -6436,9 +6452,9 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
-                    const key3 = "{key}-3" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
+                    const key3 = "{key}-3" + getRandomKey();
 
                     expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
                     expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
@@ -6485,7 +6501,7 @@ export function runBaseTests(config: {
         `Pttl test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.pttl(key)).toEqual(-2);
 
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -6521,7 +6537,7 @@ export function runBaseTests(config: {
         `zremRangeByRank test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zremRangeByRank(key, 2, 1)).toEqual(0);
@@ -6541,8 +6557,8 @@ export function runBaseTests(config: {
         `zrank test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zrank(key1, "one")).toEqual(0);
@@ -6585,8 +6601,8 @@ export function runBaseTests(config: {
         `zrevrank test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const nonSetKey = uuidv4();
+                const key = getRandomKey();
+                const nonSetKey = getRandomKey();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrevrank(key, "three")).toEqual(0);
@@ -6701,7 +6717,7 @@ export function runBaseTests(config: {
         `persist test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.persist(key)).toEqual(false);
 
@@ -6716,11 +6732,11 @@ export function runBaseTests(config: {
         `streams add, trim, and len test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonExistingKey = uuidv4();
-                const stringKey = uuidv4();
-                const field1 = uuidv4();
-                const field2 = uuidv4();
+                const key = getRandomKey();
+                const nonExistingKey = getRandomKey();
+                const stringKey = getRandomKey();
+                const field1 = getRandomKey();
+                const field2 = getRandomKey();
 
                 const nullResult = await client.xadd(
                     key,
@@ -6836,9 +6852,9 @@ export function runBaseTests(config: {
         `xrange and xrevrange test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const nonExistingKey = uuidv4();
-                const stringKey = uuidv4();
+                const key = getRandomKey();
+                const nonExistingKey = getRandomKey();
+                const stringKey = getRandomKey();
                 const streamId1 = "0-1";
                 const streamId2 = "0-2";
                 const streamId3 = "0-3";
@@ -7041,8 +7057,8 @@ export function runBaseTests(config: {
         `zremRangeByLex test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const stringKey = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
                 const membersScores = { a: 1, b: 2, c: 3, d: 4 };
                 expect(await client.zadd(key, membersScores)).toEqual(4);
 
@@ -7097,7 +7113,7 @@ export function runBaseTests(config: {
         `zremRangeByScore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -7133,8 +7149,8 @@ export function runBaseTests(config: {
         `zlexcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const stringKey = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
@@ -7214,9 +7230,9 @@ export function runBaseTests(config: {
         `streams xread test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{xread}-1-" + uuidv4();
-                const key2 = "{xread}-2-" + uuidv4();
-                const key3 = "{xread}-3-" + uuidv4();
+                const key1 = "{xread}-1-" + getRandomKey();
+                const key2 = "{xread}-2-" + getRandomKey();
+                const key3 = "{xread}-3-" + getRandomKey();
                 const field1 = "foo";
                 const field2 = "bar";
                 const field3 = "barvaz";
@@ -7300,7 +7316,7 @@ export function runBaseTests(config: {
                 ]);
 
                 // key is not a stream
-                expect(await client.set(key3, uuidv4())).toEqual("OK");
+                expect(await client.set(key3, getRandomKey())).toEqual("OK");
                 await expect(client.xread({ [key3]: "0-0" })).rejects.toThrow(
                     RequestError,
                 );
@@ -7313,11 +7329,11 @@ export function runBaseTests(config: {
         `xreadgroup test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{xreadgroup}-1-" + uuidv4();
-                const key2 = "{xreadgroup}-2-" + uuidv4();
-                const key3 = "{xreadgroup}-3-" + uuidv4();
-                const group = uuidv4();
-                const consumer = uuidv4();
+                const key1 = "{xreadgroup}-1-" + getRandomKey();
+                const key2 = "{xreadgroup}-2-" + getRandomKey();
+                const key3 = "{xreadgroup}-3-" + getRandomKey();
+                const group = getRandomKey();
+                const consumer = getRandomKey();
 
                 // setup data & test binary parameters in XGROUP CREATE commands
                 expect(
@@ -7438,7 +7454,7 @@ export function runBaseTests(config: {
                     client.xreadgroup("_", "_", { [key3]: "0-0" }),
                 ).rejects.toThrow(RequestError);
                 // key is not a stream
-                expect(await client.set(key3, uuidv4())).toEqual("OK");
+                expect(await client.set(key3, getRandomKey())).toEqual("OK");
                 await expect(
                     client.xreadgroup("_", "_", { [key3]: "0-0" }),
                 ).rejects.toThrow(RequestError);
@@ -7470,9 +7486,9 @@ export function runBaseTests(config: {
         `xinfo stream xinfosream test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const groupName = `group-${uuidv4()}`;
-                const consumerName = `consumer-${uuidv4()}`;
+                const key = getRandomKey();
+                const groupName = `group-${getRandomKey()}`;
+                const consumerName = `consumer-${getRandomKey()}`;
                 const streamId0_0 = "0-0";
                 const streamId1_0 = "1-0";
                 const streamId1_1 = "1-1";
@@ -7623,9 +7639,9 @@ export function runBaseTests(config: {
         `xinfo stream edge cases and failures test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = `{key}-1-${uuidv4()}`;
-                const stringKey = `{key}-2-${uuidv4()}`;
-                const nonExistentKey = `{key}-3-${uuidv4()}`;
+                const key = `{key}-1-${getRandomKey()}`;
+                const stringKey = `{key}-2-${getRandomKey()}`;
+                const nonExistentKey = `{key}-3-${getRandomKey()}`;
                 const streamId1_0 = "1-0";
 
                 // Setup: create empty stream
@@ -7680,8 +7696,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 // Making sure both keys will be oart of the same slot
-                const key = uuidv4() + "{123}";
-                const newKey = uuidv4() + "{123}";
+                const key = getRandomKey() + "{123}";
+                const newKey = getRandomKey() + "{123}";
                 await client.set(key, "value");
                 expect(await client.rename(key, newKey)).toEqual("OK");
                 expect(await client.get(newKey)).toEqual("value");
@@ -7701,9 +7717,9 @@ export function runBaseTests(config: {
         "renamenx test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const key3 = `{key}-3-${getRandomKey()}`;
 
                 // renamenx missing key
                 await expect(client.renamenx(key1, key2)).rejects.toThrow(
@@ -7734,12 +7750,12 @@ export function runBaseTests(config: {
         "dump and restore test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key3 = "{key}-3" + uuidv4();
-                const key4 = "{key}-4" + uuidv4();
-                const key5 = "{key}-5" + uuidv4();
-                const nonExistingkey = "{nonExistingkey}-" + uuidv4();
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const key3 = "{key}-3" + getRandomKey();
+                const key4 = "{key}-4" + getRandomKey();
+                const key5 = "{key}-5" + getRandomKey();
+                const nonExistingkey = "{nonExistingkey}-" + getRandomKey();
                 const value = "orange";
                 const valueEncode = Buffer.from(value);
 
@@ -7841,53 +7857,65 @@ export function runBaseTests(config: {
                 ).rejects.toThrow("DUMP payload version or checksum are wrong");
 
                 // Transaction tests
-                let response =
-                    client instanceof GlideClient
-                        ? await client.exec(new Transaction().dump(key1), {
-                              decoder: Decoder.Bytes,
-                          })
-                        : await client.exec(
-                              new ClusterTransaction().dump(key1),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).not.toBeNull();
-                data = response?.[0] as Buffer;
+                for (const isAtomic of [true, false]) {
+                    await client.del([key4, key5]);
+                    let response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic).dump(key1),
+                                  true,
+                                  {
+                                      decoder: Decoder.Bytes,
+                                  },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic).dump(key1),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
+                    expect(response?.[0]).not.toBeNull();
+                    data = response?.[0] as Buffer;
 
-                // Restore with `String` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(value);
+                    // Restore with `String` exec decoder
+                    response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              );
+                    expect(response?.[0]).toEqual("OK");
+                    expect(response?.[1]).toEqual(value);
 
-                // Restore with `Bytes` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(valueEncode);
+                    // Restore with `Bytes` exec decoder
+                    response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
+                    expect(response?.[0]).toEqual("OK");
+                    expect(response?.[1]).toEqual(valueEncode);
+                }
             }, protocol);
         },
         config.timeout,
@@ -7897,7 +7925,7 @@ export function runBaseTests(config: {
         "pfadd test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 expect(await client.pfadd(key, [])).toEqual(1);
                 expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
                 expect(
@@ -7917,11 +7945,11 @@ export function runBaseTests(config: {
         "pfcount test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;
-                const stringKey = `{key}-4-${uuidv4()}`;
-                const nonExistingKey = `{key}-5-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const key3 = `{key}-3-${getRandomKey()}`;
+                const stringKey = `{key}-4-${getRandomKey()}`;
+                const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
                 expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
@@ -7953,11 +7981,11 @@ export function runBaseTests(config: {
         "pfmerget test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-1-${uuidv4()}`;
-                const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;
-                const stringKey = `{key}-4-${uuidv4()}`;
-                const nonExistingKey = `{key}-5-${uuidv4()}`;
+                const key1 = `{key}-1-${getRandomKey()}`;
+                const key2 = `{key}-2-${getRandomKey()}`;
+                const key3 = `{key}-3-${getRandomKey()}`;
+                const stringKey = `{key}-4-${getRandomKey()}`;
+                const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
                 expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
@@ -8003,10 +8031,10 @@ export function runBaseTests(config: {
         "setrange test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const key_2 = uuidv4();
-                const key_3 = uuidv4();
-                const nonStringKey = uuidv4();
+                const key = getRandomKey();
+                const key_2 = getRandomKey();
+                const key_3 = getRandomKey();
+                const nonStringKey = getRandomKey();
 
                 // new key
                 expect(await client.setrange(key, 0, "Hello World")).toBe(11);
@@ -8047,10 +8075,10 @@ export function runBaseTests(config: {
         "append test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
-                const key3 = uuidv4();
-                const value = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                const key3 = getRandomKey();
+                const value = getRandomKey();
                 const valueEncoded = Buffer.from(value);
 
                 // Append on non-existing string(similar to SET)
@@ -8083,9 +8111,9 @@ export function runBaseTests(config: {
         "wait test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const value1 = uuidv4();
-                const value2 = uuidv4();
+                const key = getRandomKey();
+                const value1 = getRandomKey();
+                const value2 = getRandomKey();
 
                 // assert that wait returns 0 under standalone and 1 under cluster mode.
                 expect(await client.set(key, value1)).toEqual("OK");
@@ -8114,8 +8142,8 @@ export function runBaseTests(config: {
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
-        const key = uuidv4();
-        const value = uuidv4();
+        const key = getRandomKey();
+        const value = getRandomKey();
         const setResWithExpirySetMilli = await client.set(key, value, {
             expiry: {
                 type: TimeUnit.Milliseconds,
@@ -8174,8 +8202,8 @@ export function runBaseTests(config: {
     }
 
     async function setWithOnlyIfExistOptions(client: BaseClient) {
-        const key = uuidv4();
-        const value = uuidv4();
+        const key = getRandomKey();
+        const value = getRandomKey();
         const setKey = await client.set(key, value);
         expect(setKey).toEqual("OK");
         const getRes = await client.get(key);
@@ -8198,9 +8226,9 @@ export function runBaseTests(config: {
     }
 
     async function setWithOnlyIfEquals(client: BaseClient) {
-        const key = uuidv4();
-        const initialValue = uuidv4();
-        const newValue = uuidv4();
+        const key = getRandomKey();
+        const initialValue = getRandomKey();
+        const newValue = getRandomKey();
         const setKey = await client.set(key, initialValue);
         expect(setKey).toEqual("OK");
         const getRes = await client.get(key);
@@ -8226,8 +8254,8 @@ export function runBaseTests(config: {
     }
 
     async function setWithOnlyIfNotExistOptions(client: BaseClient) {
-        const key = uuidv4();
-        const value = uuidv4();
+        const key = getRandomKey();
+        const value = getRandomKey();
         const notExistingKeyRes = await client.set(key, value, {
             conditionalSet: "onlyIfDoesNotExist",
         });
@@ -8248,8 +8276,8 @@ export function runBaseTests(config: {
     }
 
     async function setWithGetOldOptions(client: BaseClient) {
-        const key = uuidv4();
-        const value = uuidv4();
+        const key = getRandomKey();
+        const value = getRandomKey();
 
         const setResGetNotExistOld = await client.set(key, value, {
             returnOldValue: true,
@@ -8271,8 +8299,8 @@ export function runBaseTests(config: {
     }
 
     async function setWithAllOptions(client: BaseClient) {
-        const key = uuidv4();
-        const value = uuidv4();
+        const key = getRandomKey();
+        const value = getRandomKey();
 
         // set with multiple options:
         // * only apply SET if the key already exists
@@ -8293,9 +8321,9 @@ export function runBaseTests(config: {
     }
 
     async function setIfeqWithAllOptions(client: BaseClient) {
-        const key = uuidv4();
-        const initialValue = uuidv4();
-        const newValue = uuidv4();
+        const key = getRandomKey();
+        const initialValue = getRandomKey();
+        const newValue = getRandomKey();
 
         await client.set(key, initialValue);
         // set with multiple options:
@@ -8337,9 +8365,9 @@ export function runBaseTests(config: {
         client: BaseClient,
         cluster: ValkeyCluster,
     ) {
-        const key = uuidv4();
-        const value = uuidv4(); // Initial value
-        const value2 = uuidv4(); // New value for IFEQ testing
+        const key = getRandomKey();
+        const value = getRandomKey(); // Initial value
+        const value2 = getRandomKey(); // New value for IFEQ testing
         const count = 2;
         const expiryCombination = [
             { type: TimeUnit.Seconds, count },
@@ -8455,17 +8483,17 @@ export function runBaseTests(config: {
         "object encoding test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const string_key = uuidv4();
-                const list_key = uuidv4();
-                const hashtable_key = uuidv4();
-                const intset_key = uuidv4();
-                const set_listpack_key = uuidv4();
-                const hash_hashtable_key = uuidv4();
-                const hash_listpack_key = uuidv4();
-                const skiplist_key = uuidv4();
-                const zset_listpack_key = uuidv4();
-                const stream_key = uuidv4();
-                const non_existing_key = uuidv4();
+                const string_key = getRandomKey();
+                const list_key = getRandomKey();
+                const hashtable_key = getRandomKey();
+                const intset_key = getRandomKey();
+                const set_listpack_key = getRandomKey();
+                const hash_hashtable_key = getRandomKey();
+                const hash_listpack_key = getRandomKey();
+                const skiplist_key = getRandomKey();
+                const zset_listpack_key = getRandomKey();
+                const stream_key = getRandomKey();
+                const non_existing_key = getRandomKey();
                 const versionLessThan7 =
                     cluster.checkIfServerVersionLessThan("7.0.0");
                 const versionLessThan72 =
@@ -8603,8 +8631,8 @@ export function runBaseTests(config: {
         "object freq test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonExistingKey = uuidv4();
+                const key = getRandomKey();
+                const nonExistingKey = getRandomKey();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
                 const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
@@ -8638,8 +8666,8 @@ export function runBaseTests(config: {
         "object idletime test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonExistingKey = uuidv4();
+                const key = getRandomKey();
+                const nonExistingKey = getRandomKey();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
                 const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
@@ -8683,8 +8711,8 @@ export function runBaseTests(config: {
         `object refcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = `{key}:${uuidv4()}`;
-                const nonExistingKey = `{key}:${uuidv4()}`;
+                const key = `{key}:${getRandomKey()}`;
+                const nonExistingKey = `{key}:${getRandomKey()}`;
 
                 expect(await client.objectRefcount(nonExistingKey)).toBeNull();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -8715,7 +8743,7 @@ export function runBaseTests(config: {
                 expect(await client.flushall(FlushMode.ASYNC)).toBe("OK");
 
                 if (client instanceof GlideClusterClient) {
-                    const key = uuidv4();
+                    const key = getRandomKey();
                     const primaryRoute: SingleNodeRoute = {
                         type: "primarySlotKey",
                         key: key,
@@ -8731,7 +8759,7 @@ export function runBaseTests(config: {
                     ).toBe("OK");
 
                     //Test FLUSHALL on replica (should fail)
-                    const key2 = uuidv4();
+                    const key2 = getRandomKey();
                     const replicaRoute: SingleNodeRoute = {
                         type: "replicaSlotKey",
                         key: key2,
@@ -8749,7 +8777,7 @@ export function runBaseTests(config: {
         `lpos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = `{key}:${uuidv4()}`;
+                const key = `{key}:${getRandomKey()}`;
                 const valueArray = ["a", "a", "b", "c", "a", "b"];
                 expect(await client.rpush(key, valueArray)).toEqual(6);
 
@@ -8794,7 +8822,7 @@ export function runBaseTests(config: {
                 expect(await client.lpos("non-existent_key", "e")).toBeNull();
 
                 // wrong key data type
-                const wrongDataType = `{key}:${uuidv4()}`;
+                const wrongDataType = `{key}:${getRandomKey()}`;
                 expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
 
                 await expect(client.lpos(wrongDataType, "a")).rejects.toThrow(
@@ -8844,7 +8872,7 @@ export function runBaseTests(config: {
 
                 // set 10 random key-value pairs
                 for (let i = 0; i < 10; i++) {
-                    const key = `{key}:${uuidv4()}`;
+                    const key = `{key}:${getRandomKey()}`;
                     const value = "0".repeat(Math.random() * 7);
 
                     expect(await client.set(key, value)).toBe("OK");
@@ -8856,7 +8884,7 @@ export function runBaseTests(config: {
                 // additional test for the standalone client
                 if (client instanceof GlideClient) {
                     expect(await client.flushall()).toBe("OK");
-                    const key = uuidv4();
+                    const key = getRandomKey();
                     expect(await client.set(key, "value")).toBe("OK");
                     expect(await client.dbsize()).toBe(1);
                     // switching to another db to check size
@@ -8867,7 +8895,7 @@ export function runBaseTests(config: {
                 // additional test for the cluster client
                 if (client instanceof GlideClusterClient) {
                     expect(await client.flushall()).toBe("OK");
-                    const key = uuidv4();
+                    const key = getRandomKey();
                     expect(await client.set(key, "value")).toBe("OK");
                     const primaryRoute: SingleNodeRoute = {
                         type: "primarySlotKey",
@@ -8886,8 +8914,8 @@ export function runBaseTests(config: {
         `bitcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const value = "foobar";
 
                 expect(await client.set(key1, value)).toEqual("OK");
@@ -8902,9 +8930,12 @@ export function runBaseTests(config: {
                     await client.bitcount(key1, { start: 0, end: -5 }),
                 ).toEqual(10);
                 // non-existing key
-                expect(await client.bitcount(uuidv4())).toEqual(0);
+                expect(await client.bitcount(getRandomKey())).toEqual(0);
                 expect(
-                    await client.bitcount(uuidv4(), { start: 5, end: 30 }),
+                    await client.bitcount(getRandomKey(), {
+                        start: 5,
+                        end: 30,
+                    }),
                 ).toEqual(0);
                 // key exists, but it is not a string
                 expect(await client.sadd(key2, [value])).toEqual(1);
@@ -8953,7 +8984,7 @@ export function runBaseTests(config: {
                         }),
                     ).toEqual(23);
                     expect(
-                        await client.bitcount(uuidv4(), {
+                        await client.bitcount(getRandomKey(), {
                             start: 2,
                             end: 5,
                             indexType: BitmapIndexType.BYTE,
@@ -8992,7 +9023,7 @@ export function runBaseTests(config: {
                         }),
                     ).toEqual(0);
                     expect(
-                        await client.bitcount(uuidv4(), {
+                        await client.bitcount(getRandomKey(), {
                             start: 80,
                         }),
                     ).toEqual(0);
@@ -9013,8 +9044,8 @@ export function runBaseTests(config: {
         `geoadd geopos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const membersToCoordinates = new Map<string, GeospatialData>();
                 membersToCoordinates.set("Palermo", {
                     longitude: 13.361389,
@@ -9096,7 +9127,7 @@ export function runBaseTests(config: {
         `geoadd invalid args test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key = getRandomKey();
 
                 // empty coordinate map
                 await expect(client.geoadd(key, new Map())).rejects.toThrow();
@@ -9137,9 +9168,9 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient, cluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-                const key1 = "{geosearch}" + uuidv4();
-                const key2 = "{geosearch}" + uuidv4();
-                const key3 = "{geosearch}" + uuidv4();
+                const key1 = "{geosearch}" + getRandomKey();
+                const key2 = "{geosearch}" + getRandomKey();
+                const key3 = "{geosearch}" + getRandomKey();
 
                 const members: string[] = [
                     "Catania",
@@ -9626,7 +9657,7 @@ export function runBaseTests(config: {
                 ).rejects.toThrow(RequestError);
 
                 // key exists but holds a non-ZSET value
-                expect(await client.set(key3, uuidv4())).toEqual("OK");
+                expect(await client.set(key3, getRandomKey())).toEqual("OK");
                 await expect(
                     client.geosearch(
                         key3,
@@ -9653,10 +9684,10 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
-                    const nonExistingKey = "{key}-0" + uuidv4();
-                    const stringKey = "{key}-string" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
+                    const nonExistingKey = "{key}-0" + getRandomKey();
+                    const stringKey = "{key}-string" + getRandomKey();
 
                     expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(
                         2,
@@ -9745,10 +9776,10 @@ export function runBaseTests(config: {
         `zincrby test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = "{key}" + uuidv4();
-                const member = "{member}-1" + uuidv4();
-                const othermember = "{member}-1" + uuidv4();
-                const stringKey = "{key}-string" + uuidv4();
+                const key = "{key}" + getRandomKey();
+                const member = "{member}-1" + getRandomKey();
+                const othermember = "{member}-1" + getRandomKey();
+                const stringKey = "{key}-string" + getRandomKey();
 
                 // key does not exist
                 expect(await client.zincrby(key, 2.5, member)).toEqual(2.5);
@@ -9781,8 +9812,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
                     const initialCursor = "0";
                     const defaultCount = 20;
                     const resultCursorIndex = 0;
@@ -9835,7 +9866,7 @@ export function runBaseTests(config: {
                         expectedCharMapArray.length,
                     );
                     expect(result[resultCollectionIndex]).toEqual(
-                        expectedCharMapArray.map(Buffer.from),
+                        expectedCharMapArray.map((str) => Buffer.from(str)),
                     );
 
                     result = await client.zscan(
@@ -9973,10 +10004,10 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
-                    const key1 = "{key}-1" + uuidv4();
-                    const key2 = "{key}-2" + uuidv4();
-                    const nonExistingKey = "{key}-0" + uuidv4();
-                    const stringKey = "{key}-string" + uuidv4();
+                    const key1 = "{key}-1" + getRandomKey();
+                    const key2 = "{key}-2" + getRandomKey();
+                    const nonExistingKey = "{key}-0" + getRandomKey();
+                    const stringKey = "{key}-string" + getRandomKey();
 
                     expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(
                         2,
@@ -10085,8 +10116,8 @@ export function runBaseTests(config: {
         `geodist test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const member1 = "Palermo";
                 const member2 = "Catania";
                 const nonExistingMember = "NonExisting";
@@ -10137,8 +10168,8 @@ export function runBaseTests(config: {
         `geohash test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
                 const members = ["Palermo", "Catania", "NonExisting"];
                 const empty: string[] = [];
                 const expected = ["sqc8b49rny0", "sqdtr74hyu0", null];
@@ -10175,8 +10206,8 @@ export function runBaseTests(config: {
         `geo commands binary %p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = "{geo-bin}-1-" + uuidv4();
-                const key2 = "{geo-bin}-2-" + uuidv4();
+                const key1 = "{geo-bin}-1-" + getRandomKey();
+                const key2 = "{geo-bin}-2-" + getRandomKey();
 
                 const members = [
                     "Catania",
@@ -10247,7 +10278,7 @@ export function runBaseTests(config: {
                 );
                 // using set to compare, because results are reordrered
                 expect(new Set(searchResult)).toEqual(
-                    new Set(members.map((m) => Buffer.from(m))),
+                    new Set(members.map((m) => Buffer.from(String(m)))),
                 );
                 // repeat geosearch with string decoder
                 searchResult = await client.geosearch(
@@ -10280,9 +10311,9 @@ export function runBaseTests(config: {
         `touch test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = `{key}-${uuidv4()}`;
-                const key2 = `{key}-${uuidv4()}`;
-                const nonExistingKey = `{key}-${uuidv4()}`;
+                const key1 = `{key}-${getRandomKey()}`;
+                const key2 = `{key}-${getRandomKey()}`;
+                const nonExistingKey = `{key}-${getRandomKey()}`;
 
                 expect(
                     await client.mset({ [key1]: "value1", [key2]: "value2" }),
@@ -10302,8 +10333,8 @@ export function runBaseTests(config: {
         `zrandmember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
 
                 const memberScores = { one: 1.0, two: 2.0 };
                 const elements: GlideString[] = ["one", "two"];
@@ -10333,8 +10364,8 @@ export function runBaseTests(config: {
         `zrandmemberWithCount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
 
                 const memberScores = { one: 1.0, two: 2.0 };
                 expect(await client.zadd(key1, memberScores)).toBe(2);
@@ -10383,8 +10414,8 @@ export function runBaseTests(config: {
         `zrandmemberWithCountWithScores test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = uuidv4();
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
 
                 const memberScores = { one: 1.0, two: 2.0 };
                 const memberScoreMap = new Map<string, number>([
@@ -10442,10 +10473,10 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient, cluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
-                const key1 = "{lcs}" + uuidv4();
-                const key2 = "{lcs}" + uuidv4();
-                const key3 = "{lcs}" + uuidv4();
-                const key4 = "{lcs}" + uuidv4();
+                const key1 = "{lcs}" + getRandomKey();
+                const key2 = "{lcs}" + getRandomKey();
+                const key3 = "{lcs}" + getRandomKey();
+                const key4 = "{lcs}" + getRandomKey();
 
                 // keys does not exist or is empty
                 expect(await client.lcs(key1, key2)).toEqual("");
@@ -10589,9 +10620,9 @@ export function runBaseTests(config: {
         `xdel test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const stringKey = uuidv4();
-                const nonExistentKey = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
+                const nonExistentKey = getRandomKey();
                 const streamId1 = "0-1";
                 const streamId2 = "0-2";
                 const streamId3 = "0-3";
@@ -10647,11 +10678,11 @@ export function runBaseTests(config: {
         `xinfoconsumers xinfo consumers %p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const stringKey = uuidv4();
-                const groupName1 = uuidv4();
-                const consumer1 = uuidv4();
-                const consumer2 = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
+                const groupName1 = getRandomKey();
+                const consumer1 = getRandomKey();
+                const consumer2 = getRandomKey();
                 const streamId1 = "0-1";
                 const streamId2 = "0-2";
                 const streamId3 = "0-3";
@@ -10767,7 +10798,7 @@ export function runBaseTests(config: {
                 ).rejects.toThrow(RequestError);
 
                 // Passing a non-existing key raises an error
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 await expect(client.xinfoConsumers(key2, "_")).rejects.toThrow(
                     RequestError,
                 );
@@ -10798,10 +10829,10 @@ export function runBaseTests(config: {
         `xinfogroups xinfo groups %p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const stringKey = uuidv4();
-                const groupName1 = uuidv4();
-                const consumer1 = uuidv4();
+                const key = getRandomKey();
+                const stringKey = getRandomKey();
+                const groupName1 = getRandomKey();
+                const consumer1 = getRandomKey();
                 const streamId1 = "0-1";
                 const streamId2 = "0-2";
                 const streamId3 = "0-3";
@@ -10962,7 +10993,7 @@ export function runBaseTests(config: {
                 );
 
                 // Passing a non-existing key raises an error
-                const key2 = uuidv4();
+                const key2 = getRandomKey();
                 await expect(client.xinfoGroups(key2)).rejects.toThrow(
                     RequestError,
                 );
@@ -10980,11 +11011,11 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key = "testKey" + uuidv4();
-                    const nonExistingKey = "group" + uuidv4();
-                    const stringKey = "testKey" + uuidv4();
-                    const groupName = uuidv4();
-                    const consumerName = uuidv4();
+                    const key = "testKey" + getRandomKey();
+                    const nonExistingKey = "group" + getRandomKey();
+                    const stringKey = "testKey" + getRandomKey();
+                    const groupName = getRandomKey();
+                    const consumerName = getRandomKey();
                     const streamid0 = "0";
                     const streamid1_0 = "1-0";
                     const streamid1_1 = "1-1";
@@ -11115,8 +11146,8 @@ export function runBaseTests(config: {
         `xpending test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const group = uuidv4();
+                const key = getRandomKey();
+                const group = getRandomKey();
 
                 expect(
                     await client.xgroupCreate(key, group, "0", {
@@ -11201,7 +11232,7 @@ export function runBaseTests(config: {
                 ).toEqual([]);
 
                 // key exists, but it is not a stream
-                const stringKey = uuidv4();
+                const stringKey = getRandomKey();
                 expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(client.xpending(stringKey, "_")).rejects.toThrow(
                     RequestError,
@@ -11215,8 +11246,8 @@ export function runBaseTests(config: {
         `xclaim test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const group = uuidv4();
+                const key = getRandomKey();
+                const group = getRandomKey();
 
                 expect(
                     await client.xgroupCreate(key, group, "0", {
@@ -11317,7 +11348,7 @@ export function runBaseTests(config: {
                 ).rejects.toThrow(RequestError);
 
                 // key exists, but it is not a stream
-                const stringKey = uuidv4();
+                const stringKey = getRandomKey();
                 expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.xclaim(stringKey, "_", "_", 0, ["_"]),
@@ -11331,8 +11362,8 @@ export function runBaseTests(config: {
         `xautoclaim test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const group = uuidv4();
+                const key = getRandomKey();
+                const group = getRandomKey();
 
                 expect(
                     await client.xgroupCreate(key, group, "0", {
@@ -11446,7 +11477,7 @@ export function runBaseTests(config: {
                 expect(result2).toEqual(expected2);
 
                 // key exists, but it is not a stream
-                const stringKey = uuidv4();
+                const stringKey = getRandomKey();
                 expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.xautoclaim(stringKey, "_", "_", 0, "_"),
@@ -11460,11 +11491,11 @@ export function runBaseTests(config: {
         `xack test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = "{testKey}:1-" + uuidv4();
-                const nonExistingKey = "{testKey}:2-" + uuidv4();
-                const string_key = "{testKey}:3-" + uuidv4();
-                const groupName = uuidv4();
-                const consumerName = uuidv4();
+                const key = "{testKey}:1-" + getRandomKey();
+                const nonExistingKey = "{testKey}:2-" + getRandomKey();
+                const string_key = "{testKey}:3-" + getRandomKey();
+                const groupName = getRandomKey();
+                const consumerName = getRandomKey();
                 const stream_id0 = "0";
                 const stream_id1_0 = "1-0";
                 const stream_id1_1 = "1-1";
@@ -11591,9 +11622,9 @@ export function runBaseTests(config: {
                         return;
                     }
 
-                    const key1 = "{key}" + uuidv4();
-                    const key2 = "{key}" + uuidv4();
-                    const nonListKey = uuidv4();
+                    const key1 = "{key}" + getRandomKey();
+                    const key2 = "{key}" + getRandomKey();
+                    const nonListKey = getRandomKey();
                     const singleKeyArray = [key1];
                     const multiKeyArray = [key2, key1];
                     const count = 1;
@@ -11632,7 +11663,7 @@ export function runBaseTests(config: {
                     ).rejects.toThrow(RequestError);
 
                     // Test with single binary key array as input
-                    const key3 = "{key}" + uuidv4();
+                    const key3 = "{key}" + getRandomKey();
                     const singleKeyArrayWithKey3 = [Buffer.from(key3)];
 
                     // pushing to the arrays to be popped
@@ -11648,7 +11679,7 @@ export function runBaseTests(config: {
                     ).toEqual(expectedWithKey3);
 
                     // test with multiple binary keys array as input
-                    const key4 = "{key}" + uuidv4();
+                    const key4 = "{key}" + getRandomKey();
                     const multiKeyArrayWithKey3AndKey4 = [
                         Buffer.from(key4),
                         Buffer.from(key3),
@@ -11685,9 +11716,9 @@ export function runBaseTests(config: {
                         return;
                     }
 
-                    const key1 = "{key}" + uuidv4();
-                    const key2 = "{key}" + uuidv4();
-                    const nonListKey = uuidv4();
+                    const key1 = "{key}" + getRandomKey();
+                    const key2 = "{key}" + getRandomKey();
+                    const nonListKey = getRandomKey();
                     const singleKeyArray = [key1];
                     const multiKeyArray = [key2, key1];
                     const count = 1;
@@ -11737,7 +11768,7 @@ export function runBaseTests(config: {
                     ).rejects.toThrow(RequestError);
 
                     // Test with single binary key array as input
-                    const key3 = "{key}" + uuidv4();
+                    const key3 = "{key}" + getRandomKey();
                     const singleKeyArrayWithKey3 = [Buffer.from(key3)];
 
                     // pushing to the arrays to be popped
@@ -11754,7 +11785,7 @@ export function runBaseTests(config: {
                     ).toEqual(expectedWithKey3);
 
                     // test with multiple binary keys array as input
-                    const key4 = "{key}" + uuidv4();
+                    const key4 = "{key}" + getRandomKey();
                     const multiKeyArrayWithKey3AndKey4 = [
                         Buffer.from(key4),
                         Buffer.from(key3),
@@ -11787,11 +11818,11 @@ export function runBaseTests(config: {
         `xgroupCreateConsumer and xgroupDelConsumer test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const nonExistentKey = uuidv4();
-                const stringKey = uuidv4();
-                const groupName = uuidv4();
-                const consumer = uuidv4();
+                const key = getRandomKey();
+                const nonExistentKey = getRandomKey();
+                const stringKey = getRandomKey();
+                const groupName = getRandomKey();
+                const consumer = getRandomKey();
                 const streamId0 = "0";
 
                 // create group and consumer for the group
@@ -11898,11 +11929,11 @@ export function runBaseTests(config: {
         `xgroupCreate and xgroupDestroy test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key = uuidv4();
-                const nonExistentKey = uuidv4();
-                const stringKey = uuidv4();
-                const groupName1 = uuidv4();
-                const groupName2 = uuidv4();
+                const key = getRandomKey();
+                const nonExistentKey = getRandomKey();
+                const stringKey = getRandomKey();
+                const groupName1 = getRandomKey();
+                const groupName2 = getRandomKey();
                 const streamId = "0-1";
 
                 // trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
@@ -11992,9 +12023,9 @@ export function runBaseTests(config: {
         "check that blocking commands never time out %p",
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                const key1 = "{blocking}-1-" + uuidv4();
-                const key2 = "{blocking}-2-" + uuidv4();
-                const key3 = "{blocking}-3-" + uuidv4(); // stream
+                const key1 = "{blocking}-1-" + getRandomKey();
+                const key2 = "{blocking}-2-" + getRandomKey();
+                const key3 = "{blocking}-3-" + getRandomKey(); // stream
                 const keyz = [key1, key2];
 
                 // create a group and a stream, so `xreadgroup` won't fail on missing group
@@ -12073,9 +12104,9 @@ export function runBaseTests(config: {
                         return;
                     }
 
-                    const key1 = "{key}" + uuidv4();
-                    const key2 = "{key}" + uuidv4();
-                    const value = uuidv4();
+                    const key1 = "{key}" + getRandomKey();
+                    const key2 = "{key}" + getRandomKey();
+                    const value = getRandomKey();
 
                     expect(await client.set(key1, value)).toBe("OK");
                     expect(await client.getex(key1)).toEqual(value);
@@ -12141,10 +12172,10 @@ export function runBaseTests(config: {
                         return;
                     }
 
-                    const setPrefix = "{slot}setKey" + uuidv4();
-                    const hashPrefix = "{slot}hashKey" + uuidv4();
-                    const list = "{slot}" + uuidv4();
-                    const store = "{slot}" + uuidv4();
+                    const setPrefix = "{slot}setKey" + getRandomKey();
+                    const hashPrefix = "{slot}hashKey" + getRandomKey();
+                    const list = "{slot}" + getRandomKey();
+                    const store = "{slot}" + getRandomKey();
                     const names = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
                     const ages = ["30", "25", "35", "20", "40"];
 
@@ -12328,84 +12359,207 @@ export function runBaseTests(config: {
                     ]);
 
                     // transaction test
-                    const transaction =
-                        client instanceof GlideClient
-                            ? new Transaction()
-                            : new ClusterTransaction();
-                    transaction
-                        .hset(hashPrefix + 1, [
-                            { field: "name", value: "Alice" },
-                            { field: "age", value: "30" },
-                        ])
-                        .hset(hashPrefix + 2, {
-                            name: "Bob",
-                            age: "25",
-                        })
-                        .del([list])
-                        .lpush(list, ["2", "1"])
-                        .sort(list, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                        })
-                        .sort(list, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                            orderBy: SortOrder.DESC,
-                        })
-                        .sortStore(list, store, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                        })
-                        .lrange(store, 0, -1)
-                        .sortStore(list, store, {
-                            byPattern: hashPrefix + "*->age",
-                            getPatterns: [hashPrefix + "*->name"],
-                            orderBy: SortOrder.DESC,
-                        })
-                        .lrange(store, 0, -1);
-
-                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                        transaction
-                            .sortReadOnly(list, {
+                    for (const isAtomic of [true, false]) {
+                        await client.del([hashPrefix + 1, hashPrefix + 2]);
+                        const batch =
+                            client instanceof GlideClient
+                                ? new Batch(isAtomic)
+                                : new ClusterBatch(isAtomic);
+                        batch
+                            .hset(hashPrefix + 1, [
+                                { field: "name", value: "Alice" },
+                                { field: "age", value: "30" },
+                            ])
+                            .hset(hashPrefix + 2, {
+                                name: "Bob",
+                                age: "25",
+                            })
+                            .del([list])
+                            .lpush(list, ["2", "1"])
+                            .sort(list, {
                                 byPattern: hashPrefix + "*->age",
                                 getPatterns: [hashPrefix + "*->name"],
                             })
-                            .sortReadOnly(list, {
+                            .sort(list, {
                                 byPattern: hashPrefix + "*->age",
                                 getPatterns: [hashPrefix + "*->name"],
                                 orderBy: SortOrder.DESC,
-                            });
+                            })
+                            .sortStore(list, store, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                            })
+                            .lrange(store, 0, -1)
+                            .sortStore(list, store, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                            })
+                            .lrange(store, 0, -1);
+
+                        if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                            batch
+                                .sortReadOnly(list, {
+                                    byPattern: hashPrefix + "*->age",
+                                    getPatterns: [hashPrefix + "*->name"],
+                                })
+                                .sortReadOnly(list, {
+                                    byPattern: hashPrefix + "*->age",
+                                    getPatterns: [hashPrefix + "*->name"],
+                                    orderBy: SortOrder.DESC,
+                                });
+                        }
+
+                        const expectedResult = [
+                            2,
+                            2,
+                            1,
+                            2,
+                            ["Bob", "Alice"],
+                            ["Alice", "Bob"],
+                            2,
+                            ["Bob", "Alice"],
+                            2,
+                            ["Alice", "Bob"],
+                        ];
+
+                        if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                            expectedResult.push(
+                                ["Bob", "Alice"],
+                                ["Alice", "Bob"],
+                            );
+                        }
+
+                        const result =
+                            client instanceof GlideClient
+                                ? await client.exec(batch as Batch, true)
+                                : await client.exec(
+                                      batch as ClusterBatch,
+                                      true,
+                                  );
+                        expect(result).toEqual(expectedResult);
                     }
-
-                    const expectedResult = [
-                        2,
-                        2,
-                        1,
-                        2,
-                        ["Bob", "Alice"],
-                        ["Alice", "Bob"],
-                        2,
-                        ["Bob", "Alice"],
-                        2,
-                        ["Alice", "Bob"],
-                    ];
-
-                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                        expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
-                    }
-
-                    const result =
-                        client instanceof GlideClient
-                            ? await client.exec(transaction as Transaction)
-                            : await client.exec(
-                                  transaction as ClusterTransaction,
-                              );
-                    expect(result).toEqual(expectedResult);
 
                     client.close();
                 },
                 protocol,
             );
+        },
+        config.timeout,
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `batch timeout test_%p isAtomic=%p`,
+        async (protocol, isAtomic) => {
+            await runTest(async (client: BaseClient) => {
+                const isCluster = client instanceof GlideClusterClient;
+
+                const batch = isCluster
+                    ? new ClusterBatch(isAtomic)
+                    : new Batch(isAtomic);
+
+                batch.customCommand(["DEBUG", "sleep", "0.5"]);
+
+                // Expect a timeout exception on short timeout
+                await expect(async () => {
+                    if (isCluster) {
+                        const clusterClient = client as GlideClusterClient;
+                        const clusterBatch = batch as ClusterBatch;
+                        await clusterClient.exec(clusterBatch, true, {
+                            timeout: 100,
+                        });
+                    } else {
+                        const standaloneClient = client as GlideClient;
+                        const standaloneBatch = batch as Batch;
+                        await standaloneClient.exec(standaloneBatch, true, {
+                            timeout: 100,
+                        });
+                    }
+                }).rejects.toThrow(TimeoutError);
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Retry with a longer timeout
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          true,
+                          { timeout: 1000 },
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, true, {
+                          timeout: 1000,
+                      });
+
+                expect(result?.length).toBe(1);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        `batch raiseOnError test_%p isAtomic=%p`,
+        async (protocol, isAtomic) => {
+            await runTest(async (client: BaseClient) => {
+                const isCluster = client instanceof GlideClusterClient;
+                const key = getRandomKey();
+                const key2 = `{${key}}${getRandomKey()}`;
+
+                const batch = isCluster
+                    ? new ClusterBatch(isAtomic)
+                    : new Batch(isAtomic);
+
+                batch.set(key, "hello").lpop(key).del([key]).rename(key, key2);
+
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          false,
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, false);
+
+                expect(result?.length).toBe(4);
+                expect(result?.[0]).toBe("OK");
+                expect(result?.[2]).toBe(1);
+                expect(result?.[1]).toBeInstanceOf(RequestError);
+                expect((result?.[1] as RequestError).message).toContain(
+                    "WRONGTYPE",
+                );
+                expect(result?.[3]).toBeInstanceOf(RequestError);
+                expect((result?.[3] as RequestError).message).toContain(
+                    "no such key",
+                );
+
+                try {
+                    if (isCluster) {
+                        await (client as GlideClusterClient).exec(
+                            batch as ClusterBatch,
+                            true,
+                        );
+                    } else {
+                        await (client as GlideClient).exec(
+                            batch as Batch,
+                            true,
+                        );
+                    }
+
+                    // to make sure we are raising an error and not getting into this part
+                    fail("Expected an error to be thrown");
+                } catch (error) {
+                    expect(error).toBeInstanceOf(RequestError);
+                    expect((error as RequestError).message).toContain(
+                        "WRONGTYPE",
+                    );
+                }
+            }, protocol);
         },
         config.timeout,
     );
@@ -12440,7 +12594,7 @@ export function runCommonTests(config: {
         "can set and get non-ASCII unicode without modification",
         async () => {
             await runTest(async (client: Client) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 const value = "שלום hello 汉字";
                 await client.set(key, value);
                 const result = await client.get(key);
@@ -12454,7 +12608,7 @@ export function runCommonTests(config: {
         "get for missing key returns null",
         async () => {
             await runTest(async (client: Client) => {
-                const result = await client.get(uuidv4());
+                const result = await client.get(getRandomKey());
 
                 expect(result).toEqual(null);
             });
@@ -12466,7 +12620,7 @@ export function runCommonTests(config: {
         "get for empty string",
         async () => {
             await runTest(async (client: Client) => {
-                const key = uuidv4();
+                const key = getRandomKey();
                 await client.set(key, "");
                 const result = await client.get(key);
 
@@ -12483,10 +12637,10 @@ export function runCommonTests(config: {
                 const WANTED_LENGTH = Math.pow(2, 16);
 
                 const getLongUUID = () => {
-                    let id = uuidv4();
+                    let id = getRandomKey();
 
                     while (id.length < WANTED_LENGTH) {
-                        id += uuidv4();
+                        id += getRandomKey();
                     }
 
                     return id;
@@ -12511,7 +12665,7 @@ export function runCommonTests(config: {
                     if (index % 2 === 0) {
                         await GetAndSetRandomValue(client);
                     } else {
-                        const result = await client.get(uuidv4());
+                        const result = await client.get(getRandomKey());
                         expect(result).toEqual(null);
                     }
                 };
@@ -12523,6 +12677,31 @@ export function runCommonTests(config: {
                 }
 
                 await Promise.all(operations);
+            });
+        },
+        config.timeout,
+    );
+
+    it(
+        "test deprecated transaction",
+        async () => {
+            await runTest(async (client: Client) => {
+                const clusterMode = client instanceof GlideClusterClient;
+                const key = getRandomKey();
+                const batch = clusterMode
+                    ? new ClusterTransaction()
+                    : new Transaction();
+                batch.set(key, "hello").get(key);
+
+                const result = clusterMode
+                    ? await client.exec(batch as ClusterTransaction, true)
+                    : await (client as GlideClient).exec(
+                          batch as Transaction,
+                          true,
+                      );
+                expect(result?.length).toBe(2);
+                expect(result?.[0]).toBe("OK");
+                expect(result?.[1]).toBe("hello");
             });
         },
         config.timeout,

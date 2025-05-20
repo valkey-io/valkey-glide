@@ -37,6 +37,8 @@ const (
 	MinIdKeyword        string = "MINID"
 	GroupKeyword        string = "GROUP"
 	StreamsKeyword      string = "STREAMS"
+	WithCodeKeyword     string = "WITHCODE"
+	LibraryNameKeyword  string = "LIBRARYNAME"
 )
 
 type InfBoundary string
@@ -231,4 +233,19 @@ type SearchShape string
 const (
 	BYRADIUS SearchShape = "BYRADIUS"
 	BYBOX    SearchShape = "BYBOX"
+)
+
+// FunctionRestorePolicy represents the policy to use when restoring functions.
+// See https://valkey.io/commands/function-restore/ for details.
+type FunctionRestorePolicy string
+
+const (
+	// AppendPolicy appends the restored libraries to the existing libraries and aborts on collision.
+	// This is the default policy.
+	AppendPolicy FunctionRestorePolicy = "APPEND"
+	// FlushPolicy deletes all existing libraries before restoring the payload.
+	FlushPolicy FunctionRestorePolicy = "FLUSH"
+	// ReplacePolicy appends the restored libraries to the existing libraries, replacing any existing ones
+	// in case of name collisions. Note that this policy doesn't prevent function name collisions, only libraries.
+	ReplacePolicy FunctionRestorePolicy = "REPLACE"
 )

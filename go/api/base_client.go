@@ -21,7 +21,6 @@ package api
 import "C"
 
 import (
-	goErr "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -428,16 +427,15 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Parameters:
 //
-//		password - The new password to update the connection with.
-//		immediateAuth - immediateAuth A boolean flag. If true, the client will
-//	    authenticate immediately with the new password against all connections, Using AUTH
-//	    command. If password supplied is an empty string, the client will not perform auth and a warning
-//	    will be returned. The default is `false`.
+//	password - The new password to update the connection with.
+//	immediateAuth - immediateAuth A boolean flag. If true, the client will authenticate immediately with the new password
+//					against all connections, Using AUTH command. If password supplied is an empty string, the client will
+//					not perform auth and a warning will be returned. The default is `false`.
 //
 // Return value:
 //
@@ -456,8 +454,8 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Return value:
 //
@@ -524,7 +522,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options optio
 	return handleOkOrStringOrNilResponse(result)
 }
 
-// Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such value
+// Get string value associated with the given key, or api.CreateNilStringResult() is returned if no such key
 // exists.
 //
 // See [valkey.io] for details.
@@ -906,7 +904,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-// Returns the longest common subsequence between strings stored at key1 and key2.
+// Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
@@ -928,7 +926,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 //
 // Return value:
 //
-//	The longest common subsequence between the 2 strings.
+//	A string containing all the longest common subsequences combined between the 2 strings.
 //	An empty string is returned if the keys do not exist or have no common subsequences.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
@@ -1431,7 +1429,7 @@ func (client *baseClient) HScanWithOptions(
 // Return value:
 //
 //	A random field name from the hash stored at `key`, or `nil` when
-//	  the key does not exist.
+//	the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
@@ -1454,12 +1452,13 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 //
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//		    If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	An array of random field names from the hash stored at `key`,
-//	   or an empty array when the key does not exist.
+//	or an empty array when the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
@@ -1483,13 +1482,14 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//	  		If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	A 2D `array` of `[field, value]` arrays, where `field` is a random
-//	  field name from the hash and `value` is the associated value of the field name.
-//	  If the hash does not exist or is empty, the response will be an empty array.
+//	field name from the hash and `value` is the associated value of the field name.
+//	If the hash does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
@@ -2547,6 +2547,10 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 
 // Pops one element from the first non-empty list from the provided keys.
 //
+// Note:
+//
+//	When in cluster mode, `keys` must map to the same hash slot.
+//
 // Since:
 //
 //	Valkey 7.0 and above.
@@ -2561,6 +2565,7 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 // Return value:
 //
 //	A map of key name mapped array of popped element.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPop(keys []string, listDirection options.ListDirection) (map[string][]string, error) {
@@ -2604,6 +2609,7 @@ func (client *baseClient) LMPop(keys []string, listDirection options.ListDirecti
 // Return value:
 //
 //	A map of key name mapped array of popped elements.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *baseClient) LMPopCount(
@@ -2963,9 +2969,8 @@ func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 // Parameters:
 //
 //	key - The key to expire.
-//
-// seconds - Time in seconds for the key to expire.
-// option - The option to set expiry, see [options.ExpireCondition].
+//	seconds - Time in seconds for the key to expire.
+//	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3026,9 +3031,8 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bo
 // Parameters:
 //
 //	key - The key to expire.
-//
-// unixTimestampInSeconds - Absolute Unix timestamp.
-// option - The option to set expiry - see [options.ExpireCondition].
+//	unixTimestampInSeconds - Absolute Unix timestamp.
+//	expireCondition - The option to set expiry - see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3150,7 +3154,7 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 //
 //	key - The key to set timeout on it.
 //	unixMilliseconds - The timeout in an absolute Unix timestamp.
-//	option - The option to set expiry, see [options.ExpireCondition].
+//	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
@@ -3505,7 +3509,8 @@ func (client *baseClient) XAdd(key string, values [][]string) (Result[string], e
 //
 // Return value:
 //
-//	The id of the added entry.
+//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
+//	matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
@@ -3766,19 +3771,25 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 	return handleFloatOrNilResponse(result)
 }
 
-// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+//
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key - The key of the set.
-//	member - The member to add to.
-//	increment - The increment to add to the member's score.
+//	key - The key of the sorted set.
+//	member - A member in the sorted set to increment.
+//	increment - The score to increment the member.
 //
 // Return value:
 //
-//	Result[float64] - The new score of the member.
+//	The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -3794,15 +3805,21 @@ func (client *baseClient) ZAddIncr(
 	return client.zAddIncrBase(key, options)
 }
 
-// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+//
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key - The key of the set.
-//	member - The member to add to.
-//	increment - The increment to add to the member's score.
+//	key - The key of the sorted set.
+//	member - A member in the sorted set to increment.
+//	increment - The score to increment the member.
 //	opts - The options for the command. See [ZAddOptions] for details.
 //
 // Return value:
@@ -4220,14 +4237,14 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //
 // Return value:
 //
-//	A map of elements and their scores within the specified range.
-//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+//	An array of elements and their scores within the specified range.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRangeWithScores(
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	queryArgs, err := rangeQuery.ToArgs()
@@ -4241,7 +4258,15 @@ func (client *baseClient) ZRangeWithScores(
 		return nil, err
 	}
 
-	return handleStringDoubleMapResponse(result)
+	needsReverse := false
+	for _, arg := range args {
+		if arg == "REV" {
+			needsReverse = true
+			break
+		}
+	}
+
+	return handleSortedSetWithScoresResponse(result, needsReverse)
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
@@ -4541,7 +4566,7 @@ func (client *baseClient) XAutoClaim(
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	options - Options detailing how to read the stream.
+//	options - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Return value:
 //
@@ -4629,7 +4654,7 @@ func (client *baseClient) XAutoClaimJustId(
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	opts - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Return value:
 //
@@ -4985,19 +5010,7 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
+func (client *baseClient) echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -6015,7 +6028,7 @@ func (client *baseClient) CopyWithOptions(
 // Return value:
 //
 //	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRange(
@@ -6044,7 +6057,8 @@ func (client *baseClient) XRange(
 // Return value:
 //
 //	An `array` of stream entry data, where entry data is an array of
-//	pairings with format `[[field, entry], [field, entry], ...]`. Returns `nil` if `count` is non-positive.
+//	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (client *baseClient) XRangeWithOptions(
@@ -6390,13 +6404,13 @@ func (client *baseClient) ZInter(keys options.KeyArray) ([]string, error) {
 //
 // Return value:
 //
-//	A map of members to their scores.
+//	An array of members to their scores.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (client *baseClient) ZInterWithScores(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions options.ZInterOptions,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6411,7 +6425,7 @@ func (client *baseClient) ZInterWithScores(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -6530,19 +6544,19 @@ func (client *baseClient) ZDiff(keys []string) ([]string, error) {
 //
 // Return value:
 //
-//	A `Map` of elements and their scores representing the difference between the sorted sets.
+//	An `Array` of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty `Map`.
+//	command returns an empty `Array`.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
-func (client *baseClient) ZDiffWithScores(keys []string) (map[string]float64, error) {
+func (client *baseClient) ZDiffWithScores(keys []string) ([]MemberAndScore, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -6636,7 +6650,7 @@ func (client *baseClient) ZUnion(keys options.KeyArray) ([]string, error) {
 func (client *baseClient) ZUnionWithScores(
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zUnionOptions *options.ZUnionOptions,
-) (map[string]float64, error) {
+) ([]MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6651,7 +6665,7 @@ func (client *baseClient) ZUnionWithScores(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringDoubleMapResponse(result)
+	return handleSortedSetWithScoresResponse(result, false)
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -7751,6 +7765,246 @@ func (client *baseClient) FCallReadOnlyWithKeysAndArgs(
 	return handleAnyResponse(result)
 }
 
+// Lists the currently active channels.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	An array of active channel names.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannels() ([]string, error) {
+	result, err := client.executeCommand(C.PubSubChannels, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Lists the currently active channels matching the specified pattern.
+//
+// Pattern can be any glob-style pattern:
+// - h?llo matches hello, hallo and hxllo
+// - h*llo matches hllo and heeeello
+// - h[ae]llo matches hello and hallo, but not hillo
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single array.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - The pattern to match channel names against.
+//
+// Return value:
+//
+//	An array of active channel names matching the pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-channels
+func (client *baseClient) PubSubChannelsWithPattern(pattern string) ([]string, error) {
+	args := []string{pattern}
+	result, err := client.executeCommand(C.PubSubChannels, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns the number of patterns that are subscribed to by clients.
+//
+// This returns the total number of unique patterns that all clients are subscribed to,
+// not the count of clients subscribed to patterns.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	The number of patterns that are subscribed to by clients.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numpat
+func (client *baseClient) PubSubNumPat() (int64, error) {
+	result, err := client.executeCommand(C.PubSubNumPat, []string{})
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Returns the number of subscribers for the specified channels.
+//
+// The count only includes clients subscribed to exact channels, not pattern subscriptions.
+// If no channels are specified, an empty map is returned.
+//
+// When used in cluster mode, the command is routed to all nodes and aggregates
+// the responses into a single map.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel names to get subscriber counts for.
+//
+// Return value:
+//
+//	A map of channel names to their subscriber counts.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-numsub
+func (client *baseClient) PubSubNumSub(channels ...string) (map[string]int64, error) {
+	result, err := client.executeCommand(C.PubSubNumSub, channels)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringIntMapResponse(result)
+}
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *baseClient) FunctionKill() (string, error) {
+	result, err := client.executeCommand(C.FunctionKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *baseClient) FunctionList(query FunctionListQuery) ([]LibraryInfo, error) {
+	response, err := client.executeCommand(C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
+}
+
+// Returns the serialized payload of all loaded libraries.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to a random node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *baseClient) FunctionDump() (string, error) {
+	result, err := client.executeCommand(C.FunctionDump, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestore(payload string) (string, error) {
+	result, err := client.executeCommand(C.FunctionRestore, []string{payload})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	When in cluster mode, the command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *baseClient) FunctionRestoreWithPolicy(payload string, policy options.FunctionRestorePolicy) (string, error) {
+	result, err := client.executeCommand(C.FunctionRestore, []string{payload, string(policy)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
 // Executes a Lua script on the server.
 //
 // This function simplifies the process of invoking scripts on the server by using an object that
@@ -7817,27 +8071,6 @@ func (client *baseClient) InvokeScriptWithOptions(script options.Script, scriptO
 	}
 
 	return handleAnyResponse(response)
-}
-
-// Publish posts a message to the specified channel. Returns the number of clients that received the message.
-//
-// Channel can be any string, but common patterns include using "." to create namespaces like
-// "news.sports" or "news.weather".
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/publish
-func (client *baseClient) Publish(channel string, message string) (int64, error) {
-	if message == "" || channel == "" {
-		return 0, goErr.New("both message and channel are required for Publish command")
-	}
-	args := []string{channel, message}
-	result, err := client.executeCommand(C.Publish, args)
-	if err != nil {
-		return 0, err
-	}
-
-	return handleIntResponse(result)
 }
 
 // executeScriptWithRoute executes a Lua script with the given hash, keys, args, and routing information.
@@ -7931,33 +8164,6 @@ func (client *baseClient) executeScriptWithRoute(
 		return nil, payload.error
 	}
 	return payload.value, nil
-}
-
-// Kills a function that is currently executing.
-//
-// `FUNCTION KILL` terminates read-only functions only.
-//
-// Since:
-//
-//	Valkey 7.0 and above.
-//
-// Note:
-//
-//	When in cluster mode, this command will be routed to all nodes.
-//
-// See [valkey.io] for details.
-//
-// Return value:
-//
-//	`OK` if function is terminated. Otherwise, throws an error.
-//
-// [valkey.io]: https://valkey.io/commands/function-kill/
-func (client *baseClient) FunctionKill() (string, error) {
-	result, err := client.executeCommand(C.FunctionKill, []string{})
-	if err != nil {
-		return DefaultStringResponse, err
-	}
-	return handleStringResponse(result)
 }
 
 // Checks existence of scripts in the script cache by their SHA1 digest.
