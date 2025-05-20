@@ -11,7 +11,6 @@ use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
-use glide_core::ConnectionRequest;
 use protobuf::Message;
 use redis::ObjectType;
 use redis::ScanStateRC;
