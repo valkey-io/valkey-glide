@@ -23,7 +23,7 @@ To **build and serve** the site locally (deploy to localhost), run the following
 ```
 
 ## Deployment
-Documentation deployment is handled through GitHub Actions using our "Deploy mkdocs website to GitHub Pages" workflow:
+Documentation deployment is handled through GitHub Actions using our ["Deploy mkdocs website to GitHub Pages" workflow](../.github/workflows/mkdocs-deploy.yml):
 
 1. The workflow can only be triggered manually (workflow_dispatch), and should be triggered after right after new version releases.
 2. It only accepts triggers from release branches (branches starting with `release-`), to ensure only released versions are documented
