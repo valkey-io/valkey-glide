@@ -403,6 +403,22 @@ func (client *GlideClusterClient) FlushDBWithOptions(flushOptions options.FlushC
 }
 
 // Echo the provided message back.
+// The command will be routed to a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *GlideClient) Echo(message string) (Result[string], error) {
+	return client.echo(message)
+}
+
+// Echo the provided message back.
 //
 // Parameters:
 //
