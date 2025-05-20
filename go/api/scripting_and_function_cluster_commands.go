@@ -44,6 +44,25 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionKillWithRoute(route options.RouteOption) (string, error)
 
+	InvokeScriptWithRoute(script options.Script, route options.RouteOption) (ClusterValue[any], error)
+
+	InvokeScriptWithClusterOptions(
+		script options.Script,
+		clusterScriptOptions options.ClusterScriptOptions,
+	) (ClusterValue[any], error)
+
+	ScriptExists(sha1s []string) ([]bool, error)
+
+	ScriptExistsWithRoute(sha1s []string, route options.RouteOption) ([]bool, error)
+
+	ScriptFlush() (string, error)
+
+	ScriptFlushWithOptions(options options.ScriptFlushOptions) (string, error)
+
+	ScriptKill() (string, error)
+
+	ScriptKillWithRoute(route options.RouteOption) (string, error)
+
 	FunctionListWithRoute(query FunctionListQuery, route options.RouteOption) (ClusterValue[[]LibraryInfo], error)
 
 	FunctionDumpWithRoute(route config.Route) (ClusterValue[string], error)
