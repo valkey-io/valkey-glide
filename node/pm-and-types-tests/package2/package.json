@@ -1,7 +1,6 @@
 {
     "name": "@test/consumer",
     "version": "1.0.0",
-    "packageManager": "yarn@4.9.1",
     "description": "Consumer package that uses @test/common",
     "main": "dist/index.js",
     "scripts": {
