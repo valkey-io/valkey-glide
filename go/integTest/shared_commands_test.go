@@ -6599,7 +6599,9 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 func (suite *GlideTestSuite) TestObjectEncoding() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1: Check object encoding for embstr
-		key := "{keyName}" + uuid.NewString()
+		// We can't use UUID for a key here because of a behavior change with long keys in Valkey 8.1
+		// see https://github.com/valkey-io/valkey/issues/2026
+		key := "testKey"
 		value1 := "Hello"
 		t := suite.T()
 		suite.verifyOK(client.Set(key, value1))
