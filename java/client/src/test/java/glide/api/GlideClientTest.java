@@ -14056,7 +14056,10 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<String> response =
                 service.restore(
-                        key, ttl, value, RestoreOptions.builder().replace().absttl().frequency(frequency).build());
+                        key,
+                        ttl,
+                        value,
+                        RestoreOptions.builder().replace().absttl().frequency(frequency).build());
 
         // verify
         assertEquals(testResponse, response);
