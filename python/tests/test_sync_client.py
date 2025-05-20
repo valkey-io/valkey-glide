@@ -110,7 +110,7 @@ class TestGlideClients:
         assert isinstance(info, bytes)
         info_str = info.decode()
         print(info_str)
-        assert "lib-name=GlidePyFFI" in info_str
+        assert "lib-name=GlidePySync" in info_str
         assert "lib-ver=unknown" in info_str
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

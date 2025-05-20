@@ -26,6 +26,8 @@ VENV_DIR = PYTHON_DIR / VENV_NAME
 VENV_BIN_DIR = VENV_DIR / "bin"
 PYTHON_EXE = VENV_BIN_DIR / "python"
 FFI_DIR = GLIDE_ROOT / "ffi"
+GLIDE_SYNC_NAME = "GlidePySync"
+GLIDE_ASYNC_NAME = "GlidePy"
 
 
 def check_dependencies() -> None:
@@ -129,22 +131,35 @@ def generate_protobuf_files() -> None:
     print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}")
 
 
-def build_async_client(release: bool, no_cache: bool = False) -> None:
+def build_async_client(
+    glide_version: str, release: bool, no_cache: bool = False
+) -> None:
     print(
         f"[INFO] Building async client in {'release' if release else 'debug'} mode..."
     )
     env = activate_venv(no_cache)
+    env.update(
+        {  # Update it with your GLIDE variables
+            "GLIDE_NAME": GLIDE_ASYNC_NAME,
+            "GLIDE_VERSION": glide_version,
+        }
+    )
     generate_protobuf_files()
 
     cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
 
-    run_command(cmd, cwd=PYTHON_DIR, env=env, label="maturin develop")
+    run_command(
+        cmd,
+        cwd=PYTHON_DIR,
+        env=env,
+        label="maturin develop",
+    )
     print("[OK] Async client build completed")
 
 
-def build_sync_client(glide_version) -> None:
+def build_sync_client(glide_version: str) -> None:
     print(f"[INFO] Building sync client with version={glide_version}...")
     generate_protobuf_files()
 
@@ -152,7 +167,11 @@ def build_sync_client(glide_version) -> None:
         ["cargo", "build"],
         cwd=FFI_DIR,
         label="cargo build ffi",
-        env={"GLIDE_NAME": "GlidePyFFI", "GLIDE_VERSION": glide_version, **os.environ},
+        env={
+            "GLIDE_NAME": GLIDE_SYNC_NAME,
+            "GLIDE_VERSION": glide_version,
+            **os.environ,
+        },
     )
 
     print("[OK] Sync client build completed")
@@ -264,7 +283,7 @@ Examples:
         "--glide-version",
         type=str,
         default="unknown",
-        help="Specify the sync client version (meant to be used in CD)",
+        help="Specify the client version that will be used for server identification and displayed in CLIENT INFO output",
     )
 
     subparsers.add_parser(
@@ -306,7 +325,7 @@ Examples:
         no_cache = args.no_cache
         if args.client in ["async", "all"]:
             print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(release, no_cache)
+            build_async_client(args.glide_version, release, no_cache)
         if args.client in ["sync", "all"]:
             print("🛠 Building sync client...")
             build_sync_client(glide_version=args.glide_version)
