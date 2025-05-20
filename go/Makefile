@@ -12,7 +12,8 @@ UNAME := $(shell uname)
 ARCH := $(shell uname -m)
 
 # Set default values for GLIDE_NAME and GLIDE_VERSION
-# GLIDE_VERSION is modifiable by changing the env var, to allow for changing it during CD
+# GLIDE_VERSION is automatically set during the deployment workflow based on the value defined in go-cd.yml.
+# For local builds, you can manually specify the version using `GLIDE_VERSION=<version> make build`
 GLIDE_NAME = GlideGo
 GLIDE_VERSION ?= unknown
 
