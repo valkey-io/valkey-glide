@@ -260,11 +260,11 @@ jobs:
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
-                    napi build --release --strip --platform --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
+                    napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
 
                   # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
                   else
-                    napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../src/native.js --dts ../src/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
+                    napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
                   fi
 
                   # Create directory for this target's node file
@@ -293,9 +293,8 @@ jobs:
               with:
                   name: js-files-${{ github.run_id }}
                   path: |
-                      ./node/src/native.js
-                      ./node/src/native.d.ts
-                      ./node/src/native.js.map
+                      ./node/build-ts/native.js
+                      ./node/build-ts/native.d.ts
                   retention-days: 1
                   if-no-files-found: error
 
@@ -311,13 +310,18 @@ jobs:
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+            - name: Create Build Directory
+              shell: bash
+              run: |
+                  # Create a build directory for the artifacts
+                  mkdir -p ./node/build-ts
 
             # Put the native.js and native.d.ts files in the src directory
             - name: Download Module js files
               uses: actions/download-artifact@v4
               with:
                   name: js-files-${{ github.run_id }}
-                  path: ./node/src
+                  path: ./node/build-ts
 
             # Download all native modules
             - name: Download all native modules

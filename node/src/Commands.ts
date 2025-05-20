@@ -2,8 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "./native";
 import Long from "long";
+import {
+    createLeakedStringVec,
+    MAX_REQUEST_ARGS_LEN,
+} from "../build-ts/native";
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -17,11 +20,12 @@ import {
     Score,
     SortedSetDataType,
 } from "./BaseClient";
+
+import { command_request } from "../build-ts/ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient";
-import { command_request } from "../build-ts/ProtobufMessage";
 
 import RequestType = command_request.RequestType;
 

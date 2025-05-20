@@ -124,7 +124,7 @@ jobs:
 
             # Additional tests for specific configurations
             - name: Test hybrid node modules - commonjs
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x86' && matrix.node == '23.x' }}
               run: |
                   npm install
                   npm run test
@@ -133,7 +133,7 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
             - name: Test hybrid node modules - ecma
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
               run: |
                   npm install
                   npm run test
@@ -142,9 +142,23 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
               with:
                   language-flag: -node
+
+            - name: Test yarn compatibility and correct typescript
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              working-directory: ./node/pm-and-types-tests
+              run: |
+                  npm install -g yarn
+                  cd package1
+                  yarn install
+                  yarn run build
+                  cd ../package2
+                  yarn install
+                  yarn run build
+              env:
+                  JEST_HTML_REPORTER_OUTPUT_PATH: test-report-yarn.html
 
             - name: Upload test reports
               if: always()

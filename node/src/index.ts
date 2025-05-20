@@ -6,7 +6,7 @@
  * - All TypeScript client-side APIs from ./src/
  */
 
-import * as Native from "./native";
+import * as Native from "../build-ts/native";
 
 export const {
     Level,

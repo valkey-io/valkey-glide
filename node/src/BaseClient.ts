@@ -4,6 +4,15 @@
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs/minimal";
 import {
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    getStatistics,
+    valueFromSplitPointer,
+} from "../build-ts/native";
+import {
     command_request,
     connection_request,
     response,
@@ -245,15 +254,6 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    getStatistics,
-    valueFromSplitPointer,
-} from "./native";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -766,7 +766,7 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
-type BaseOptions = RouteOption & DecoderOption;
+export type BaseOptions = RouteOption & DecoderOption;
 export type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
