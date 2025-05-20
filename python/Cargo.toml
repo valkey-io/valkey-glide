@@ -22,9 +22,6 @@ redis = { path = "../glide-core/redis-rs/redis", features = [
 glide-core = { path = "../glide-core", features = ["socket-layer"] }
 logger_core = { path = "../logger_core" }
 
-[package.metadata.maturin]
-python-source = "python"
-
 [profile.release]
 lto = true
 strip = "symbols"

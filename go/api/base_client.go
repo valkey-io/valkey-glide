@@ -427,16 +427,15 @@ func (client *baseClient) submitConnectionPasswordUpdate(password string, immedi
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Parameters:
 //
-//		password - The new password to update the connection with.
-//		immediateAuth - immediateAuth A boolean flag. If true, the client will
-//	    authenticate immediately with the new password against all connections, Using AUTH
-//	    command. If password supplied is an empty string, the client will not perform auth and a warning
-//	    will be returned. The default is `false`.
+//	password - The new password to update the connection with.
+//	immediateAuth - immediateAuth A boolean flag. If true, the client will authenticate immediately with the new password
+//					against all connections, Using AUTH command. If password supplied is an empty string, the client will
+//					not perform auth and a warning will be returned. The default is `false`.
 //
 // Return value:
 //
@@ -455,8 +454,8 @@ func (client *baseClient) UpdateConnectionPassword(password string, immediateAut
 //
 // Note:
 //
-// This method updates the client's internal password configuration and does not perform
-// password rotation on the server side.
+//	This method updates the client's internal password configuration and does not perform
+//	password rotation on the server side.
 //
 // Return value:
 //
@@ -1430,7 +1429,7 @@ func (client *baseClient) HScanWithOptions(
 // Return value:
 //
 //	A random field name from the hash stored at `key`, or `nil` when
-//	  the key does not exist.
+//	the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
@@ -1453,12 +1452,13 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 //
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//		    If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	An array of random field names from the hash stored at `key`,
-//	   or an empty array when the key does not exist.
+//	or an empty array when the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
@@ -1482,13 +1482,14 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //
 //	key - The key of the hash.
 //	count - The number of field names to return.
-//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//	  		If `count` is positive, returns unique elements.
+//			If negative, allows for duplicates.
 //
 // Return value:
 //
 //	A 2D `array` of `[field, value]` arrays, where `field` is a random
-//	  field name from the hash and `value` is the associated value of the field name.
-//	  If the hash does not exist or is empty, the response will be an empty array.
+//	field name from the hash and `value` is the associated value of the field name.
+//	If the hash does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
@@ -5009,19 +5010,7 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-// Echo the provided message back.
-// The command will be routed a random node.
-//
-// Parameters:
-//
-//	message - The provided message.
-//
-// Return value:
-//
-//	The provided message
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (client *baseClient) Echo(message string) (Result[string], error) {
+func (client *baseClient) echo(message string) (Result[string], error) {
 	result, err := client.executeCommand(C.Echo, []string{message})
 	if err != nil {
 		return CreateNilStringResult(), err
