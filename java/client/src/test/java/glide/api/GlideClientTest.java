@@ -14035,13 +14035,7 @@ public class GlideClientTest {
 
         GlideString[] arg =
                 new GlideString[] {
-                    key,
-                    gs(Long.toString(ttl)),
-                    gs(value),
-                    gs("REPLACE"),
-                    gs("ABSTTL"),
-                    gs("FREQ"),
-                    gs("5")
+                    key, gs(Long.toString(ttl)), gs(value), gs("REPLACE"), gs("ABSTTL"), gs("FREQ"), gs("5")
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
