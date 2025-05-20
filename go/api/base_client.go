@@ -8004,3 +8004,271 @@ func (client *baseClient) FunctionRestoreWithPolicy(payload string, policy optio
 	}
 	return handleOkResponse(result)
 }
+
+// Executes a Lua script on the server.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading and execution will all be handled internally. If
+// the script has not already been loaded, it will be loaded automatically using the
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
+// command.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	script - The Lua script to execute.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *baseClient) InvokeScript(script options.Script) (any, error) {
+	response, err := client.executeScriptWithRoute(script.GetHash(), []string{}, []string{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyResponse(response)
+}
+
+// Executes a Lua script on the server with additional options.
+//
+// This function simplifies the process of invoking scripts on the server by using an object that
+// represents a Lua script. The script loading, argument preparation, and execution will all be
+// handled internally. If the script has not already been loaded, it will be loaded automatically
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the
+// `EVALSHA` command.
+//
+// Note:
+//
+//	When in cluster mode:
+//	- all `keys` in `scriptOptions` must map to the same hash slot.
+//	- if no `keys` are given, command will be routed to a random primary node.
+//
+// See [LOAD] and [EVALSHA] for details.
+//
+// Parameters:
+//
+//	script - The Lua script to execute.
+//	scriptOptions - Options for script execution including keys and arguments.
+//
+// Return value:
+//
+//	The result of the script execution.
+//
+// [LOAD]: https://valkey.io/commands/script-load/
+// [EVALSHA]: https://valkey.io/commands/evalsha/
+func (client *baseClient) InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error) {
+	keys := scriptOptions.GetKeys()
+	args := scriptOptions.GetArgs()
+
+	response, err := client.executeScriptWithRoute(script.GetHash(), keys, args, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyResponse(response)
+}
+
+// executeScriptWithRoute executes a Lua script with the given hash, keys, args, and routing information.
+//
+// Parameters:
+//
+//	hash - The SHA1 hash of the script to execute.
+//	keys - The keys that the script will access.
+//	args - The arguments to pass to the script.
+//	route - Optional routing information for the script execution.
+//
+// Return value:
+//
+//	A CommandResponse containing the result of the script execution.
+func (client *baseClient) executeScriptWithRoute(
+	hash string,
+	keys []string,
+	args []string,
+	route config.Route,
+) (*C.struct_CommandResponse, error) {
+	var cKeysPtr *C.uintptr_t = nil
+	var keysLengthsPtr *C.ulong = nil
+	if len(keys) > 0 {
+		cKeys, keysLengths := toCStrings(keys)
+		cKeysPtr = &cKeys[0]
+		keysLengthsPtr = &keysLengths[0]
+	}
+
+	var cArgsPtr *C.uintptr_t = nil
+	var argsLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argsLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argsLengthsPtr = &argsLengths[0]
+	}
+
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := routeToProtobuf(route)
+		if err != nil {
+			return nil, &errors.RequestError{Msg: "ExecuteScript failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	C.invoke_script(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.CString(hash),
+		C.size_t(len(keys)),
+		cKeysPtr,
+		keysLengthsPtr,
+		C.size_t(len(args)),
+		cArgsPtr,
+		argsLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
+	)
+	client.mu.Unlock()
+
+	payload := <-resultChannel
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+	return payload.value, nil
+}
+
+// Checks existence of scripts in the script cache by their SHA1 digest.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	sha1s - SHA1 digests of Lua scripts to be checked.
+//
+// Return value:
+//
+//	An array of boolean values indicating the existence of each script.
+//
+// [valkey.io]: https://valkey.io/commands/script-exists
+func (client *baseClient) ScriptExists(
+	sha1s []string,
+) ([]bool, error) {
+	response, err := client.executeCommand(C.ScriptExists, sha1s)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleBoolArrayResponse(response)
+}
+
+// Removes all the scripts from the script cache.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *baseClient) ScriptFlush() (string, error) {
+	result, err := client.executeCommand(C.ScriptFlush, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Removes all the scripts from the script cache with the specified flush mode.
+// The mode can be either SYNC or ASYNC.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flush mode (SYNC or ASYNC).
+//
+// Return value:
+//
+//	OK on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-flush/
+func (client *baseClient) ScriptFlushWithMode(mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(C.ScriptFlush, []string{string(mode)})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ScriptShow returns the original source code of a script in the script cache.
+//
+// Arguments:
+//
+//	sha1: The SHA1 digest of the script.
+//
+// Return value:
+//
+//	The original source code of the script, if present in the cache.
+//	If the script is not found in the cache, an error is thrown.
+//
+// Since: Valkey 8.0.0
+//
+// [valkey.io]: https://valkey.io/commands/script-show
+func (client *baseClient) ScriptShow(sha1 string) (string, error) {
+	result, err := client.executeCommand(C.ScriptShow, []string{sha1})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the
+// script.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Return value:
+//
+//	`OK` if script is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/script-kill
+func (client *baseClient) ScriptKill() (string, error) {
+	result, err := client.executeCommand(C.ScriptKill, []string{})
+	if err != nil {
+		return DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}

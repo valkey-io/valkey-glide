@@ -29,6 +29,20 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FunctionKill() (string, error)
 
+	InvokeScript(script options.Script) (any, error)
+
+	InvokeScriptWithOptions(script options.Script, scriptOptions options.ScriptOptions) (any, error)
+
+	ScriptExists(sha1s []string) ([]bool, error)
+
+	ScriptFlush() (string, error)
+
+	ScriptFlushWithMode(mode options.FlushMode) (string, error)
+
+	ScriptShow(sha1 string) (string, error)
+
+	ScriptKill() (string, error)
+
 	FunctionList(query FunctionListQuery) ([]LibraryInfo, error)
 
 	FunctionDump() (string, error)
