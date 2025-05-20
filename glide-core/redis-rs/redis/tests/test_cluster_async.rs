@@ -2181,6 +2181,7 @@ mod cluster_async {
 
             // 4. Immediately try to get the second key while refresh is happening in background
             // This command should not be blocked despite the ongoing refresh
+            println!("Sending the 2nd GET");
             let result: RedisResult<String> = connection.get(key2).await;
 
             // 5. Assert that the command completed successfully without timing out
@@ -2191,7 +2192,7 @@ mod cluster_async {
 
             assert_eq!(
                 result.unwrap(),
-                "value2",
+                "value2-",
                 "The second GET command returned incorrect value"
             );
 
