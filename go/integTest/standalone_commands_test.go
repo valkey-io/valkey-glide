@@ -18,12 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func (suite *GlideTestSuite) TestDBG() {
-	client := suite.defaultClient()
-	// client, _ := api.NewGlideClient(suite.defaultClientConfig())
-	client.DBG()
-}
-
 func (suite *GlideTestSuite) TestCustomCommandInfo() {
 	client := suite.defaultClient()
 	result, err := client.CustomCommand(context.Background(), []string{"INFO"})
