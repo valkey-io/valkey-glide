@@ -1760,6 +1760,249 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_refresh_topology_is_blocking() {
+        // Test: Head-of-Line Blocking During Slot Refresh
+        //
+        // This test verifies that during cluster topology refresh operations triggered by
+        // MOVED errors, the implementation exhibits head-of-line blocking behavior.
+        // When a client receives a MOVED error (indicating topology changes), it needs to
+        // refresh its slot mapping. This process blocks all subsequent commands until the
+        // refresh completes.
+        //
+        // The test employs the following strategy to verify the blocking behavior:
+        //
+        // 1. Trigger Slot Refresh: Send a blocking BLPOP command that will receive a MOVED error when
+        //    slot 0 is migrated, initiating a topology refresh operation.
+        //
+        // 2. Atomicly migrate slot and pause clients: Use SET SLOT and CLIENT PAUSE to artificially delay the node's
+        //    response during the refresh operation.
+        //
+        // 3. Verify Blocking Behavior: While the refresh is in progress, send a GET command
+        //    to a different node in the cluster and verify it times out due to being blocked.
+        //
+        // This test intentionally demonstrates how topology refresh operations can block
+        // subsequent commands, even those directed to healthy nodes in the cluster.
+
+        // Create a cluster with 3 nodes
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| {
+                builder
+                    .response_timeout(Duration::from_millis(2000))
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+                    .retries(0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            // STEP 1: Create two separate connections to the same cluster
+            let mut client1 = cluster.async_connection(None).await;
+            let mut client2 = cluster.async_connection(None).await;
+
+            // STEP 2: Prepare keys that hash to different shards
+            let slot0_key = "06S"; // This key should hash to slot 0
+            assert_eq!(get_slot(slot0_key.as_bytes()), 0);
+
+            let other_shard_key = "foo"; // This key hashes to slot 12182
+            assert_eq!(get_slot(other_shard_key.as_bytes()), 12182);
+
+            // Initialize the keys with values
+            let _: () = client1.set(other_shard_key, "value2").await.unwrap();
+
+            // Get node IDs for migration
+            let shards_info = client1
+                .route_command(
+                    &cmd("CLUSTER").arg("SHARDS"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        0,
+                        SlotAddr::Master,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            let (_, target_node_id) = extract_node_ids_from_shards(shards_info);
+
+            // STEP 3: Launch a background task that will handle the blocking BLPOP and GET commands
+            let client1_handle = tokio::spawn(async move {
+                // Send BLPOP which will trigger a MOVED error and topology refresh
+                // Note, this command will timeout after 2000ms due to response_timeout config
+                let blpop_result = client1.blpop::<_, String>(slot0_key, 0.0).await;
+                assert!(blpop_result.is_err());
+
+                // Now immediately try to access another key on a different shard
+
+                // Apply timeout from when the call is made, not when it starts executing
+                // This GET should time out as it's blocked by the topology refresh
+                let get_result = tokio::time::timeout(
+                    Duration::from_millis(1000),
+                    client1.get::<_, redis::Value>(other_shard_key),
+                )
+                .await;
+
+                // Assert that we got a timeout error due to head-of-line blocking
+                assert!(get_result.is_err());
+                assert!(matches!(
+                    get_result.unwrap_err(),
+                    tokio::time::error::Elapsed { .. }
+                ));
+
+                true
+            });
+
+            // STEP 4: Give the BLPOP time to start blocking - it will have 1500 ms to wait for MOVED
+            sleep(futures_time::time::Duration::from_millis(500)).await;
+
+            // STEP 5: Trigger migration to cause MOVED error and delay the response
+            let mut pipe = redis::pipe();
+            pipe.atomic()
+                .cmd("CLUSTER")
+                .arg("SETSLOT")
+                .arg("0")
+                .arg("NODE")
+                .arg(&target_node_id)
+                .ignore()
+                .cmd("CLIENT")
+                .arg("PAUSE")
+                .arg(2000)
+                .ignore();
+
+            // Execute migration pipeline on client2
+            let _ = client2
+                .route_pipeline(
+                    &pipe,
+                    0,
+                    2,
+                    Some(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        0,
+                        SlotAddr::Master,
+                    ))),
+                    None,
+                )
+                .await;
+
+            // STEP 6: Wait for client1 handle to complete
+            let result = client1_handle.await.unwrap();
+
+            assert!(
+                result,
+                "The test should pass, demonstrating blocking behavior"
+            );
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    /// Helper function to extract node IDs from CLUSTER SHARDS response
+    fn extract_node_ids_from_shards(shards_info: Value) -> (String, String) {
+        let mut node_id_for_slot0 = None;
+        let mut other_node_id = None;
+
+        match &shards_info {
+            Value::Array(shards) => {
+                for shard in shards {
+                    if let Value::Array(shard_data) = shard {
+                        let mut slots = None;
+                        let mut nodes = None;
+
+                        // Extract slots and nodes arrays
+                        for i in (0..shard_data.len()).step_by(2) {
+                            if i + 1 >= shard_data.len() {
+                                continue; // No value for this key
+                            }
+
+                            if let Value::BulkString(key_bytes) = &shard_data[i] {
+                                let key = String::from_utf8_lossy(key_bytes);
+                                if key.contains("slots") {
+                                    slots = shard_data.get(i + 1);
+                                } else if key.contains("nodes") {
+                                    nodes = shard_data.get(i + 1);
+                                }
+                            }
+                        }
+
+                        // Check if this shard has slot 0
+                        let has_slot0 = if let Some(Value::Array(slot_ranges)) = slots {
+                            if slot_ranges.len() >= 2 {
+                                if let (Value::Int(start), Value::Int(end)) =
+                                    (&slot_ranges[0], &slot_ranges[1])
+                                {
+                                    *start <= 0 && *end >= 0
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        };
+
+                        // Extract node ID if this is the slot 0 shard or we need another node
+                        if let Some(Value::Array(nodes_array)) = nodes {
+                            if !nodes_array.is_empty() {
+                                if let Value::Array(node_data) = &nodes_array[0] {
+                                    let mut node_id = None;
+
+                                    // Find the node ID in the node data
+                                    for i in (0..node_data.len()).step_by(2) {
+                                        if i + 1 >= node_data.len() {
+                                            continue;
+                                        }
+
+                                        if let Value::BulkString(key_bytes) = &node_data[i] {
+                                            let key = String::from_utf8_lossy(key_bytes);
+                                            if key.contains("id") {
+                                                if let Value::BulkString(id_bytes) =
+                                                    &node_data[i + 1]
+                                                {
+                                                    node_id = Some(
+                                                        String::from_utf8_lossy(id_bytes)
+                                                            .to_string(),
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(id) = node_id {
+                                        if has_slot0 {
+                                            node_id_for_slot0 = Some(id);
+                                        } else if other_node_id.is_none() {
+                                            other_node_id = Some(id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Break early if we found both IDs
+                        if node_id_for_slot0.is_some() && other_node_id.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => panic!("Unexpected CLUSTER SHARDS response type: {:?}", shards_info),
+        }
+
+        if node_id_for_slot0.is_none() {
+            panic!("Could not find master node for slot 0 in CLUSTER SHARDS output");
+        }
+
+        if other_node_id.is_none() {
+            panic!("Could not find another master node in CLUSTER SHARDS output");
+        }
+
+        (node_id_for_slot0.unwrap(), other_node_id.unwrap())
+    }
+
+    #[test]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
         // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
         // stored on the primary node of another shard.
