@@ -4,7 +4,6 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
-import { OpenTelemetryConfig } from "glide-rs";
 import {
     ClusterBatch,
     GlideClient,
@@ -13,6 +12,7 @@ import {
     ProtocolVersion,
 } from "..";
 import ValkeyCluster from "../../utils/TestUtils";
+import { OpenTelemetryConfig } from "../build-ts/native";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,

@@ -34,7 +34,7 @@
  * - Invalid configuration will throw an error synchronously when calling `OpenTelemetry.init()`.
  */
 
-import { InitOpenTelemetry, OpenTelemetryConfig } from "glide-rs";
+import { InitOpenTelemetry, OpenTelemetryConfig } from "../build-ts/native";
 import { ConfigurationError } from "./Errors";
 import { Logger } from "./Logger";
 
