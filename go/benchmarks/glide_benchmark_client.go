@@ -5,10 +5,11 @@ package main
 import (
 	"github.com/valkey-io/valkey-glide/go/api"
 	"github.com/valkey-io/valkey-glide/go/api/config"
+	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
 )
 
 type glideBenchmarkClient struct {
-	client api.BaseClient
+	client interfaces.BaseClientCommands
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *connectionSettings) error {
