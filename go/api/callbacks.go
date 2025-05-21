@@ -49,7 +49,6 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 
 //export failureCallback
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	defer C.free_error_message(cErrorMessage)
 	msg := C.GoString(cErrorMessage)
 	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: nil, error: errors.GoError(uint32(cErrorType), msg)}
