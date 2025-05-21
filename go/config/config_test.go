@@ -67,7 +67,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		ReadFrom:           protobuf.ReadFrom_PreferReplica,
 		ClusterModeEnabled: false,
 		AuthenticationInfo: &protobuf.AuthenticationInfo{Username: username, Password: password},
-		RequestTimeout:     uint32(timeout),
+		RequestTimeout:     uint32(timeout.Milliseconds()),
 		ClientName:         clientName,
 		ConnectionRetryStrategy: &protobuf.ConnectionRetryStrategy{
 			NumberOfRetries: uint32(retries),
