@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 // TestPubSub_Patterns tests all combinations of client types and message reading methods
@@ -27,7 +27,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 	}{
 		{
 			name:           "Standalone with Callback",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -36,7 +36,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Standalone with WaitForMessage",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -45,7 +45,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Standalone with SignalChannel",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -54,7 +54,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Standalone with SyncLoop",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -63,7 +63,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with Callback",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -72,7 +72,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with WaitForMessage",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -81,7 +81,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with SignalChannel",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -90,7 +90,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with SyncLoop",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -99,7 +99,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with Callback Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        true,
@@ -108,7 +108,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with WaitForMessage Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -117,7 +117,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with SignalChannel Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -126,7 +126,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 		},
 		{
 			name:           "Cluster with SyncLoop Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -150,7 +150,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			}
 
 			var receiver interfaces.BaseClientCommands
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -165,10 +165,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 
 			// Publish test message
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(tt.channelName, tt.messageContent, tt.sharded)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish(tt.channelName, tt.messageContent, tt.sharded)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(tt.channelName, tt.messageContent)
+				_, err = publisher.(*glide.Client).Publish(tt.channelName, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -197,7 +197,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 	}{
 		{
 			name:           "Standalone with Callback",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -206,7 +206,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Standalone with WaitForMessage",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -215,7 +215,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Standalone with SignalChannel",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -224,7 +224,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Standalone with SyncLoop",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -233,7 +233,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with Callback",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -242,7 +242,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with WaitForMessage",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -251,7 +251,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with SignalChannel",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -260,7 +260,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with SyncLoop",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -269,7 +269,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with Callback Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        true,
@@ -278,7 +278,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with WaitForMessage Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -287,7 +287,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with SignalChannel Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -296,7 +296,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 		},
 		{
 			name:           "Cluster with SyncLoop Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -321,7 +321,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 
 			// Create multiple subscribers
 			const numSubscribers = 3
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			subscribers := make([]interfaces.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
@@ -342,10 +342,10 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 
 			// Publish test message
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(tt.channelName, tt.messageContent, tt.sharded)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish(tt.channelName, tt.messageContent, tt.sharded)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(tt.channelName, tt.messageContent)
+				_, err = publisher.(*glide.Client).Publish(tt.channelName, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
@@ -374,7 +374,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 	}{
 		{
 			name:           "Standalone with Callback",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			pattern:        "test-pattern-*",
@@ -383,7 +383,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Standalone with WaitForMessage",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -392,7 +392,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Standalone with SignalChannel",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -401,7 +401,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Standalone with SyncLoop",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -410,7 +410,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Cluster with Callback",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			pattern:        "test-pattern-*",
@@ -419,7 +419,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Cluster with WaitForMessage",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -428,7 +428,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Cluster with SignalChannel",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -437,7 +437,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 		},
 		{
 			name:           "Cluster with SyncLoop",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -457,7 +457,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			expectedMessages[tt.pattern] = tt.messageContent
 
 			var receiver interfaces.BaseClientCommands
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -473,20 +473,20 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			// Publish test messages to matching channels
 			for _, channel := range tt.channels {
 				var err error
-				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(channel, tt.messageContent, false)
+				if tt.clientType == ClusterClient {
+					_, err = publisher.(*glide.ClusterClient).Publish(channel, tt.messageContent, false)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(channel, tt.messageContent)
+					_, err = publisher.(*glide.Client).Publish(channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
 
 			// Publish a message to a non-matching channel
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish("other-channel", "should not receive", false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish("other-channel", "should not receive", false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish("other-channel", "should not receive")
+				_, err = publisher.(*glide.Client).Publish("other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -515,7 +515,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 	}{
 		{
 			name:           "Standalone with Callback",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -524,7 +524,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Standalone with WaitForMessage",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -533,7 +533,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Standalone with SignalChannel",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -542,7 +542,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Standalone with SyncLoop",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -551,7 +551,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with Callback",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        false,
@@ -560,7 +560,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with WaitForMessage",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -569,7 +569,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with SignalChannel",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -578,7 +578,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with SyncLoop",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        false,
@@ -587,7 +587,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with Callback Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			sharded:        true,
@@ -596,7 +596,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with WaitForMessage Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -605,7 +605,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with SignalChannel Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -614,7 +614,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 		},
 		{
 			name:           "Cluster with SyncLoop Sharded",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			sharded:        true,
@@ -643,7 +643,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			}
 
 			var receiver interfaces.BaseClientCommands
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -657,11 +657,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			time.Sleep(MESSAGE_PROCESSING_DELAY * time.Millisecond)
 
 			for _, channelName := range tt.channelNames {
-				if tt.clientType == GlideClusterClient {
-					_, err := publisher.(*api.GlideClusterClient).Publish(channelName, tt.messageContent, tt.sharded)
+				if tt.clientType == ClusterClient {
+					_, err := publisher.(*glide.ClusterClient).Publish(channelName, tt.messageContent, tt.sharded)
 					assert.Nil(t, err)
 				} else {
-					_, err := publisher.(*api.GlideClient).Publish(channelName, tt.messageContent)
+					_, err := publisher.(*glide.Client).Publish(channelName, tt.messageContent)
 					assert.Nil(t, err)
 				}
 			}
@@ -691,7 +691,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 	}{
 		{
 			name:           "Standalone with Callback",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			pattern:        "test-pattern-*",
@@ -700,7 +700,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Standalone with WaitForMessage",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -709,7 +709,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Standalone with SignalChannel",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -718,7 +718,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Standalone with SyncLoop",
-			clientType:     GlideClient,
+			clientType:     StandaloneClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -727,7 +727,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Cluster with Callback",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     CallbackMethod,
 			useCallback:    true,
 			pattern:        "test-pattern-*",
@@ -736,7 +736,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Cluster with WaitForMessage",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     WaitForMessageMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -745,7 +745,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Cluster with SignalChannel",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SignalChannelMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -754,7 +754,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 		},
 		{
 			name:           "Cluster with SyncLoop",
-			clientType:     GlideClusterClient,
+			clientType:     ClusterClient,
 			readMethod:     SyncLoopMethod,
 			useCallback:    false,
 			pattern:        "test-pattern-*",
@@ -777,7 +777,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			expectedMessages[tt.pattern] = tt.messageContent
 
 			var receiver interfaces.BaseClientCommands
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -793,20 +793,20 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			// Publish test messages to matching channels
 			for _, channel := range tt.channels {
 				var err error
-				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(channel, tt.messageContent, false)
+				if tt.clientType == ClusterClient {
+					_, err = publisher.(*glide.ClusterClient).Publish(channel, tt.messageContent, false)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(channel, tt.messageContent)
+					_, err = publisher.(*glide.Client).Publish(channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
 
 			// Publish a message to a non-matching channel
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish("other-channel", "should not receive", false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish("other-channel", "should not receive", false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish("other-channel", "should not receive")
+				_, err = publisher.(*glide.Client).Publish("other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -836,7 +836,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 	}{
 		{
 			name:            "Standalone with Callback",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      CallbackMethod,
 			useCallback:     true,
 			exactChannel:    "test-exact-channel",
@@ -846,7 +846,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Standalone with WaitForMessage",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      WaitForMessageMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -856,7 +856,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Standalone with SignalChannel",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      SignalChannelMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -866,7 +866,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Standalone with SyncLoop",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      SyncLoopMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -876,7 +876,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Cluster with Callback",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      CallbackMethod,
 			useCallback:     true,
 			exactChannel:    "test-exact-channel",
@@ -886,7 +886,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Cluster with WaitForMessage",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      WaitForMessageMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -896,7 +896,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Cluster with SignalChannel",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      SignalChannelMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -906,7 +906,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 		},
 		{
 			name:            "Cluster with SyncLoop",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      SyncLoopMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -932,7 +932,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			expectedMessages[tt.pattern] = tt.messageContent
 
 			var receiver interfaces.BaseClientCommands
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
 				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -947,29 +947,29 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 
 			// Publish to exact channel
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(tt.exactChannel, tt.messageContent, false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish(tt.exactChannel, tt.messageContent, false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(tt.exactChannel, tt.messageContent)
+				_, err = publisher.(*glide.Client).Publish(tt.exactChannel, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
 			// Publish to pattern-matching channels
 			for _, channel := range tt.patternChannels {
 				var err error
-				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(channel, tt.messageContent, false)
+				if tt.clientType == ClusterClient {
+					_, err = publisher.(*glide.ClusterClient).Publish(channel, tt.messageContent, false)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(channel, tt.messageContent)
+					_, err = publisher.(*glide.Client).Publish(channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
 
 			// Publish to a non-matching channel
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish("other-channel", "should not receive", false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish("other-channel", "should not receive", false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish("other-channel", "should not receive")
+				_, err = publisher.(*glide.Client).Publish("other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 
@@ -1000,7 +1000,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 	}{
 		{
 			name:            "Standalone with Callback",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      CallbackMethod,
 			useCallback:     true,
 			exactChannel:    "test-exact-channel",
@@ -1010,7 +1010,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Standalone with WaitForMessage",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      WaitForMessageMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1020,7 +1020,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Standalone with SignalChannel",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      SignalChannelMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1030,7 +1030,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Standalone with SyncLoop",
-			clientType:      GlideClient,
+			clientType:      StandaloneClient,
 			readMethod:      SyncLoopMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1040,7 +1040,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Cluster with Callback",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      CallbackMethod,
 			useCallback:     true,
 			exactChannel:    "test-exact-channel",
@@ -1050,7 +1050,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Cluster with WaitForMessage",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      WaitForMessageMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1060,7 +1060,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Cluster with SignalChannel",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      SignalChannelMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1070,7 +1070,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		},
 		{
 			name:            "Cluster with SyncLoop",
-			clientType:      GlideClusterClient,
+			clientType:      ClusterClient,
 			readMethod:      SyncLoopMethod,
 			useCallback:     false,
 			exactChannel:    "test-exact-channel",
@@ -1097,7 +1097,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 
 			// Create multiple subscribers
 			const numSubscribers = 3
-			queues := make(map[int]*api.PubSubMessageQueue)
+			queues := make(map[int]*glide.PubSubMessageQueue)
 			subscribers := make([]interfaces.BaseClientCommands, numSubscribers)
 
 			for i := 0; i < numSubscribers; i++ {
@@ -1118,29 +1118,29 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 
 			// Publish to exact channel
 			var err error
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish(tt.exactChannel, tt.messageContent, false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish(tt.exactChannel, tt.messageContent, false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish(tt.exactChannel, tt.messageContent)
+				_, err = publisher.(*glide.Client).Publish(tt.exactChannel, tt.messageContent)
 			}
 			assert.Nil(t, err)
 
 			// Publish to pattern-matching channels
 			for _, channel := range tt.patternChannels {
 				var err error
-				if tt.clientType == GlideClusterClient {
-					_, err = publisher.(*api.GlideClusterClient).Publish(channel, tt.messageContent, false)
+				if tt.clientType == ClusterClient {
+					_, err = publisher.(*glide.ClusterClient).Publish(channel, tt.messageContent, false)
 				} else {
-					_, err = publisher.(*api.GlideClient).Publish(channel, tt.messageContent)
+					_, err = publisher.(*glide.Client).Publish(channel, tt.messageContent)
 				}
 				assert.Nil(t, err)
 			}
 
 			// Publish to a non-matching channel
-			if tt.clientType == GlideClusterClient {
-				_, err = publisher.(*api.GlideClusterClient).Publish("other-channel", "should not receive", false)
+			if tt.clientType == ClusterClient {
+				_, err = publisher.(*glide.ClusterClient).Publish("other-channel", "should not receive", false)
 			} else {
-				_, err = publisher.(*api.GlideClient).Publish("other-channel", "should not receive")
+				_, err = publisher.(*glide.Client).Publish("other-channel", "should not receive")
 			}
 			assert.Nil(t, err)
 

@@ -3,7 +3,7 @@
 package interfaces
 
 import (
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // ServerManagementCommands supports commands for the "Server Management" group for a standalone client.

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/internal/interfaces"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 // TestPubSubChannels tests the PubSubChannels command for standalone client
@@ -27,7 +27,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 	}{
 		{
 			name:          "Standalone Empty Pattern",
-			clientType:    GlideClient,
+			clientType:    StandaloneClient,
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "",
 			expectedNames: []string{"news.sports", "news.weather", "events.local"},
@@ -35,7 +35,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Standalone Exact Match",
-			clientType:    GlideClient,
+			clientType:    StandaloneClient,
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "news.sports",
 			expectedNames: []string{"news.sports"},
@@ -43,7 +43,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Standalone Glob Pattern",
-			clientType:    GlideClient,
+			clientType:    StandaloneClient,
 			channelNames:  []string{"news.sports", "news.weather", "events.local"},
 			pattern:       "news.*",
 			expectedNames: []string{"news.sports", "news.weather"},
@@ -51,7 +51,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Empty Pattern",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "",
 			expectedNames: []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
@@ -59,7 +59,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Exact Match",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "cluster.news.sports",
 			expectedNames: []string{"cluster.news.sports"},
@@ -67,7 +67,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Glob Pattern",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.news.sports", "cluster.news.weather", "cluster.events.local"},
 			pattern:       "cluster.news.*",
 			expectedNames: []string{"cluster.news.sports", "cluster.news.weather"},
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Sharded Empty Pattern",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
 			pattern:       "",
 			expectedNames: []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
@@ -83,7 +83,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Sharded Exact Match",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
 			pattern:       "cluster.shard.news.sports",
 			expectedNames: []string{"cluster.shard.news.sports"},
@@ -91,7 +91,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 		},
 		{
 			name:          "Cluster Sharded Glob Pattern",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelNames:  []string{"cluster.shard.news.sports", "cluster.shard.news.weather", "cluster.shard.events.local"},
 			pattern:       "cluster.shard.news.*",
 			expectedNames: []string{"cluster.shard.news.sports", "cluster.shard.news.weather"},
@@ -122,7 +122,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			var err error
 			if tt.sharded {
 				// For sharded channels, we need to use the cluster-specific methods
-				clusterClient, ok := receiver.(*api.GlideClusterClient)
+				clusterClient, ok := receiver.(*glide.ClusterClient)
 				if !ok {
 					t.Fatal("Expected GlideClusterClient for sharded channels")
 				}
@@ -163,13 +163,13 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 	}{
 		{
 			name:          "Standalone Single Pattern",
-			clientType:    GlideClient,
+			clientType:    StandaloneClient,
 			channelDefns:  []ChannelDefn{{Channel: "news.*", Mode: PatternMode}},
 			expectedCount: 1,
 		},
 		{
 			name:       "Standalone Multiple Patterns",
-			clientType: GlideClient,
+			clientType: StandaloneClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "news.*", Mode: PatternMode},
 				{Channel: "events.*", Mode: PatternMode},
@@ -179,7 +179,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 		},
 		{
 			name:       "Standalone Mixed Modes",
-			clientType: GlideClient,
+			clientType: StandaloneClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "news.*", Mode: PatternMode},
 				{Channel: "events.local", Mode: ExactMode},
@@ -189,13 +189,13 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 		},
 		{
 			name:          "Cluster Single Pattern",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelDefns:  []ChannelDefn{{Channel: "cluster.news.*", Mode: PatternMode}},
 			expectedCount: 1,
 		},
 		{
 			name:       "Cluster Multiple Patterns",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.news.*", Mode: PatternMode},
 				{Channel: "cluster.events.*", Mode: PatternMode},
@@ -205,7 +205,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 		},
 		{
 			name:       "Cluster Mixed Modes",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.news.*", Mode: PatternMode},
 				{Channel: "cluster.events.local", Mode: ExactMode},
@@ -247,7 +247,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 	}{
 		{
 			name:          "Standalone Single Channel",
-			clientType:    GlideClient,
+			clientType:    StandaloneClient,
 			channelDefns:  []ChannelDefn{{Channel: "news.sports", Mode: ExactMode}},
 			queryChannels: []string{"news.sports"},
 			expectedCounts: map[string]int64{
@@ -257,7 +257,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Standalone Multiple Channels",
-			clientType: GlideClient,
+			clientType: StandaloneClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "news.sports", Mode: ExactMode},
 				{Channel: "news.weather", Mode: ExactMode},
@@ -274,7 +274,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Standalone Mixed Modes",
-			clientType: GlideClient,
+			clientType: StandaloneClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "news.*", Mode: PatternMode},
 				{Channel: "events.local", Mode: ExactMode},
@@ -290,7 +290,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:          "Cluster Single Channel",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelDefns:  []ChannelDefn{{Channel: "cluster.news.sports", Mode: ExactMode}},
 			queryChannels: []string{"cluster.news.sports"},
 			expectedCounts: map[string]int64{
@@ -300,7 +300,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Cluster Multiple Channels",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.news.sports", Mode: ExactMode},
 				{Channel: "cluster.news.weather", Mode: ExactMode},
@@ -317,7 +317,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Cluster Mixed Modes",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.news.*", Mode: PatternMode},
 				{Channel: "cluster.events.local", Mode: ExactMode},
@@ -333,7 +333,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:          "Cluster Sharded Single Channel",
-			clientType:    GlideClusterClient,
+			clientType:    ClusterClient,
 			channelDefns:  []ChannelDefn{{Channel: "cluster.shard.news.sports", Mode: ShardedMode}},
 			queryChannels: []string{"cluster.shard.news.sports"},
 			expectedCounts: map[string]int64{
@@ -343,7 +343,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Cluster Sharded Multiple Channels",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.shard.news.sports", Mode: ShardedMode},
 				{Channel: "cluster.shard.news.weather", Mode: ShardedMode},
@@ -360,7 +360,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 		},
 		{
 			name:       "Cluster Sharded Mixed Modes",
-			clientType: GlideClusterClient,
+			clientType: ClusterClient,
 			channelDefns: []ChannelDefn{
 				{Channel: "cluster.shard.news.*", Mode: PatternMode},
 				{Channel: "cluster.shard.events.local", Mode: ShardedMode},
@@ -401,7 +401,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 			var err error
 			if tt.sharded {
 				// For sharded channels, we need to use the cluster-specific methods
-				clusterClient, ok := clients[0].(*api.GlideClusterClient)
+				clusterClient, ok := clients[0].(*glide.ClusterClient)
 				if !ok {
 					t.Fatal("Expected GlideClusterClient for sharded channels")
 				}
