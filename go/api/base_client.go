@@ -516,7 +516,7 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	return nil
 }
 
-func createBatchInfo(pinner pinner, batch batch /*cmds []C.CmdInfo, isAtomic bool*/) C.BatchInfo {
+func createBatchInfo(pinner pinner, batch batch) C.BatchInfo {
 	numCommands := len(batch.commands)
 	info := C.BatchInfo{}
 	info.is_atomic = C._Bool(batch.isAtomic)
@@ -536,7 +536,7 @@ func createBatchInfo(pinner pinner, batch batch /*cmds []C.CmdInfo, isAtomic boo
 	return info
 }
 
-func createCmdInfo(pinner pinner, cmd Cmd /*requestType C.RequestType, args []string*/) C.CmdInfo {
+func createCmdInfo(pinner pinner, cmd Cmd) C.CmdInfo {
 	numArgs := len(cmd.args)
 	info := C.CmdInfo{}
 	info.request_type = uint32(cmd.requestType)

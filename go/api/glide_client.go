@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/api/options"
 	"github.com/valkey-io/valkey-glide/go/utils"
@@ -26,7 +25,6 @@ type GlideClientCommands interface {
 	ScriptingAndFunctionStandaloneCommands
 	PubSubStandaloneCommands
 
-	DBG()
 	Exec(ctx context.Context, batch StandaloneBatch, raiseOnError bool) ([]any, error)
 	ExecWithOptions(
 		ctx context.Context,
