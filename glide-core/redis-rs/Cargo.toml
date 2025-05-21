@@ -7,3 +7,4 @@ edition = "2021"
 [workspace]
 members = ["redis", "redis-test", "afl/parser"]
 resolver = "2"
+chrono = "0.4"
