@@ -10721,3 +10721,25 @@ func (suite *GlideTestSuite) TestScriptShow() {
 		script.Close()
 	})
 }
+
+func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
+	suite.SkipIfServerVersionLowerThanBy("7.2.0", suite.T())
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		result := sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"CLIENT", "INFO"},
+			"Can't send CLIENT INFO as a custom command",
+		)
+
+		var infoStr string
+		switch v := result.(type) {
+		case string:
+			infoStr = v
+		case api.ClusterValue[any]:
+			infoStr = v.SingleValue().(string)
+		}
+		assert.Contains(suite.T(), infoStr, "lib-name=GlideGo", "lib-name not found or incorrect")
+		assert.Contains(suite.T(), infoStr, "lib-ver=unknown", "lib-ver not found or incorrect")
+	})
+}
