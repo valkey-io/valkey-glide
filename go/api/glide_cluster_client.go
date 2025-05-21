@@ -26,6 +26,9 @@ type GlideClusterClientCommands interface {
 	ConnectionManagementClusterCommands
 	ScriptingAndFunctionClusterCommands
 	PubSubClusterCommands
+
+	Exec(ctx context.Context, batch ClusterBatch, raiseOnError bool) ([]any, error)
+	ExecWithOptions(ctx context.Context, batch ClusterBatch, raiseOnError bool, options ClusterBatchOptions) ([]any, error)
 }
 
 // Client used for connection to cluster servers.
@@ -73,6 +76,31 @@ func NewGlideClusterClient(ctx context.Context, config *GlideClusterClientConfig
 	}
 
 	return &GlideClusterClient{client}, nil
+}
+
+// TODO docs for the god of docs
+func (client *GlideClusterClient) Exec(ctx context.Context, batch ClusterBatch, raiseOnError bool) ([]any, error) {
+	response, err := client.executeBatch(ctx, batch.batch, raiseOnError, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyArrayResponse(response)
+}
+
+func (client *GlideClusterClient) ExecWithOptions(
+	ctx context.Context,
+	batch ClusterBatch,
+	raiseOnError bool,
+	options ClusterBatchOptions,
+) ([]any, error) {
+	converted := options.convert()
+	response, err := client.executeBatch(ctx, batch.batch, raiseOnError, &converted)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleAnyArrayResponse(response)
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,

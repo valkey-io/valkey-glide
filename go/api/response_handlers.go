@@ -93,6 +93,16 @@ func parseInterface(response *C.struct_CommandResponse) (interface{}, error) {
 		return parseSet(response)
 	case C.Ok:
 		return "OK", nil
+	case C.Error:
+		errStr, err := parseString(response)
+		if err != nil {
+			return &errors.RequestError{Msg: "Cannot read error message"}, nil
+		}
+		errStrString, ok := errStr.(string)
+		if !ok {
+			return &errors.RequestError{Msg: "Error message isn't a string"}, nil
+		}
+		return &errors.RequestError{Msg: errStrString}, nil
 	}
 
 	return nil, &errors.RequestError{Msg: "Unexpected return type from Valkey"}
