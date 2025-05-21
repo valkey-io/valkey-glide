@@ -1,17 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    createLeakedOtelSpan,
-    dropOtelSpan,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
 import Long from "long";
 import * as net from "net";
 import {
@@ -20,7 +9,21 @@ import {
     Long as ProtoLong,
     Reader,
     Writer,
-} from "protobufjs";
+} from "protobufjs/minimal";
+import {
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    Script,
+    StartSocketConnection,
+    getStatistics,
+    valueFromSplitPointer,
+} from "../build-ts/native";
+import {
+    command_request,
+    connection_request,
+    response,
+} from "../build-ts/ProtobufMessage";
 import {
     AggregationType,
     BaseScanOptions,
@@ -258,12 +261,8 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { createLeakedOtelSpan, dropOtelSpan } from "./native";
 import { OpenTelemetry } from "./OpenTelemetry";
-import {
-    command_request,
-    connection_request,
-    response,
-} from "./ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -777,7 +776,7 @@ export interface PubSubMsg {
  * @see {@link BatchOptions}
  */
 type BaseOptions = RouteOption & DecoderOption;
-export type WritePromiseOptions =
+type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
