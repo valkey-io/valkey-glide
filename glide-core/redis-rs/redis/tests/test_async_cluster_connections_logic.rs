@@ -247,7 +247,7 @@ mod test_connect_and_check {
             ClusterParams::default(),
             None,
             RefreshConnectionType::OnlyManagementConnection,
-            Some(node),
+            Some(Arc::new(node)),
             GlideConnectionOptions::default(),
         )
         .await;
@@ -295,7 +295,7 @@ mod test_connect_and_check {
             ClusterParams::default(),
             None,
             RefreshConnectionType::OnlyManagementConnection,
-            Some(node),
+            Some(Arc::new(node)),
             GlideConnectionOptions::default(),
         )
         .await;
@@ -359,7 +359,7 @@ mod test_connect_and_check {
             ClusterParams::default(),
             None,
             RefreshConnectionType::OnlyUserConnection,
-            Some(node),
+            Some(Arc::new(node)),
             GlideConnectionOptions::default(),
         )
         .await;
