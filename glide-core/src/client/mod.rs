@@ -19,7 +19,6 @@ use redis::{
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
@@ -33,7 +32,7 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use redis::InfoDict;
-use telemetrylib::*;
+use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, mpsc, oneshot};
 use versions::Versioning;
 
@@ -199,10 +198,19 @@ async fn run_with_timeout<T>(
     future: impl futures::Future<Output = RedisResult<T>> + Send,
 ) -> redis::RedisResult<T> {
     match timeout {
-        Some(duration) => tokio::time::timeout(duration, future)
-            .await
-            .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
-            .and_then(|res| res),
+        Some(duration) => match tokio::time::timeout(duration, future).await {
+            Ok(result) => result,
+            Err(_) => {
+                // Record timeout error metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                    log_error(
+                        "OpenTelemetry:timeout_error",
+                        format!("Failed to record timeout error: {}", e),
+                    );
+                }
+                Err(io::Error::from(io::ErrorKind::TimedOut).into())
+            }
+        },
         None => future.await,
     }
 }
@@ -1025,26 +1033,6 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
-
-        if let Some(endpoint_str) = &request.otel_endpoint {
-            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
-                .map_err(ConnectionError::IoError)?;
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(
-                    request
-                        .otel_span_flush_interval_ms
-                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
-                ))
-                .with_trace_exporter(trace_exporter)
-                .build();
-
-            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
-                log_error(
-                    "OpenTelemetry initialization",
-                    format!("OpenTelemetry initialization failed: {}", e),
-                )
-            });
-        };
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {

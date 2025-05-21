@@ -128,7 +128,11 @@ mod cluster_async {
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(std::time::Duration::from_millis(400))
             .with_trace_exporter(
-                GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap(),
+                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
+                Some(100),
+            )
+            .with_metrics_exporter(
+                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
             )
             .build();
         let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
@@ -137,7 +141,7 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_async_open_telemetry_invalid_config() {
-        let result = GlideOpenTelemetryTraceExporter::from_str("invalid-protocol.com");
+        let result = GlideOpenTelemetrySignalsExporter::from_str("invalid-protocol.com");
         assert!(result.is_err(), "Expected `from_str` to return an error");
         assert_eq!(
             result.unwrap_err().kind(),
@@ -148,36 +152,23 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_async_open_telemetry_interval_config() {
-        let exporter = GlideOpenTelemetryTraceExporter::from_str("http://valid-url.com").unwrap();
+        let exporter = GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
         let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(exporter.clone())
-            .build();
-        assert_eq!(GlideOpenTelemetry::get_span_interval(glide_ot_config), 400);
-        // check the default interval
-        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_trace_exporter(exporter)
+            .with_flush_interval(Duration::from_millis(400))
+            .with_trace_exporter(exporter.clone(), Some(100))
             .build();
         assert_eq!(
-            GlideOpenTelemetry::get_span_interval(glide_ot_config.clone()),
-            5000
+            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config),
+            Duration::from_millis(400)
         );
-
-        let cluster = TestClusterContext::new(3, 0);
-
-        let cluster_addresses: Vec<_> = cluster
-            .cluster
-            .servers
-            .iter()
-            .map(|server| server.connection_info())
-            .collect();
-        ClusterClient::builder(cluster_addresses.clone())
-            .open_telemetry_config(glide_ot_config.clone())
-            .build()
-            .unwrap()
-            .get_async_connection(None)
-            .await
-            .unwrap();
+        // check the default interval
+        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
+            .with_trace_exporter(exporter, Some(100))
+            .build();
+        assert_eq!(
+            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config.clone()),
+            Duration::from_millis(5000)
+        );
     }
 
     #[tokio::test]
