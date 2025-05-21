@@ -86,7 +86,7 @@ The build process consists of multiple steps:
 2. `build-protobuf` - Generates optimized protobuf code (43% smaller than default)
 3. `build:rust-client` - Builds the native Rust client binding
 4. `build:ts` - Compiles TypeScript code into the build-ts directory
-    - When using `build:ts:release` - Applies additional optimizations with `--stripInternal --removeComments`
+    - When using `build:ts:release` - Applies additional optimizations with `--stripInternal`
 
 These steps are orchestrated by npm scripts in package.json.
 
@@ -213,10 +213,8 @@ The npm packages are published in a two-stage process managed by GitHub Actions:
     - Contains all TypeScript code compiled to JavaScript
     - References platform packages as optional dependencies
     - Includes support for npm tag differentiation:
-        - "latest" for stable releases
-        - "next" for release candidates (RC)
-        - "alpha" for alpha releases
-        - "beta" for beta releases
+        - "latest" for stable releases (e.g., 1.0.0)
+        - "next" for release candidates (e.g., 1.0.0-rc1)
 
 The workflow handles version synchronization automatically across all packages using either:
 
@@ -303,6 +301,24 @@ npm run test:modules
 ```
 
 You can run these tests with custom flags for cluster and standalone endpoints by passing environment variables.
+
+### Package Manager and TypeScript Types Testing
+
+The CI workflow also tests TypeScript types and package manager compatibility:
+
+- Tests proper TypeScript declaration file generation for downstream packages 
+- Verifies compatibility with Yarn package manager in addition to npm
+- Tests library use in both direct consumer packages and transitive dependencies
+- Ensures type definitions work correctly in multi-package environments
+
+The test structure in `node/pm-and-types-tests/` includes:
+- `package1/`: A library that depends on valkey-glide
+- `package2/`: An application that depends on package1 (transitive dependency on valkey-glide)
+
+This helps verify that:
+1. Types are correctly exported and available to downstream consumers
+2. The library works properly when used through different package managers
+3. TypeScript type declarations are correctly passed through dependent packages
 
 ## REPL
 

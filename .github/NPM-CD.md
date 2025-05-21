@@ -46,7 +46,7 @@ Prepares artifacts for publishing:
 
 - Downloads native modules and JS interface files
 - Uses the NAPI artifacts command to distribute native modules to the correct package folders
-- Builds TypeScript source code with optimized settings (--stripInternal --removeComments --declaration)
+- Builds TypeScript source code with optimized settings (--stripInternal --pretty --declaration)
 - Sets correct versions in all package.json files
 - Uses napi-rs prepublish to configure optional dependencies between packages and align versions
 - Validates package contents to ensure all files are in place
