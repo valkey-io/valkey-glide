@@ -105,60 +105,6 @@ func (client *GlideClient) ExecWithOptions(
 	return handleAnyArrayResponse(response)
 }
 
-func (client *GlideClient) DBG() {
-	b := NewClusterBatch(true)
-	bb := b.Get("k").Set("k", "v").Ping("df").Get("k") //.Select(42)
-
-	fmt.Printf("\n\n------1> %T %+v\n\n", bb, bb)
-
-	b2 := NewStandaloneBatch(true).Get("k").Set("k", "v").Get("k").Select(2).Get("k")
-	options := NewStandaloneBatchOptions().WithTimeout(42)
-	fmt.Printf("\n\n------o> %T %+v\n\n", options, options)
-	converted := options.convert()
-	fmt.Printf("\n\n------c> %T %+v\n\n", converted, converted)
-
-	response, err := client.executeBatch(context.TODO(), b2.batch, false, &converted)
-	fmt.Printf("\n\n------2> %T %+v\n\n", err, err)
-	if err != nil {
-		return
-	}
-
-	data, err := handleAnyArrayResponse(response)
-	fmt.Printf("\n\n------3> %T %+v\n\n", err, err)
-	fmt.Printf("\n\n------4> %T %+v\n\n", data, data)
-
-	// TODO apply converters
-
-	/*
-		args := []string { "abc", "123", "pewpew" }
-		pinner := pinner{}
-
-		cmds := []C.CmdInfo {
-			createCmd(pinner, C.Ping, args),
-			createCmd(pinner, C.Echo, []string{}),
-			createCmd(pinner, C.Get, []string{"__"}),
-		}
-		cmds = []C.CmdInfo{}
-		info := createBatch(pinner, cmds, false)
-
-		defer pinner.Unpin()
-		boi := createBatchInfo(pinner, true, false, nil, nil)
-		C.DBG(&info, &boi)
-		to := 42
-		boi = createBatchInfo(pinner, true, true, config.AllNodes, &to)
-		C.DBG(&info, &boi)
-		to = 2345234545
-		boi = createBatchInfo(pinner, false, false, config.RandomRoute, &to)
-		C.DBG(&info, &boi)
-		boi = createBatchInfo(pinner, false, true, config.NewSlotKeyRoute(config.SlotTypePrimary, "invalidHost"), nil)
-		C.DBG(&info, &boi)
-		boi = createBatchInfo(pinner, true, true, config.NewSlotIdRoute(config.SlotTypeReplica, 42), nil)
-		C.DBG(&info, &boi)
-		boi = createBatchInfo(pinner, true, true, config.NewByAddressRoute("invalidHost", 9999), nil)
-		C.DBG(&info, &boi)
-	*/
-}
-
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.

@@ -7,8 +7,8 @@ use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
-use glide_core::errors::{self, error_message};
 use glide_core::errors::RequestErrorType;
+use glide_core::errors::{self, error_message};
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
 use protobuf::Message;
@@ -340,7 +340,7 @@ impl ClientAdapter {
             } => {
                 // Spawn the request for async client
                 self.runtime.spawn(async move {
-                    let result = dbg!(request_future.await);
+                    let result = request_future.await;
                     Self::handle_result(
                         result,
                         Some(success_callback),
@@ -418,11 +418,11 @@ impl ClientAdapter {
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`handle_custom_error`].
+    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`Self::handle_custom_error`].
     unsafe fn handle_redis_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
         let error_string = errors::error_message(&err);
         let error_type = errors::error_type(&err);
-        unsafe { Self::handle_custom_error(&self, error_string, error_type, channel) }
+        unsafe { Self::handle_custom_error(self, error_string, error_type, channel) }
     }
 
     /// Handles a Redis error by either invoking the failure callback (for async clients)
@@ -440,18 +440,32 @@ impl ClientAdapter {
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`send_async_error`].
-    unsafe fn handle_custom_error(&self, error_string: String, error_type: RequestErrorType, channel: usize) -> *mut CommandResult {
+    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`Self::send_async_custom_error`].
+    unsafe fn handle_custom_error(
+        &self,
+        error_string: String,
+        error_type: RequestErrorType,
+        channel: usize,
+    ) -> *mut CommandResult {
         //logger_core::log(logger_core::Level::Error, "ffi", &error_string);
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback: _,
                 failure_callback,
             } => {
-                unsafe { Self::send_async_custom_error(failure_callback, error_string, error_type, channel) };
+                unsafe {
+                    Self::send_async_custom_error(
+                        failure_callback,
+                        error_string,
+                        error_type,
+                        channel,
+                    )
+                };
                 std::ptr::null_mut()
             }
-            ClientType::SyncClient => create_error_result_with_custom_error(error_string, error_type),
+            ClientType::SyncClient => {
+                create_error_result_with_custom_error(error_string, error_type)
+            }
         }
     }
 
@@ -468,7 +482,12 @@ impl ClientAdapter {
     ///
     /// # Safety
     /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
-    unsafe fn send_async_custom_error(failure_callback: FailureCallback, error_string: String, error_type: RequestErrorType, channel: usize) {
+    unsafe fn send_async_custom_error(
+        failure_callback: FailureCallback,
+        error_string: String,
+        error_type: RequestErrorType,
+        channel: usize,
+    ) {
         let err_ptr = CString::into_raw(
             CString::new(error_string).expect("Couldn't convert error message to CString"),
         );
@@ -487,7 +506,11 @@ impl ClientAdapter {
     ///
     /// # Safety
     /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
-    unsafe fn send_async_redis_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
+    unsafe fn send_async_redis_error(
+        failure_callback: FailureCallback,
+        err: RedisError,
+        channel: usize,
+    ) {
         let (c_err_str, error_type) = to_c_error(err);
         unsafe { (failure_callback)(channel, c_err_str, error_type) };
         _ = unsafe { CString::from_raw(c_err_str as *mut c_char) };
@@ -1091,13 +1114,16 @@ fn create_error_result_with_redis_error(err: RedisError) -> *mut CommandResult {
 /// - `error_type`: The error type.
 ///
 /// # Returns
-/// A raw pointer to a `CommandResult`. This must be freed using [`free_error_message`]
+/// A raw pointer to a `CommandResult`. This must be freed using [`free_command_result`]
 /// to avoid memory leaks.
 ///
 /// # Safety
 /// The returned pointer must be passed back to Rust for cleanup. Failing to call
 /// [`free_command_result`] will result in a memory leak.
-fn create_error_result_with_custom_error(error_string: String, error_type: RequestErrorType) -> *mut CommandResult {
+fn create_error_result_with_custom_error(
+    error_string: String,
+    error_type: RequestErrorType,
+) -> *mut CommandResult {
     let c_err_str = CString::into_raw(
         CString::new(error_string).expect("Couldn't convert error message to CString"),
     );
@@ -1545,7 +1571,7 @@ pub struct BatchOptionsInfo {
 /// * `batch_ptr` must not be `null`.
 /// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
 /// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
-//#[allow(rustdoc::private_intra_doc_links)]
+#[allow(rustdoc::private_intra_doc_links)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn batch(
     client_ptr: *const c_void,
@@ -1562,13 +1588,19 @@ pub unsafe extern "C" fn batch(
     let mut client = client_adapter.core.client.clone();
 
     // TODO handle panics
-    let pipeline = match unsafe { dbg!(create_pipeline(batch_ptr)) } {
+    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
         Ok(pipeline) => pipeline,
         Err(err) => {
-            return unsafe { client_adapter.handle_custom_error(err, RequestErrorType::Unspecified, callback_index) };
+            return unsafe {
+                client_adapter.handle_custom_error(
+                    err,
+                    RequestErrorType::Unspecified,
+                    callback_index,
+                )
+            };
         }
     };
-    let (routing, timeout, pipeline_retry_strategy) = unsafe { dbg!(get_pipeline_options(options_ptr)) };
+    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client_adapter.execute_request(callback_index, async move {
         if pipeline.is_atomic() {
@@ -1587,13 +1619,6 @@ pub unsafe extern "C" fn batch(
                 .await
         }
     })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn DBG(cmd_ptr: *const BatchInfo, route_ptr: *const BatchOptionsInfo) {
-    let cmd = unsafe { create_pipeline(cmd_ptr) };
-    dbg!(cmd);
-    dbg!(unsafe { get_pipeline_options(route_ptr)});
 }
 
 /// Convert raw C string to a rust string.
@@ -1661,8 +1686,13 @@ pub(crate) unsafe fn create_route(
 /// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
 pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
     let info = unsafe { *ptr };
-    let arg_vec =
-        unsafe { convert_double_pointer_to_vec(info.args as *const *const c_void, info.arg_count as c_ulong, info.args_len as *const c_ulong) };
+    let arg_vec = unsafe {
+        convert_double_pointer_to_vec(
+            info.args as *const *const c_void,
+            info.arg_count as c_ulong,
+            info.args_len as *const c_ulong,
+        )
+    };
 
     let Some(mut cmd) = info.request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
