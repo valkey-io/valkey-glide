@@ -10813,7 +10813,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_properties:2.0.0
+Package: icu_properties:2.0.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -10851,7 +10851,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_properties_data:2.0.0
+Package: icu_properties_data:2.0.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31199,7 +31199,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-core:0.61.1
+Package: windows-core:0.61.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32115,7 +32115,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-result:0.3.3
+Package: windows-result:0.3.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32344,7 +32344,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-strings:0.4.1
+Package: windows-strings:0.4.2
 
 The following copyrights and licenses were found in the source code of this package:
 
