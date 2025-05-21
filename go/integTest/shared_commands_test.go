@@ -7150,15 +7150,15 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := uuid.New().String()
+		key := "{key}" + uuid.New().String()
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
-		client.Set(context.Background(), "weight_item1", "3")
-		client.Set(context.Background(), "weight_item2", "1")
-		client.Set(context.Background(), "weight_item3", "2")
+		client.Set(context.Background(), "{key}weight_item1", "3")
+		client.Set(context.Background(), "{key}weight_item2", "1")
+		client.Set(context.Background(), "{key}weight_item3", "2")
 
 		options := options.NewSortOptions().
-			SetByPattern("weight_*").
+			SetByPattern("{key}weight_*").
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false)
 
@@ -7181,18 +7181,18 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := uuid.New().String()
+		key := "{key}" + uuid.New().String()
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
-		client.Set(context.Background(), "object_item1", "Object_1")
-		client.Set(context.Background(), "object_item2", "Object_2")
-		client.Set(context.Background(), "object_item3", "Object_3")
+		client.Set(context.Background(), "{key}object_item1", "Object_1")
+		client.Set(context.Background(), "{key}object_item2", "Object_2")
+		client.Set(context.Background(), "{key}object_item3", "Object_3")
 
 		options := options.NewSortOptions().
-			SetByPattern("weight_*").
+			SetByPattern("{key}weight_*").
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false).
-			AddGetPattern("object_*")
+			AddGetPattern("{key}object_*")
 
 		sortResult, err := client.SortWithOptions(context.Background(), key, *options)
 
@@ -7214,22 +7214,22 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := uuid.New().String()
+		key := "{key}" + uuid.New().String()
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
-		client.Set(context.Background(), "weight_item1", "10")
-		client.Set(context.Background(), "weight_item2", "5")
-		client.Set(context.Background(), "weight_item3", "15")
+		client.Set(context.Background(), "{key}weight_item1", "10")
+		client.Set(context.Background(), "{key}weight_item2", "5")
+		client.Set(context.Background(), "{key}weight_item3", "15")
 
-		client.Set(context.Background(), "object_item1", "Object 1")
-		client.Set(context.Background(), "object_item2", "Object 2")
-		client.Set(context.Background(), "object_item3", "Object 3")
+		client.Set(context.Background(), "{key}object_item1", "Object 1")
+		client.Set(context.Background(), "{key}object_item2", "Object 2")
+		client.Set(context.Background(), "{key}object_item3", "Object 3")
 
 		options := options.NewSortOptions().
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false).
-			SetByPattern("weight_*").
-			AddGetPattern("object_*").
+			SetByPattern("{key}weight_*").
+			AddGetPattern("{key}object_*").
 			AddGetPattern("#")
 
 		sortResult, err := client.SortWithOptions(context.Background(), key, *options)
@@ -7247,15 +7247,15 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 
 		assert.Equal(suite.T(), resultList, sortResult)
 
-		objectItem2, err := client.Get(context.Background(), "object_item2")
+		objectItem2, err := client.Get(context.Background(), "{key}object_item2")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 2", objectItem2.Value())
 
-		objectItem1, err := client.Get(context.Background(), "object_item1")
+		objectItem1, err := client.Get(context.Background(), "{key}object_item1")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 1", objectItem1.Value())
 
-		objectItem3, err := client.Get(context.Background(), "object_item3")
+		objectItem3, err := client.Get(context.Background(), "{key}object_item3")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 3", objectItem3.Value())
 
