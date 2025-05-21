@@ -151,7 +151,7 @@ jobs:
 
             # Additional tests for specific configurations
             - name: Test hybrid node modules - commonjs
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.node == '23.x' && matrix.host.TARGET == 'x86_64-unknown-linux-gnu' }}
               run: |
                   npm install
                   npm run test
@@ -160,7 +160,7 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
             - name: Test hybrid node modules - ecma
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.node == '23.x' && matrix.host.TARGET == 'x86_64-unknown-linux-gnu' }}
               run: |
                   npm install
                   npm run test
@@ -170,7 +170,7 @@ jobs:
 
             - name: Run benchmarks
               uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.node == '23.x' && matrix.host.TARGET == 'x86_64-unknown-linux-gnu' }}
               with:
                   language-flag: -node
 

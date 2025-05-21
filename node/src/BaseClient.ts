@@ -3,7 +3,13 @@
  */
 import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long as ProtoLong, Reader, Writer } from "protobufjs/minimal";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs/minimal";
 import {
     DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
@@ -255,10 +261,7 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
-import {
-    createLeakedOtelSpan,
-    dropOtelSpan
-} from "./native";
+import { createLeakedOtelSpan, dropOtelSpan } from "./native";
 import { OpenTelemetry } from "./OpenTelemetry";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */

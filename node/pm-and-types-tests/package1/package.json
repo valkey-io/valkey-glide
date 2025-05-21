@@ -8,7 +8,7 @@
     },
     "dependencies": {
         "@types/pg": "^8.11.11",
-        "@valkey/valkey-glide": "latest",
+        "@valkey/valkey-glide": "next",
         "decimal.js": "^10.5.0",
         "pg": "^8.14.1",
         "winston": "^3.17.0"
