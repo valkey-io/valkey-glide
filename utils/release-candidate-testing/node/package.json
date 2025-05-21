@@ -6,16 +6,17 @@
     "type": "module",
     "scripts": {
         "test": "node index.js",
-        "build-utils": "cd ../../ && npm run build",
+        "build:utils": "cd ../../ && npm install && npm run build",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },
     "author": "",
     "license": "Apache-2.0",
     "dependencies": {
-        "@valkey/valkey-glide": "latest"
+        "@valkey/valkey-glide": "latest",
+        "typescript": "^5"
     },
     "devDependencies": {
-        "prettier": "^2.8.8"
+        "prettier": "^3"
     }
 }
