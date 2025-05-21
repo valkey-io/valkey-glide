@@ -61,6 +61,8 @@ type GlideClusterClient struct {
 //	  - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
 //	      using the specified username and password.
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
+//	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
+//	      in case of disconnections.
 func NewGlideClusterClient(ctx context.Context, config *GlideClusterClientConfiguration) (GlideClusterClientCommands, error) {
 	client, err := createClient(config)
 	if err != nil {
