@@ -91,13 +91,14 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout time.Duration
-	clientName     string
-	clientAZ       string
+	addresses         []NodeAddress
+	useTLS            bool
+	credentials       *ServerCredentials
+	readFrom          ReadFrom
+	requestTimeout    time.Duration
+	clientName        string
+	clientAZ          string
+	reconnectStrategy *BackoffStrategy
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -136,18 +137,25 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		}
 	}
 
+	if config.reconnectStrategy != nil {
+		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+	}
+
 	return &request, nil
 }
 
-// BackoffStrategy represents the strategy used to determine how and when to reconnect, in case of connection failures. The
-// time between attempts grows exponentially, to the formula:
+// BackoffStrategy defines how and when the client should attempt to reconnect after a connection failure.
+// The time between retry attempts increases exponentially according to the formula:
 //
 //	rand(0 ... factor * (exponentBase ^ N))
 //
-// where N is the number of failed attempts.
+// where N is the number of failed attempts. The `rand(...)` component applies a jitter of up to `jitterPercent%`
+// to introduce randomness and reduce retry storms.
 //
-// Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is successful.
-// The client will attempt to reconnect indefinitely.
+// Once the maximum retry interval is reached, that interval will be reused for all subsequent retries until
+// a successful connection is established. The client retries indefinitely.
+//
+// If no strategy is explicitly provided, a default backoff strategy will be used.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
@@ -157,25 +165,43 @@ type BackoffStrategy struct {
 	factor int
 	// The exponent base configured for the strategy.
 	exponentBase int
+	// The Jitter percent on the calculated duration. If not set, a default value will be used.
+	jitterPercent *int
 }
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
-	return &BackoffStrategy{numOfRetries, factor, exponentBase}
+	return &BackoffStrategy{
+		numOfRetries: numOfRetries,
+		factor:       factor,
+		exponentBase: exponentBase,
+	}
+}
+
+// WithJitterPercent sets the jitter percent.
+func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
+	strategy.jitterPercent = &jitter
+	return strategy
 }
 
 func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
-	return &protobuf.ConnectionRetryStrategy{
+	protoStrategy := &protobuf.ConnectionRetryStrategy{
 		NumberOfRetries: uint32(strategy.numOfRetries),
 		Factor:          uint32(strategy.factor),
 		ExponentBase:    uint32(strategy.exponentBase),
 	}
+
+	if strategy.jitterPercent != nil {
+		jitter := uint32(*strategy.jitterPercent)
+		protoStrategy.JitterPercent = &jitter
+	}
+
+	return protoStrategy
 }
 
 // GlideClientConfiguration represents the configuration settings for a Standalone client.
 type GlideClientConfiguration struct {
 	baseClientConfiguration
-	reconnectStrategy  *BackoffStrategy
 	databaseId         int
 	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedGlideClientConfiguration
@@ -193,9 +219,6 @@ func (config *GlideClientConfiguration) toProtobuf() (*protobuf.ConnectionReques
 		return nil, err
 	}
 	request.ClusterModeEnabled = false
-	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
-	}
 
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
@@ -395,6 +418,15 @@ func (config *GlideClusterClientConfiguration) WithClientName(clientName string)
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *GlideClusterClientConfiguration) WithClientAZ(clientAZ string) *GlideClusterClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
+// failures. If not set, a default backoff strategy will be used.
+func (config *GlideClusterClientConfiguration) WithReconnectStrategy(
+	strategy *BackoffStrategy,
+) *GlideClusterClientConfiguration {
+	config.reconnectStrategy = strategy
 	return config
 }
 
