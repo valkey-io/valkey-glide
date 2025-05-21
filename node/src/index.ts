@@ -6,24 +6,7 @@
  * - All TypeScript client-side APIs from ./src/
  */
 
-import * as Native from "../build-ts/native";
-
-export const {
-    Level,
-    MAX_REQUEST_ARGS_LEN,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    AsyncClient,
-    StartSocketConnection,
-    log,
-    InitInternalLogger,
-    valueFromSplitPointer,
-    createLeakedStringVec,
-    Script,
-    ClusterScanCursor,
-    getStatistics,
-} = Native;
+export * from "../build-ts/native";
 
 // Export TypeScript APIs
 export * from "./BaseClient.js";
@@ -33,6 +16,7 @@ export * from "./Errors.js";
 export * from "./GlideClient.js";
 export * from "./GlideClusterClient.js";
 export * from "./Logger.js";
+export * from "./OpenTelemetry.js";
 export * from "./server-modules/GlideFt.js";
 export * from "./server-modules/GlideFtOptions.js";
 export * from "./server-modules/GlideJson.js";

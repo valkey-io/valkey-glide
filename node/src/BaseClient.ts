@@ -16,6 +16,8 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
     valueFromSplitPointer,
 } from "../build-ts/native";
@@ -261,7 +263,6 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
-import { createLeakedOtelSpan, dropOtelSpan } from "./native";
 import { OpenTelemetry } from "./OpenTelemetry";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
