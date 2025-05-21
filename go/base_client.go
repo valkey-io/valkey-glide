@@ -298,6 +298,17 @@ func (client *baseClient) executeCommandWithRoute(
 		// Continue with execution
 	}
 
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	if otelInstance != nil && otelInstance.ShouldSample() {
+		// Use the first argument as the command name, or "Batch" if it's a batch command
+		spanName := "Batch"
+		if len(args) > 0 {
+			spanName = args[0]
+		}
+		spanPtr = otelInstance.CreateSpan(spanName)
+	}
+
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -311,10 +322,16 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
+			if spanPtr != 0 {
+				otelInstance.DropSpan(spanPtr)
+			}
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
+			if spanPtr != 0 {
+				otelInstance.DropSpan(spanPtr)
+			}
 			return nil, err
 		}
 
@@ -333,6 +350,9 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
+		if spanPtr != 0 {
+			otelInstance.DropSpan(spanPtr)
+		}
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
@@ -345,6 +365,7 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 
@@ -352,6 +373,9 @@ func (client *baseClient) executeCommandWithRoute(
 	var payload payload
 	select {
 	case <-ctx.Done():
+		if spanPtr != 0 {
+			otelInstance.DropSpan(spanPtr)
+		}
 		client.mu.Lock()
 		if client.pending != nil {
 			delete(client.pending, resultChannelPtr)
