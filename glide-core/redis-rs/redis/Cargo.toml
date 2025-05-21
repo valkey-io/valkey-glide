@@ -24,6 +24,7 @@ bench = false
 # an indirection through std::Formatter.
 ryu = "1.0"
 itoa = "1.0"
+chrono = "0.4"
 
 # Strum is a set of macros and traits for working with enums and strings easier in Rust.
 strum = "0.26"
