@@ -1,248 +1,260 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test Valkey GLIDE Node wrapper.
+This document describes how to set up your development environment to build and test the **Valkey GLIDE Node wrapper**, part of the polyglot `valkey-glide` project.
 
-### Development Overview
+## Project Structure
 
-The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings for Node.js are implemented using [napi-rs](https://github.com/napi-rs/napi-rs). The Node and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+- `valkey-glide/`: The polyglot root directory.
+- `valkey-glide/node/`: Contains the Node.js binding (TypeScript + Rust napi-rs).
+    - `src/`: TypeScript source code with modular file organization.
+        - `index.ts`: Main entry point that re-exports all APIs.
+        - `*.ts`: TypeScript files for client classes, commands, batching, etc..
+        - `server-modules/`: Server module implementations (e.g., JSON, FT).
+        - `native.js`, `native.d.ts`: Auto-generated bindings by napi-rs.
+    - `build-ts/`: Compiled TypeScript output.
+    - `tests/`: Jest tests.
+    - `rust-client/`: napi-rs Rust crate (binds to `glide-core`).
+    - `npm/`: Platform-specific packages for CD.
+        - Platform-specific directories (e.g., `linux-arm64-gnu/`, `darwin-arm64/`) containing package.json and native binaries.
 
-### Build from source
+## Development Overview
 
-#### Prerequisites
+The Node.js wrapper consists of:
 
-Software Dependencies
+- TypeScript: User-facing API organized in logical modules.
+- Rust: Native module built with [`napi-rs`](https://github.com/napi-rs/napi-rs).
+- Communication: Protocol Buffers for efficient data exchange.
 
-##### **Note:** Nodejs Supported Version
+### Build scripts overview
 
-If your Nodejs version is below the supported version specified in the client's [documentation](https://github.com/valkey-io/valkey-glide/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
+The build process consists of multiple steps:
 
+1. `clean:build` - Removes previous build artifacts
+2. `build-protobuf` - Generates optimized protobuf code (43% smaller than default)
+3. `build:rust-client` - Builds the native Rust client binding
+4. `build:ts` - Compiles TypeScript code into the build-ts directory
+    - When using `build:ts:release` - Applies additional optimizations with `--stripInternal`
+
+These steps are orchestrated by npm scripts in package.json.
+
+## TypeScript Build Options
+
+The TypeScript build uses different settings based on the build mode:
+
+- **Standard Build**: Uses default TypeScript settings from `tsconfig.json`
+- **Release Build**: Adds the following flags:
+    - `--stripInternal`: Removes documentation marked with @internal from declarations while preserving public documentation
+    - `--pretty`: Formats error messages for better readability
+    - `--declaration`: Ensures type declaration files are generated with full JSDoc/TSDoc documentation
+
+These settings optimize the code for production use while maintaining full TypeScript type information.
+
+## Prerequisites
+
+- Node.js (see [supported version](https://github.com/valkey-io/valkey-glide/blob/main/node/README.md#nodejs-supported-version))
 - npm
-- git
-- GCC
-- pkg-config
-- protoc (protobuf compiler)
-- openssl
-- openssl-dev
-- rustup
-- ziglang and zigbuild (for GNU Linux only)
-- valkey (for testing)
+- Rust (via `rustup`)
+- `protoc` (protobuf compiler)
+- GCC, pkg-config, OpenSSL
 
-**Valkey installation**
+### Installing Dependencies
 
-See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
-
-**Dependencies installation for Ubuntu**
+#### On Ubuntu/Debian
 
 ```bash
-sudo apt update -y
-sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
+sudo apt update
+sudo apt install -y build-essential pkg-config libssl-dev protobuf-compiler
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-# Check the installed node version
-node -v
 ```
 
-> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#note-nodejs-supported-version) to upgrade your Node.js version.
-
-**Dependencies installation for CentOS**
+#### On macOS
 
 ```bash
-sudo yum update -y
-sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext
+brew install protobuf pkg-config openssl
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
 ```
 
-**Dependencies installation for MacOS**
+### Installing Zig (for cross-compilation)
+
+Zig is used to enable deterministic, static builds compatible with older glibc versions like 2.17.
+
+#### On Ubuntu/Debian based systems
 
 ```bash
-brew update
-brew install nodejs git gcc pkgconfig protobuf openssl
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
+sudo apt install -y snap
+sudo snap install zig --classic --beta
 ```
 
-**Install `ziglang` and `zigbuild`**
+#### On macOS (with Homebrew)
 
 ```bash
-pip3 install ziglang
-cargo install --locked cargo-zigbuild
+brew install zig
 ```
 
-#### Building and installation steps
+Ensure `zig` is available in your PATH:
 
-Before starting this step, make sure you've installed all software requirments.
+```bash
+zig version
+```
 
-1. Clone the repository:
+#### Node.js and npm
+
+Install Node.js and npm from [nodejs.org](https://nodejs.org/) or via nvm:
+
+```bash
+nvm install --lts
+nvm use --lts
+```
+
+Supported node version for development is minimum 18, but it is recommended to use one of the LTS versions, or latest.
+
+## Building & Running
+
+1. Clone and set up:
+
     ```bash
     git clone https://github.com/valkey-io/valkey-glide.git
-    cd valkey-glide
-    ```
-2. Install all node dependencies:
-
-    ```bash
-    cd node
-    npm i
-    cd rust-client
-    npm i
-    cd ..
+    cd valkey-glide/node
+    npm install
     ```
 
-3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
+2. Build:
 
-    1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
-
-    ```bash
-    npm run build:release
-    ```
-
-    2. Build in release mode with debug symbols (optimized but large binary size):
-
-    ```bash
-    npm run build:benchmark
-    ```
-
-    3. For testing purposes, you can execute an unoptimized but fast build using:
+- **Fast Dev Build:**
+  Quickly compiles without optimization. Best for testing and development.
+  Command:
 
     ```bash
     npm run build
     ```
 
-    Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
+- **Benchmark Build:**
+  Compiles optimized build, but install like dev build.
+  Command:
 
-4. Run tests:
+    ```bash
+    npm run build:benchmark
+    ```
 
-    1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
-    2. Execute the following command from the node folder:
+- **Release Build:**
+  Fully optimized, stripped - This mimic production build.
+  Command:
 
-        ```bash
-        npm run build # make sure we have a debug build compiled first
-        npm test-local # For testing on local. For skipping exported symbols validation test on local.
-        npm test
+    ```bash
+    npm run build:release
+    ```
 
-        ```
+## Local Development Notes
 
-5. Integrating the built GLIDE package into your project:
-   Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
+- Rust builds are located in `node/rust-client/`. Scripts automatically `cd` into this directory when running `napi build`.
+- TypeScript files are compiled into the `build-ts/` directory, maintaining the modular structure.
+- The `index.ts` file re-exports all public APIs to maintain a clean interface.
 
-- For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
-- If your modifications are limited to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
-- If your modifications are limited to the Rust code, execute `npm run build-internal` to build the internal package and generate TypeScript code.
-- To generate Node's protobuf files, execute `npm run build-protobuf`. Keep in mind that protobuf files are generated as part of full builds (e.g., `build`, `build:release`, etc.).
+## Linting & Formatting
 
-> Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder.
+### TypeScript
 
-### Troubleshooting
+- Lint your TypeScript code using ESLint:
 
-- If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
+    ```bash
+    npm run lint
+    ```
 
-### Test
+- Automatically fix linting issues:
 
-To run tests, use the following command:
+    ```bash
+    npm run lint:fix
+    ```
+
+- Format code with Prettier:
+
+    ```bash
+    npm run format
+    ```
+
+### Rust
+
+- Run Clippy linter:
+
+    ```bash
+    cd rust-client
+    cargo clippy --all-features --all-targets -- -D warnings
+    ```
+
+- Format Rust code:
+
+    ```bash
+    cargo fmt
+    ```
+
+## Testing
+
+- Jest configuration is in `node/jest.config.ts`.
+- Tests are located in `node/tests/`.
+
+Run tests with:
 
 ```bash
+npm run test
+```
+
+Run tests in watch mode:
+
+```bash
+npm run test:watch
+```
+
+### Integration and Module Tests
+
+The project includes different test groups:
+
+```bash
+# Run standard tests (excluding modules)
 npm test
+
+# Run tests with debugging options
+npm run test:debug
+
+# Run minimal tests (excludes modules and special features)
+npm run test:minimum
+
+# Run only module-specific tests
+npm run test:modules
 ```
 
-Simplified test suite skips few time consuming tests and runs faster:
+You can run these tests with custom flags for cluster and standalone endpoints by passing environment variables.
 
-```bash
-npm test-minimum
-```
+### Package Manager and TypeScript Types Testing
 
-To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
+The CI workflow also tests TypeScript types and package manager compatibility:
 
-```bash
-npm run test-dbg -- --testNamePattern="batch"
-```
+- Tests proper TypeScript declaration file generation for downstream packages
+- Verifies compatibility with Yarn package manager in addition to npm
+- Tests library use in both direct consumer packages and transitive dependencies
+- Ensures type definitions work correctly in multi-package environments
 
-IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
-To run the integration tests with existing servers, run the following command:
+The test structure in `node/pm-and-types-tests/` includes:
 
-```bash
-npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+- `package1/`: A library that depends on valkey-glide
+- `package2/`: An application that depends on package1 (transitive dependency on valkey-glide)
 
-# If those endpoints use TLS, add `--tls=true` (applies to both endpoints)
-npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
-```
+This helps verify that:
 
-Parameters `cluster-endpoints`, `standalone-endpoints` and `tls` could be used with all test suites.
+1. Types are correctly exported and available to downstream consumers
+2. The library works properly when used through different package managers
+3. TypeScript type declarations are correctly passed through dependent packages
 
-By default, the server modules tests do not run using `npm run test`. This test suite also does not start the server.
-In order to run these tests, use:
+## REPL
 
-```bash
-npm run test-modules -- --cluster-endpoints=<address>:<port>
-```
-
-Note: these tests don't run with standalone server as of now.
-
-### REPL (interactive shell)
-
-It is possible to run an interactive shell synced with the currect client code to test and debug it:
+You can experiment with the client in a live TypeScript REPL:
 
 ```bash
 npx ts-node --project tsconfig.json
 ```
 
-This shell allows executing typescript and javascript code line by line:
+## Recommended VS Code Extensions
 
-```typescript
-import { GlideClient, GlideClusterClient } from ".";
-let client = await GlideClient.createClient({
-    addresses: [{ host: "localhost", port: 6379 }],
-});
-let clusterClient = await GlideClusterClient.createClient({
-    addresses: [{ host: "localhost", port: 7000 }],
-});
-await client.ping();
-```
-
-After applying changes in client code you need to restart the shell.
-
-It has command history and bash-like search (`Ctrl+R`).
-
-Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
-
-### Linters
-
-Development on the Node wrapper may involve changes in either the TypeScript or Rust code. Each language has distinct linter tests that must be passed before committing changes.
-
-#### Language-specific Linters
-
-**TypeScript:**
-
-- ESLint
 - Prettier
-
-**Rust:**
-
-- clippy
-- fmt
-
-#### Running the linters
-
-1. TypeScript
-
-    ```bash
-    # Run from the node folder
-    npm run lint
-    # To automatically apply ESLint and/or prettier recommendations
-    npm run lint:fix
-    ```
-
-2. Rust
-    ```bash
-    # Run from the `node/rust-client` folder
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
-
-### Recommended extensions for VS Code
-
-- [Prettier - Code formatter](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) - JavaScript / TypeScript formatter.
-- [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) - linter.
-- [Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
-- [Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
-- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language support for VSCode.
+- ESLint
+- Jest Runner
+- rust-analyzer
