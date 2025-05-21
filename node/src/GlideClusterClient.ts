@@ -2,9 +2,13 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
-import { Writer } from "protobufjs";
+import { Writer } from "protobufjs/minimal";
+import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -64,8 +68,6 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { command_request, connection_request } from "./ProtobufMessage";
-
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -652,7 +654,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                (resolveAns: [typeof cursor, GlideString[]]) => {
                     try {
                         resolve([
                             new ClusterScanCursor(resolveAns[0].toString()),
