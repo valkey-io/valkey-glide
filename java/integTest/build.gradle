@@ -155,7 +155,32 @@ tasks.withType(Test) {
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
     }
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
+
+// JaCoCo section (code coverage by integration tests)
+jacocoTestReport {
+    sourceDirectories.setFrom(files("${project.rootDir}/client/src/main/java"))
+    classDirectories.setFrom(files("$buildDir/classes"))
+    executionData.setFrom(
+        files("$buildDir/jacoco/test.exec"),
+        files("$buildDir/jacoco/pubsubTest.exec")
+    )
+}
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'CLASS'
+            excludes = [
+                'glide.models.protobuf.*',
+                'glide.com.google.*', // shadowed protobuf
+                'glide.io.netty.*' // shadowed netty
+            ]
+        }
+    }
+}
+// End of JaCoCo section
 
 test {
     filter {
@@ -168,6 +193,7 @@ tasks.register('pubsubTest', Test) {
     filter {
         includeTestsMatching 'glide.PubSubTests'
     }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
 
 tasks.register('modulesTest', Test) {
