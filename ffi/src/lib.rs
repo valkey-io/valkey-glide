@@ -790,7 +790,7 @@ pub extern "C-unwind" fn get_response_type_string(response_type: ResponseType) -
 pub unsafe extern "C-unwind" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
         let command_response = unsafe { Box::from_raw(command_response_ptr) };
-        free_command_response_elements(unsafe { *command_response });
+        free_command_response_elements(*command_response);
     }
 }
 

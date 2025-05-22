@@ -141,26 +141,32 @@ func storeScript(script []byte) string {
 		return ""
 	}
 
-	cHash := C.store_script(
+	cHash := (*C.struct_ScriptHashBuffer)(C.store_script(
 		(*C.uint8_t)(unsafe.Pointer(&script[0])),
 		C.uintptr_t(len(script)),
-	)
-	defer C.free(unsafe.Pointer(cHash))
+	))
+	defer C.free_script_hash_buffer(cHash)
 
-	return C.GoString(cHash)
+        buffer := (*C.uint8_t)(cHash.ptr)
+        len := C.uintptr_t(cHash.len)
+
+        hash := string(C.GoBytes(buffer, len))
+
+	return hash
 }
 
 // dropScript removes a script from the script cache
 // This function interfaces with the Rust implementation through FFI
-func dropScript(hash string) {
+func dropScript(hash string) error {
 	if hash == "" {
 		return
 	}
 
-	cHash := C.CString(hash)
-	defer C.free(unsafe.Pointer(cHash))
+	buffer := []byte(hash)
+        len := C.uintptr_t(buffer)
+        cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
-	C.drop_script(cHash)
+	return C.drop_script(cHash, len)
 }
 
 // ScriptFlushOptions represents options for script flush operations
