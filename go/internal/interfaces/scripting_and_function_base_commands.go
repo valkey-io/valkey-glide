@@ -5,7 +5,9 @@ package interfaces
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
@@ -39,7 +41,7 @@ type ScriptingAndFunctionBaseCommands interface {
 
 	FunctionRestore(ctx context.Context, payload string) (string, error)
 
-	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy options.FunctionRestorePolicy) (string, error)
+	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy constants.FunctionRestorePolicy) (string, error)
 
 	InvokeScript(ctx context.Context, script options.Script) (any, error)
 

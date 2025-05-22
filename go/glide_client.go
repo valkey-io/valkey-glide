@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -222,7 +223,7 @@ func (client *Client) InfoWithOptions(ctx context.Context, options options.InfoO
 //	The number of keys in the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *GClient) DBSize(ctx context.Context) (int64, error) {
+func (client *Client) DBSize(ctx context.Context) (int64, error) {
 	result, err := client.executeCommand(ctx, C.DBSize, []string{})
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -437,7 +438,7 @@ func (client *baseClient) LolwutWithOptions(ctx context.Context, opts options.Lo
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *lient) ClientId(ctx context.Context) (int64, error) {
+func (client *Client) ClientId(ctx context.Context) (int64, error) {
 	result, err := client.executeCommand(ctx, C.ClientId, []string{})
 	if err != nil {
 		return models.DefaultIntResponse, err

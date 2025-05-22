@@ -174,7 +174,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 			WithUseTLS(suite.tls).
 			WithRequestTimeout(5 * time.Second)
 
-		client, err := glide.NewClient(context.Background(), clientConfig)
+		client, err := glide.NewClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
 			info, _ := client.InfoWithOptions(
@@ -265,7 +265,10 @@ func (suite *GlideTestSuite) runWithDefaultClients(test func(client interfaces.B
 	suite.runWithClients(clients, test)
 }
 
-func (suite *GlideTestSuite) runWithSpecificClients(clientFlag ClientTypeFlag, test func(client interfaces.BaseClientCommands)) {
+func (suite *GlideTestSuite) runWithSpecificClients(
+	clientFlag ClientTypeFlag,
+	test func(client interfaces.BaseClientCommands),
+) {
 	clients := suite.getSpecificClients(clientFlag)
 	suite.runWithClients(clients, test)
 }
@@ -289,7 +292,7 @@ func (suite *GlideTestSuite) getDefaultClients() []interfaces.BaseClientCommands
 	return suite.getSpecificClients(StandaloneFlag | ClusterFlag)
 }
 
-func (suite *GlideTestSuite) getSpecificClients(clientFlag ClientTypeFlag) []interfaces.BaseClientCommands{
+func (suite *GlideTestSuite) getSpecificClients(clientFlag ClientTypeFlag) []interfaces.BaseClientCommands {
 	clients := make([]interfaces.BaseClientCommands, 0)
 	if clientFlag.Has(StandaloneFlag) {
 		standaloneClient := suite.defaultClient()
@@ -332,7 +335,7 @@ func (suite *GlideTestSuite) defaultClient() *glide.Client {
 }
 
 func (suite *GlideTestSuite) client(config *config.ClientConfiguration) *glide.Client {
-	client, err := glide.NewClient(context.Background(), config)
+	client, err := glide.NewClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -372,7 +375,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
 			config.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
-	return glide.NewClient(context.Background(), clientConfig)
+	return glide.NewClient(clientConfig)
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(

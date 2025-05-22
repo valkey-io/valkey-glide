@@ -101,7 +101,7 @@ func TestGlideClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	strategy := NewBackoffStrategy(retries, factor, base).WithJitterPercent(jitter)
 
-	config := NewGlideClientConfiguration().
+	config := NewClientConfiguration().
 		WithAddress(&NodeAddress{Host: host, Port: port}).
 		WithReconnectStrategy(strategy)
 
@@ -133,7 +133,7 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	strategy := NewBackoffStrategy(retries, factor, base).WithJitterPercent(jitter)
 
-	config := NewGlideClusterClientConfiguration().
+	config := NewClusterClientConfiguration().
 		WithAddress(&NodeAddress{Host: host, Port: port}).
 		WithReconnectStrategy(strategy)
 

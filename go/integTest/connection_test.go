@@ -18,7 +18,7 @@ import (
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
-	client, err := glide.NewClient(context.Background(), config)
+	client, err := glide.NewClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -55,7 +55,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 	config := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{Host: "invalid-host"})
-	client, err := glide.NewClient(context.Background(), config)
+	client, err := glide.NewClient(config)
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)

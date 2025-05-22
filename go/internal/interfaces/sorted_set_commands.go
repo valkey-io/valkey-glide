@@ -64,13 +64,17 @@ type SortedSetCommands interface {
 		scoreFilter constants.ScoreFilter,
 		timeoutSecs float64,
 		options options.ZMPopOptions,
-	) (Result[KeyWithArrayOfMembersAndScores], error)
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(ctx context.Context, key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
 	BZPopMax(ctx context.Context, keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
 
-	ZMPop(ctx context.Context, keys []string, scoreFilter constants.ScoreFilter) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
+	ZMPop(
+		ctx context.Context,
+		keys []string,
+		scoreFilter constants.ScoreFilter,
+	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZMPopWithOptions(
 		ctx context.Context,
@@ -79,7 +83,11 @@ type SortedSetCommands interface {
 		opts options.ZPopOptions,
 	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
-	ZRangeWithScores(ctx context.Context, key string, rangeQuery options.ZRangeQueryWithScores) ([]models.MemberAndScore, error)
+	ZRangeWithScores(
+		ctx context.Context,
+		key string,
+		rangeQuery options.ZRangeQueryWithScores,
+	) ([]models.MemberAndScore, error)
 
 	ZRangeStore(ctx context.Context, destination string, key string, rangeQuery options.ZRangeQuery) (int64, error)
 

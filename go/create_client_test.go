@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+
 	config2 "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
@@ -15,7 +16,7 @@ func ExampleNewClient() {
 		WithUseTLS(false).
 		WithReconnectStrategy(config2.NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
-	client, err := NewClient(context.Background(), config)
+	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

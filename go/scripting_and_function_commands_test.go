@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -868,8 +869,8 @@ func ExampleClusterClient_FunctionListWithRoute() {
 	//   Functions: 1
 }
 
-func ExampleGlideClient_FunctionDump() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionDump() {
+	client := getExampleClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
 	dump, _ := client.FunctionDump(context.Background())
@@ -881,8 +882,8 @@ func ExampleGlideClient_FunctionDump() {
 	// Function dump got a payload
 }
 
-func ExampleGlideClusterClient_FunctionDump() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionDump() {
+	client := getExampleClusterClient()
 
 	// Call FunctionDump to get the serialized payload of all loaded libraries
 	dump, _ := client.FunctionDump(context.Background())
@@ -894,8 +895,8 @@ func ExampleGlideClusterClient_FunctionDump() {
 	// Function dump got a payload
 }
 
-func ExampleGlideClusterClient_FunctionDumpWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionDumpWithRoute() {
+	client := getExampleClusterClient()
 
 	// Call FunctionDumpWithRoute to get the serialized payload of all loaded libraries with a route
 	dump, _ := client.FunctionDumpWithRoute(context.Background(), config.RandomRoute)
@@ -907,8 +908,8 @@ func ExampleGlideClusterClient_FunctionDumpWithRoute() {
 	// Function dump got a payload
 }
 
-func ExampleGlideClient_FunctionRestore() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionRestore() {
+	client := getExampleClient()
 
 	// Attempt to restore with invalid dump data
 	invalidDump := "invalid_dump_data"
@@ -921,8 +922,8 @@ func ExampleGlideClient_FunctionRestore() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClusterClient_FunctionRestore() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionRestore() {
+	client := getExampleClusterClient()
 
 	// Attempt to restore with invalid dump data
 	invalidDump := "invalid_dump_data"
@@ -935,8 +936,8 @@ func ExampleGlideClusterClient_FunctionRestore() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClusterClient_FunctionRestoreWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionRestoreWithRoute() {
+	client := getExampleClusterClient()
 
 	// Attempt to restore with invalid dump data and route
 	invalidDump := "invalid_dump_data"
@@ -950,12 +951,12 @@ func ExampleGlideClusterClient_FunctionRestoreWithRoute() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClient_FunctionRestoreWithPolicy() {
-	client := getExampleGlideClient()
+func ExampleClient_FunctionRestoreWithPolicy() {
+	client := getExampleClient()
 
 	// Attempt to restore with invalid dump data and policy
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, constants.FlushPolicy)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -964,12 +965,12 @@ func ExampleGlideClient_FunctionRestoreWithPolicy() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClusterClient_FunctionRestoreWithPolicy() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionRestoreWithPolicy() {
+	client := getExampleClusterClient()
 
 	// Attempt to restore with invalid dump data and policy
 	invalidDump := "invalid_dump_data"
-	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, options.FlushPolicy)
+	_, err := client.FunctionRestoreWithPolicy(context.Background(), invalidDump, constants.FlushPolicy)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -978,13 +979,13 @@ func ExampleGlideClusterClient_FunctionRestoreWithPolicy() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClusterClient_FunctionRestoreWithPolicyWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_FunctionRestoreWithPolicyWithRoute() {
+	client := getExampleClusterClient()
 
 	// Attempt to restore with invalid dump data, policy and route
 	invalidDump := "invalid_dump_data"
 	route := config.RandomRoute
-	_, err := client.FunctionRestoreWithPolicyWithRoute(context.Background(), invalidDump, options.FlushPolicy, route)
+	_, err := client.FunctionRestoreWithPolicyWithRoute(context.Background(), invalidDump, constants.FlushPolicy, route)
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 	}
@@ -993,8 +994,8 @@ func ExampleGlideClusterClient_FunctionRestoreWithPolicyWithRoute() {
 	// Error: An error was signalled by the server: - ResponseError: DUMP payload version or checksum are wrong
 }
 
-func ExampleGlideClient_InvokeScript() {
-	client := getExampleGlideClient()
+func ExampleClient_InvokeScript() {
+	client := getExampleClient()
 
 	// Create a simple Lua script that returns a string
 	script := options.NewScript("return 'Hello from Lua'")
@@ -1012,8 +1013,8 @@ func ExampleGlideClient_InvokeScript() {
 	// Hello from Lua
 }
 
-func ExampleGlideClusterClient_InvokeScript() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_InvokeScript() {
+	client := getExampleClusterClient()
 
 	// Create a simple Lua script that returns a number
 	script := options.NewScript("return 123")
@@ -1031,8 +1032,8 @@ func ExampleGlideClusterClient_InvokeScript() {
 	// 123
 }
 
-func ExampleGlideClient_InvokeScriptWithOptions() {
-	client := getExampleGlideClient()
+func ExampleClient_InvokeScriptWithOptions() {
+	client := getExampleClient()
 
 	// Create a Lua script that uses keys and arguments
 	scriptText := `
@@ -1064,8 +1065,8 @@ func ExampleGlideClient_InvokeScriptWithOptions() {
 	// Hello World
 }
 
-func ExampleGlideClusterClient_InvokeScriptWithOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_InvokeScriptWithOptions() {
+	client := getExampleClusterClient()
 
 	// Create a Lua script that performs calculations with arguments
 	scriptText := `
@@ -1092,8 +1093,8 @@ func ExampleGlideClusterClient_InvokeScriptWithOptions() {
 	// 30
 }
 
-func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_InvokeScriptWithClusterOptions() {
+	client := getExampleClusterClient()
 
 	// Create a Lua script.
 	scriptText := "return 'Hello'"
@@ -1126,8 +1127,8 @@ func ExampleGlideClusterClient_InvokeScriptWithClusterOptions() {
 	// Hello
 }
 
-func ExampleGlideClient_ScriptExists() {
-	client := getExampleGlideClient()
+func ExampleClient_ScriptExists() {
+	client := getExampleClient()
 
 	// Invoke a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1146,8 +1147,8 @@ func ExampleGlideClient_ScriptExists() {
 	// Output: [true]
 }
 
-func ExampleGlideClusterClient_ScriptExists() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptExists() {
+	client := getExampleClusterClient()
 
 	// Invoke a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1166,8 +1167,8 @@ func ExampleGlideClusterClient_ScriptExists() {
 	// Output: [true]
 }
 
-func ExampleGlideClusterClient_ScriptExistsWithRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptExistsWithRoute() {
+	client := getExampleClusterClient()
 	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
 
 	// Invoke a script
@@ -1187,8 +1188,8 @@ func ExampleGlideClusterClient_ScriptExistsWithRoute() {
 	// Output: [true]
 }
 
-func ExampleGlideClient_ScriptFlush() {
-	client := getExampleGlideClient()
+func ExampleClient_ScriptFlush() {
+	client := getExampleClient()
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1231,8 +1232,8 @@ func ExampleGlideClient_ScriptFlush() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClient_ScriptFlushWithMode() {
-	client := getExampleGlideClient()
+func ExampleClient_ScriptFlushWithMode() {
+	client := getExampleClient()
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1275,8 +1276,8 @@ func ExampleGlideClient_ScriptFlushWithMode() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClusterClient_ScriptFlush() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptFlush() {
+	client := getExampleClusterClient()
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1319,8 +1320,8 @@ func ExampleGlideClusterClient_ScriptFlush() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClusterClient_ScriptFlushWithMode() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptFlushWithMode() {
+	client := getExampleClusterClient()
 
 	// First, load a script
 	script := options.NewScript("return 'Hello World!'")
@@ -1363,8 +1364,8 @@ func ExampleGlideClusterClient_ScriptFlushWithMode() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClusterClient_ScriptFlushWithOptions() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptFlushWithOptions() {
+	client := getExampleClusterClient()
 	route := options.RouteOption{Route: config.AllPrimaries}
 
 	// First, load a script on all primaries
@@ -1409,8 +1410,8 @@ func ExampleGlideClusterClient_ScriptFlushWithOptions() {
 	// Script exists after flush: false
 }
 
-func ExampleGlideClient_ScriptKill() {
-	client := getExampleGlideClient()
+func ExampleClient_ScriptKill() {
+	client := getExampleClient()
 
 	// Try to kill scripts when no scripts are running
 	_, err := client.ScriptKill(context.Background())
@@ -1422,8 +1423,8 @@ func ExampleGlideClient_ScriptKill() {
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
 
-func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptKill_withoutRoute() {
+	client := getExampleClusterClient()
 
 	// Try to kill scripts when no scripts are running
 	_, err := client.ScriptKill(context.Background())
@@ -1435,9 +1436,9 @@ func ExampleGlideClusterClient_ScriptKill_withoutRoute() {
 	// Expected error: An error was signalled by the server: - NotBusy: No scripts in execution right now.
 }
 
-func ExampleGlideClusterClient_ScriptKill_withRoute() {
+func ExampleClusterClient_ScriptKill_withRoute() {
 	key := "{randomkey}1"
-	client := getExampleGlideClusterClient()
+	client := getExampleClusterClient()
 
 	// Create a route with our specified key
 	route := options.RouteOption{
@@ -1455,8 +1456,8 @@ func ExampleGlideClusterClient_ScriptKill_withRoute() {
 }
 
 // ScriptShow Examples
-func ExampleGlideClient_ScriptShow() {
-	client := getExampleGlideClient()
+func ExampleClient_ScriptShow() {
+	client := getExampleClient()
 
 	// First, create and invoke a script
 	scriptText := "return 'Hello, World!'"
@@ -1480,8 +1481,8 @@ func ExampleGlideClient_ScriptShow() {
 	// return 'Hello, World!'
 }
 
-func ExampleGlideClusterClient_ScriptShow() {
-	client := getExampleGlideClusterClient()
+func ExampleClusterClient_ScriptShow() {
+	client := getExampleClusterClient()
 
 	// First, create and invoke a script
 	scriptText := "return 'Hello World'"

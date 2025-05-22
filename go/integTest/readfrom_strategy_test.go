@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -95,7 +95,7 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	clusterInfo, err := clientForConfigSet.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
 			RouteOption: &options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "key")},
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Replication}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Replication}},
 		})
 	assert.NoError(suite.T(), err)
 	nReplicas := 0
@@ -126,7 +126,6 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 		[]string{"availability-zone"}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	for _, value := range azGetResult.MultiValue() {
-		if valueMap, ok := value.(map[string]any); ok {
 		assert.Equal(suite.T(), az, value["availability-zone"])
 	}
 

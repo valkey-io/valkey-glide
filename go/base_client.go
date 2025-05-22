@@ -395,7 +395,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	// Check if context is already done
 	select {
 	case <-ctx.Done():
-		return DefaultStringResponse, ctx.Err()
+		return models.DefaultStringResponse, ctx.Err()
 	default:
 		// Continue with execution
 	}
@@ -432,7 +432,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
-		return DefaultStringResponse, ctx.Err()
+		return models.DefaultStringResponse, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
 	}
@@ -731,7 +731,7 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 //	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()]
 //
 // [valkey.io]: https://valkey.io/commands/mget/
-func (client *baseClient) MGet(keys []string) ([]models.Result[string], error) {
+func (client *baseClient) MGet(ctx context.Context, keys []string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.MGet, keys)
 	if err != nil {
 		return nil, err
@@ -1524,7 +1524,7 @@ func (client *baseClient) HScanWithOptions(
 //	the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
-func (client *baseClient) HRandField(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) HRandField(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.HRandField, []string{key})
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -1587,7 +1587,11 @@ func (client *baseClient) HRandFieldWithCount(ctx context.Context, key string, c
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error) {
-	result, err := client.executeCommand(ctx, C.HRandField, []string{key, utils.IntToString(count), constants.WithValuesKeyword})
+	result, err := client.executeCommand(
+		ctx,
+		C.HRandField,
+		[]string{key, utils.IntToString(count), constants.WithValuesKeyword},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1684,6 +1688,7 @@ func (client *baseClient) LPopCount(ctx context.Context, key string, count int64
 // Return value:
 //
 //	The models.Result[int64] containing the index of the first occurrence of element, or [models.CreateNilInt64Result()] if
+//
 // element is not in the list.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
@@ -1748,7 +1753,7 @@ func (client *baseClient) LPosWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (client *baseClient) LPosCount(ctx context.Context, key string, element string, count int64) ([]int64, error) {
-	result, err := client.executeCommand(C.LPos, []string{key, element, constants.CountKeyword, utils.IntToString(count)})
+	result, err := client.executeCommand(ctx, C.LPos, []string{key, element, constants.CountKeyword, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
@@ -2179,7 +2184,7 @@ func (client *baseClient) SRandMember(ctx context.Context, key string) (models.R
 //	Returns a NilResult if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/spop/
-func (client *baseClient) SPop(ctx context.Context, key string) (Result[string], error) {
+func (client *baseClient) SPop(ctx context.Context, key string) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.SPop, []string{key})
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -3958,7 +3963,11 @@ func (client *baseClient) ZAddWithOptions(
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) zAddIncrBase(ctx context.Context, key string, opts *options.ZAddOptions) (models.Result[float64], error) {
+func (client *baseClient) zAddIncrBase(
+	ctx context.Context,
+	key string,
+	opts *options.ZAddOptions,
+) (models.Result[float64], error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return models.CreateNilFloat64Result(), err
@@ -4273,7 +4282,7 @@ func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
 	timeoutSecs float64,
-) (models.Result[KeyWithMemberAndScore], error) {
+) (models.Result[models.KeyWithMemberAndScore], error) {
 	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return models.CreateNilKeyWithMemberAndScoreResult(), err
@@ -5835,7 +5844,11 @@ func (client *baseClient) SortStoreWithOptions(
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.Sort, append([]string{key, constants.StoreKeyword, destination}, optionArgs...))
+	result, err := client.executeCommand(
+		ctx,
+		C.Sort,
+		append([]string{key, constants.StoreKeyword, destination}, optionArgs...),
+	)
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
@@ -6942,10 +6955,10 @@ func (client *baseClient) ZDiff(ctx context.Context, keys []string) ([]string, e
 //	command returns an empty `Array`.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
-func (client *baseClient) ZDiffWithScores(keys []string) ([]MemberAndScore, error) {
+func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([]models.MemberAndScore, error) {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	result, err := client.executeCommand(C.ZDiff, append(args, options.WithScoresKeyword))
+	result, err := client.executeCommand(ctx, C.ZDiff, append(args, constants.WithScoresKeyword))
 	if err != nil {
 		return nil, err
 	}
@@ -7504,7 +7517,12 @@ func (client *baseClient) GeoPos(ctx context.Context, key string, members []stri
 //	unit is meters, see - [options.Meters]
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
-func (client *baseClient) GeoDist(ctx context.Context, key string, member1 string, member2 string) (models.Result[float64], error) {
+func (client *baseClient) GeoDist(
+	ctx context.Context,
+	key string,
+	member1 string,
+	member2 string,
+) (models.Result[float64], error) {
 	result, err := client.executeCommand(ctx,
 		C.GeoDist,
 		[]string{key, member1, member2},
@@ -8429,7 +8447,7 @@ func (client *baseClient) FunctionList(ctx context.Context, query models.Functio
 func (client *baseClient) FunctionDump(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -8459,7 +8477,7 @@ func (client *baseClient) FunctionDump(ctx context.Context) (string, error) {
 func (client *baseClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8490,11 +8508,11 @@ func (client *baseClient) FunctionRestore(ctx context.Context, payload string) (
 func (client *baseClient) FunctionRestoreWithPolicy(
 	ctx context.Context,
 	payload string,
-	policy options.FunctionRestorePolicy,
+	policy constants.FunctionRestorePolicy,
 ) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8726,7 +8744,7 @@ func (client *baseClient) ScriptExists(ctx context.Context, sha1s []string) ([]b
 func (client *baseClient) ScriptFlush(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.ScriptFlush, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8749,7 +8767,7 @@ func (client *baseClient) ScriptFlush(ctx context.Context) (string, error) {
 func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.FlushMode) (string, error) {
 	result, err := client.executeCommand(ctx, C.ScriptFlush, []string{string(mode)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -8772,7 +8790,7 @@ func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.
 func (client *baseClient) ScriptShow(ctx context.Context, sha1 string) (string, error) {
 	result, err := client.executeCommand(ctx, C.ScriptShow, []string{sha1})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -8798,7 +8816,7 @@ func (client *baseClient) ScriptShow(ctx context.Context, sha1 string) (string, 
 func (client *baseClient) ScriptKill(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.ScriptKill, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }

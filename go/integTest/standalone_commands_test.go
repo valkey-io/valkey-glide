@@ -1218,12 +1218,12 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// APPEND policy also fails for the same reason (name collision)
-	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.AppendPolicy)
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.AppendPolicy)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// REPLACE policy succeeds
-	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy))
 
 	// Functions still work the same after replace
 	result1, err = client.FCallWithKeysAndArgs(context.Background(), name1, []string{}, []string{"meow", "woem"})
@@ -1245,7 +1245,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Equal(suite.T(), name2, loadResult)
 
 	// REPLACE policy now fails due to a name collision
-	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy)
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
 	// valkey checks names in random order and blames on first collision
@@ -1254,7 +1254,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 			strings.Contains(errMsg, "Function "+name2+" already exists"))
 
 	// FLUSH policy succeeds, but deletes the second lib
-	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.FlushPolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, constants.FlushPolicy))
 
 	// Original functions work again
 	result1, err = client.FCallWithKeysAndArgs(context.Background(), name1, []string{}, []string{"meow", "woem"})

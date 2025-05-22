@@ -4276,7 +4276,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		nonListKey := "{key}-4" + uuid.NewString()
 
 		res1, err := client.BLMove(context.Background(), key1, key2, constants.Left, constants.Right, float64(0.1))
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		assert.Equal(suite.T(), models.CreateNilStringResult(), res1)
 		assert.Nil(suite.T(), err)
 
 		res2, err := client.LPush(context.Background(), key1, []string{"four", "three", "two", "one"})
@@ -8519,7 +8519,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-			[]models.XRangeResponse{
+				[]models.XRangeResponse{
 					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
 				},
 				xrangeResult,
@@ -8536,7 +8536,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-			[]models.XRangeResponse{
+				[]models.XRangeResponse{
 					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
 				},
 				xrevrangeResult,

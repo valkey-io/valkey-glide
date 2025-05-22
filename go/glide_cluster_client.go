@@ -305,7 +305,7 @@ func (client *ClusterClient) PingWithOptions(
 func (client *ClusterClient) TimeWithOptions(
 	ctx context.Context,
 	opts options.RouteOption,
-) (ClusterValue[[]string], error) {
+) (models.ClusterValue[[]string], error) {
 	result, err := client.executeCommandWithRoute(ctx, C.Time, []string{}, opts.Route)
 	if err != nil {
 		return models.CreateEmptyClusterValue[[]string](), err
@@ -1959,20 +1959,20 @@ func (client *ClusterClient) FunctionDumpWithRoute(
 ) (models.ClusterValue[string], error) {
 	response, err := client.executeCommandWithRoute(ctx, C.FunctionDump, []string{}, route)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
 	if route != nil && route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[string](), err
 		}
-		return createClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[string](data), nil
 	}
 	data, err := handleStringResponse(response)
 	if err != nil {
-		return createEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[string](), err
 	}
-	return createClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[string](data), nil
 }
 
 // Restores libraries from the serialized payload.
@@ -2002,7 +2002,7 @@ func (client *ClusterClient) FunctionRestoreWithRoute(
 ) (string, error) {
 	result, err := client.executeCommandWithRoute(ctx, C.FunctionRestore, []string{payload}, route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -2031,12 +2031,12 @@ func (client *ClusterClient) FunctionRestoreWithRoute(
 func (client *ClusterClient) FunctionRestoreWithPolicyWithRoute(
 	ctx context.Context,
 	payload string,
-	policy options.FunctionRestorePolicy,
+	policy constants.FunctionRestorePolicy,
 	route config.Route,
 ) (string, error) {
 	result, err := client.executeCommandWithRoute(ctx, C.FunctionRestore, []string{payload, string(policy)}, route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -2074,17 +2074,17 @@ func (client *ClusterClient) InvokeScriptWithRoute(
 ) (models.ClusterValue[any], error) {
 	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, []string{}, route.Route)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil && route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 
-	return createClusterSingleValue[any](response), nil
+	return models.CreateClusterSingleValue[any](response), nil
 }
 
 // Executes a Lua script on the server with cluster script options.
@@ -2124,18 +2124,18 @@ func (client *ClusterClient) InvokeScriptWithClusterOptions(
 
 	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, args, route)
 	if err != nil {
-		return createEmptyClusterValue[any](), err
+		return models.CreateEmptyClusterValue[any](), err
 	}
 
 	if route != nil && route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(response)
 		if err != nil {
-			return createEmptyClusterValue[any](), err
+			return models.CreateEmptyClusterValue[any](), err
 		}
-		return createClusterMultiValue[any](data), nil
+		return models.CreateClusterMultiValue[any](data), nil
 	}
 
-	return createClusterSingleValue[any](response), nil
+	return models.CreateClusterSingleValue[any](response), nil
 }
 
 // Checks existence of scripts in the script cache by their SHA1 digest.
@@ -2238,13 +2238,13 @@ func (client *ClusterClient) ScriptFlushWithOptions(
 	if options.Route == nil {
 		result, err := client.executeCommand(ctx, C.ScriptFlush, args)
 		if err != nil {
-			return DefaultStringResponse, err
+			return models.DefaultStringResponse, err
 		}
 		return handleOkResponse(result)
 	}
 	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.Route.Route)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -2273,7 +2273,7 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 		route.Route,
 	)
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }

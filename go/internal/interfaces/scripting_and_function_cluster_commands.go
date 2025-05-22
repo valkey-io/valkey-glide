@@ -5,6 +5,8 @@ package interfaces
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -48,7 +50,10 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionStats(ctx context.Context) (map[string]models.FunctionStatsResult, error)
 
-	FunctionStatsWithRoute(ctx context.Context, route options.RouteOption) (models.ClusterValue[models.FunctionStatsResult], error)
+	FunctionStatsWithRoute(
+		ctx context.Context,
+		route options.RouteOption,
+	) (models.ClusterValue[models.FunctionStatsResult], error)
 
 	FunctionDelete(ctx context.Context, libName string) (string, error)
 
@@ -58,7 +63,7 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionListWithRoute(
 		ctx context.Context,
-		query FunctionListQuery,
+		query models.FunctionListQuery,
 		route options.RouteOption,
 	) (models.ClusterValue[[]models.LibraryInfo], error)
 
@@ -69,11 +74,15 @@ type ScriptingAndFunctionClusterCommands interface {
 	FunctionRestoreWithPolicyWithRoute(
 		ctx context.Context,
 		payload string,
-		policy options.FunctionRestorePolicy,
+		policy constants.FunctionRestorePolicy,
 		route config.Route,
 	) (string, error)
 
-	InvokeScriptWithRoute(ctx context.Context, script options.Script, route options.RouteOption) (models.ClusterValue[any], error)
+	InvokeScriptWithRoute(
+		ctx context.Context,
+		script options.Script,
+		route options.RouteOption,
+	) (models.ClusterValue[any], error)
 
 	InvokeScriptWithClusterOptions(
 		ctx context.Context,

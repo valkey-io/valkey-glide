@@ -28,7 +28,7 @@ func ExampleClient_Select() {
 }
 
 func ExampleClient_ConfigGet() {
-	var client *Client = getExampleClient()                                    // example helper function
+	var client *Client = getExampleClient()                                                          // example helper function
 	client.ConfigSet(context.Background(), map[string]string{"timeout": "1000", "maxmemory": "1GB"}) // example configuration
 	result, err := client.ConfigGet(context.Background(), []string{"timeout", "maxmemory"})
 	if err != nil {
@@ -41,7 +41,7 @@ func ExampleClient_ConfigGet() {
 }
 
 func ExampleClient_ConfigSet() {
-	var client *Client = getExampleClient()                                                   // example helper function
+	var client *Client = getExampleClient() // example helper function
 	result, err := client.ConfigSet(
 		context.Background(),
 		map[string]string{"timeout": "1000", "maxmemory": "1GB"},

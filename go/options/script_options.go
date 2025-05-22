@@ -7,7 +7,7 @@ import (
 	"unsafe"
 )
 
-// #include "../../lib.h"
+// #include "../lib.h"
 import "C"
 
 // ScriptOptions represents options for script execution

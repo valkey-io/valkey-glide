@@ -17,7 +17,12 @@ import (
 type StreamCommands interface {
 	XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error)
 
-	XAddWithOptions(ctx context.Context, key string, values [][]string, options options.XAddOptions) (models.Result[string], error)
+	XAddWithOptions(
+		ctx context.Context,
+		key string,
+		values [][]string,
+		options options.XAddOptions,
+	) (models.Result[string], error)
 
 	XTrim(ctx context.Context, key string, options options.XTrimOptions) (int64, error)
 
@@ -86,9 +91,9 @@ type StreamCommands interface {
 
 	XDel(ctx context.Context, key string, ids []string) (int64, error)
 
-	XPending(key string, group string) (XPendingSummary, error)
+	XPending(ctx context.Context, key string, group string) (models.XPendingSummary, error)
 
-	XPendingWithOptions(key string, group string, options options.XPendingOptions) ([]XPendingDetail, error)
+	XPendingWithOptions(
 		ctx context.Context,
 		key string,
 		group string,
@@ -169,7 +174,12 @@ type StreamCommands interface {
 
 	XInfoGroups(ctx context.Context, key string) ([]models.XInfoGroupInfo, error)
 
-	XRange(ctx context.Context, key string, start options.StreamBoundary, end options.StreamBoundary) ([]models.XRangeResponse, error)
+	XRange(
+		ctx context.Context,
+		key string,
+		start options.StreamBoundary,
+		end options.StreamBoundary,
+	) ([]models.XRangeResponse, error)
 
 	XRangeWithOptions(
 		ctx context.Context,

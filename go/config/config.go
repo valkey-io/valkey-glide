@@ -462,7 +462,7 @@ func (config *ClusterClientConfiguration) HasSubscription() bool {
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
 	if config.HasSubscription() {
 		return config.subscriptionConfig
-	connectionTimeout int
+	}
 	return nil
 }
 

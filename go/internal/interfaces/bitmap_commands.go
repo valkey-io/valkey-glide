@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )

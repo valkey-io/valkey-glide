@@ -853,7 +853,7 @@ func ExampleClusterClient_ObjectFreq() {
 }
 
 func ExampleClient_ObjectIdleTime() {
-	var client *Client = getExampleClient()                                // example helper function
+	var client *Client = getExampleClient()                                                      // example helper function
 	client.ConfigSet(context.Background(), map[string]string{"maxmemory-policy": "allkeys-lru"}) // example configuration
 	result, err := client.Set(context.Background(), "key1", "someValue")
 	result1, err := client.ObjectIdleTime(context.Background(), "key1")
@@ -887,7 +887,7 @@ func ExampleClusterClient_ObjectIdleTime() {
 }
 
 func ExampleClient_ObjectRefCount() {
-	var client *Client = getExampleClient()                                          // example helper function
+	var client *Client = getExampleClient() // example helper function
 	_, err := client.ConfigSet(
 		context.Background(),
 		map[string]string{"maxmemory-policy": "allkeys-lru"},

@@ -61,7 +61,7 @@ func getExampleClient() *Client {
 	config := config.NewClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
-	client, err := NewClient(context.Background(), config)
+	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -115,7 +115,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
-	client, err := NewClient(context.Background(), config)
+	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}

@@ -73,14 +73,14 @@ type ListCommands interface {
 	LMPopCount(
 		ctx context.Context,
 		keys []string,
-		listDirection models..ListDirection,
+		listDirection constants.ListDirection,
 		count int64,
 	) (map[string][]string, error)
 
 	BLMPop(
 		ctx context.Context,
 		keys []string,
-		listDirection models..ListDirection,
+		listDirection constants.ListDirection,
 		timeoutSecs float64,
 	) (map[string][]string, error)
 

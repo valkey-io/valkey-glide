@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -32,7 +33,7 @@ type ConnectionManagementClusterCommands interface {
 		ctx context.Context,
 		connectionName string,
 		routeOptions options.RouteOption,
-	) (ClusterValue[string], error)
+	) (models.ClusterValue[string], error)
 
 	ClientGetName(ctx context.Context) (models.ClusterValue[string], error)
 
