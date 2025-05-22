@@ -1744,7 +1744,6 @@ where
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
     ) -> RedisResult<()> {
-        println!("Starting to refresh");
         let SlotRefreshState {
             in_progress,
             last_run,
@@ -1804,7 +1803,6 @@ where
             })
             .await;
         }
-        println!("finished to refresh");
         in_progress.store(false, Ordering::Relaxed);
 
         Self::refresh_pubsub_subscriptions(inner).await;
@@ -3127,8 +3125,6 @@ where
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
-
-            println!("Finished with poll_recover, sending requests");
 
             match ready!(self.poll_complete(cx)) {
                 PollFlushAction::None => return Poll::Ready(Ok(())),
