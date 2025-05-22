@@ -1,5 +1,6 @@
 #### Changes
 
+* Go: Add client name and version identifiers ([#3903](https://github.com/valkey-io/valkey-glide/pull/3903))
 * Python: Add support for Trio ([#3465](https://github.com/valkey-io/valkey-glide/pull/3465))
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
 * Core: Move UDS Socket Filename to tmp ([#3615](https://github.com/valkey-io/valkey-glide/pull/3615))
@@ -8,6 +9,10 @@
 * Python: Add Batch support ([#3555](https://github.com/valkey-io/valkey-glide/pull/3555))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
+* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830)) 
+* Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
+* Core/Node: Create openTelemetry span to measure command latency ([#3391](https://github.com/valkey-io/valkey-glide/pull/3391))
+* Core: Add `opentelemetry` metrics support ([#3466](https://github.com/valkey-io/valkey-glide/pull/3466))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 * Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
@@ -66,16 +71,24 @@
 * Go: Add Function Stats ([#3526](https://github.com/valkey-io/valkey-glide/pull/3526))
 * Go: Add Function Delete ([#3603](https://github.com/valkey-io/valkey-glide/pull/3603))
 * Go: Add Function Kill ([#3604](https://github.com/valkey-io/valkey-glide/pull/3604))
+* Go: Script eval/load([#3605](https://github.com/valkey-io/valkey-glide/pull/3605))
 * Benchmarks: Fix rust benchmark latencies calculation
+* Go: Add Script Exists ([#3649](https://github.com/valkey-io/valkey-glide/pull/3649))
 * Python: Moved the tests folder to be under the root folder ([#3661](https://github.com/valkey-io/valkey-glide/pull/3661))
+* Go: Add script flush command([#3662](https://github.com/valkey-io/valkey-glide/pull/3662))
+* Go: Add Script Kill ([#3670](https://github.com/valkey-io/valkey-glide/pull/3670))
+* Go: Add Script Show ([#3668](https://github.com/valkey-io/valkey-glide/pull/3668))
 * Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
+* Go: Move private types to internal packages ([#3841](https://github.com/valkey-io/valkey-glide/pull/3841))
+* Go: Move private interfaces to internal packages ([#3856](https://github.com/valkey-io/valkey-glide/pull/3856))
 * Java, Python, Node: Fix logger docs, add option to log an exception ([#3844](https://github.com/valkey-io/valkey-glide/pull/3844))
 * Core: Refactor socket listener to use a runtime that lives for the application lifetime [#3842](https://github.com/valkey-io/valkey-glide/pull/3842)
 * Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))
-* Python: Fix restore command([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
-* Go: Remove redundant implementations of echo([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
-* Java: Add toArgs() to restore batch command([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
+* Python: Fix restore command ([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
+* Go: Remove redundant implementations of echo ([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
+* Java: Add toArgs() to restore batch command ([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
 * Java: Add error restore command ([#3905](https://github.com/valkey-io/valkey-glide/pull/3905))
+* Core: Add reference counting to Script container to support multiple instances ([#3897](https://github.com/valkey-io/valkey-glide/pull/3897))
 
 #### Breaking Changes
 
@@ -84,6 +97,7 @@
 * Go: Fix response handler for `ZRangeWithScores` to return an ordered result ([#3694](https://github.com/valkey-io/valkey-glide/pull/3694))
 * Go: Fix response handler for other sorted set with scores commands to return an ordered result ([#3712](https://github.com/valkey-io/valkey-glide/pull/3712))
 * Java: Change `BZMPOP` and `ZMPOP` to return `Map<String, Object>` and `Map<GlideString, Object>` instead of `Object[]` ([#3733](https://github.com/valkey-io/valkey-glide/pull/3733))
+* Go: Add support for `context` ([#3802](https://github.com/valkey-io/valkey-glide/pull/3802))
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
 * Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
