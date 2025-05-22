@@ -4,14 +4,19 @@ use bytes::BytesMut;
 use logger_core::{log_info, log_warn};
 use once_cell::sync::Lazy;
 use sha1_smol::Sha1;
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
+const LOCK_ERR: &str = "Failed to acquire the scripts container lock";
+
+/// A script entry stored in the global container.
+///
+/// `ScriptEntry` holds the compiled script bytes and a reference count
+/// to track how many times the script has been added via `add_script`.
 struct ScriptEntry {
     script: Arc<BytesMut>,
-    ref_count: Arc<AtomicUsize>,
+    ref_count: Cell<u32>,
 }
 
 static CONTAINER: Lazy<Mutex<HashMap<String, ScriptEntry>>> =
@@ -26,14 +31,15 @@ pub fn add_script(script: &[u8]) -> String {
         format!("Added script with hash: `{hash}`"),
     );
 
-    let mut container = CONTAINER.lock().unwrap();
+    let mut container = CONTAINER.lock().expect(LOCK_ERR);
     let entry = container
         .entry(hash.clone())
         .or_insert_with(|| ScriptEntry {
             script: Arc::new(BytesMut::from(script)),
-            ref_count: Arc::new(AtomicUsize::new(0)),
+            ref_count: Cell::new(0),
         });
-    let new_count = entry.ref_count.fetch_add(1, Ordering::SeqCst) + 1;
+    let new_count = entry.ref_count.get() + 1;
+    entry.ref_count.set(new_count);
     log_info(
         "script_lifetime",
         format!("Added script with hash: `{hash}`, ref_count = {new_count}"),
@@ -44,15 +50,16 @@ pub fn add_script(script: &[u8]) -> String {
 pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
     CONTAINER
         .lock()
-        .unwrap()
+        .expect(LOCK_ERR)
         .get(hash)
         .map(|entry| entry.script.clone())
 }
 
 pub fn remove_script(hash: &str) {
-    let mut container = CONTAINER.lock().unwrap();
+    let mut container = CONTAINER.lock().expect(LOCK_ERR);
     if let Some(entry) = container.get(hash) {
-        let new_count = entry.ref_count.fetch_sub(1, Ordering::SeqCst) - 1;
+        let new_count = entry.ref_count.get() - 1;
+        entry.ref_count.set(new_count);
 
         if new_count == 0 {
             container.remove(hash);
