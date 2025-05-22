@@ -47,6 +47,8 @@ from .glide import (
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
     create_leaked_bytes_vec,
+    create_leaked_otel_span,
+    drop_otel_span,
     get_statistics,
     start_socket_listener_external,
     value_from_pointer,
@@ -424,6 +426,13 @@ class BaseClient(CoreCommands):
             request.single_command.args_vec_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+        
+        # Create a span if OpenTelemetry is enabled
+        command_name = RequestType.Name(request_type)
+        span_pair = create_leaked_otel_span(command_name)
+        if span_pair:
+            request.root_span_ptr = span_pair
+            
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -462,6 +471,12 @@ class BaseClient(CoreCommands):
             request.batch.timeout = timeout
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
+        
+        # Create a span if OpenTelemetry is enabled
+        span_pair = create_leaked_otel_span("Batch")
+        if span_pair:
+            request.root_span_ptr = span_pair
+            
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -493,6 +508,12 @@ class BaseClient(CoreCommands):
             request.script_invocation_pointers.args_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+            
+        # Create a span if OpenTelemetry is enabled
+        span_pair = create_leaked_otel_span(f"Script:{hash}")
+        if span_pair:
+            request.root_span_ptr = span_pair
+            
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -655,6 +676,10 @@ class BaseClient(CoreCommands):
                 res_future.set_result(OK)
             else:
                 res_future.set_result(None)
+                
+            # Drop the command span if it exists
+            if response.HasField("root_span_ptr"):
+                drop_otel_span(response.root_span_ptr)
 
     async def _process_push(self, response: Response) -> None:
         if response.HasField("closing_error") or not response.HasField("resp_pointer"):
