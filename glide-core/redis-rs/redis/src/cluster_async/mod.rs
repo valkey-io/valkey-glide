@@ -2951,13 +2951,13 @@ where
                     let future: Option<
                         RequestState<Pin<Box<dyn Future<Output = OperationResult> + Send>>>,
                     > = if let Some(moved_redirect) = moved_redirect {
-                            // record moved error metric if telemetry is initialized
-                            if let Err(e) = GlideOpenTelemetry::record_moved_error() {
-                                log_error(
-                                    "OpenTelemetry:moved_error",
-                                    format!("Failed to record moved error: {}", e),
-                                );
-                            }
+                        // record moved error metric if telemetry is initialized
+                        if let Err(e) = GlideOpenTelemetry::record_moved_error() {
+                            log_error(
+                                "OpenTelemetry:moved_error",
+                                format!("Failed to record moved error: {}", e),
+                            );
+                        }
                         Some(RequestState::UpdateMoved {
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
