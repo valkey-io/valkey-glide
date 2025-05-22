@@ -13,10 +13,12 @@ use crate::{cluster_routing, RedisResult, Value};
 use crate::{cluster_routing::Route, Cmd, ErrorKind, RedisError};
 use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 use futures::FutureExt;
+use logger_core::log_error;
 use rand::prelude::IteratorRandom;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
@@ -1042,6 +1044,13 @@ where
 
         // Handle MOVED redirect by updating the topology
         if matches!(retry_method, RetryMethod::MovedRedirect) {
+            // record moved error metric if telemetry is initialized
+            if let Err(e) = GlideOpenTelemetry::record_moved_error() {
+                log_error(
+                    "OpenTelemetry:moved_error",
+                    format!("Failed to record moved error: {}", e),
+                );
+            }
             if let Err(server_error) =
                 pipeline_handle_moved_redirect(core.clone(), &redis_error).await
             {
@@ -1196,6 +1205,14 @@ where
                     inner_index,
                     false,
                 );
+
+                // Record retry attempt metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_retries() {
+                    log_error(
+                        "OpenTelemetry:retry_error",
+                        format!("Failed to record retry attempt: {}", e),
+                    );
+                }
             }
             Err(redis_error) => {
                 error.append_detail(&redis_error.into());
