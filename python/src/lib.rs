@@ -24,7 +24,7 @@ use std::sync::Arc;
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
-pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS_PY: u64 = DEFAULT_FLUSH_SIGNAL_INTERVAL_MS;
+pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS_PY: u32 = DEFAULT_FLUSH_SIGNAL_INTERVAL_MS;
 
 #[pyclass(eq, eq_int)]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -54,7 +54,6 @@ impl Level {
 ///
 /// At least one of traces or metrics must be provided.
 #[pyclass]
-#[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
     #[pyo3(get, set)]
@@ -65,6 +64,16 @@ pub struct OpenTelemetryConfig {
     /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
     #[pyo3(get, set)]
     pub flush_interval_ms: Option<i64>,
+}
+
+impl Clone for OpenTelemetryConfig {
+    fn clone(&self) -> Self {
+        OpenTelemetryConfig {
+            traces: self.traces.as_ref().map(|t| t.clone()),
+            metrics: self.metrics.as_ref().map(|m| m.clone()),
+            flush_interval_ms: self.flush_interval_ms,
+        }
+    }
 }
 
 #[pymethods]
