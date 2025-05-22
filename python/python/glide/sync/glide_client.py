@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional, Union
@@ -49,8 +50,19 @@ class BaseClient(CoreCommands):
         self._init_ffi()
         self.config = config
         self._is_closed = False
-        conn_req = config._create_a_protobuf_conn_request(
-            cluster_mode=type(config) is GlideClusterClientConfiguration
+
+        os.register_at_fork(after_in_child=self._reset_client_connection)
+
+        self._create_new_core_client()
+
+        return self
+
+    def _reset_client_connection(self):
+        self._create_new_core_client()
+
+    def _create_new_core_client(self):
+        conn_req = self.config._create_a_protobuf_conn_request(
+            cluster_mode=type(self.config) is GlideClusterClientConfiguration
         )
         conn_req_bytes = conn_req.SerializeToString()
         client_type = self.ffi.new(
@@ -83,7 +95,6 @@ class BaseClient(CoreCommands):
             self.lib.free_connection_response(client_response_ptr)
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
-        return self
 
     def _init_ffi(self):
         self.ffi = FFI()

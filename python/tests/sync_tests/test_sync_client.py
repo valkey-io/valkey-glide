@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -379,6 +380,27 @@ class TestGlideClients:
 
         # Clean up the main client
         client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_fork(self, glide_sync_client: TGlideClient):
+        try:
+            pid = os.fork()
+        except OSError as e:
+            pytest.fail(f"Fork failed: {e}")
+
+        if pid == 0:
+            # Child process
+            glide_sync_client.set("key", "value")
+            assert glide_sync_client.get("key") == "value".encode()
+            os._exit(0)
+        else:
+            # Parent process
+            glide_sync_client.set("key", "value")
+            assert glide_sync_client.get("key") == "value".encode()
+            _, status = os.waitpid(pid, 0)
+            if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
+                pytest.fail(f"Child process failed with status {status}")
 
 
 class TestCommands:
