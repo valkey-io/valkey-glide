@@ -5,8 +5,6 @@ package interfaces
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -32,16 +30,6 @@ type ScriptingAndFunctionBaseCommands interface {
 	FCallWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
 
 	FCallReadOnlyWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
-
-	FunctionKill(ctx context.Context) (string, error)
-
-	FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error)
-
-	FunctionDump(ctx context.Context) (string, error)
-
-	FunctionRestore(ctx context.Context, payload string) (string, error)
-
-	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy constants.FunctionRestorePolicy) (string, error)
 
 	InvokeScript(ctx context.Context, script options.Script) (any, error)
 
