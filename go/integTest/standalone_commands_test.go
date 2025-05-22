@@ -10,10 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,7 +41,7 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
-	config := api.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
@@ -97,7 +100,7 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
-	config := api.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
@@ -114,11 +117,11 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	}
 	suite.verifyOK(client.MSet(context.Background(), keyValueMap))
 	keys := []string{key1, key2, key3}
-	values := []interface{}{value, value, nil}
+	values := []any{value, value, nil}
 	result, err := client.CustomCommand(context.Background(), append([]string{"MGET"}, keys...))
 
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), values, result.([]interface{}))
+	assert.Equal(suite.T(), values, result.([]any))
 }
 
 func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
@@ -131,7 +134,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 
 	result2, err := client.CustomCommand(context.Background(), []string{"CONFIG", "GET", "timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
+	assert.Equal(suite.T(), map[string]any{"timeout": "1000", "maxmemory": "1073741824"}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
@@ -293,10 +296,10 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, *options)
 
 	assert.Nil(suite.T(), err)
-	resultList := []api.Result[string]{
-		api.CreateStringResult("item2"),
-		api.CreateStringResult("item3"),
-		api.CreateStringResult("item1"),
+	resultList := []models.Result[string]{
+		models.CreateStringResult("item2"),
+		models.CreateStringResult("item3"),
+		models.CreateStringResult("item1"),
 	}
 	assert.Equal(suite.T(), resultList, sortResult)
 }
@@ -322,10 +325,10 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 
 	assert.Nil(suite.T(), err)
 
-	resultList := []api.Result[string]{
-		api.CreateStringResult("Object_2"),
-		api.CreateStringResult("Object_3"),
-		api.CreateStringResult("Object_1"),
+	resultList := []models.Result[string]{
+		models.CreateStringResult("Object_2"),
+		models.CreateStringResult("Object_3"),
+		models.CreateStringResult("Object_1"),
 	}
 
 	assert.Equal(suite.T(), resultList, sortResult)
@@ -357,13 +360,13 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 
 	assert.Nil(suite.T(), err)
 
-	resultList := []api.Result[string]{
-		api.CreateStringResult("Object 2"),
-		api.CreateStringResult("item2"),
-		api.CreateStringResult("Object 1"),
-		api.CreateStringResult("item1"),
-		api.CreateStringResult("Object 3"),
-		api.CreateStringResult("item3"),
+	resultList := []models.Result[string]{
+		models.CreateStringResult("Object 2"),
+		models.CreateStringResult("item2"),
+		models.CreateStringResult("Object 1"),
+		models.CreateStringResult("item1"),
+		models.CreateStringResult("Object 3"),
+		models.CreateStringResult("item3"),
 	}
 
 	assert.Equal(suite.T(), resultList, sortResult)
@@ -411,9 +414,9 @@ func (suite *GlideTestSuite) TestInfoStandalone() {
 	}
 
 	// info with option or with multiple options
-	sections := []options.Section{options.Cpu}
+	sections := []constants.Section{constants.Cpu}
 	if suite.serverVersion >= "7.0.0" {
-		sections = append(sections, options.Memory)
+		sections = append(sections, constants.Memory)
 	}
 	info, err = client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
@@ -875,7 +878,7 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 
 	// Test TestScanWithOption SetType
-	opts = options.NewScanOptions().SetType(options.ObjectTypeString)
+	opts = options.NewScanOptions().SetType(constants.ObjectTypeString)
 	resCursor, resCollection, err = client.ScanWithOptions(context.Background(), 0, *opts)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
@@ -885,7 +888,7 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 func (suite *GlideTestSuite) TestConfigRewrite() {
 	client := suite.defaultClient()
 	t := suite.T()
-	opts := options.InfoOptions{Sections: []options.Section{options.Server}}
+	opts := options.InfoOptions{Sections: []constants.Section{constants.Server}}
 	response, err := client.InfoWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	lines := strings.Split(response, "\n")
@@ -947,7 +950,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	assert.Equal(suite.T(), "one", functionResult)
 
 	// Test FunctionList
-	query := api.FunctionListQuery{
+	query := models.FunctionListQuery{
 		LibraryName: libName,
 		WithCode:    false,
 	}
@@ -968,7 +971,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 	assert.Contains(suite.T(), funcInfo.Flags, "no-writes")
 
 	// Test FunctionList with WithCode and query for all libraries
-	query = api.FunctionListQuery{
+	query = models.FunctionListQuery{
 		WithCode: true,
 	}
 	functionList, err = client.FunctionList(context.Background(), query)
@@ -1215,12 +1218,12 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// APPEND policy also fails for the same reason (name collision)
-	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.AppendPolicy)
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.AppendPolicy)
 	assert.NotNil(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Library "+name1+" already exists")
 
 	// REPLACE policy succeeds
-	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy))
 
 	// Functions still work the same after replace
 	result1, err = client.FCallWithKeysAndArgs(context.Background(), name1, []string{}, []string{"meow", "woem"})
@@ -1242,7 +1245,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	assert.Equal(suite.T(), name2, loadResult)
 
 	// REPLACE policy now fails due to a name collision
-	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, options.ReplacePolicy)
+	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
 	// valkey checks names in random order and blames on first collision
@@ -1251,7 +1254,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 			strings.Contains(errMsg, "Function "+name2+" already exists"))
 
 	// FLUSH policy succeeds, but deletes the second lib
-	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, options.FlushPolicy))
+	suite.verifyOK(client.FunctionRestoreWithPolicy(context.Background(), dump, constants.FlushPolicy))
 
 	// Original functions work again
 	result1, err = client.FCallWithKeysAndArgs(context.Background(), name1, []string{}, []string{"meow", "woem"})

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/valkey-io/valkey-glide/go/api"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 type options struct {
@@ -43,9 +43,9 @@ type runConfiguration struct {
 }
 
 const (
-	goRedis = "go-redis"
-	glide   = "glide"
-	all     = "all"
+	goRedis     = "go-redis"
+	valkeyGlide = "glide"
+	all         = "all"
 )
 
 func main() {
@@ -79,8 +79,8 @@ func parseArguments() *options {
 	dataSize := flag.String("dataSize", "[100]", "Data block size")
 	concurrentTasks := flag.String("concurrentTasks", "[1 10 100 1000]", "Number of concurrent tasks")
 	clientNames := flag.String("clients", "all", "One of: all|go-redis|glide")
-	host := flag.String("host", api.DefaultHost, "Hostname")
-	port := flag.Int("port", api.DefaultPort, "Port number")
+	host := flag.String("host", config.DefaultHost, "Hostname")
+	port := flag.Int("port", config.DefaultPort, "Port number")
 	clientCount := flag.String("clientCount", "[1]", "Number of clients to run")
 	tls := flag.Bool("tls", false, "Use TLS")
 	clusterModeEnabled := flag.Bool("clusterModeEnabled", false, "Is cluster mode enabled")
@@ -149,11 +149,11 @@ func verifyOptions(opts *options) (*runConfiguration, error) {
 	case strings.EqualFold(opts.clients, goRedis):
 		runConfig.clientNames = append(runConfig.clientNames, goRedis)
 
-	case strings.EqualFold(opts.clients, glide):
-		runConfig.clientNames = append(runConfig.clientNames, glide)
+	case strings.EqualFold(opts.clients, valkeyGlide):
+		runConfig.clientNames = append(runConfig.clientNames, valkeyGlide)
 
 	case strings.EqualFold(opts.clients, all):
-		runConfig.clientNames = append(runConfig.clientNames, goRedis, glide)
+		runConfig.clientNames = append(runConfig.clientNames, goRedis, valkeyGlide)
 	default:
 		return nil, fmt.Errorf("invalid clients option, should be one of: all|go-redis|glide")
 	}
