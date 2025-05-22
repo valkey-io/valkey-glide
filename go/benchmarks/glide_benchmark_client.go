@@ -5,19 +5,21 @@ package main
 import (
 	"context"
 
-	"github.com/valkey-io/valkey-glide/go/api"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 type glideBenchmarkClient struct {
-	client api.BaseClient
+	client interfaces.BaseClientCommands
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *connectionSettings) error {
 	if connectionSettings.clusterModeEnabled {
-		config := api.NewGlideClusterClientConfiguration().
-			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
+		config := config.NewClusterClientConfiguration().
+			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClusterClient(context.Background(), config)
+		glideClient, err := glide.NewClusterClient(config)
 		if err != nil {
 			return err
 		}
@@ -25,10 +27,10 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		glideBenchmarkClient.client = glideClient
 		return nil
 	} else {
-		config := api.NewGlideClientConfiguration().
-			WithAddress(&api.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
+		config := config.NewClientConfiguration().
+			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClient(context.Background(), config)
+		glideClient, err := glide.NewClient(config)
 		if err != nil {
 			return err
 		}
