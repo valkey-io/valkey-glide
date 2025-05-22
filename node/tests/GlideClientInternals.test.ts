@@ -4,20 +4,11 @@
 
 import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
-import {
-    createLeakedArray,
-    createLeakedAttribute,
-    createLeakedBigint,
-    createLeakedDouble,
-    createLeakedMap,
-    createLeakedString,
-    MAX_REQUEST_ARGS_LEN,
-} from "glide-rs";
 import Long from "long";
 import net from "net";
 import os from "os";
 import path from "path";
-import { Reader } from "protobufjs";
+import { Reader } from "protobufjs/minimal";
 import {
     BaseClientConfiguration,
     ClosingError,
@@ -33,15 +24,24 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
+    MAX_REQUEST_ARGS_LEN,
     RequestError,
     SlotKeyTypes,
     TimeUnit,
-} from "..";
+} from "../build-ts";
+import {
+    createLeakedArray,
+    createLeakedAttribute,
+    createLeakedBigint,
+    createLeakedDouble,
+    createLeakedMap,
+    createLeakedString,
+} from "../build-ts/native";
 import {
     command_request,
     connection_request,
     response,
-} from "../src/ProtobufMessage";
+} from "../build-ts/ProtobufMessage";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
@@ -196,21 +196,21 @@ function closeTestResources(
     socket.end();
 }
 
-async function testWithResources(
-    testFunction: (
+async function testWithResources<T>(
+    fn: (
         connection: GlideClient | GlideClusterClient,
         socket: net.Socket,
-    ) => Promise<void>,
-    connectionOptions?: BaseClientConfiguration,
-) {
-    const { connection, server, socket } = await getConnectionAndSocket(
-        undefined,
-        connectionOptions,
-    );
+    ) => Promise<T>,
+): Promise<T> {
+    const { connection, socket, server } = await getConnectionAndSocket();
 
-    await testFunction(connection, socket);
-
-    closeTestResources(connection, server, socket);
+    try {
+        return await fn(connection, socket);
+    } finally {
+        socket.destroy();
+        connection.close();
+        server.close();
+    }
 }
 
 async function testWithClusterResources(

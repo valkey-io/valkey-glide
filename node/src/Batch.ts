@@ -3,23 +3,6 @@
  */
 
 import {
-    ElementAndScore,
-    GlideRecord,
-    GlideString,
-    HashDataType,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    Score,
-    convertGlideRecord,
-} from "./BaseClient";
-
-import {
-    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-} from "./GlideClient";
-import {
-    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-} from "./GlideClusterClient";
-
-import {
     AggregationType,
     BaseScanOptions,
     BitFieldGet,
@@ -33,6 +16,7 @@ import {
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ElementAndScore,
     ExpireOptions,
     FlushMode,
     FunctionListOptions,
@@ -47,7 +31,12 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
+    GlideString,
     HScanOptions,
+    HashDataType,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -58,7 +47,9 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     RestoreOptions,
+    Score,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -74,6 +65,7 @@ import {
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
+    convertGlideRecord,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -271,8 +263,8 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
-import { command_request } from "./ProtobufMessage";
+} from ".";
+import { command_request } from "../build-ts/ProtobufMessage";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.

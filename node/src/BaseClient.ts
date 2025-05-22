@@ -1,17 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    createLeakedOtelSpan,
-    dropOtelSpan,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
 import Long from "long";
 import * as net from "net";
 import {
@@ -20,7 +9,7 @@ import {
     Long as ProtoLong,
     Reader,
     Writer,
-} from "protobufjs";
+} from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -35,8 +24,15 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClosingError,
     ClusterBatchOptions,
+    ConfigurationError,
+    ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -46,20 +42,29 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     HScanOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
     ListDirection,
+    Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    OpenTelemetry,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RequestError,
     RestoreOptions,
+    RouteOption,
+    Routes,
     ScoreFilter,
+    Script,
     SearchOrigin,
     SetOptions,
     SortOptions,
+    StartSocketConnection,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -68,6 +73,8 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    TimeoutError,
+    ValkeyError,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -137,6 +144,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLeakedOtelSpan,
     createMGet,
     createMSet,
     createMSetNX,
@@ -241,30 +249,15 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
-import {
-    ClosingError,
-    ConfigurationError,
-    ConnectionError,
-    ExecAbortError,
-    RequestError,
-    TimeoutError,
-    ValkeyError,
-} from "./Errors";
-import { GlideClientConfiguration } from "./GlideClient";
-import {
-    GlideClusterClientConfiguration,
-    RouteOption,
-    Routes,
-} from "./GlideClusterClient";
-import { Logger } from "./Logger";
-import { OpenTelemetry } from "./OpenTelemetry";
+    dropOtelSpan,
+    getStatistics,
+    valueFromSplitPointer,
+} from ".";
 import {
     command_request,
     connection_request,
     response,
-} from "./ProtobufMessage";
-
+} from "../build-ts/ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -777,7 +770,7 @@ export interface PubSubMsg {
  * @see {@link BatchOptions}
  */
 type BaseOptions = RouteOption & DecoderOption;
-export type WritePromiseOptions =
+type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 

@@ -2,32 +2,31 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
-import { Writer } from "protobufjs";
+import { Writer } from "protobufjs/minimal";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
+    ClusterBatch,
+    ClusterBatchOptions,
+    ClusterScanCursor,
+    ClusterScanOptions,
     Decoder,
     DecoderOption,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
-    PubSubMsg,
-    convertGlideRecordToRecord,
-} from "./BaseClient";
-import { ClusterBatch } from "./Batch";
-import {
-    ClusterBatchOptions,
-    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
     InfoOptions,
     LolwutOptions,
+    PubSubMsg,
+    Script,
+    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -63,9 +62,11 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from "./Commands";
-import { command_request, connection_request } from "./ProtobufMessage";
-
+} from ".";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -652,7 +653,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                (resolveAns: [typeof cursor, GlideString[]]) => {
                     try {
                         resolve([
                             new ClusterScanCursor(resolveAns[0].toString()),
