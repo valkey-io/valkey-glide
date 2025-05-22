@@ -7147,7 +7147,7 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := "{key}" + uuid.New().String()
+		key := "{key}-1"
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
 		client.Set(context.Background(), "{key}weight_item1", "3")
@@ -7175,7 +7175,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := "{key}" + uuid.New().String()
+		key := "{key}-1"
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
 		client.Set(context.Background(), "{key}object_item1", "Object_1")
@@ -7205,7 +7205,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := "{key}" + uuid.New().String()
+		key := "{key}-1"
 		client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
 
 		client.Set(context.Background(), "{key}weight_item1", "10")
