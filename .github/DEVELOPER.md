@@ -142,5 +142,3 @@ We use dynamic matrices for our CI/CD workflows, which are created using the `cr
 -   `language-version-matrix-output`: The generated language version matrix.
 
 This dynamic matrix generation allows for flexible and efficient CI/CD workflows, adapting the test configurations based on the type of change and the specific language being tested.
-
-> **Note:** For detailed information about the Node.js CD workflow, see the workflow file at `.github/workflows/npm-cd.yml`

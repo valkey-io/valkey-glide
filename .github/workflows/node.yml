@@ -124,7 +124,7 @@ jobs:
 
             - name: Install Yarn
               id: install-yarn
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.ARCH == 'x64' && matrix.node == '23.x' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.TARGET == 'x86_64-unknown-linux-gnu' && matrix.node == '23.x' }}
               shell: bash
               run: |
                   curl -o- -L https://yarnpkg.com/install.sh | bash
