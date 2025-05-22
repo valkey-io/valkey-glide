@@ -994,48 +994,46 @@ mod tests {
     fn test_set_status_ok() {
         let rt = shared_runtime();
         rt.block_on(async {
-        // Clear the file
-        let _ = std::fs::remove_file(SPANS_JSON);
+            // Clear the file
+            let _ = std::fs::remove_file(SPANS_JSON);
 
-        init_otel().await.unwrap();
-        let span = GlideOpenTelemetry::new_span("Root_Span_1");
-        span.add_event("Event1");
-        span.set_status(GlideSpanStatus::Ok);
+            init_otel().await.unwrap();
+            let span = GlideOpenTelemetry::new_span("Root_Span_1");
+            span.add_event("Event1");
+            span.set_status(GlideSpanStatus::Ok);
 
-        let child1 = span.add_span("Network_Span").unwrap();
+            let child1 = span.add_span("Network_Span").unwrap();
 
-        // Simulate some work
-        sleep(Duration::from_millis(100)).await;
-        child1.end();
+            // Simulate some work
+            sleep(Duration::from_millis(100)).await;
+            child1.end();
 
-        // Simulate that the parent span is still doing some work
-        sleep(Duration::from_millis(100)).await;
-        span.end();
+            // Simulate that the parent span is still doing some work
+            sleep(Duration::from_millis(100)).await;
+            span.end();
 
-        let span = GlideOpenTelemetry::new_span("Root_Span_2");
-        span.add_event("Event1");
-        span.add_event("Event2");
-        span.set_status(GlideSpanStatus::Error("simple error".to_string()));  // Fixed typo in "simple"
-        drop(span); // writes the span
+            let span = GlideOpenTelemetry::new_span("Root_Span_2");
+            span.add_event("Event1");
+            span.add_event("Event2");
+            span.set_status(GlideSpanStatus::Error("simple error".to_string())); // Fixed typo in "simple"
+            drop(span); // writes the span
 
-        sleep(Duration::from_millis(2100)).await;
+            sleep(Duration::from_millis(2100)).await;
 
-        let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
             println!("File content: {file_content:?}");
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
-        let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
-        assert_eq!(span_json["status"], "Ok");
-        
-        let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
-        let status = span_json["status"].as_str().unwrap_or("");
-        assert!(status.starts_with("Error"));
-        assert!(status.contains("simple error"));
+            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            assert_eq!(span_json["status"], "Ok");
 
+            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let status = span_json["status"].as_str().unwrap_or("");
+            assert!(status.starts_with("Error"));
+            assert!(status.contains("simple error"));
         });
-
     }
 }
