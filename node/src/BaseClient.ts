@@ -7,11 +7,20 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -249,6 +258,7 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { OpenTelemetry } from "./OpenTelemetry";
 import {
     command_request,
     connection_request,
@@ -489,14 +499,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -943,6 +953,16 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof Long) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -994,6 +1014,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1099,6 +1121,18 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         const callbackIndex = this.getCallbackIndex();
         const basePromise = new Promise<T>((resolve, reject) => {
+            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+
+            if (OpenTelemetry.shouldSample()) {
+                const commandName =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandName);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
@@ -1109,6 +1143,7 @@ export class BaseClient {
                 callbackIndex,
                 command,
                 route,
+                spanPtr,
                 isAtomic,
                 raiseOnError,
                 options as ClusterBatchOptions,
@@ -1211,6 +1246,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        commandSpanPtr?: number | Long | null,
         isAtomic = false,
         raiseOnError = false,
         options: ClusterBatchOptions | BatchOptions = {},
@@ -1249,6 +1285,7 @@ export class BaseClient {
             singleCommand: isBatch ? undefined : command,
             batch,
             route,
+            rootSpanPtr: commandSpanPtr,
         });
 
         this.writeOrBufferRequest(

@@ -11,6 +11,12 @@ TARGET_DIR := $(GLIDE_FFI_PATH)/target
 UNAME := $(shell uname)
 ARCH := $(shell uname -m)
 
+# Set default values for GLIDE_NAME and GLIDE_VERSION
+# GLIDE_VERSION is automatically set during the deployment workflow based on the value defined in go-cd.yml.
+# For local builds, you can manually specify the version using `GLIDE_VERSION=<version> make build`
+GLIDE_NAME = GlideGo
+GLIDE_VERSION ?= unknown
+
 ifeq ($(UNAME), Darwin)
     TARGET_TRIPLET := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
 	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
@@ -59,7 +65,7 @@ clean:
 	go clean
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
-	rm -rf protobuf
+	rm -rf internal/protobuf
 	rm -rf $(GLIDE_FFI_PATH)/target
 	rm -rf reports
 
@@ -78,7 +84,7 @@ libglide_ffi:
 	mkdir -p $(DEST_PATH)
 	cd $(GLIDE_FFI_PATH) && \
 	$(CARGO_FIX_CMD) && \
-	cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
+    GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo $(BUILD_CMD) $(BUILD_FLAGS) && \
 	$(CARGO_POSTFIX_CMD) && \
 	$(STRIP_CMD) $(TARGET_DIR)/libglide_ffi.a && \
 	cp $(TARGET_DIR)/libglide_ffi.a $(GO_DIR)/$(DEST_PATH)
@@ -87,16 +93,16 @@ build-glide-ffi: libglide_ffi gen-c-bindings
 
 gen-c-bindings:
 	cd $(GLIDE_FFI_PATH) && \
-	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
+	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)lib.h --lang c
 
 generate-protobuf:
-	rm -rf protobuf
-	mkdir -p protobuf
+	rm -rf internal/protobuf
+	mkdir -p internal/protobuf
 	protoc --proto_path=$(GLIDE_CORE_PATH)/src/protobuf \
-		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/protobuf \
-		--go_out=./protobuf \
+		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/v2/internal/protobuf \
+		--go_out=./internal/protobuf \
 		--go_opt=paths=source_relative \
 		$(GLIDE_CORE_PATH)/src/protobuf/*.proto
 
@@ -128,7 +134,7 @@ unit-test:
 	mkdir -p reports
 	set -o pipefail; \
 	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
 example-test:
@@ -141,8 +147,8 @@ example-test:
 	CLUSTER_OUTPUT=$$(python3 ../utils/cluster_manager.py start --cluster-mode); \
 	GLIDE_CLUSTER_NODES=$$(echo "$$CLUSTER_OUTPUT" | grep 'CLUSTER_NODES=' | cut -d'=' -f2); \
 	echo "GLIDE_CLUSTER_NODES=$$GLIDE_CLUSTER_NODES"; \
-	go test -v ./api -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/api \
+	go test -v . -skip Test $(if $(test-filter), -run $(test-filter)) -clusternodes $$GLIDE_CLUSTER_NODES -standalonenode $$GLIDE_NODE \
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
@@ -153,6 +159,14 @@ integ-test: __it
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestGlideTestSuite/TestModule)
 modules-test: __it
 
+# pubsub tests - run subtask with the pubsub flag enabled
+pubsub-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule -pubsub -testify.m TestPubSub
+pubsub-test: __it
+
+# long timeout tests - run subtask with the long timeout flag enabled
+long-timeout-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
+long-timeout-test: __it
+
 __it:
 	mkdir -p reports
 	set -o pipefail; \
@@ -161,6 +175,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

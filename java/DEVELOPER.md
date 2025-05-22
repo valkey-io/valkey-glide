@@ -279,6 +279,10 @@ To run server modules test (it doesn't start servers):
 ./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
 ```
 
+### JaCoCo Code Coverage Results
+
+JaCoCo results are automatically generated just by running the tests (due to the `finalizedBy jacocoTestReport` task). The generated files are located in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`
+
 ### Generate files
 
 To (re)generate protobuf code, use the following command:

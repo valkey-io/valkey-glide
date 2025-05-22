@@ -9331,6 +9331,15 @@ class TestCommands:
             await glide_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
+        # Restore with frequency and idletime both set.
+        with pytest.raises(RequestError) as e:
+            await glide_client.restore(
+                key2, 0, bytesData, replace=True, idletime=-10, frequency=10
+            )
+        assert "syntax error: IDLETIME and FREQ cannot be set at the same time." in str(
+            e
+        )
+
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10653,3 +10662,40 @@ class TestScripts:
 
         with pytest.raises(RequestError):
             await glide_client.script_show("non existing sha1")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_isnt_removed_while_another_instance_exists(
+        self, glide_client: TGlideClient
+    ):
+        """
+        Verifies that a script is retained in the local scripts container and not removed while another
+        instance with the same hash still exists, even after the original reference is released
+        and the server-side script cache is flushed.
+        """
+        script_1 = Script("return 'Script Exists'")
+        script_2 = Script("return 'Script Exists'")
+        assert script_1.get_hash() == script_2.get_hash()
+
+        # Run first script and drop reference
+        assert await glide_client.invoke_script(script_1) == b"Script Exists"
+        script_1.__del__()
+
+        # Flush the script from the server
+        assert await glide_client.script_flush() == OK
+
+        # Script should not exist on the server anymore
+        assert await glide_client.script_exists([script_1.get_hash()]) == [False]
+
+        # Run second script; it should not exist on the server but must be found in the local script cache
+        assert await glide_client.invoke_script(script_2) == b"Script Exists"
+
+        # Release script_2 and flush again
+        script_2.__del__()
+        assert await glide_client.script_flush() == OK
+
+        # Should now raise NOSCRIPT
+        with pytest.raises(RequestError) as exc_info:
+            await glide_client.invoke_script(script_2)
+
+        assert "NOSCRIPT" in str(exc_info.value).upper()
