@@ -1905,7 +1905,7 @@ mod cluster_async {
                 // This GET should time out as it's blocked by the topology refresh
                 let get_result = tokio::time::timeout(
                     Duration::from_millis(1000),
-                    client1.get::<_, String>(other_shard_key)
+                    client1.get::<_, String>(other_shard_key),
                 )
                 .await;
 
