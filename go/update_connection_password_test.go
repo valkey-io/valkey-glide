@@ -3,12 +3,13 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 )
 
 func ExampleClient_UpdateConnectionPassword() {
 	var client *Client = getExampleClient() // example helper function
-	response, err := client.UpdateConnectionPassword("", false)
+	response, err := client.UpdateConnectionPassword(context.Background(), "", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -19,7 +20,7 @@ func ExampleClient_UpdateConnectionPassword() {
 
 func ExampleClient_ResetConnectionPassword() {
 	var client *Client = getExampleClient() // example helper function
-	response, err := client.ResetConnectionPassword()
+	response, err := client.ResetConnectionPassword(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -30,7 +31,7 @@ func ExampleClient_ResetConnectionPassword() {
 
 func ExampleClusterClient_UpdateConnectionPassword() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
-	response, err := client.UpdateConnectionPassword("", false)
+	response, err := client.UpdateConnectionPassword(context.Background(), "", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -41,7 +42,7 @@ func ExampleClusterClient_UpdateConnectionPassword() {
 
 func ExampleClusterClient_ResetConnectionPassword() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
-	response, err := client.ResetConnectionPassword()
+	response, err := client.ResetConnectionPassword(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

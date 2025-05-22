@@ -3,6 +3,7 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -15,7 +16,7 @@ import (
 
 func ExampleClusterClient_CustomCommand() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
-	result, err := client.CustomCommand([]string{"ping"})
+	result, err := client.CustomCommand(context.Background(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -28,7 +29,7 @@ func ExampleClusterClient_CustomCommandWithRoute() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	route := config.SimpleNodeRoute(config.RandomRoute)
-	result, _ := client.CustomCommandWithRoute([]string{"ping"}, route)
+	result, _ := client.CustomCommandWithRoute(context.Background(), []string{"ping"}, route)
 	fmt.Println(result.SingleValue().(string))
 
 	// Output: PONG
@@ -43,7 +44,7 @@ func ExampleClusterClient_Scan() {
 		"key3": "value3",
 	}
 
-	_, err := client.MSet(keysToSet)
+	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -53,7 +54,7 @@ func ExampleClusterClient_Scan() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.Scan(cursor)
+		cursor, keys, err = client.Scan(context.Background(), cursor)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -77,12 +78,12 @@ func ExampleClusterClient_ScanWithOptions_match() {
 		"nonPatternKey": "value4",
 	}
 
-	_, err := client.MSet(keysToSet)
+	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	_, err = client.SAdd("someKey", []string{"value"})
+	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -93,7 +94,7 @@ func ExampleClusterClient_ScanWithOptions_match() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -116,12 +117,12 @@ func ExampleClusterClient_ScanWithOptions_matchNonUTF8() {
 		"key\xf9\xc1-3": "value3",
 	}
 
-	_, err := client.MSet(keysToSet)
+	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	_, err = client.SAdd("someKey", []string{"value"})
+	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -132,7 +133,7 @@ func ExampleClusterClient_ScanWithOptions_matchNonUTF8() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -155,7 +156,7 @@ func ExampleClusterClient_ScanWithOptions_count() {
 		"key3": "value3",
 	}
 
-	_, err := client.MSet(keysToSet)
+	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -166,7 +167,7 @@ func ExampleClusterClient_ScanWithOptions_count() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -189,12 +190,12 @@ func ExampleClusterClient_ScanWithOptions_type() {
 		"key3": "value3",
 	}
 
-	_, err := client.MSet(keysToSet)
+	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	_, err = client.SAdd("someKey", []string{"value"})
+	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -205,7 +206,7 @@ func ExampleClusterClient_ScanWithOptions_type() {
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
@@ -220,8 +221,8 @@ func ExampleClusterClient_ScanWithOptions_type() {
 func ExampleClusterClient_RandomKey() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := uuid.New().String()
-	client.Set(key, "Hello")
-	result, err := client.RandomKey()
+	client.Set(context.Background(), key, "Hello")
+	result, err := client.RandomKey(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -235,8 +236,8 @@ func ExampleClusterClient_RandomKeyWithRoute() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	options := options.RouteOption{Route: nil}
 	key := uuid.New().String()
-	client.Set(key, "Hello")
-	result, err := client.RandomKeyWithRoute(options)
+	client.Set(context.Background(), key, "Hello")
+	result, err := client.RandomKeyWithRoute(context.Background(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

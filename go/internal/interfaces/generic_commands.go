@@ -3,6 +3,8 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -13,14 +15,13 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericCommands interface {
-	CustomCommand(args []string) (any, error)
+	CustomCommand(ctx context.Context, args []string) (any, error)
 
-	Move(key string, dbIndex int64) (bool, error)
+	Move(ctx context.Context, key string, dbIndex int64) (bool, error)
 
-	Scan(cursor int64) (string, []string, error)
+	Scan(ctx context.Context, cursor int64) (string, []string, error)
 
-	ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string,
-		error)
+	ScanWithOptions(ctx context.Context, cursor int64, scanOptions options.ScanOptions) (string, []string, error)
 
-	RandomKey() (models.Result[string], error)
+	RandomKey(ctx context.Context) (models.Result[string], error)
 }

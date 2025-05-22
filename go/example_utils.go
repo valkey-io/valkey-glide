@@ -3,11 +3,13 @@
 package glide
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -59,7 +61,7 @@ func getExampleClient() *Client {
 	config := config.NewClientConfiguration().
 		WithAddress(&standaloneAddresses[0])
 
-	client, err := NewClient(config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -67,7 +69,7 @@ func getExampleClient() *Client {
 	standaloneClients = append(standaloneClients, client)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = client.FlushAllWithOptions(options.SYNC)
+	_, err = client.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -81,9 +83,9 @@ func getExampleClusterClient() *ClusterClient {
 	})
 	cConfig := config.NewClusterClientConfiguration().
 		WithAddress(&clusterAddresses[0]).
-		WithRequestTimeout(5000)
+		WithRequestTimeout(5 * time.Second)
 
-	client, err := NewClusterClient(cConfig)
+	client, err := NewClusterClient(context.Background(), cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -92,7 +94,7 @@ func getExampleClusterClient() *ClusterClient {
 
 	// Flush the database before each test to ensure a clean state.
 	mode := options.SYNC
-	_, err = client.FlushAllWithOptions(
+	_, err = client.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
@@ -113,7 +115,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 		WithAddress(&standaloneAddresses[0]).
 		WithSubscriptionConfig(sConfig)
 
-	client, err := NewClient(config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -121,7 +123,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 	standaloneClients = append(standaloneClients, client)
 
 	// Flush the database before each test to ensure a clean state.
-	_, err = client.FlushAllWithOptions(options.SYNC)
+	_, err = client.FlushAllWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("error flushing database: ", err)
 	}
@@ -143,7 +145,7 @@ func getExampleClusterClientWithSubscription(
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
-	client, err := NewClusterClient(ccConfig)
+	client, err := NewClusterClient(context.Background(), ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -152,7 +154,7 @@ func getExampleClusterClientWithSubscription(
 
 	// Flush the database before each test to ensure a clean state.
 	syncmode := options.SYNC
-	_, err = client.FlushAllWithOptions(
+	_, err = client.FlushAllWithOptions(context.Background(),
 		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {

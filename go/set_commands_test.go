@@ -3,6 +3,7 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -12,7 +13,7 @@ func ExampleClient_SAdd() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	result, err := client.SAdd(key, []string{"member1", "member2"})
+	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -25,7 +26,7 @@ func ExampleClusterClient_SAdd() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	result, err := client.SAdd(key, []string{"member1", "member2"})
+	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -38,8 +39,8 @@ func ExampleClient_SRem() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
-	result, err := client.SRem(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
+	result, err := client.SRem(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -52,8 +53,8 @@ func ExampleClusterClient_SRem() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2", "member3", "member4", "member5"})
-	result, err := client.SRem(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4", "member5"})
+	result, err := client.SRem(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -66,9 +67,9 @@ func ExampleClient_SMembers() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SMembers(key)
+	result, err := client.SMembers(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -81,9 +82,9 @@ func ExampleClusterClient_SMembers() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SMembers(key)
+	result, err := client.SMembers(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -96,9 +97,9 @@ func ExampleClient_SCard() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SCard(key)
+	result, err := client.SCard(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -110,9 +111,9 @@ func ExampleClusterClient_SCard() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SCard(key)
+	result, err := client.SCard(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -124,9 +125,9 @@ func ExampleClient_SIsMember() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SIsMember(key, "member1")
+	result, err := client.SIsMember(context.Background(), key, "member1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -138,9 +139,9 @@ func ExampleClusterClient_SIsMember() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SIsMember(key, "member1")
+	result, err := client.SIsMember(context.Background(), key, "member1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -153,10 +154,10 @@ func ExampleClient_SDiff() {
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SDiff([]string{key1, key2})
+	result, err := client.SDiff(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -169,10 +170,10 @@ func ExampleClusterClient_SDiff() {
 	key1 := "{set}1"
 	key2 := "{set}2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SDiff([]string{key1, key2})
+	result, err := client.SDiff(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -186,10 +187,10 @@ func ExampleClient_SDiffStore() {
 	key2 := "my_set_2"
 	destination := "my_set_diff"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SDiffStore(destination, []string{key1, key2})
+	result, err := client.SDiffStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -203,10 +204,10 @@ func ExampleClusterClient_SDiffStore() {
 	key2 := "{set}2"
 	destination := "{set}3"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SDiffStore(destination, []string{key1, key2})
+	result, err := client.SDiffStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -219,10 +220,10 @@ func ExampleClient_SInter() {
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInter([]string{key1, key2})
+	result, err := client.SInter(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -235,10 +236,10 @@ func ExampleClusterClient_SInter() {
 	key1 := "{set}1"
 	key2 := "{set}2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInter([]string{key1, key2})
+	result, err := client.SInter(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -252,10 +253,10 @@ func ExampleClient_SInterStore() {
 	key2 := "my_set_2"
 	destination := "my_set_inter"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInterStore(destination, []string{key1, key2})
+	result, err := client.SInterStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -269,10 +270,10 @@ func ExampleClusterClient_SInterStore() {
 	key2 := "{set}2"
 	destination := "{set}3"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInterStore(destination, []string{key1, key2})
+	result, err := client.SInterStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -285,10 +286,10 @@ func ExampleClient_SInterCard() {
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInterCard([]string{key1, key2})
+	result, err := client.SInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -301,10 +302,10 @@ func ExampleClusterClient_SInterCard() {
 	key1 := "{set}1"
 	key2 := "{set}2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2"})
 
-	result, err := client.SInterCard([]string{key1, key2})
+	result, err := client.SInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -318,10 +319,10 @@ func ExampleClient_SInterCardLimit() {
 	key2 := "my_set_2"
 	limit := int64(1)
 
-	client.SAdd(key1, []string{"member1", "member2", "member3"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2", "member3"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SInterCardLimit([]string{key1, key2}, limit)
+	result, err := client.SInterCardLimit(context.Background(), []string{key1, key2}, limit)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -335,10 +336,10 @@ func ExampleClusterClient_SInterCardLimit() {
 	key2 := "{set}2"
 	limit := int64(1)
 
-	client.SAdd(key1, []string{"member1", "member2", "member3"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2", "member3"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SInterCardLimit([]string{key1, key2}, limit)
+	result, err := client.SInterCardLimit(context.Background(), []string{key1, key2}, limit)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -350,9 +351,9 @@ func ExampleClient_SRandMember() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SRandMember(key)
+	result, err := client.SRandMember(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -365,9 +366,9 @@ func ExampleClusterClient_SRandMember() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SRandMember(key)
+	result, err := client.SRandMember(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -380,9 +381,9 @@ func ExampleClient_SPop() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SPop(key)
+	result, err := client.SPop(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -394,9 +395,9 @@ func ExampleClusterClient_SPop() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 
-	result, err := client.SPop(key)
+	result, err := client.SPop(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -409,10 +410,10 @@ func ExampleClient_SMIsMember() {
 	key := "my_set"
 
 	members := []string{"member1", "member2"}
-	client.SAdd(key, members)
+	client.SAdd(context.Background(), key, members)
 
 	memberTest := []string{"member1", "member2", "member3"}
-	result, err := client.SMIsMember(key, memberTest)
+	result, err := client.SMIsMember(context.Background(), key, memberTest)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -425,10 +426,10 @@ func ExampleClusterClient_SMIsMember() {
 	key := "my_set"
 
 	members := []string{"member1", "member2"}
-	client.SAdd(key, members)
+	client.SAdd(context.Background(), key, members)
 
 	memberTest := []string{"member1", "member2", "member3"}
-	result, err := client.SMIsMember(key, memberTest)
+	result, err := client.SMIsMember(context.Background(), key, memberTest)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -442,10 +443,10 @@ func ExampleClient_SUnionStore() {
 	key2 := "my_set_2"
 	destination := "my_set_union"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SUnionStore(destination, []string{key1, key2})
+	result, err := client.SUnionStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -459,10 +460,10 @@ func ExampleClusterClient_SUnionStore() {
 	key2 := "{set}2"
 	destination := "{set}3"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SUnionStore(destination, []string{key1, key2})
+	result, err := client.SUnionStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -475,10 +476,10 @@ func ExampleClient_SUnion() {
 	key1 := "my_set_1"
 	key2 := "my_set_2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SUnion([]string{key1, key2})
+	result, err := client.SUnion(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -491,10 +492,10 @@ func ExampleClusterClient_SUnion() {
 	key1 := "{set}1"
 	key2 := "{set}2"
 
-	client.SAdd(key1, []string{"member1", "member2"})
-	client.SAdd(key2, []string{"member2", "member3"})
+	client.SAdd(context.Background(), key1, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key2, []string{"member2", "member3"})
 
-	result, err := client.SUnion([]string{key1, key2})
+	result, err := client.SUnion(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -505,55 +506,55 @@ func ExampleClusterClient_SUnion() {
 func ExampleClient_SScan() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	cursor := "0"
-	result, nextCursor, err := client.SScan(key, cursor)
+	nextCursor, result, err := client.SScan(context.Background(), key, cursor)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result, nextCursor)
-	// Output: 0 [member1 member2]
+	fmt.Println(nextCursor, len(result)) // [member1 member2]
+	// Output: 0 2
 }
 
 func ExampleClusterClient_SScan() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
-	client.SAdd(key, []string{"member1", "member2"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	cursor := "0"
-	result, nextCursor, err := client.SScan(key, cursor)
+	nextCursor, result, err := client.SScan(context.Background(), key, cursor)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result, nextCursor)
-	// Output: 0 [member1 member2]
+	fmt.Println(nextCursor, len(result)) // [member1 member2]
+	// Output: 0 2
 }
 
 func ExampleClient_SScanWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
-	client.SAdd(key, []string{"member1", "member2", "item3"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	result, nextCursor, err := client.SScanWithOptions(key, cursor, *options)
+	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result, nextCursor)
-	// Output: 0 [member1 member2]
+	fmt.Println(nextCursor, len(result)) // [member1 member2]
+	// Output: 0 2
 }
 
 func ExampleClusterClient_SScanWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
-	client.SAdd(key, []string{"member1", "member2", "item3"})
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	result, nextCursor, err := client.SScanWithOptions(key, cursor, *options)
+	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result, nextCursor)
-	// Output: 0 [member1 member2]
+	fmt.Println(nextCursor, len(result)) // [member1 member2]
+	// Output: 0 2
 }
 
 func ExampleClient_SMove() {
@@ -562,9 +563,9 @@ func ExampleClient_SMove() {
 	destination := "my_set_2"
 	member := "member1"
 
-	client.SAdd(source, []string{member})
+	client.SAdd(context.Background(), source, []string{member})
 
-	result, err := client.SMove(source, destination, member)
+	result, err := client.SMove(context.Background(), source, destination, member)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -578,9 +579,9 @@ func ExampleClusterClient_SMove() {
 	destination := "{set}2"
 	member := "member1"
 
-	client.SAdd(source, []string{member})
+	client.SAdd(context.Background(), source, []string{member})
 
-	result, err := client.SMove(source, destination, member)
+	result, err := client.SMove(context.Background(), source, destination, member)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

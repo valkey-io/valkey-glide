@@ -2,7 +2,11 @@
 
 package interfaces
 
-import "github.com/valkey-io/valkey-glide/go/v2/models"
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+)
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // or cluster client.
@@ -11,23 +15,43 @@ import "github.com/valkey-io/valkey-glide/go/v2/models"
 //
 // [valkey.io]: https://valkey.io/commands/?group=scripting
 type ScriptingAndFunctionBaseCommands interface {
-	FunctionLoad(libraryCode string, replace bool) (string, error)
+	FunctionLoad(ctx context.Context, libraryCode string, replace bool) (string, error)
 
-	FunctionFlush() (string, error)
+	FunctionFlush(ctx context.Context) (string, error)
 
-	FunctionFlushSync() (string, error)
+	FunctionFlushSync(ctx context.Context) (string, error)
 
-	FunctionFlushAsync() (string, error)
+	FunctionFlushAsync(ctx context.Context) (string, error)
 
-	FCall(function string) (any, error)
+	FCall(ctx context.Context, function string) (any, error)
 
-	FCallReadOnly(function string) (any, error)
+	FCallReadOnly(ctx context.Context, function string) (any, error)
 
-	FCallWithKeysAndArgs(function string, keys []string, args []string) (any, error)
+	FCallWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
 
-	FCallReadOnlyWithKeysAndArgs(function string, keys []string, args []string) (any, error)
+	FCallReadOnlyWithKeysAndArgs(ctx context.Context, function string, keys []string, args []string) (any, error)
 
-	FunctionKill() (string, error)
+	FunctionKill(ctx context.Context) (string, error)
 
-	FunctionList(query models.FunctionListQuery) ([]models.LibraryInfo, error)
+	FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error)
+
+	FunctionDump(ctx context.Context) (string, error)
+
+	FunctionRestore(ctx context.Context, payload string) (string, error)
+
+	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy options.FunctionRestorePolicy) (string, error)
+
+	InvokeScript(ctx context.Context, script options.Script) (any, error)
+
+	InvokeScriptWithOptions(ctx context.Context, script options.Script, scriptOptions options.ScriptOptions) (any, error)
+
+	ScriptExists(ctx context.Context, sha1s []string) ([]bool, error)
+
+	ScriptFlush(ctx context.Context) (string, error)
+
+	ScriptFlushWithMode(ctx context.Context, mode options.FlushMode) (string, error)
+
+	ScriptShow(ctx context.Context, sha1 string) (string, error)
+
+	ScriptKill(ctx context.Context) (string, error)
 }

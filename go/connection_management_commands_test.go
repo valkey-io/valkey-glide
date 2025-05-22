@@ -3,6 +3,7 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 
 func ExampleClient_Ping() {
 	var client *Client = getExampleClient() // example helper function
-	result, err := client.Ping()
+	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -24,7 +25,7 @@ func ExampleClient_Ping() {
 func ExampleClient_PingWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	options := options.PingOptions{Message: "hello"}
-	result, err := client.PingWithOptions(options)
+	result, err := client.PingWithOptions(context.Background(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -35,7 +36,7 @@ func ExampleClient_PingWithOptions() {
 
 func ExampleClient_Echo() {
 	var client *Client = getExampleClient() // example helper function
-	result, err := client.Echo("Hello World")
+	result, err := client.Echo(context.Background(), "Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -46,7 +47,7 @@ func ExampleClient_Echo() {
 
 func ExampleClient_ClientId() {
 	var client *Client = getExampleClient() // example helper function
-	result, err := client.ClientId()
+	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -58,7 +59,7 @@ func ExampleClient_ClientId() {
 
 func ExampleClient_ClientSetName() {
 	var client *Client = getExampleClient() // example helper function
-	result, err := client.ClientSetName("ConnectionName")
+	result, err := client.ClientSetName(context.Background(), "ConnectionName")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -70,8 +71,8 @@ func ExampleClient_ClientSetName() {
 func ExampleClient_ClientGetName() {
 	var client *Client = getExampleClient() // example helper function
 	connectionName := "ConnectionName-" + uuid.NewString()
-	client.ClientSetName(connectionName)
-	result, err := client.ClientGetName()
+	client.ClientSetName(context.Background(), connectionName)
+	result, err := client.ClientGetName(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

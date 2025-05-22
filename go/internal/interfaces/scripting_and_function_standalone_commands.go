@@ -2,7 +2,10 @@
 
 package interfaces
 
-import "github.com/valkey-io/valkey-glide/go/v2/models"
+import (
+	"context"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+)
 
 // Supports commands and transactions for the "Scripting and Function" group for a standalone
 // client.
@@ -11,7 +14,7 @@ import "github.com/valkey-io/valkey-glide/go/v2/models"
 //
 // [valkey.io]: https://valkey.io/commands/?group=scripting
 type ScriptingAndFunctionStandaloneCommands interface {
-	FunctionStats() (map[string]models.FunctionStatsResult, error)
+	FunctionStats(ctx context.Context) (map[string]models.FunctionStatsResult, error)
 
-	FunctionDelete(libName string) (string, error)
+	FunctionDelete(ctx context.Context, libName string) (string, error)
 }

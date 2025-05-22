@@ -3,6 +3,8 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -13,43 +15,47 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementClusterCommands interface {
-	Info() (map[string]string, error)
+	Info(ctx context.Context) (map[string]string, error)
 
-	InfoWithOptions(options options.ClusterInfoOptions) (models.ClusterValue[string], error)
+	InfoWithOptions(ctx context.Context, options options.ClusterInfoOptions) (models.ClusterValue[string], error)
 
-	TimeWithOptions(routeOption options.RouteOption) (models.ClusterValue[[]string], error)
+	TimeWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[[]string], error)
 
-	DBSizeWithOptions(routeOption options.RouteOption) (int64, error)
+	DBSizeWithOptions(ctx context.Context, routeOption options.RouteOption) (int64, error)
 
-	FlushAll() (string, error)
+	FlushAll(ctx context.Context) (string, error)
 
-	FlushAllWithOptions(options options.FlushClusterOptions) (string, error)
+	FlushAllWithOptions(ctx context.Context, options options.FlushClusterOptions) (string, error)
 
-	FlushDB() (string, error)
+	FlushDB(ctx context.Context) (string, error)
 
-	FlushDBWithOptions(options options.FlushClusterOptions) (string, error)
+	FlushDBWithOptions(ctx context.Context, options options.FlushClusterOptions) (string, error)
 
-	Lolwut() (string, error)
+	Lolwut(ctx context.Context) (string, error)
 
-	LolwutWithOptions(lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error)
+	LolwutWithOptions(ctx context.Context, lolwutOptions options.ClusterLolwutOptions) (models.ClusterValue[string], error)
 
-	LastSave() (models.ClusterValue[int64], error)
+	LastSave(ctx context.Context) (models.ClusterValue[int64], error)
 
-	LastSaveWithOptions(routeOption options.RouteOption) (models.ClusterValue[int64], error)
+	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
-	ConfigResetStat() (string, error)
+	ConfigResetStat(ctx context.Context) (string, error)
 
-	ConfigResetStatWithOptions(routeOption options.RouteOption) (string, error)
+	ConfigResetStatWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
 
-	ConfigSet(parameters map[string]string) (string, error)
+	ConfigSet(ctx context.Context, parameters map[string]string) (string, error)
 
-	ConfigSetWithOptions(parameters map[string]string, routeOption options.RouteOption) (string, error)
+	ConfigSetWithOptions(ctx context.Context, parameters map[string]string, routeOption options.RouteOption) (string, error)
 
-	ConfigGet(parameters []string) (map[string]string, error)
+	ConfigGet(ctx context.Context, parameters []string) (map[string]string, error)
 
-	ConfigGetWithOptions(parameters []string, routeOption options.RouteOption) (models.ClusterValue[map[string]string], error)
+	ConfigGetWithOptions(
+		ctx context.Context,
+		parameters []string,
+		routeOption options.RouteOption,
+	) (models.ClusterValue[map[string]string], error)
 
-	ConfigRewrite() (string, error)
+	ConfigRewrite(ctx context.Context) (string, error)
 
-	ConfigRewriteWithOptions(routeOption options.RouteOption) (string, error)
+	ConfigRewriteWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
 }

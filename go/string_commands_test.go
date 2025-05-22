@@ -3,6 +3,7 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -13,7 +14,7 @@ import (
 func ExampleClient_Set() {
 	var client *Client = getExampleClient() // example helper function
 
-	result, err := client.Set("my_key", "my_value")
+	result, err := client.Set(context.Background(), "my_key", "my_value")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -25,7 +26,7 @@ func ExampleClient_Set() {
 func ExampleClusterClient_Set() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	result, err := client.Set("my_key", "my_value")
+	result, err := client.Set(context.Background(), "my_key", "my_value")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -41,7 +42,7 @@ func ExampleClient_SetWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(constants.Seconds).
 			SetCount(5))
-	result, err := client.SetWithOptions("my_key", "my_value", *options)
+	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -57,7 +58,7 @@ func ExampleClusterClient_SetWithOptions() {
 		SetExpiry(options.NewExpiry().
 			SetType(constants.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.SetWithOptions("my_key", "my_value", *options)
+	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -69,8 +70,8 @@ func ExampleClusterClient_SetWithOptions() {
 func ExampleClient_Get_keyexists() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.Get("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -82,8 +83,8 @@ func ExampleClient_Get_keyexists() {
 func ExampleClusterClient_Get_keyexists() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.Get("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -95,7 +96,7 @@ func ExampleClusterClient_Get_keyexists() {
 func ExampleClient_Get_keynotexists() {
 	var client *Client = getExampleClient() // example helper function
 
-	result, err := client.Get("my_key")
+	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -107,7 +108,7 @@ func ExampleClient_Get_keynotexists() {
 func ExampleClusterClient_Get_keynotexists() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	result, err := client.Get("my_key")
+	result, err := client.Get(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -119,13 +120,13 @@ func ExampleClusterClient_Get_keynotexists() {
 func ExampleClient_GetEx() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.GetEx("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.GetEx(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	ttl, _ := client.TTL("my_key")
+	ttl, _ := client.TTL(context.Background(), "my_key")
 	fmt.Println(ttl)
 
 	// Output:
@@ -136,13 +137,13 @@ func ExampleClient_GetEx() {
 func ExampleClusterClient_GetEx() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.GetEx("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.GetEx(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	ttl, _ := client.TTL("my_key")
+	ttl, _ := client.TTL(context.Background(), "my_key")
 	fmt.Println(ttl)
 
 	// Output:
@@ -153,17 +154,17 @@ func ExampleClusterClient_GetEx() {
 func ExampleClient_GetExWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
+	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
 			SetType(constants.Seconds).
 			SetCount(5))
-	result, err := client.GetExWithOptions("my_key", *options)
+	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	ttl, _ := client.TTL("my_key")
+	ttl, _ := client.TTL(context.Background(), "my_key")
 	fmt.Println(ttl)
 
 	// Output:
@@ -174,17 +175,17 @@ func ExampleClient_GetExWithOptions() {
 func ExampleClusterClient_GetExWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
+	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiry().
 			SetType(constants.Seconds).
 			SetCount(uint64(5)))
-	result, err := client.GetExWithOptions("my_key", *options)
+	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	ttl, _ := client.TTL("my_key")
+	ttl, _ := client.TTL(context.Background(), "my_key")
 	fmt.Println(ttl)
 
 	// Output:
@@ -199,7 +200,7 @@ func ExampleClient_MSet() {
 		"key1": "value1",
 		"key2": "value2",
 	}
-	result, err := client.MSet(keyValueMap)
+	result, err := client.MSet(context.Background(), keyValueMap)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -215,7 +216,7 @@ func ExampleClusterClient_MSet() {
 		"key1": "value1",
 		"key2": "value2",
 	}
-	result, err := client.MSet(keyValueMap)
+	result, err := client.MSet(context.Background(), keyValueMap)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -227,9 +228,12 @@ func ExampleClusterClient_MSet() {
 func ExampleClient_MGet() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.MSet(map[string]string{"my_key1": "my_value1", "my_key2": "my_value2", "my_key3": "my_value3"})
+	client.MSet(
+		context.Background(),
+		map[string]string{"my_key1": "my_value1", "my_key2": "my_value2", "my_key3": "my_value3"},
+	)
 	keys := []string{"my_key1", "my_key2", "my_key3"}
-	result, err := client.MGet(keys)
+	result, err := client.MGet(context.Background(), keys)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -246,9 +250,12 @@ func ExampleClient_MGet() {
 func ExampleClusterClient_MGet() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.MSet(map[string]string{"my_key1": "my_value1", "my_key2": "my_value2", "my_key3": "my_value3"})
+	client.MSet(
+		context.Background(),
+		map[string]string{"my_key1": "my_value1", "my_key2": "my_value2", "my_key3": "my_value3"},
+	)
 	keys := []string{"my_key1", "my_key2", "my_key3"}
-	result, err := client.MGet(keys)
+	result, err := client.MGet(context.Background(), keys)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -266,13 +273,13 @@ func ExampleClient_MSetNX() {
 	var client *Client = getExampleClient() // example helper function
 
 	keyValueMap := map[string]string{"my_key1": "my_value1", "my_key2": "my_value2"}
-	result, err := client.MSetNX(keyValueMap)
+	result, err := client.MSetNX(context.Background(), keyValueMap)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	client.Set("my_key3", "my_value3")
-	result, _ = client.MSetNX(map[string]string{"my_key3": "my_value3"})
+	client.Set(context.Background(), "my_key3", "my_value3")
+	result, _ = client.MSetNX(context.Background(), map[string]string{"my_key3": "my_value3"})
 	fmt.Println(result)
 
 	// Output:
@@ -284,13 +291,13 @@ func ExampleClusterClient_MSetNX() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	keyValueMap := map[string]string{"{my_key}1": "my_value1", "{my_key}2": "my_value2"}
-	result, err := client.MSetNX(keyValueMap)
+	result, err := client.MSetNX(context.Background(), keyValueMap)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	client.Set("{my_key}3", "my_value3")
-	result, _ = client.MSetNX(map[string]string{"{my_key}3": "my_value3"})
+	client.Set(context.Background(), "{my_key}3", "my_value3")
+	result, _ = client.MSetNX(context.Background(), map[string]string{"{my_key}3": "my_value3"})
 	fmt.Println(result)
 
 	// Output:
@@ -301,8 +308,8 @@ func ExampleClusterClient_MSetNX() {
 func ExampleClient_Incr() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "1")
-	result, err := client.Incr("my_key")
+	client.Set(context.Background(), "my_key", "1")
+	result, err := client.Incr(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -314,8 +321,8 @@ func ExampleClient_Incr() {
 func ExampleClusterClient_Incr() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "1")
-	result, err := client.Incr("my_key")
+	client.Set(context.Background(), "my_key", "1")
+	result, err := client.Incr(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -327,8 +334,8 @@ func ExampleClusterClient_Incr() {
 func ExampleClient_IncrBy() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "5")
-	result, err := client.IncrBy("my_key", 5)
+	client.Set(context.Background(), "my_key", "5")
+	result, err := client.IncrBy(context.Background(), "my_key", 5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -339,8 +346,8 @@ func ExampleClient_IncrBy() {
 func ExampleClusterClient_IncrBy() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "5")
-	result, err := client.IncrBy("my_key", 5)
+	client.Set(context.Background(), "my_key", "5")
+	result, err := client.IncrBy(context.Background(), "my_key", 5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -351,8 +358,8 @@ func ExampleClusterClient_IncrBy() {
 func ExampleClient_IncrByFloat() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "1")
-	result, err := client.IncrByFloat("my_key", 5.5)
+	client.Set(context.Background(), "my_key", "1")
+	result, err := client.IncrByFloat(context.Background(), "my_key", 5.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -364,8 +371,8 @@ func ExampleClient_IncrByFloat() {
 func ExampleClusterClient_IncrByFloat() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "1")
-	result, err := client.IncrByFloat("my_key", 5.5)
+	client.Set(context.Background(), "my_key", "1")
+	result, err := client.IncrByFloat(context.Background(), "my_key", 5.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -377,8 +384,8 @@ func ExampleClusterClient_IncrByFloat() {
 func ExampleClient_Decr() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "0")
-	result, err := client.Decr("my_key")
+	client.Set(context.Background(), "my_key", "0")
+	result, err := client.Decr(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -390,8 +397,8 @@ func ExampleClient_Decr() {
 func ExampleClusterClient_Decr() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "0")
-	result, err := client.Decr("my_key")
+	client.Set(context.Background(), "my_key", "0")
+	result, err := client.Decr(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -403,8 +410,8 @@ func ExampleClusterClient_Decr() {
 func ExampleClient_DecrBy() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "20")
-	result, err := client.DecrBy("my_key", 5)
+	client.Set(context.Background(), "my_key", "20")
+	result, err := client.DecrBy(context.Background(), "my_key", 5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -416,8 +423,8 @@ func ExampleClient_DecrBy() {
 func ExampleClusterClient_DecrBy() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "20")
-	result, err := client.DecrBy("my_key", 5)
+	client.Set(context.Background(), "my_key", "20")
+	result, err := client.DecrBy(context.Background(), "my_key", 5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -429,8 +436,8 @@ func ExampleClusterClient_DecrBy() {
 func ExampleClient_Strlen() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.Strlen("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.Strlen(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -442,8 +449,8 @@ func ExampleClient_Strlen() {
 func ExampleClusterClient_Strlen() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.Strlen("my_key")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.Strlen(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -455,13 +462,13 @@ func ExampleClusterClient_Strlen() {
 func ExampleClient_SetRange_one() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.SetRange("my_key", 3, "example")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.SetRange(context.Background(), "my_key", 3, "example")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	value, _ := client.Get("my_key")
+	value, _ := client.Get(context.Background(), "my_key")
 	fmt.Println(value.Value())
 
 	// Output:
@@ -472,13 +479,13 @@ func ExampleClient_SetRange_one() {
 func ExampleClusterClient_SetRange_one() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.SetRange("my_key", 3, "example")
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.SetRange(context.Background(), "my_key", 3, "example")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	value, _ := client.Get("my_key")
+	value, _ := client.Get(context.Background(), "my_key")
 	fmt.Println(value.Value())
 
 	// Output:
@@ -489,8 +496,8 @@ func ExampleClusterClient_SetRange_one() {
 func ExampleClient_SetRange_two() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
-	result, err := client.SetRange("my_key", 1, "a")
+	client.Set(context.Background(), "my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
+	result, err := client.SetRange(context.Background(), "my_key", 1, "a")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -502,8 +509,8 @@ func ExampleClient_SetRange_two() {
 func ExampleClusterClient_SetRange_two() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
-	result, err := client.SetRange("my_key", 1, "a")
+	client.Set(context.Background(), "my_key", "愛") // "愛" is a single character in UTF-8, but 3 bytes long
+	result, err := client.SetRange(context.Background(), "my_key", 1, "a")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -515,8 +522,8 @@ func ExampleClusterClient_SetRange_two() {
 func ExampleClient_GetRange_one() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "Welcome to Valkey Glide!")
-	result, err := client.GetRange("my_key", 0, 7)
+	client.Set(context.Background(), "my_key", "Welcome to Valkey Glide!")
+	result, err := client.GetRange(context.Background(), "my_key", 0, 7)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -528,8 +535,8 @@ func ExampleClient_GetRange_one() {
 func ExampleClusterClient_GetRange_one() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "Welcome to Valkey Glide!")
-	result, err := client.GetRange("my_key", 0, 7)
+	client.Set(context.Background(), "my_key", "Welcome to Valkey Glide!")
+	result, err := client.GetRange(context.Background(), "my_key", 0, 7)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -541,9 +548,9 @@ func ExampleClusterClient_GetRange_one() {
 func ExampleClient_GetRange_two() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "愛")
+	client.Set(context.Background(), "my_key", "愛")
 	fmt.Println([]byte("愛")) // "愛" is a single character in UTF-8, but 3 bytes long
-	result, err := client.GetRange("my_key", 0, 1)
+	result, err := client.GetRange(context.Background(), "my_key", 0, 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -557,9 +564,9 @@ func ExampleClient_GetRange_two() {
 func ExampleClusterClient_GetRange_two() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "愛")
+	client.Set(context.Background(), "my_key", "愛")
 	fmt.Println([]byte("愛")) // "愛" is a single character in UTF-8, but 3 bytes long
-	result, err := client.GetRange("my_key", 0, 1)
+	result, err := client.GetRange(context.Background(), "my_key", 0, 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -573,13 +580,13 @@ func ExampleClusterClient_GetRange_two() {
 func ExampleClient_Append() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_valu")
-	result, err := client.Append("my_key", "e")
+	client.Set(context.Background(), "my_key", "my_valu")
+	result, err := client.Append(context.Background(), "my_key", "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	value, _ := client.Get("my_key")
+	value, _ := client.Get(context.Background(), "my_key")
 	fmt.Println(value.Value())
 
 	// Output:
@@ -590,13 +597,13 @@ func ExampleClient_Append() {
 func ExampleClusterClient_Append() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_valu")
-	result, err := client.Append("my_key", "e")
+	client.Set(context.Background(), "my_key", "my_valu")
+	result, err := client.Append(context.Background(), "my_key", "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	value, _ := client.Get("my_key")
+	value, _ := client.Get(context.Background(), "my_key")
 	fmt.Println(value.Value())
 
 	// Output:
@@ -607,8 +614,8 @@ func ExampleClusterClient_Append() {
 func ExampleClient_LCS() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.MSet(map[string]string{"my_key1": "oh my gosh", "my_key2": "hello world"})
-	result, err := client.LCS("my_key1", "my_key2")
+	client.MSet(context.Background(), map[string]string{"my_key1": "oh my gosh", "my_key2": "hello world"})
+	result, err := client.LCS(context.Background(), "my_key1", "my_key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -621,8 +628,8 @@ func ExampleClient_LCS() {
 func ExampleClusterClient_LCS() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.MSet(map[string]string{"{my_key}1": "oh my gosh", "{my_key}2": "hello world"})
-	result, err := client.LCS("{my_key}1", "{my_key}2")
+	client.MSet(context.Background(), map[string]string{"{my_key}1": "oh my gosh", "{my_key}2": "hello world"})
+	result, err := client.LCS(context.Background(), "{my_key}1", "{my_key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -635,13 +642,13 @@ func ExampleClusterClient_LCS() {
 func ExampleClient_GetDel() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.GetDel("my_key") // return value and delete key
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.GetDel(context.Background(), "my_key") // return value and delete key
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	value, _ := client.Get("my_key") // key should be missing
+	value, _ := client.Get(context.Background(), "my_key") // key should be missing
 	fmt.Println(value.IsNil())
 
 	// Output:
@@ -652,13 +659,13 @@ func ExampleClient_GetDel() {
 func ExampleClusterClient_GetDel() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("my_key", "my_value")
-	result, err := client.GetDel("my_key") // return value and delete key
+	client.Set(context.Background(), "my_key", "my_value")
+	result, err := client.GetDel(context.Background(), "my_key") // return value and delete key
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.Value())
-	value, _ := client.Get("my_key") // key should be missing
+	value, _ := client.Get(context.Background(), "my_key") // key should be missing
 	fmt.Println(value.IsNil())
 
 	// Output:
@@ -669,10 +676,10 @@ func ExampleClusterClient_GetDel() {
 func ExampleClient_LCSLen() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key1", "ohmytext")
-	client.Set("my_key2", "mynewtext")
+	client.Set(context.Background(), "my_key1", "ohmytext")
+	client.Set(context.Background(), "my_key2", "mynewtext")
 
-	result, err := client.LCSLen("my_key1", "my_key2")
+	result, err := client.LCSLen(context.Background(), "my_key1", "my_key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -685,10 +692,10 @@ func ExampleClient_LCSLen() {
 func ExampleClusterClient_LCSLen() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("{my_key}1", "ohmytext")
-	client.Set("{my_key}2", "mynewtext")
+	client.Set(context.Background(), "{my_key}1", "ohmytext")
+	client.Set(context.Background(), "{my_key}2", "mynewtext")
 
-	result, err := client.LCSLen("{my_key}1", "{my_key}2")
+	result, err := client.LCSLen(context.Background(), "{my_key}1", "{my_key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -701,12 +708,12 @@ func ExampleClusterClient_LCSLen() {
 func ExampleClient_LCSWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
-	client.Set("my_key1", "ohmytext")
-	client.Set("my_key2", "mynewtext")
+	client.Set(context.Background(), "my_key1", "ohmytext")
+	client.Set(context.Background(), "my_key2", "mynewtext")
 
 	// Basic LCS IDX without additional options
 	opts := options.NewLCSIdxOptions()
-	result1, err := client.LCSWithOptions("my_key1", "my_key2", *opts)
+	result1, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -715,7 +722,7 @@ func ExampleClient_LCSWithOptions() {
 	// LCS IDX with MINMATCHLEN = 4
 	optsWithMin := options.NewLCSIdxOptions()
 	optsWithMin.SetMinMatchLen(4)
-	result2, err := client.LCSWithOptions("my_key1", "my_key2", *optsWithMin)
+	result2, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *optsWithMin)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -730,14 +737,14 @@ func ExampleClient_LCSWithOptions() {
 func ExampleClusterClient_LCSWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set("{my_key}1", "ohmytext")
-	client.Set("{my_key}2", "mynewtext")
+	client.Set(context.Background(), "{my_key}1", "ohmytext")
+	client.Set(context.Background(), "{my_key}2", "mynewtext")
 
 	// LCS IDX with MINMATCHLEN and WITHMATCHLEN
 	opts := options.NewLCSIdxOptions()
 	opts.SetMinMatchLen(2)
 	opts.SetWithMatchLen(true)
-	result, err := client.LCSWithOptions("{my_key}1", "{my_key}2", *opts)
+	result, err := client.LCSWithOptions(context.Background(), "{my_key}1", "{my_key}2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

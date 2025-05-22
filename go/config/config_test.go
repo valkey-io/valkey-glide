@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -47,7 +48,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 	ports := []int{1234, 5678}
 	username := "username"
 	password := "password"
-	timeout := 3
+	timeout := 3 * time.Second
 	clientName := "client name"
 	retries, factor, base := 5, 10, 50
 	databaseId := 1
@@ -88,6 +89,71 @@ func TestConfig_allFieldsSet(t *testing.T) {
 	result, err := config.ToProtobuf()
 	if err != nil {
 		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
+
+	assert.Equal(t, expected, result)
+}
+
+func TestGlideClient_BackoffStrategy_withJitter(t *testing.T) {
+	host := "localhost"
+	port := 6379
+	retries, factor, base, jitter := 5, 2, 3, 25
+
+	strategy := NewBackoffStrategy(retries, factor, base).WithJitterPercent(jitter)
+
+	config := NewGlideClientConfiguration().
+		WithAddress(&NodeAddress{Host: host, Port: port}).
+		WithReconnectStrategy(strategy)
+
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
+
+	j := uint32(jitter)
+	expected := &protobuf.ConnectionRequest{
+		Addresses: []*protobuf.NodeAddress{
+			{Host: host, Port: uint32(port)},
+		},
+		ConnectionRetryStrategy: &protobuf.ConnectionRetryStrategy{
+			NumberOfRetries: uint32(retries),
+			Factor:          uint32(factor),
+			ExponentBase:    uint32(base),
+			JitterPercent:   &j,
+		},
+	}
+
+	assert.Equal(t, expected, result)
+}
+
+func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
+	host := "localhost"
+	port := 6379
+	retries, factor, base, jitter := 5, 2, 3, 25
+
+	strategy := NewBackoffStrategy(retries, factor, base).WithJitterPercent(jitter)
+
+	config := NewGlideClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: host, Port: port}).
+		WithReconnectStrategy(strategy)
+
+	result, err := config.toProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert config to protobuf: %v", err)
+	}
+
+	j := uint32(jitter)
+	expected := &protobuf.ConnectionRequest{
+		ClusterModeEnabled: true,
+		Addresses: []*protobuf.NodeAddress{
+			{Host: host, Port: uint32(port)},
+		},
+		ConnectionRetryStrategy: &protobuf.ConnectionRetryStrategy{
+			NumberOfRetries: uint32(retries),
+			Factor:          uint32(factor),
+			ExponentBase:    uint32(base),
+			JitterPercent:   &j,
+		},
 	}
 
 	assert.Equal(t, expected, result)

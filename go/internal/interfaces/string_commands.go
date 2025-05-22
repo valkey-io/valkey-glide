@@ -3,6 +3,8 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -13,45 +15,45 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#string
 type StringCommands interface {
-	Set(key string, value string) (string, error)
+	Set(ctx context.Context, key string, value string) (string, error)
 
-	SetWithOptions(key string, value string, options options.SetOptions) (models.Result[string], error)
+	SetWithOptions(ctx context.Context, key string, value string, options options.SetOptions) (models.Result[string], error)
 
-	Get(key string) (models.Result[string], error)
+	Get(ctx context.Context, key string) (models.Result[string], error)
 
-	GetEx(key string) (models.Result[string], error)
+	GetEx(ctx context.Context, key string) (models.Result[string], error)
 
-	GetExWithOptions(key string, options options.GetExOptions) (models.Result[string], error)
+	GetExWithOptions(ctx context.Context, key string, options options.GetExOptions) (models.Result[string], error)
 
-	MSet(keyValueMap map[string]string) (string, error)
+	MSet(ctx context.Context, keyValueMap map[string]string) (string, error)
 
-	MGet(keys []string) ([]models.Result[string], error)
+	MGet(ctx context.Context, keys []string) ([]models.Result[string], error)
 
-	MSetNX(keyValueMap map[string]string) (bool, error)
+	MSetNX(ctx context.Context, keyValueMap map[string]string) (bool, error)
 
-	Incr(key string) (int64, error)
+	Incr(ctx context.Context, key string) (int64, error)
 
-	IncrBy(key string, amount int64) (int64, error)
+	IncrBy(ctx context.Context, key string, amount int64) (int64, error)
 
-	IncrByFloat(key string, amount float64) (float64, error)
+	IncrByFloat(ctx context.Context, key string, amount float64) (float64, error)
 
-	Decr(key string) (int64, error)
+	Decr(ctx context.Context, key string) (int64, error)
 
-	DecrBy(key string, amount int64) (int64, error)
+	DecrBy(ctx context.Context, key string, amount int64) (int64, error)
 
-	Strlen(key string) (int64, error)
+	Strlen(ctx context.Context, key string) (int64, error)
 
-	SetRange(key string, offset int, value string) (int64, error)
+	SetRange(ctx context.Context, key string, offset int, value string) (int64, error)
 
-	GetRange(key string, start int, end int) (string, error)
+	GetRange(ctx context.Context, key string, start int, end int) (string, error)
 
-	Append(key string, value string) (int64, error)
+	Append(ctx context.Context, key string, value string) (int64, error)
 
-	LCS(key1 string, key2 string) (string, error)
+	LCS(ctx context.Context, key1 string, key2 string) (string, error)
 
-	LCSLen(key1 string, key2 string) (int64, error)
+	LCSLen(ctx context.Context, key1 string, key2 string) (int64, error)
 
-	LCSWithOptions(key1, key2 string, opts options.LCSIdxOptions) (map[string]any, error)
+	LCSWithOptions(ctx context.Context, key1, key2 string, opts options.LCSIdxOptions) (map[string]any, error)
 
-	GetDel(key string) (models.Result[string], error)
+	GetDel(ctx context.Context, key string) (models.Result[string], error)
 }

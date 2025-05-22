@@ -3,6 +3,8 @@
 package interfaces
 
 import (
+	"context"
+	
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -13,15 +15,15 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#connection
 type ConnectionManagementCommands interface {
-	Ping() (string, error)
+	Ping(ctx context.Context) (string, error)
 
-	PingWithOptions(pingOptions options.PingOptions) (string, error)
+	PingWithOptions(ctx context.Context, pingOptions options.PingOptions) (string, error)
 
-	Echo(message string) (models.Result[string], error)
+	Echo(ctx context.Context, message string) (models.Result[string], error)
 
-	ClientId() (int64, error)
+	ClientId(ctx context.Context) (int64, error)
 
-	ClientGetName() (string, error)
+	ClientGetName(ctx context.Context) (string, error)
 
-	ClientSetName(connectionName string) (string, error)
+	ClientSetName(ctx context.Context, connectionName string) (string, error)
 }

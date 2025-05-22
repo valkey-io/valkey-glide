@@ -3,8 +3,9 @@
 package glide
 
 import (
+	"context"
 	"fmt"
-
+	"time"
 	config2 "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
@@ -14,7 +15,7 @@ func ExampleNewClient() {
 		WithUseTLS(false).
 		WithReconnectStrategy(config2.NewBackoffStrategy(5, 1000, 2)).
 		WithDatabaseId(1)
-	client, err := NewClient(config)
+	client, err := NewClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
@@ -27,9 +28,9 @@ func ExampleNewClient() {
 func ExampleNewClusterClient() {
 	config := config2.NewClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).
-		WithRequestTimeout(5000).
+		WithRequestTimeout(5 * time.Second).
 		WithUseTLS(false)
-	client, err := NewClusterClient(config)
+	client, err := NewClusterClient(context.Background(), config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

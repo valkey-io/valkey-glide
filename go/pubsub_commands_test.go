@@ -3,6 +3,7 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -26,7 +27,7 @@ func ExampleClient_Publish() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish a message
-	result, err := publisher.Publish("my_channel", "Hello, World!")
+	result, err := publisher.Publish(context.Background(), "my_channel", "Hello, World!")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -57,7 +58,7 @@ func ExampleClusterClient_Publish() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish a message
-	result, err := publisher.Publish("my_channel", "Hello, World!", false)
+	result, err := publisher.Publish(context.Background(), "my_channel", "Hello, World!", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -82,7 +83,7 @@ func ExampleClient_PubSubChannels() {
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
-	result, err := publisher.PubSubChannels()
+	result, err := publisher.PubSubChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -101,7 +102,7 @@ func ExampleClusterClient_PubSubChannels() {
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
-	result, err := publisher.PubSubChannels()
+	result, err := publisher.PubSubChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -123,7 +124,7 @@ func ExampleClient_PubSubChannelsWithPattern() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get channels matching the "news.*" pattern
-	result, err := publisher.PubSubChannelsWithPattern("news.*")
+	result, err := publisher.PubSubChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -146,7 +147,7 @@ func ExampleClusterClient_PubSubChannelsWithPattern() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get channels matching the "news.*" pattern
-	result, err := publisher.PubSubChannelsWithPattern("news.*")
+	result, err := publisher.PubSubChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -167,7 +168,7 @@ func ExampleClusterClient_PubSubShardChannels() {
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
-	result, err := publisher.PubSubShardChannels()
+	result, err := publisher.PubSubShardChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -188,7 +189,7 @@ func ExampleClusterClient_PubSubShardChannelsWithPattern() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get channels matching the "news.*" pattern
-	result, err := publisher.PubSubShardChannelsWithPattern("news.*")
+	result, err := publisher.PubSubShardChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -210,7 +211,7 @@ func ExampleClient_PubSubNumPat() {
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
-	result, err := publisher.PubSubNumPat()
+	result, err := publisher.PubSubNumPat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -230,7 +231,7 @@ func ExampleClusterClient_PubSubNumPat() {
 	// Allow subscriptions to establish
 	time.Sleep(100 * time.Millisecond)
 
-	result, err := publisher.PubSubNumPat()
+	result, err := publisher.PubSubNumPat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -254,7 +255,7 @@ func ExampleClient_PubSubNumSub() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get subscriber counts for specific channels
-	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
+	result, err := publisher.PubSubNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -292,7 +293,7 @@ func ExampleClusterClient_PubSubNumSub() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get subscriber counts for specific channels
-	result, err := publisher.PubSubNumSub("news.sports", "news.weather", "events.local")
+	result, err := publisher.PubSubNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -330,7 +331,7 @@ func ExampleClusterClient_PubSubShardNumSub() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Get subscriber counts for specific channels
-	result, err := publisher.PubSubShardNumSub("news.sports", "news.weather", "events.local")
+	result, err := publisher.PubSubShardNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

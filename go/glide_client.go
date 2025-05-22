@@ -6,7 +6,9 @@ package glide
 import "C"
 
 import (
+	"context"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
@@ -31,6 +33,7 @@ type Client struct {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	config - The configuration options for the client, including server addresses, authentication credentials,
 //	    TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
 //
@@ -73,6 +76,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - Arguments for the custom command including the command name.
 //
 // Return value:
@@ -80,8 +84,8 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 //	The returned value for the custom command.
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *Client) CustomCommand(args []string) (any, error) {
-	res, err := client.executeCommand(C.CustomCommand, args)
+func (client *Client) CustomCommand(ctx context.Context, args []string) (any, error) {
+	res, err := client.executeCommand(ctx, C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +100,7 @@ func (client *Client) CustomCommand(args []string) (any, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	parameters - A map consisting of configuration parameters and their respective values to set.
 //
 // Return value:
@@ -103,8 +108,8 @@ func (client *Client) CustomCommand(args []string) (any, error) {
 //	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *Client) ConfigSet(parameters map[string]string) (string, error) {
-	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+func (client *Client) ConfigSet(ctx context.Context, parameters map[string]string) (string, error) {
+	result, err := client.executeCommand(ctx, C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -119,6 +124,7 @@ func (client *Client) ConfigSet(parameters map[string]string) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	args - A slice of configuration parameter names to retrieve values for.
 //
 // Return value:
@@ -126,8 +132,8 @@ func (client *Client) ConfigSet(parameters map[string]string) (string, error) {
 //	A map of models.Result[string] corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *Client) ConfigGet(args []string) (map[string]string, error) {
-	res, err := client.executeCommand(C.ConfigGet, args)
+func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]string, error) {
+	res, err := client.executeCommand(ctx, C.ConfigGet, args)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +142,11 @@ func (client *Client) ConfigGet(args []string) (map[string]string, error) {
 
 // Select changes the currently selected database.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	index - The index of the database to select.
 //
 // Return value:
@@ -145,8 +154,8 @@ func (client *Client) ConfigGet(args []string) (map[string]string, error) {
 //	A simple `"OK"` response.
 //
 // [valkey.io]: https://valkey.io/commands/select/
-func (client *Client) Select(index int64) (string, error) {
-	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
+func (client *Client) Select(ctx context.Context, index int64) (string, error) {
+	result, err := client.executeCommand(ctx, C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -158,21 +167,28 @@ func (client *Client) Select(index int64) (string, error) {
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A string with the information for the default sections.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *Client) Info() (string, error) {
-	return client.InfoWithOptions(options.InfoOptions{Sections: []constants.Section{}})
+func (client *Client) Info(ctx context.Context) (string, error) {
+	return client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{}})
 }
 
 // Gets information and statistics about the server.
+//
+// Starting from server version 7, command supports multiple section arguments.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	options - Additional command parameters, see [InfoOptions] for more details.
 //
 // Return value:
@@ -180,12 +196,12 @@ func (client *Client) Info() (string, error) {
 //	A string containing the information for the sections requested.
 //
 // [valkey.io]: https://valkey.io/commands/info/
-func (client *Client) InfoWithOptions(options options.InfoOptions) (string, error) {
+func (client *Client) InfoWithOptions(ctx context.Context, options options.InfoOptions) (string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Info, optionArgs)
+	result, err := client.executeCommand(ctx, C.Info, optionArgs)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -195,13 +211,19 @@ func (client *Client) InfoWithOptions(options options.InfoOptions) (string, erro
 
 // Returns the number of keys in the currently selected database.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The number of keys in the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/dbsize/
-func (client *Client) DBSize() (int64, error) {
-	result, err := client.executeCommand(C.DBSize, []string{})
+func (client *GClient) DBSize(ctx context.Context) (int64, error) {
+	result, err := client.executeCommand(ctx, C.DBSize, []string{})
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
@@ -209,10 +231,12 @@ func (client *Client) DBSize() (int64, error) {
 }
 
 // Echo the provided message back.
-// The command will be routed a random node.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	message - The provided message.
 //
 // Return value:
@@ -220,29 +244,34 @@ func (client *Client) DBSize() (int64, error) {
 //	The provided message
 //
 // [valkey.io]: https://valkey.io/commands/echo/
-func (client *Client) Echo(message string) (models.Result[string], error) {
-	result, err := client.executeCommand(C.Echo, []string{message})
-	if err != nil {
-		return models.CreateNilStringResult(), err
-	}
-	return handleStringOrNilResponse(result)
+func (client *Client) Echo(ctx context.Context, message string) (models.Result[string], error) {
+	return client.echo(ctx, message)
 }
 
 // Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
 //	Returns "PONG".
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *Client) Ping() (string, error) {
-	return client.PingWithOptions(options.PingOptions{})
+func (client *Client) Ping(ctx context.Context) (string, error) {
+	return client.PingWithOptions(ctx, options.PingOptions{})
 }
 
 // Pings the server.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	pingOptions - The PingOptions type.
 //
 // Return value:
@@ -250,12 +279,12 @@ func (client *Client) Ping() (string, error) {
 //	Returns the copy of message.
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *Client) PingWithOptions(pingOptions options.PingOptions) (string, error) {
+func (client *Client) PingWithOptions(ctx context.Context, pingOptions options.PingOptions) (string, error) {
 	optionArgs, err := pingOptions.ToArgs()
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Ping, optionArgs)
+	result, err := client.executeCommand(ctx, C.Ping, optionArgs)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -266,13 +295,17 @@ func (client *Client) PingWithOptions(pingOptions options.PingOptions) (string, 
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *Client) FlushAll() (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{})
+func (client *Client) FlushAll(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushAll, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -285,6 +318,7 @@ func (client *Client) FlushAll() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
 //
 // Return value:
@@ -292,25 +326,8 @@ func (client *Client) FlushAll() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushall/
-func (client *Client) FlushAllWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushAll, []string{string(mode)})
-	if err != nil {
-		return models.DefaultStringResponse, err
-	}
-	return handleOkResponse(result)
-}
-
-// Deletes all the keys of the currently selected database.
-//
-// See [valkey.io] for details.
-//
-// Return value:
-//
-//	`"OK"` response on success.
-//
-// [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *Client) FlushDB() (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{})
+func (client *Client) FlushAllWithOptions(ctx context.Context, mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushAll, []string{string(mode)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -323,6 +340,28 @@ func (client *Client) FlushDB() (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (client *Client) FlushDB(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushDB, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
 //
 // Return value:
@@ -330,8 +369,8 @@ func (client *Client) FlushDB() (string, error) {
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/flushdb/
-func (client *Client) FlushDBWithOptions(mode options.FlushMode) (string, error) {
-	result, err := client.executeCommand(C.FlushDB, []string{string(mode)})
+func (client *Client) FlushDBWithOptions(ctx context.Context, mode options.FlushMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.FlushDB, []string{string(mode)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -340,13 +379,19 @@ func (client *Client) FlushDBWithOptions(mode options.FlushMode) (string, error)
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *Client) Lolwut() (string, error) {
-	result, err := client.executeCommand(C.Lolwut, []string{})
+func (client *Client) Lolwut(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Lolwut, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -355,8 +400,11 @@ func (client *Client) Lolwut() (string, error) {
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	opts - The [LolwutOptions] type.
 //
 // Return value:
@@ -364,12 +412,12 @@ func (client *Client) Lolwut() (string, error) {
 // A piece of generative computer art of that specific valkey version along with the Valkey version.
 //
 // [valkey.io]: https://valkey.io/commands/lolwut/
-func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string, error) {
+func (client *baseClient) LolwutWithOptions(ctx context.Context, opts options.LolwutOptions) (string, error) {
 	commandArgs, err := opts.ToArgs()
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	result, err := client.executeCommand(C.Lolwut, commandArgs)
+	result, err := client.executeCommand(ctx, C.Lolwut, commandArgs)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -378,13 +426,19 @@ func (client *baseClient) LolwutWithOptions(opts options.LolwutOptions) (string,
 
 // Gets the current connection id.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The id of the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-id/
-func (client *Client) ClientId() (int64, error) {
-	result, err := client.executeCommand(C.ClientId, []string{})
+func (client *lient) ClientId(ctx context.Context) (int64, error) {
+	result, err := client.executeCommand(ctx, C.ClientId, []string{})
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
@@ -393,13 +447,19 @@ func (client *Client) ClientId() (int64, error) {
 
 // Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	UNIX TIME of the last DB save executed with success.
 //
 // [valkey.io]: https://valkey.io/commands/lastsave/
-func (client *Client) LastSave() (int64, error) {
-	response, err := client.executeCommand(C.LastSave, []string{})
+func (client *Client) LastSave(ctx context.Context) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LastSave, []string{})
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
@@ -408,13 +468,19 @@ func (client *Client) LastSave() (int64, error) {
 
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	OK to confirm that the statistics were successfully reset.
 //
 // [valkey.io]: https://valkey.io/commands/config-resetstat/
-func (client *Client) ConfigResetStat() (string, error) {
-	response, err := client.executeCommand(C.ConfigResetStat, []string{})
+func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigResetStat, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -423,13 +489,19 @@ func (client *Client) ConfigResetStat() (string, error) {
 
 // Gets the name of the current connection.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *Client) ClientGetName() (string, error) {
-	result, err := client.executeCommand(C.ClientGetName, []string{})
+func (client *Client) ClientGetName(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -438,8 +510,11 @@ func (client *Client) ClientGetName() (string, error) {
 
 // Set the name of the current connection.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //
 // Return value:
@@ -447,8 +522,8 @@ func (client *Client) ClientGetName() (string, error) {
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *Client) ClientSetName(connectionName string) (string, error) {
-	result, err := client.executeCommand(C.ClientSetName, []string{connectionName})
+func (client *Client) ClientSetName(ctx context.Context, connectionName string) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -457,8 +532,11 @@ func (client *Client) ClientSetName(connectionName string) (string, error) {
 
 // Move key from the currently selected database to the database specified by dbIndex.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	key - The key to move.
 //	dbIndex -  The index of the database to move key to.
 //
@@ -467,8 +545,8 @@ func (client *Client) ClientSetName(connectionName string) (string, error) {
 //	Returns "OK".
 //
 // [valkey.io]: https://valkey.io/commands/move/
-func (client *Client) Move(key string, dbIndex int64) (bool, error) {
-	result, err := client.executeCommand(C.Move, []string{key, utils.IntToString(dbIndex)})
+func (client *Client) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -478,8 +556,11 @@ func (client *Client) Move(key string, dbIndex int64) (bool, error) {
 
 // Iterates incrementally over a database for matching keys.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	cursor - The cursor that points to the next iteration of results. A value of 0
 //			 indicates the start of the search.
 //
@@ -490,8 +571,8 @@ func (client *Client) Move(key string, dbIndex int64) (bool, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *Client) Scan(cursor int64) (string, []string, error) {
-	res, err := client.executeCommand(C.Scan, []string{utils.IntToString(cursor)})
+func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string, error) {
+	res, err := client.executeCommand(ctx, C.Scan, []string{utils.IntToString(cursor)})
 	if err != nil {
 		return models.DefaultStringResponse, nil, err
 	}
@@ -500,8 +581,11 @@ func (client *Client) Scan(cursor int64) (string, []string, error) {
 
 // Iterates incrementally over a database for matching keys.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	 cursor - The cursor that points to the next iteration of results. A value of 0
 //				 indicates the start of the search.
 //	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
@@ -513,12 +597,16 @@ func (client *Client) Scan(cursor int64) (string, []string, error) {
 //	of the scan. The second element is always an Array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *Client) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) (string, []string, error) {
+func (client *Client) ScanWithOptions(
+	ctx context.Context,
+	cursor int64,
+	scanOptions options.ScanOptions,
+) (string, []string, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
 		return models.DefaultStringResponse, nil, err
 	}
-	res, err := client.executeCommand(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executeCommand(ctx, C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
 	if err != nil {
 		return models.DefaultStringResponse, nil, err
 	}
@@ -527,13 +615,19 @@ func (client *Client) ScanWithOptions(cursor int64, scanOptions options.ScanOpti
 
 // Rewrites the configuration file with the current configuration.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
-func (client *Client) ConfigRewrite() (string, error) {
-	response, err := client.executeCommand(C.ConfigRewrite, []string{})
+func (client *Client) ConfigRewrite(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ConfigRewrite, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -542,13 +636,19 @@ func (client *Client) ConfigRewrite() (string, error) {
 
 // Returns a random existing key name from the currently selected database.
 //
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A random existing key name from the currently selected database.
 //
 // [valkey.io]: https://valkey.io/commands/randomkey/
-func (client *Client) RandomKey() (models.Result[string], error) {
-	result, err := client.executeCommand(C.RandomKey, []string{})
+func (client *Client) RandomKey(ctx context.Context) (models.Result[string], error) {
+	result, err := client.executeCommand(ctx, C.RandomKey, []string{})
 	if err != nil {
 		return models.CreateNilStringResult(), err
 	}
@@ -566,6 +666,10 @@ func (client *Client) RandomKey() (models.Result[string], error) {
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
 // Return value:
 //
 //	A map of node addresses to their function statistics represented by
@@ -574,8 +678,8 @@ func (client *Client) RandomKey() (models.Result[string], error) {
 //	engines - Information about available engines and their stats.
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
-func (client *Client) FunctionStats() (map[string]models.FunctionStatsResult, error) {
-	response, err := client.executeCommand(C.FunctionStats, []string{})
+func (client *Client) FunctionStats(ctx context.Context) (map[string]models.FunctionStatsResult, error) {
+	response, err := client.executeCommand(ctx, C.FunctionStats, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -592,6 +696,7 @@ func (client *Client) FunctionStats() (map[string]models.FunctionStatsResult, er
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //
 // Return value:
@@ -599,8 +704,8 @@ func (client *Client) FunctionStats() (map[string]models.FunctionStatsResult, er
 //	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
-func (client *Client) FunctionDelete(libName string) (string, error) {
-	result, err := client.executeCommand(C.FunctionDelete, []string{libName})
+func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDelete, []string{libName})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -616,6 +721,7 @@ func (client *Client) FunctionDelete(libName string) (string, error) {
 //
 // Parameters:
 //
+//	ctx - The context for controlling the command execution.
 //	channel - The channel to publish the message to.
 //	message - The message to publish.
 //
@@ -624,9 +730,9 @@ func (client *Client) FunctionDelete(libName string) (string, error) {
 //	The number of clients that received the message.
 //
 // [valkey.io]: https://valkey.io/commands/publish
-func (client *Client) Publish(channel string, message string) (int64, error) {
+func (client *Client) Publish(ctx context.Context, channel string, message string) (int64, error) {
 	args := []string{channel, message}
-	result, err := client.executeCommand(C.Publish, args)
+	result, err := client.executeCommand(ctx, C.Publish, args)
 	if err != nil {
 		return 0, err
 	}

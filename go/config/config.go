@@ -4,6 +4,7 @@ package config
 
 import (
 	"errors"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
@@ -90,13 +91,14 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout int
-	clientName     string
-	clientAZ       string
+	addresses         []NodeAddress
+	useTLS            bool
+	credentials       *ServerCredentials
+	readFrom          ReadFrom
+	requestTimeout    time.Duration
+	clientName        string
+	clientAZ          string
+	reconnectStrategy *BackoffStrategy
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -135,18 +137,25 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		}
 	}
 
+	if config.reconnectStrategy != nil {
+		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+	}
+
 	return &request, nil
 }
 
-// BackoffStrategy represents the strategy used to determine how and when to reconnect, in case of connection failures. The
-// time between attempts grows exponentially, to the formula:
+// BackoffStrategy defines how and when the client should attempt to reconnect after a connection failure.
+// The time between retry attempts increases exponentially according to the formula:
 //
 //	rand(0 ... factor * (exponentBase ^ N))
 //
-// where N is the number of failed attempts.
+// where N is the number of failed attempts. The `rand(...)` component applies a jitter of up to `jitterPercent%`
+// to introduce randomness and reduce retry storms.
 //
-// Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is successful.
-// The client will attempt to reconnect indefinitely.
+// Once the maximum retry interval is reached, that interval will be reused for all subsequent retries until
+// a successful connection is established. The client retries indefinitely.
+//
+// If no strategy is explicitly provided, a default backoff strategy will be used.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
@@ -156,25 +165,43 @@ type BackoffStrategy struct {
 	factor int
 	// The exponent base configured for the strategy.
 	exponentBase int
+	// The Jitter percent on the calculated duration. If not set, a default value will be used.
+	jitterPercent *int
 }
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
-	return &BackoffStrategy{numOfRetries, factor, exponentBase}
+	return &BackoffStrategy{
+		numOfRetries: numOfRetries,
+		factor:       factor,
+		exponentBase: exponentBase,
+	}
+}
+
+// WithJitterPercent sets the jitter percent.
+func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
+	strategy.jitterPercent = &jitter
+	return strategy
 }
 
 func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
-	return &protobuf.ConnectionRetryStrategy{
+	protoStrategy := &protobuf.ConnectionRetryStrategy{
 		NumberOfRetries: uint32(strategy.numOfRetries),
 		Factor:          uint32(strategy.factor),
 		ExponentBase:    uint32(strategy.exponentBase),
 	}
+
+	if strategy.jitterPercent != nil {
+		jitter := uint32(*strategy.jitterPercent)
+		protoStrategy.JitterPercent = &jitter
+	}
+
+	return protoStrategy
 }
 
 // ClientConfiguration represents the configuration settings for a Standalone client.
 type ClientConfiguration struct {
 	baseClientConfiguration
-	reconnectStrategy  *BackoffStrategy
 	databaseId         int
 	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedClientConfiguration
@@ -192,9 +219,6 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		return nil, err
 	}
 	request.ClusterModeEnabled = false
-	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
-	}
 
 	if config.databaseId != 0 {
 		request.DatabaseId = uint32(config.databaseId)
@@ -248,11 +272,11 @@ func (config *ClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClientConfig
 	return config
 }
 
-// WithRequestTimeout sets the duration in milliseconds that the client should wait for a request to complete. This duration
+// WithRequestTimeout sets the duration that the client should wait for a request to complete. This duration
 // encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *ClientConfiguration) WithRequestTimeout(requestTimeout int) *ClientConfiguration {
+func (config *ClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
@@ -384,11 +408,11 @@ func (config *ClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *Clust
 	return config
 }
 
-// WithRequestTimeout sets the duration in milliseconds that the client should wait for a request to complete. This duration
+// WithRequestTimeout sets the duration that the client should wait for a request to complete. This duration
 // encompasses sending the request, awaiting a response from the server, and any required reconnections or retries. If the
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
-func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout int) *ClusterClientConfiguration {
+func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
 }
@@ -403,6 +427,15 @@ func (config *ClusterClientConfiguration) WithClientName(clientName string) *Clu
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
+// failures. If not set, a default backoff strategy will be used.
+func (config *ClusterClientConfiguration) WithReconnectStrategy(
+	strategy *BackoffStrategy,
+) *ClusterClientConfiguration {
+	config.reconnectStrategy = strategy
 	return config
 }
 
@@ -429,13 +462,13 @@ func (config *ClusterClientConfiguration) HasSubscription() bool {
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
 	if config.HasSubscription() {
 		return config.subscriptionConfig
-	}
+	connectionTimeout int
 	return nil
 }
 
 // Represents advanced configuration settings for a Standalone [Client] used in [ClientConfiguration].
 type AdvancedClientConfiguration struct {
-	connectionTimeout int
+	connectionTimeout time.Duration
 }
 
 // NewAdvancedGlideClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
@@ -443,22 +476,22 @@ func NewAdvancedGlideClientConfiguration() *AdvancedClientConfiguration {
 	return &AdvancedClientConfiguration{}
 }
 
-// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 // The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
 // during initial client creation and any reconnections that may occur during request processing.
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
 // pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
 func (config *AdvancedClientConfiguration) WithConnectionTimeout(
-	connectionTimeout int,
+	connectionTimeout time.Duration,
 ) *AdvancedClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config
 }
 
-// Represents advanced configuration settings for a Standalone [GlideClusterClient] used in
+// Represents advanced configuration settings for a Standalone [ClusterClient] used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
-	connectionTimeout int
+	connectionTimeout time.Duration
 }
 
 // NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
@@ -466,9 +499,9 @@ func NewAdvancedClusterClientConfiguration() *AdvancedClusterClientConfiguration
 	return &AdvancedClusterClientConfiguration{}
 }
 
-// WithConnectionTimeout sets the duration in milliseconds to wait for a TCP/TLS connection to complete.
+// WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
-	connectionTimeout int,
+	connectionTimeout time.Duration,
 ) *AdvancedClusterClientConfiguration {
 	config.connectionTimeout = connectionTimeout
 	return config

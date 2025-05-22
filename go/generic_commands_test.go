@@ -3,10 +3,10 @@
 package glide
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-
 	"github.com/google/uuid"
 
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -14,7 +14,7 @@ import (
 
 func ExampleClient_CustomCommand() {
 	var client *Client = getExampleClient() // example helper function
-	result, err := client.CustomCommand([]string{"ping"})
+	result, err := client.CustomCommand(context.Background(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -26,11 +26,11 @@ func ExampleClient_CustomCommand() {
 func ExampleClient_Move() {
 	var client *Client = getExampleClient() // example helper function
 	key := uuid.New().String()
-	_, err := client.Set(key, "hello")
+	_, err := client.Set(context.Background(), key, "hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	result, err := client.Move(key, 2)
+	result, err := client.Move(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -41,9 +41,9 @@ func ExampleClient_Move() {
 
 func ExampleClient_Scan() {
 	var client *Client = getExampleClient() // example helper function
-	client.CustomCommand([]string{"FLUSHALL"})
-	client.Set("key1", "hello")
-	resCursor, resCollection, err := client.Scan(0)
+	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
+	client.Set(context.Background(), "key1", "hello")
+	resCursor, resCollection, err := client.Scan(context.Background(), 0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -58,9 +58,9 @@ func ExampleClient_Scan() {
 func ExampleClient_ScanWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	opts := options.NewScanOptions().SetCount(10).SetType(constants.ObjectTypeList)
-	client.CustomCommand([]string{"FLUSHALL"})
-	client.LPush("key1", []string{"1", "3", "2", "4"})
-	resCursor, resCollection, err := client.ScanWithOptions(0, *opts)
+	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
+	client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
+	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -75,8 +75,8 @@ func ExampleClient_ScanWithOptions() {
 func ExampleClient_RandomKey() {
 	var client *Client = getExampleClient() // example helper function
 	key := uuid.New().String()
-	client.Set(key, "Hello")
-	result, err := client.RandomKey()
+	client.Set(context.Background(), key, "Hello")
+	result, err := client.RandomKey(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
