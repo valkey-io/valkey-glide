@@ -705,28 +705,8 @@ struct Message<C: Sized> {
     sender: oneshot::Sender<RedisResult<Response>>,
 }
 
-// The state of the refresh slots background task
-struct SlotRefreshTaskState {
-    retry_count: u8,
-    task_handle: JoinHandle<()>,
-    result_receiver: oneshot::Receiver<RedisResult<()>>,
-}
-
-impl SlotRefreshTaskState {
-    fn new(
-        task_handle: JoinHandle<()>,
-        result_receiver: oneshot::Receiver<RedisResult<()>>,
-    ) -> Self {
-        Self {
-            retry_count: 0,
-            task_handle,
-            result_receiver,
-        }
-    }
-}
-
 enum RecoverFuture {
-    RefreshingSlots(SlotRefreshTaskState),
+    RefreshingSlots(oneshot::Receiver<RedisResult<()>>),
     ReconnectToInitialNodes(BoxFuture<'static, ()>),
     Reconnect(BoxFuture<'static, ()>),
 }
@@ -1594,7 +1574,7 @@ where
     fn spawn_refresh_slots_task(
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
-    ) -> (JoinHandle<()>, oneshot::Receiver<RedisResult<()>>) {
+    ) -> oneshot::Receiver<RedisResult<()>> {
         // Create a channel
         let (result_sender, result_receiver) = oneshot::channel();
 
@@ -1603,7 +1583,7 @@ where
         let policy_clone = policy.clone();
 
         // Spawn the background task
-        let task_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let result =
                 Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone)
                     .await;
@@ -1613,7 +1593,7 @@ where
             let _ = result_sender.send(result);
         });
 
-        (task_handle, result_receiver)
+        result_receiver
     }
 
     async fn aggregate_results(
@@ -2767,9 +2747,9 @@ where
         };
 
         match recover_future {
-            RecoverFuture::RefreshingSlots(refresh_state) => {
+            RecoverFuture::RefreshingSlots(result_receiver) => {
                 // Check if there's a result ready on the channel
-                match refresh_state.result_receiver.try_recv() {
+                match result_receiver.try_recv() {
                     Ok(Ok(_)) => {
                         // Task succeeded
                         trace!("Slot refresh completed successfully!");
@@ -2780,10 +2760,8 @@ where
                         // Task failed with an error
                         trace!("Slot refresh failed: {:?}", e);
 
-                        if e.kind() == ErrorKind::AllConnectionsUnavailable
-                            || refresh_state.retry_count >= 2
-                        {
-                            // After 3 attempts or if all connections unavailable, try reconnect
+                        if e.kind() == ErrorKind::AllConnectionsUnavailable {
+                            // If all connections unavailable, try reconnect
                             self.state =
                                 ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
                                     Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
@@ -2792,18 +2770,16 @@ where
                                 ));
                             return Poll::Ready(Err(e));
                         } else {
-                            // Retry
-                            refresh_state.retry_count += 1;
-
                             // Create a new task with a new channel
-                            let (task_handle, result_receiver) = Self::spawn_refresh_slots_task(
+                            let new_receiver = Self::spawn_refresh_slots_task(
                                 self.inner.clone(),
                                 &RefreshPolicy::Throttable,
                             );
 
-                            // Update state
-                            refresh_state.task_handle = task_handle;
-                            refresh_state.result_receiver = result_receiver;
+                            // Update state with the new receiver
+                            self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
+                                new_receiver,
+                            ));
 
                             return Poll::Ready(Ok(()));
                         }
@@ -2816,33 +2792,15 @@ where
                         // Sender was dropped without sending a value - task likely failed or was aborted
                         trace!("Slot refresh task channel closed without result");
 
-                        if refresh_state.retry_count >= 2 {
-                            // After 3 attempts, try reconnect
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
-                                ));
-                            return Poll::Ready(Err((
-                                ErrorKind::IoError,
-                                "Slot refresh task failed after multiple attempts",
-                            )
-                                .into()));
-                        } else {
-                            // Retry
-                            refresh_state.retry_count += 1;
+                        // Create a new task with a new channel
+                        let new_receiver = Self::spawn_refresh_slots_task(
+                            self.inner.clone(),
+                            &RefreshPolicy::Throttable,
+                        );
 
-                            // Create a new task with a new channel
-                            let (task_handle, result_receiver) = Self::spawn_refresh_slots_task(
-                                self.inner.clone(),
-                                &RefreshPolicy::Throttable,
-                            );
-
-                            // Update state
-                            refresh_state.task_handle = task_handle;
-                            refresh_state.result_receiver = result_receiver;
-                        }
+                        // Update state with the new receiver
+                        self.state =
+                            ConnectionState::Recover(RecoverFuture::RefreshingSlots(new_receiver));
                     }
                 }
 
@@ -3130,17 +3088,14 @@ where
                 PollFlushAction::None => return Poll::Ready(Ok(())),
                 PollFlushAction::RebuildSlots => {
                     // Spawn task with channel
-                    let (task_handle, result_receiver) = ClusterConnInner::spawn_refresh_slots_task(
+                    let result_receiver = ClusterConnInner::spawn_refresh_slots_task(
                         self.inner.clone(),
                         &RefreshPolicy::Throttable,
                     );
 
-                    // Create state
-                    let refresh_state = SlotRefreshTaskState::new(task_handle, result_receiver);
-
                     // Update state
                     self.state =
-                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(refresh_state));
+                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(result_receiver));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
                     self.state =
