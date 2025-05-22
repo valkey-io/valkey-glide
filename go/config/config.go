@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
 const (
@@ -95,7 +96,7 @@ type baseClientConfiguration struct {
 	useTLS            bool
 	credentials       *ServerCredentials
 	readFrom          ReadFrom
-	requestTimeout    uint32
+	requestTimeout    time.Duration
 	clientName        string
 	clientAZ          string
 	reconnectStrategy *BackoffStrategy
@@ -119,7 +120,10 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	request.ReadFrom = mapReadFrom(config.readFrom)
 	if config.requestTimeout != 0 {
-		request.RequestTimeout = config.requestTimeout
+		timeout, valid := utils.DurationToMilliseconds(config.requestTimeout)
+		if valid {
+			request.RequestTimeout = timeout
+		}
 	}
 
 	if config.clientName != "" {
@@ -228,7 +232,10 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	}
 
 	if config.AdvancedClientConfiguration.connectionTimeout != 0 {
-		request.ConnectionTimeout = config.AdvancedClientConfiguration.connectionTimeout
+		timeout, valid := utils.DurationToMilliseconds(config.AdvancedClientConfiguration.connectionTimeout)
+		if valid {
+			request.ConnectionTimeout = timeout
+		}
 	}
 
 	return request, nil
@@ -277,14 +284,10 @@ func (config *ClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClientConfig
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
 //
-// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1, a default value will be used.
+// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
 func (config *ClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClientConfiguration {
 	// Convert back to milliseconds and check if requestTimeout exceeds bounds of a uint32
-	milliseconds := requestTimeout.Milliseconds()
-	if milliseconds < 0 || milliseconds > (1<<32-1) {
-		milliseconds = 5000
-	}
-	config.requestTimeout = uint32(milliseconds)
+	config.requestTimeout = requestTimeout
 	return config
 }
 
@@ -367,7 +370,10 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	request.ClusterModeEnabled = true
 	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
-		request.ConnectionTimeout = config.AdvancedClusterClientConfiguration.connectionTimeout
+		timeout, valid := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
+		if valid {
+			request.ConnectionTimeout = timeout
+		}
 	}
 	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
@@ -420,14 +426,10 @@ func (config *ClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *Clust
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
 //
-// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1, a default value will be used.
+// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
 func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClusterClientConfiguration {
 	// Convert back to milliseconds and check if requestTimeout exceeds bounds of a uint32
-	milliseconds := requestTimeout.Milliseconds()
-	if milliseconds < 0 || milliseconds > (1<<32-1) {
-		milliseconds = 5000
-	}
-	config.requestTimeout = uint32(milliseconds)
+	config.requestTimeout = requestTimeout
 	return config
 }
 
@@ -482,7 +484,7 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 
 // Represents advanced configuration settings for a Standalone [Client] used in [ClientConfiguration].
 type AdvancedClientConfiguration struct {
-	connectionTimeout uint32
+	connectionTimeout time.Duration
 }
 
 // NewAdvancedGlideClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
@@ -496,22 +498,18 @@ func NewAdvancedGlideClientConfiguration() *AdvancedClientConfiguration {
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
 // pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
 //
-// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1, the default value will be used.
+// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds, the default value will be used.
 func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
 ) *AdvancedClientConfiguration {
-	milliseconds := connectionTimeout.Milliseconds()
-	if milliseconds < 0 || milliseconds > (1<<32-1) {
-		milliseconds = 250
-	}
-	config.connectionTimeout = uint32(milliseconds)
+	config.connectionTimeout = connectionTimeout
 	return config
 }
 
 // Represents advanced configuration settings for a Standalone [ClusterClient] used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
-	connectionTimeout uint32
+	connectionTimeout time.Duration
 }
 
 // NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
@@ -521,14 +519,10 @@ func NewAdvancedClusterClientConfiguration() *AdvancedClusterClientConfiguration
 
 // WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 //
-// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1, the default value will be used.
+// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds, the default value will be used.
 func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
 ) *AdvancedClusterClientConfiguration {
-	milliseconds := connectionTimeout.Milliseconds()
-	if milliseconds < 0 || milliseconds > (1<<32-1) {
-		milliseconds = 250
-	}
-	config.connectionTimeout = uint32(milliseconds)
+	config.connectionTimeout = connectionTimeout
 	return config
 }
