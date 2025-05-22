@@ -29,24 +29,18 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 ### Linux GNU
 
-Tests are actively running on **Ubuntu 24**, but the package is being build for any linux using **glibc 2.17** or higher.
-Manual tests have been done on:
-
-- Fedora 39
-- Ubuntu 22.04
-- Amazon Linux 2
-- Debian 12.
+Linux with **glibc 2.17** or higher.
 
 ### MacOS (Darwin)
 
 MacOS Apple Silicon/aarch_64 and x86_64/amd64.
 
 - Full tests are running on MacOS 15.0 arm64/aarch64
-- Minimal tests are running on: MacOS 13.5 x86*64/amd64 *(We do not recommend using MacOS Intel for production, It is supported for development purposes)\_
+- Minimal tests are running on: MacOS 13.5 x86*64/amd64*(We do not recommend using MacOS Intel for production, It is supported for development purposes)\_
 
 ### Alpine
 
-All alpine versions that are using _musl libc_ 1.2.3 (All Alpine non deprecated alpine versions) or higher should be supported.
+All alpine versions that are using *musl libc* 1.2.3 (All Alpine non deprecated alpine versions) or higher should be supported.
 Tests are running on:
 
 - node:alpine (x86_64/amd64 and arm64/aarch64)
@@ -72,7 +66,7 @@ npm i @valkey/valkey-glide
 
 ## Basic Examples
 
-#### Standalone Mode
+#### Standalone Mode:
 
 ```typescript
 import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
@@ -99,7 +93,7 @@ const get_response = await client.get("foo");
 console.log(`Get response is = ${get_response}`);
 ```
 
-#### Cluster Mode
+#### Cluster Mode:
 
 ```typescript
 import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
