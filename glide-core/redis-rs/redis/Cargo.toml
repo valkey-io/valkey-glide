@@ -131,7 +131,7 @@ aio = [
     "dispose",
 ]
 geospatial = []
-json = ["serde", "serde/derive", "serde_json"]
+json = ["serde", "serde/derive"]
 cluster = ["crc16", "rand"]
 script = ["sha1_smol"]
 tls-native-tls = ["native-tls"]
@@ -180,6 +180,7 @@ tokio = { version = "1", features = [
 tempfile = "=3.6.0"
 once_cell = "1"
 anyhow = "1"
+serde_json = "1.0.82"
 sscanf = "0.4.1"
 serial_test = "^2"
 versions = "6.3"
