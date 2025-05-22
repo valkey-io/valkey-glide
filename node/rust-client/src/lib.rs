@@ -604,11 +604,28 @@ impl Script {
     pub fn get_hash(&self) -> String {
         self.hash.clone()
     }
+
+    /// Internal release logic used both by Drop and napi-exposed `release()`.
+    fn release_internal(&self) {
+        glide_core::scripts_container::remove_script(&self.hash);
+    }
+
+    /// Decrements the script's reference count in the local container.  
+    /// Removes the script when the count reaches zero.
+    ///
+    /// This method is primarily intended for testing or manual cleanup.
+    /// It does not need to be called explicitly, as the script will be automatically
+    /// released when dropped.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn release(&self) {
+        self.release_internal();
+    }
 }
 
 impl Drop for Script {
     fn drop(&mut self) {
-        glide_core::scripts_container::remove_script(&self.hash);
+        self.release_internal();
     }
 }
 
