@@ -3,7 +3,6 @@
 package glide
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -31,7 +30,7 @@ func ExampleNewClusterClient() {
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5 * time.Second).
 		WithUseTLS(false)
-	client, err := NewClusterClient(context.Background(), config)
+	client, err := NewClusterClient(config)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

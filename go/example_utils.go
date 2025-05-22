@@ -85,7 +85,7 @@ func getExampleClusterClient() *ClusterClient {
 		WithAddress(&clusterAddresses[0]).
 		WithRequestTimeout(5 * time.Second)
 
-	client, err := NewClusterClient(context.Background(), cConfig)
+	client, err := NewClusterClient(cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}
@@ -145,7 +145,7 @@ func getExampleClusterClientWithSubscription(
 		WithAddress(&clusterAddresses[0]).
 		WithSubscriptionConfig(cConfig)
 
-	client, err := NewClusterClient(context.Background(), ccConfig)
+	client, err := NewClusterClient(ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
 	}

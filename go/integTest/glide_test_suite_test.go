@@ -196,7 +196,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
 
-	client, err := glide.NewClusterClient(context.Background(), clientConfig)
+	client, err := glide.NewClusterClient(clientConfig)
 	if err == nil && client != nil {
 		defer client.Close()
 
@@ -357,7 +357,7 @@ func (suite *GlideTestSuite) defaultClusterClient() *glide.ClusterClient {
 }
 
 func (suite *GlideTestSuite) clusterClient(config *config.ClusterClientConfiguration) *glide.ClusterClient {
-	client, err := glide.NewClusterClient(context.Background(), config)
+	client, err := glide.NewClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -385,7 +385,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 		WithAdvancedConfiguration(
 			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
 		WithRequestTimeout(requestTimeout)
-	return glide.NewClusterClient(context.Background(), clientConfig)
+	return glide.NewClusterClient(clientConfig)
 }
 
 func (suite *GlideTestSuite) runWithClients(

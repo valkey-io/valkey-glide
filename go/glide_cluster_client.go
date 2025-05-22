@@ -56,7 +56,7 @@ type ClusterClient struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
-func NewClusterClient(ctx context.Context, config *config.ClusterClientConfiguration) (*ClusterClient, error) {
+func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

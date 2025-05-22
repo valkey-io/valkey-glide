@@ -32,7 +32,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 		config.WithAddress(&host)
 	}
 
-	client, err := glide.NewClusterClient(context.Background(), config)
+	client, err := glide.NewClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -44,7 +44,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 	config := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
-	client, err := glide.NewClusterClient(context.Background(), config)
+	client, err := glide.NewClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)

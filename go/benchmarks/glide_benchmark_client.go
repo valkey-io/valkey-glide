@@ -19,7 +19,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := config.NewClusterClientConfiguration().
 			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := api.NewGlideClusterClient(context.Background(), config)
+		glideClient, err := glide.NewClusterClient(config)
 		if err != nil {
 			return err
 		}
@@ -30,7 +30,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 		config := config.NewClientConfiguration().
 			WithAddress(&config.NodeAddress{Host: connectionSettings.host, Port: connectionSettings.port}).
 			WithUseTLS(connectionSettings.useTLS)
-		glideClient, err := glide.NewClient(context.Background(), config)
+		glideClient, err := glide.NewClient(config)
 		if err != nil {
 			return err
 		}
