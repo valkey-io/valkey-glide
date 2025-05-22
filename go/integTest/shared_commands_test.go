@@ -7145,9 +7145,6 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
-	// TODO: Remove this skip when the test is ready to run
-	suite.T().Skip("Skipping test for now")
-
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
@@ -7176,9 +7173,6 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
-	// TODO: Remove this skip when the test is ready to run
-	suite.T().Skip("Skipping test for now")
-
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
@@ -7209,9 +7203,6 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
-	// TODO: Remove this skip when the test is ready to run
-	suite.T().Skip("Skipping test for now")
-
 	suite.SkipIfServerVersionLowerThanBy("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := "{key}" + uuid.New().String()
