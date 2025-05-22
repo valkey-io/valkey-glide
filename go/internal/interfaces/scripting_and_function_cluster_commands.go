@@ -59,7 +59,11 @@ type ScriptingAndFunctionClusterCommands interface {
 
 	FunctionDeleteWithRoute(ctx context.Context, libName string, route options.RouteOption) (string, error)
 
+	FunctionKill(ctx context.Context) (string, error)
+
 	FunctionKillWithRoute(ctx context.Context, route options.RouteOption) (string, error)
+
+	FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error)
 
 	FunctionListWithRoute(
 		ctx context.Context,
@@ -67,9 +71,15 @@ type ScriptingAndFunctionClusterCommands interface {
 		route options.RouteOption,
 	) (models.ClusterValue[[]models.LibraryInfo], error)
 
+	FunctionDump(ctx context.Context) (string, error)
+
 	FunctionDumpWithRoute(ctx context.Context, route config.Route) (models.ClusterValue[string], error)
 
+	FunctionRestore(ctx context.Context, payload string) (string, error)
+
 	FunctionRestoreWithRoute(ctx context.Context, payload string, route config.Route) (string, error)
+
+	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy constants.FunctionRestorePolicy) (string, error)
 
 	FunctionRestoreWithPolicyWithRoute(
 		ctx context.Context,
