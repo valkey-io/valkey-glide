@@ -2,11 +2,17 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { BaseClient, DecoderOption, GlideString } from "../BaseClient";
-import { Batch, ClusterBatch } from "../Batch";
-import { ConditionalChange } from "../Commands";
-import { GlideClient } from "../GlideClient";
-import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
+import {
+    BaseClient,
+    Batch,
+    ClusterBatch,
+    ConditionalChange,
+    DecoderOption,
+    GlideClient,
+    GlideClusterClient,
+    GlideString,
+    RouteOption,
+} from "..";
 
 export type ReturnTypeJson<T> = T | (T | null)[];
 export type UniversalReturnTypeJson<T> = T | T[];

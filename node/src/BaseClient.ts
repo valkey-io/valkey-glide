@@ -11,22 +11,6 @@ import {
     Writer,
 } from "protobufjs/minimal";
 import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    createLeakedOtelSpan,
-    dropOtelSpan,
-    getStatistics,
-    valueFromSplitPointer,
-} from "../build-ts/native";
-import {
-    command_request,
-    connection_request,
-    response,
-} from "../build-ts/ProtobufMessage";
-import {
     AggregationType,
     BaseScanOptions,
     BatchOptions,
@@ -40,8 +24,15 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClosingError,
     ClusterBatchOptions,
+    ConfigurationError,
+    ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -51,20 +42,29 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     HScanOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
     ListDirection,
+    Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    OpenTelemetry,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RequestError,
     RestoreOptions,
+    RouteOption,
+    Routes,
     ScoreFilter,
+    Script,
     SearchOrigin,
     SetOptions,
     SortOptions,
+    StartSocketConnection,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -73,6 +73,8 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    TimeoutError,
+    ValkeyError,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -142,6 +144,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLeakedOtelSpan,
     createMGet,
     createMSet,
     createMSetNX,
@@ -246,25 +249,15 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
+    dropOtelSpan,
+    getStatistics,
+    valueFromSplitPointer,
+} from ".";
 import {
-    ClosingError,
-    ConfigurationError,
-    ConnectionError,
-    ExecAbortError,
-    RequestError,
-    TimeoutError,
-    ValkeyError,
-} from "./Errors";
-import { GlideClientConfiguration } from "./GlideClient";
-import {
-    GlideClusterClientConfiguration,
-    RouteOption,
-    Routes,
-} from "./GlideClusterClient";
-import { Logger } from "./Logger";
-import { OpenTelemetry } from "./OpenTelemetry";
-
+    command_request,
+    connection_request,
+    response,
+} from "../build-ts/ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
