@@ -12,6 +12,14 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 - **Stability and Fault Tolerance**: We brought our years of experience to create a bulletproof client.
 - **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
 
+## Key Features
+- **[AZ Affinity](https://valkey.io/blog/az-affinity-strategy/)** – Ensures low-latency connections and minimal cross-zone costs by routing read traffic to replicas in the clients availability zone.
+- **[PubSub Auto-Reconnection](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=PubSub%20Support,Receiving%2C%20and%20Unsubscribing.)** – Seamless background resubscription on topology updates or disconnection.
+- **[Sharded PubSub](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=Receiving%2C%20and%20Unsubscribing.-,Subscribing,routed%20to%20the%20server%20holding%20the%20slot%20for%20the%20command%27s%20channel.,-Receiving)** – Native support for sharded PubSub across cluster slots.
+- **[Cluster-Aware MGET/MSET/DEL/FLUSHALL](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling:~:text=Multi%2DSlot%20Command%20Execution,JSON.MGET)** – Execute multi-key commands across cluster slots without manual key grouping.
+- **[Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)** – Unified key iteration across shards using a consistent, high-level API for cluster environments.
+- **Support for TS / CJS / MJS** – Fully compatible with modern and legacy JavaScript/TypeScript runtimes.
+
 ## Supported Engine Versions
 
 Valkey GLIDE is API-compatible with the following engine versions:
@@ -43,7 +51,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Node](./node/README.md)
 - [Go](./go/README.md)
 
-**General Concepts:** 
+**General Concepts:**
 - [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
 - [Connection Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#connection-management)
 - [Multi-Slot Command Handling](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling)

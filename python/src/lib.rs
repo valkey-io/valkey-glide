@@ -1,15 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use bytes::Bytes;
+use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::Telemetry;
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
 use glide_core::start_socket_listener;
-use glide_core::Telemetry;
-use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
-use pyo3::Python;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;

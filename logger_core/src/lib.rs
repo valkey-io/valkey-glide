@@ -9,13 +9,13 @@ use std::{
 use tracing::{self, event};
 use tracing_appender::rolling::{RollingFileAppender, RollingWriter, Rotation};
 use tracing_subscriber::{
+    Registry,
     filter::Filtered,
     fmt::{
-        format::{DefaultFields, Format},
         Layer,
+        format::{DefaultFields, Format},
     },
     layer::Layered,
-    Registry,
 };
 
 use tracing_subscriber::{
@@ -284,7 +284,7 @@ mod tests {
         // Create the directory
         assert!(std::fs::create_dir_all(&dir_path).is_ok());
 
-        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        unsafe { std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path) };
         assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
         assert!(std::fs::metadata(&dir_path).is_ok());
 
@@ -295,14 +295,14 @@ mod tests {
         assert!(std::fs::create_dir_all(&dir_path).is_ok());
         assert!(std::fs::metadata(&dir_path).is_ok());
 
-        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        unsafe { std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path) };
         assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
 
         // make sure we are starting fresh
         let _ = std::fs::remove_dir_all(&dir_path);
 
         // Case 3: empty variable is not acceptable
-        std::env::set_var(ENV_GLIDE_LOG_DIR, "");
+        unsafe { std::env::set_var(ENV_GLIDE_LOG_DIR, "") };
         assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_none());
     }
 }

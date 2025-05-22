@@ -61,6 +61,7 @@ from glide.constants import (
     TXInfoStreamFullResponse,
     TXInfoStreamResponse,
 )
+from glide.exceptions import RequestError
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -6649,6 +6650,10 @@ class CoreCommands(Protocol):
             args.append("REPLACE")
         if absttl is True:
             args.append("ABSTTL")
+        if idletime is not None and frequency is not None:
+            raise RequestError(
+                "syntax error: IDLETIME and FREQ cannot be set at the same time."
+            )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:

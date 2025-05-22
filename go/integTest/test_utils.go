@@ -104,3 +104,32 @@ func createLuaLibWithLongRunningFunction(libName, funcName string, timeout int, 
 
 	return code.String()
 }
+
+func CreateLongRunningLuaScript(timeout int, readonly bool) string {
+	var code strings.Builder
+
+	// Write header
+	if readonly {
+		code.WriteString("  local started = tonumber(redis.pcall('time')[1])\n" +
+			"  while (true) do\n" +
+			"    local now = tonumber(redis.pcall('time')[1])\n" +
+			"    if now > started + ")
+		code.WriteString(strconv.Itoa(timeout))
+		code.WriteString(" then\n" +
+			"      return 'Timed out ")
+		code.WriteString(strconv.Itoa(timeout))
+		code.WriteString(" sec'\n" +
+			"    end\n" +
+			"  end\n")
+	} else {
+		code.WriteString("redis.call('SET', KEYS[1], 'value')\n" +
+			"  local start = redis.call('time')[1]\n" +
+			"  while redis.call('time')[1] - start < ")
+		code.WriteString(strconv.Itoa(timeout))
+		code.WriteString(" do\n" +
+			"      redis.call('SET', KEYS[1], 'value')\n" +
+			"   end\n")
+	}
+
+	return code.String()
+}

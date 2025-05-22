@@ -2,14 +2,17 @@
 
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
+use crate::client::get_or_init_runtime;
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
-    command, command_request, Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes,
+    Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes, command, command_request,
 };
 use crate::connection_request::ConnectionRequest;
-use crate::errors::{error_message, error_type, RequestErrorType};
+use crate::errors::{RequestErrorType, error_message, error_type};
 use crate::response;
 use crate::response::Response;
+use ClosingReason::*;
+use PipeListeningResult::*;
 use bytes::Bytes;
 use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
@@ -29,19 +32,17 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
-use std::sync::RwLock;
-use std::{str, thread};
+use std::str;
+use std::sync::{Arc, RwLock};
+use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::runtime::Builder;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Sender, channel};
 use tokio::task;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
-use ClosingReason::*;
-use PipeListeningResult::*;
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";
@@ -186,10 +187,12 @@ async fn write_result(
     resp_result: ClientUsageResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
+    command_span_ptr: Option<u64>,
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.is_push = false;
+    response.root_span_ptr = command_span_ptr;
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
@@ -309,14 +312,15 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    let child_span = cmd.span().map(|span| span.add_span("send_command"));
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    if let Some(child_span) = child_span {
-        child_span.end();
-    }
+
+    if let Some(c) = child_span {
+        c.end()
+    };
     res
 }
 
@@ -377,12 +381,36 @@ async fn invoke_script(
         .map_err(|err| err.into())
 }
 
+/// Creates a child span for telemetry if telemetry is enabled
+fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> {
+    // Early return if no parent span is provided
+    let parent_span = span?;
+
+    match parent_span.add_span(name) {
+        Ok(child_span) => Some(child_span),
+        Err(error_msg) => {
+            log_error(
+                "OpenTelemetry error",
+                format!(
+                    "Failed to create child span with name `{}`. Error: {:?}",
+                    name, error_msg
+                ),
+            );
+            None
+        }
+    }
+}
+
 async fn send_batch(
     request: Batch,
     client: &mut Client,
     routing: Option<RoutingInfo>,
+    command_span: Option<GlideSpan>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
+    pipeline.set_pipeline_span(command_span);
+    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
+
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -390,7 +418,7 @@ async fn send_batch(
         pipeline.add_command(get_redis_command(&command)?);
     }
 
-    match request.is_atomic {
+    let res = match request.is_atomic {
         true => client
             .send_transaction(
                 &pipeline,
@@ -413,7 +441,12 @@ async fn send_batch(
             )
             .await
             .map_err(|err| err.into()),
-    }
+    };
+
+    if let Some(c) = child_span {
+        c.end()
+    };
+    res
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -502,12 +535,16 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             true => match request.command {
                 Some(action) => match action {
                     command_request::Command::ClusterScan(cluster_scan_command) => {
+                        //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {
                         match get_redis_command(&command) {
-                            Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
-                                Ok(routes) => send_command(cmd, client, routes).await,
+                            Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
+                                Ok(routes) => {
+                                    cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
+                                    send_command(cmd, client, routes).await
+                                }
                                 Err(e) => Err(e),
                             },
                             Err(e) => Err(e),
@@ -515,7 +552,11 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     }
                     command_request::Command::Batch(batch) => {
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_batch(batch, &mut client, routes).await,
+                            Ok(routes) => {
+                                let otel_command_span =
+                                    get_unsafe_span_from_ptr(request.root_span_ptr);
+                                send_batch(batch, &mut client, routes, otel_command_span).await
+                            }
                             Err(e) => Err(e),
                         }
                     }
@@ -580,7 +621,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             client_clone.release_inflight_request();
         }
 
-        let _res = write_result(result, request.callback_idx, &writer).await;
+        let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
     });
 }
 
@@ -594,6 +635,34 @@ async fn handle_requests(
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
+}
+
+/// This function converts a raw pointer to a GlideSpan into a safe Rust reference.
+/// It handles the unsafe pointer operations internally, incrementing the reference count
+/// to ensure the span remains valid while in use.
+///
+/// # Safety
+///
+/// This function is marked as unsafe because it dereferences a raw pointer. The caller
+/// must ensure that:
+/// * The pointer is valid and points to a properly allocated GlideSpan
+/// * The pointer is properly aligned
+/// * The data pointed to is not modified while the returned reference is in use
+/// * The pointer is not used after the referenced data is dropped
+///
+/// # Arguments
+///
+/// * `command_span` - An optional raw pointer (as u64) to a GlideSpan
+///
+/// # Returns
+///
+/// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
+/// * `None` - If the pointer is None
+fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
+    command_span.map(|command_span| unsafe {
+        Arc::increment_strong_count(command_span as *const GlideSpan);
+        (*Arc::from_raw(command_span as *const GlideSpan)).clone()
+    })
 }
 
 pub fn close_socket(socket_path: &String) {
@@ -610,7 +679,7 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), 0, writer).await?;
+    write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
 }
 
@@ -869,7 +938,6 @@ pub fn start_socket_listener_internal<InitCallback>(
             return;
         }
     }
-
     // Retry with write lock, will be dropped upon the function completion
     let mut sockets_write_guard = INITIALIZED_SOCKETS
         .write()
@@ -881,87 +949,90 @@ pub fn start_socket_listener_internal<InitCallback>(
 
     let (tx, rx) = std::sync::mpsc::channel();
     let socket_path_cloned = socket_path.clone();
-    let init_callback_cloned = init_callback.clone();
-    let tx_cloned = tx.clone();
-    thread::Builder::new()
-        .name("socket_listener_thread".to_string())
-        .spawn(move || {
-            let init_result = {
-                let runtime = match Builder::new_current_thread().enable_all().build() {
-                    Err(err) => {
-                        log_error(
-                            "listen_on_socket",
-                            format!("Error failed to create a new tokio thread: {err}"),
-                        );
-                        return Err(err);
-                    }
-                    Ok(runtime) => runtime,
-                };
-
-                runtime.block_on(async move {
-                    let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
-                        Err(err) => {
-                            log_error(
-                                "listen_on_socket",
-                                format!("Error failed to bind listening socket: {err}"),
-                            );
-                            return Err(err);
-                        }
-                        Ok(listener_socket) => listener_socket,
-                    };
-                    // Restrict permissions: rw------- (owner only)
-                    fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))?;
-
-                    // Signal initialization is successful.
-                    // IMPORTANT:
-                    // tx.send() must be called before init_callback_cloned() to ensure runtimes, such as Python, can properly complete the main function
-                    let _ = tx.send(true);
-                    init_callback_cloned(Ok(socket_path_cloned.clone()));
-
-                    let local_set_pool = LocalPoolHandle::new(num_cpus::get());
-                    loop {
-                        match listener_socket.accept().await {
-                            Ok((stream, _addr)) => {
-                                local_set_pool
-                                    .spawn_pinned(move || listen_on_client_stream(stream));
-                            }
-                            Err(err) => {
-                                log_error(
-                                    "listen_on_socket",
-                                    format!("Error accepting connection: {err}"),
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // ensure socket file removal
-                    drop(listener_socket);
-                    let _ = std::fs::remove_file(socket_path_cloned.clone());
-
-                    // no more listening on socket - update the sockets db
-                    let mut sockets_write_guard = INITIALIZED_SOCKETS
-                        .write()
-                        .expect("Failed to acquire sockets db write guard");
-                    sockets_write_guard.remove(&socket_path_cloned);
-                    Ok(())
-                })
-            };
-
-            if let Err(err) = init_result {
-                init_callback(Err(err.to_string()));
-                let _ = tx_cloned.send(false);
-            }
-            Ok(())
-        })
-        .expect("Thread spawn failed. Cannot report error because callback was moved.");
-
-    // wait for thread initialization signaling, callback invocation is done in the thread
-    let _ = rx.recv().map(|res| {
-        if res {
-            sockets_write_guard.insert(socket_path);
+    let glide_rt = match get_or_init_runtime() {
+        Ok(handle) => handle,
+        Err(err) => {
+            init_callback(Err(err));
+            return;
         }
+    };
+
+    glide_rt.runtime.spawn(async move {
+        let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
+            Err(err) => {
+                log_error(
+                    "listen_on_socket",
+                    format!("Failed to bind listening socket: {err}"),
+                );
+
+                if let Err(err) = tx.send(Err(err)) {
+                    log_error(
+                        "listen_on_socket",
+                        format!(
+                            "Failed to notify about socket binding failure.
+                      Channel send error: {err:?}"
+                        ),
+                    );
+                }
+                return;
+            }
+            Ok(listener_socket) => listener_socket,
+        };
+
+        // Restrict permissions: rw------- (owner only)
+        if let Err(err) =
+            fs::set_permissions(&socket_path_cloned, fs::Permissions::from_mode(0o600))
+        {
+            log_error(
+                "listen_on_socket",
+                format!("Failed to set socket path permissions: {err:?}"),
+            );
+            let _ = tx.send(Err(err));
+            return;
+        }
+
+        // Signal initialization is successful.
+        let _ = tx.send(Ok(socket_path_cloned.clone()));
+
+        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
+        loop {
+            match listener_socket.accept().await {
+                Ok((stream, _addr)) => {
+                    local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
+                }
+                Err(err) => {
+                    log_error(
+                        "listen_on_socket",
+                        format!("Error accepting connection: {err}"),
+                    );
+                    break;
+                }
+            }
+        }
+
+        // ensure socket file removal
+        drop(listener_socket);
+        let _ = std::fs::remove_file(socket_path_cloned.clone());
+
+        // no more listening on socket - update the sockets db
+        let mut sockets_write_guard = INITIALIZED_SOCKETS
+            .write()
+            .expect("Failed to acquire sockets db write guard");
+        sockets_write_guard.remove(&socket_path_cloned);
     });
+
+    match rx.recv()
+        .map_err(|e| e.to_string()) // recv error -> String
+        .and_then(|res| res.map_err(|e| e.to_string())) // inner thread error -> String
+        {
+            Ok(socket_path) => {
+                sockets_write_guard.insert(socket_path.clone());
+                init_callback(Ok(socket_path));
+            }
+            Err(err) => {
+                init_callback(Err(err));
+            }
+        }
 }
 
 /// Creates a new thread with a main loop task listening on the socket for new connections.

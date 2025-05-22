@@ -65,10 +65,10 @@ mod tests {
     use std::ptr::from_mut;
 
     use super::*;
-    use crate::command_request::{command, command_request};
     use crate::command_request::{Command, CommandRequest, RequestType};
+    use crate::command_request::{command, command_request};
     use bytes::BufMut;
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{Rng, distributions::Alphanumeric};
     use rstest::rstest;
 
     fn write_length(buffer: &mut BytesMut, length: u32) {

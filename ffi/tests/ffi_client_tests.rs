@@ -6,15 +6,15 @@ use lazy_static::lazy_static;
 use protobuf::Message;
 use rstest::rstest;
 use std::collections::HashMap;
-use std::ffi::{c_char, c_ulong, c_void, CStr};
+use std::ffi::{CStr, c_char, c_ulong, c_void};
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc, RwLock,
+    atomic::{AtomicUsize, Ordering},
 };
 use tokio::runtime::Runtime;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 pub(crate) struct AsyncMetrics {
     pub success_count: AtomicUsize,

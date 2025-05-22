@@ -1,10 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
+use crate::errors::{ExceptionType, FFIError, handle_errors, handle_panics, throw_java_exception};
 use jni::{
+    JNIEnv,
     objects::{JByteArray, JClass, JLongArray, JString},
     sys::{jboolean, jdouble, jlong},
-    JNIEnv,
 };
 use redis::Value;
 use std::ptr::from_mut;

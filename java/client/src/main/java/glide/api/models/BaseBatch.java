@@ -5286,7 +5286,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull RestoreOptions restoreOptions) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
-                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions)));
+                buildCommand(
+                        Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions.toArgs())));
         return getThis();
     }
 
@@ -7232,6 +7233,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * before this command, both in the case where the specified number of replicas are reached, or
      * when the timeout is reached.
      *
+     * @apiNote This command clashes with Java's built-in wait method. Ensure you are using the right
+     *     one.
      * @see <a href="https://valkey.io/commands/wait">valkey.io</a> for details.
      * @param numReplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds.

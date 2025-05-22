@@ -2,8 +2,33 @@ plugins {
     id 'java'
     id 'java-library'
     id 'io.freefair.lombok' version '8.6'
-    id 'jacoco'
     id 'com.diffplug.spotless' version '6.25.0'
+    id 'jacoco'
+}
+
+allprojects {
+    // JaCoCo section (common config for code coverage)
+    apply plugin: 'jacoco'
+
+    jacoco {
+        toolVersion = "0.8.9"
+    }
+
+    jacocoTestCoverageVerification {
+        violationRules {
+            rule {
+                element = 'CLASS'
+                excludes = [
+                    'glide.models.protobuf.*',
+                    'glide.connectors.resources.*',
+                    'glide.connectors.handlers.*'
+                ]
+            }
+        }
+    }
+
+    check.dependsOn jacocoTestCoverageVerification
+    // End of JaCoCo section
 }
 
 repositories {
@@ -26,8 +51,12 @@ subprojects {
         mavenCentral()
     }
     // minimal java compatibility level
-    plugins.withId('java') {
-        sourceCompatibility = targetCompatibility = "11"
+    apply plugin: 'java'
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(11))
+            vendor = JvmVendorSpec.ADOPTIUM // Temurin
+        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()
@@ -37,8 +66,6 @@ subprojects {
             events "started", "skipped", "passed", "failed"
             showStandardStreams true
         }
-        // TODO: add jacoco with code coverage
-        // finalizedBy jacocoTestReport, jacocoTestCoverageVerification
     }
 
     ext {
@@ -62,47 +89,6 @@ subprojects {
         }
     }
 }
-
-// JaCoCo section (code coverage by unit tests)
-jacoco {
-    toolVersion = "0.8.9"
-}
-jacocoTestReport {
-    reports {
-        xml.configure { enabled false }
-        csv.configure { enabled false }
-    }
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
-    }
-}
-jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            element = 'CLASS'
-            excludes = [
-            ]
-            limit {
-                counter = 'LINE'
-                minimum = 1.0
-            }
-            limit {
-                counter = 'BRANCH'
-                minimum = 1.0
-            }
-        }
-    }
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
-        }))
-    }
-}
-// TODO: add jacoco with code coverage
-// check.dependsOn jacocoTestCoverageVerification
-// End of JaCoCo section
 
 // Spotless section (code style)
 spotless {

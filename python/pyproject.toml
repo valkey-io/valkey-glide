@@ -1,9 +1,10 @@
 [build-system]
-requires = ["maturin==0.14.17"]
+requires = ["maturin==1.8.6"]
 build-backend = "maturin"
 
 [project]
 name = "valkey-glide"
+dynamic = ["version"]
 description = "An open source Valkey client library that supports Valkey and Redis open source 6.2, 7.0, 7.2 and 8.0."
 requires-python = ">=3.9"
 dependencies = [
@@ -23,6 +24,9 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Framework :: AsyncIO",
+    "Framework :: Trio",
+    "Framework :: AnyIO",
 ]
 
 [tool.isort]
@@ -35,3 +39,6 @@ target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.mypy]
 exclude = "^(.*\\/)?(\\.env|python/python/glide/protobuf|utils/release-candidate-testing|target|ort)(\\/|$)"
+
+[tool.maturin]
+python-source = "python"
