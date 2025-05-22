@@ -427,11 +427,13 @@ class BaseClient(CoreCommands):
                 encoded_args
             )
         
-        # Create a span if OpenTelemetry is enabled
-        command_name = RequestType.Name(request_type)
-        span_pair = create_leaked_otel_span(command_name)
-        if span_pair:
-            request.root_span_ptr = span_pair
+        # Create a span if OpenTelemetry is enabled and should sample
+        from glide.opentelemetry import OpenTelemetry
+        if OpenTelemetry.should_sample():
+            command_name = RequestType.Name(request_type)
+            span_pair = create_leaked_otel_span(command_name)
+            if span_pair:
+                request.root_span_ptr = span_pair
             
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
@@ -472,10 +474,12 @@ class BaseClient(CoreCommands):
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
         
-        # Create a span if OpenTelemetry is enabled
-        span_pair = create_leaked_otel_span("Batch")
-        if span_pair:
-            request.root_span_ptr = span_pair
+        # Create a span if OpenTelemetry is enabled and should sample
+        from glide.opentelemetry import OpenTelemetry
+        if OpenTelemetry.should_sample():
+            span_pair = create_leaked_otel_span("Batch")
+            if span_pair:
+                request.root_span_ptr = span_pair
             
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
@@ -509,10 +513,12 @@ class BaseClient(CoreCommands):
                 encoded_args
             )
             
-        # Create a span if OpenTelemetry is enabled
-        span_pair = create_leaked_otel_span(f"Script:{hash}")
-        if span_pair:
-            request.root_span_ptr = span_pair
+        # Create a span if OpenTelemetry is enabled and should sample
+        from glide.opentelemetry import OpenTelemetry
+        if OpenTelemetry.should_sample():
+            span_pair = create_leaked_otel_span(f"Script:{hash}")
+            if span_pair:
+                request.root_span_ptr = span_pair
             
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
