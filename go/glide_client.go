@@ -679,10 +679,10 @@ func (client *Client) RandomKey(ctx context.Context) (models.Result[string], err
 //	`OK` if function is terminated. Otherwise, throws an error.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
-func (client *GlideClient) FunctionKill(ctx context.Context) (string, error) {
+func (client *Client) FunctionKill(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -762,7 +762,7 @@ func (client *Client) FunctionDelete(ctx context.Context, libName string) (strin
 //	A list of info about queried libraries and their functions.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
-func (client *GlideClient) FunctionList(ctx context.Context, query FunctionListQuery) ([]LibraryInfo, error) {
+func (client *Client) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
 	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
 	if err != nil {
 		return nil, err
@@ -787,10 +787,10 @@ func (client *GlideClient) FunctionList(ctx context.Context, query FunctionListQ
 //	The serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
-func (client *GlideClient) FunctionDump(ctx context.Context) (string, error) {
+func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -813,10 +813,10 @@ func (client *GlideClient) FunctionDump(ctx context.Context) (string, error) {
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
-func (client *GlideClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
+func (client *Client) FunctionRestore(ctx context.Context, payload string) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -840,14 +840,14 @@ func (client *GlideClient) FunctionRestore(ctx context.Context, payload string) 
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
-func (client *GlideClient) FunctionRestoreWithPolicy(
+func (client *Client) FunctionRestoreWithPolicy(
 	ctx context.Context,
 	payload string,
-	policy options.FunctionRestorePolicy,
+	policy constants.FunctionRestorePolicy,
 ) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }

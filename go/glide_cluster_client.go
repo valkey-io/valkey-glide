@@ -1763,10 +1763,10 @@ func (client *ClusterClient) FunctionDeleteWithRoute(
 //	`OK` if function is terminated. Otherwise, throws an error.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
-func (client *GlideClusterClient) FunctionKill(ctx context.Context) (string, error) {
+func (client *ClusterClient) FunctionKill(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -1823,7 +1823,7 @@ func (client *ClusterClient) FunctionKillWithRoute(ctx context.Context, route op
 //	A list of info about queried libraries and their functions.
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
-func (client *GlideClusterClient) FunctionList(ctx context.Context, query FunctionListQuery) ([]LibraryInfo, error) {
+func (client *ClusterClient) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
 	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
 	if err != nil {
 		return nil, err
@@ -2012,10 +2012,10 @@ func (client *ClusterClient) PubSubShardNumSub(ctx context.Context, channels ...
 //	The serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
-func (client *GlideClusterClient) FunctionDump(ctx context.Context) (string, error) {
+func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleStringResponse(result)
 }
@@ -2083,10 +2083,10 @@ func (client *ClusterClient) FunctionDumpWithRoute(
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
-func (client *GlideClusterClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
+func (client *ClusterClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
@@ -2146,14 +2146,14 @@ func (client *ClusterClient) FunctionRestoreWithRoute(
 //	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
-func (client *GlideClusterClient) FunctionRestoreWithPolicy(
+func (client *ClusterClient) FunctionRestoreWithPolicy(
 	ctx context.Context,
 	payload string,
-	policy options.FunctionRestorePolicy,
+	policy constants.FunctionRestorePolicy,
 ) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
-		return DefaultStringResponse, err
+		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
 }
