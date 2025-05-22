@@ -1827,16 +1827,15 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
-    fn test_async_cluster_refresh_topology_is_blocking() {
-        // Test: Head-of-Line Blocking During Slot Refresh
+    fn test_async_cluster_refresh_topology_is_not_blocking() {
+        // Test: Non-Head-of-Line Blocking During Slot Refresh
         //
         // This test verifies that during cluster topology refresh operations triggered by
-        // MOVED errors, the implementation exhibits head-of-line blocking behavior.
-        // When a client receives a MOVED error (indicating topology changes), it needs to
-        // refresh its slot mapping. This process blocks all subsequent commands until the
-        // refresh completes.
+        // MOVED errors, the implementation does not exhibit head-of-line blocking behavior.
+        // When a client receives a MOVED error (indicating topology changes), it refreshes
+        // its slot mapping in the background, allowing other commands to proceed concurrently.
         //
-        // The test employs the following strategy to verify the blocking behavior:
+        // The test employs the following strategy to verify the non-blocking behavior:
         //
         // 1. Trigger Slot Refresh: Send a blocking BLPOP command that will receive a MOVED error when
         //    slot 0 is migrated, initiating a topology refresh operation.
@@ -1844,11 +1843,12 @@ mod cluster_async {
         // 2. Atomicly migrate slot and pause clients: Use SET SLOT and CLIENT PAUSE to artificially delay the node's
         //    response during the refresh operation.
         //
-        // 3. Verify Blocking Behavior: While the refresh is in progress, send a GET command
-        //    to a different node in the cluster and verify it times out due to being blocked.
+        // 3. Verify Non-Blocking Behavior: While the refresh is in progress, send a GET command
+        //    to a different node in the cluster. Unlike the blocking implementation, this command
+        //    should complete successfully without timing out.
         //
-        // This test intentionally demonstrates how topology refresh operations can block
-        // subsequent commands, even those directed to healthy nodes in the cluster.
+        // This test intentionally demonstrates how topology refresh operations is no longer blocking
+        // subsequent commands.
 
         // Create a cluster with 3 nodes
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -1905,21 +1905,19 @@ mod cluster_async {
                 // This GET should time out as it's blocked by the topology refresh
                 let get_result = tokio::time::timeout(
                     Duration::from_millis(1000),
-                    client1.get::<_, redis::Value>(other_shard_key),
+                    client1.get::<_, String>(other_shard_key)
                 )
                 .await;
 
-                // Assert that we got a timeout error due to head-of-line blocking
-                assert!(get_result.is_err());
-                assert!(matches!(
-                    get_result.unwrap_err(),
-                    tokio::time::error::Elapsed { .. }
-                ));
+                // Assert that the GET succeeded (no timeout or error)
+                assert!(get_result.is_ok());
+                let result = get_result.unwrap().unwrap();
+                assert_eq!(result, "value2");
 
                 true
             });
 
-            // STEP 4: Give the BLPOP time to start blocking - it will have 1500 ms to wait for MOVED
+            // STEP 4: Give the BLPOP time to start blocking
             sleep(futures_time::time::Duration::from_millis(500)).await;
 
             // STEP 5: Trigger migration to cause MOVED error and delay the response
@@ -1955,7 +1953,7 @@ mod cluster_async {
 
             assert!(
                 result,
-                "The test should pass, demonstrating blocking behavior"
+                "The test should pass, demonstrating non blocking behavior"
             );
 
             Ok::<_, RedisError>(())
@@ -2065,379 +2063,6 @@ mod cluster_async {
             panic!("Could not find another master node in CLUSTER SHARDS output");
         }
 
-        (node_id_for_slot0.unwrap(), other_node_id.unwrap())
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_refresh_topology_non_blocking() {
-        // # Test: Non-Head-of-Line Blocking During Slot Refresh
-        //
-        // ## Purpose
-        // This test verifies that the implementation of `spawn_refresh_slots_task` successfully
-        // prevents head-of-line blocking during cluster topology refresh operations. Prior to this
-        // implementation, when a MOVED error triggered a topology refresh, all subsequent commands
-        // would be blocked until the refresh completed, causing potential timeouts and performance
-        // degradation.
-        //
-        // ## Background
-        // In Valkey Cluster, when a client receives a MOVED error (indicating topology changes),
-        // it needs to refresh its slot mapping. In the previous implementation, this would cause
-        // all subsequent commands to wait for the refresh to complete, leading to head-of-line
-        // blocking. The `spawn_refresh_slots_task` improvement moves this refresh operation to a
-        // background task, allowing other commands to proceed concurrently.
-        //
-        // ## Test Strategy
-        // The test employs the following strategy to verify non-blocking behavior:
-        //
-        // 1. **Trigger Slot Refresh**: Send a GET command to an incorrect route to trigger a MOVED
-        //    error, which initiates a background slot refresh operation.
-        //
-        // 2. **Delay Refresh Completion**: In the same pipeline, issue a CLIENT PAUSE command to
-        //    artificially delay the node's response during the refresh operation.
-        //
-        // 3. **Verify Non-Blocking Behavior**: While the first operation is still pending (due to
-        //    the pause), send a second GET command to a different node in the cluster.
-        //
-        // 4. **Assert Success**: The second GET should succeed immediately without waiting for
-        //    the first operation to complete, demonstrating that the slot refresh is truly
-        //    happening in the background.
-        //
-        // ## Expected Outcomes
-        // - With the old implementation (blocking): The second GET would time out waiting for the
-        //   slot refresh to complete.
-        // - With the new implementation (non-blocking): The second GET completes successfully while
-        //   the refresh is still in progress.
-        //
-        // ## Technical Implementation
-        // - We use a 3-node cluster for a realistic test environment
-        // - The response timeout is set to match the CLIENT PAUSE duration (2000ms)
-        // - We ensure test keys map to different nodes in the cluster
-        // - A deliberate wrong route is chosen to guarantee a MOVED error
-        // - The CLIENT PAUSE command ensures the refresh operation doesn't complete immediately
-        // - Success of the test is determined by the second GET command returning without timeout
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3, // Use 3 nodes for a realistic test scenario
-            0,
-            |builder| {
-                builder
-                    .use_protocol(ProtocolVersion::RESP3)
-                    .response_timeout(Duration::from_millis(2000)) // Match with CLIENT PAUSE timeout
-                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
-                    .retries(0)
-            },
-            false,
-        );
-
-        block_on_all(async move {
-            let mut connection = cluster.async_connection(None).await;
-
-            // 1. Set up initial data - create keys on two different nodes
-            let key1 = "test_key1"; // Will be used to trigger the MOVED error
-            let key2 = "test_key2"; // Will be used to test non-blocking behavior
-
-            // Calculate slots for our test keys to ensure they're on different nodes
-            let slot1 = get_slot(key1.as_bytes());
-            let slot2 = get_slot(key2.as_bytes());
-
-            // Ensure the keys are on different nodes
-            assert_ne!(
-                slot1 / 5461,
-                slot2 / 5461,
-                "Test keys must be on different nodes for a valid test"
-            );
-
-            // Set initial values
-            let _: () = connection.set(key1, "value1").await?;
-            let _: () = connection.set(key2, "value2").await?;
-
-            // 2. Create a route that will definitely cause a MOVED error
-            let wrong_route = Route::new(
-                (slot1 + 6000) % 16384, // Create a slot far from original to ensure MOVED error
-                SlotAddr::Master,
-            );
-
-            // 3. Send the pipeline that will trigger background refresh and pause the node
-            let mut pipe = redis::pipe();
-            pipe.atomic()
-                .cmd("GET")                
-                .arg(key1)
-                .ignore()
-                .cmd("CLIENT")
-                .arg("PAUSE")
-                .arg(2000) // Pause for 2 seconds
-                .ignore();
-
-            // Send pipeline to wrong route to trigger MOVED error and background refresh
-            let _ = connection
-                .route_pipeline(
-                    &pipe,
-                    0,
-                    2,
-                    Some(SingleNodeRoutingInfo::SpecificNode(wrong_route)),
-                    None,
-                )
-                .await;
-
-            // 4. Immediately try to get the second key while refresh is happening in background
-            // This command should not be blocked despite the ongoing refresh
-            println!("Sending the 2nd GET");
-            let result: RedisResult<String> = connection.get(key2).await;
-
-            // 5. Assert that the command completed successfully without timing out
-            assert!(
-                result.is_ok(),
-                "The second GET command should succeed while refresh is in progress"
-            );
-
-            assert_eq!(
-                result.unwrap(),
-                "value2-",
-                "The second GET command returned incorrect value"
-            );
-
-            Ok::<_, RedisError>(())
-        })
-        .unwrap();
-    }
-
-    use chrono::prelude::*;
-
-    /// # Test: Non-Head-of-Line Blocking During Slot Refresh
-    ///
-    /// This test verifies that the implementation of `spawn_refresh_slots_task` prevents
-    /// head-of-line blocking during cluster topology refresh operations. It uses a real
-    /// cluster slot migration scenario to trigger a MOVED error and background refresh.
-    ///
-    /// ## Test Strategy
-    /// 1. We use two separate clients to the same cluster
-    /// 2. From client1, we start a BLPOP command on a key in slot 0
-    /// 3. From client2, we migrate slot 0 to a different node and introduce a delay
-    /// 4. The BLPOP fails with MOVED error which triggers slot refresh
-    /// 5. We immediately try to access a key in a different shard from client1
-    /// 6. If the implementation is non-blocking, the second command succeeds immediately
-    ///    without waiting for the slot refresh to complete
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_refresh_topology_non_blocking_2() {
-        // Create a cluster with 3 nodes
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| {
-                builder
-                    .response_timeout(Duration::from_millis(1000)) // Reasonable timeout
-                    .slots_refresh_rate_limit(Duration::from_secs(0), 0) // No throttling
-                    .retries(0) // No retries - we want to see the raw MOVED errors
-            },
-            false,
-        );
-
-        block_on_all(async move {
-            // STEP 1: Create two separate connections to the same cluster
-            let mut client1 = cluster.async_connection(None).await;
-            let mut client2 = cluster.async_connection(None).await;
-
-            // Get the node IDs of the nodes in the cluster
-            let shards_info = client1
-                .route_command(
-                    &cmd("CLUSTER").arg("SHARDS"),
-                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                        Route::new(0, SlotAddr::Master)
-                    )),
-                )
-                .await
-                .unwrap();
-            
-            // Extract current node ID for slot 0 and a different node ID for migration
-            let (_current_node_id, target_node_id) = extract_node_ids_from_shards(shards_info);
-            println!("target_node_id: {:?}", target_node_id);
-            
-            // STEP 2: Prepare a key that hashes to slot 0 and another key for a different shard
-            let slot0_key = "06S"; // This key should hash to slot 0
-            assert_eq!(get_slot(slot0_key.as_bytes()), 0);
-
-            // For a 3-node cluster with even distribution, slots would be roughly:
-            // Node 1: 0-5460, Node 2: 5461-10922, Node 3: 10923-16383
-            let other_shard_key = "foo"; // This key hashes to slot 12182
-            assert_eq!(get_slot(other_shard_key.as_bytes()), 12182);
-            // Verify it's in a different shard (different node would handle it)
-            assert!(get_slot(other_shard_key.as_bytes()) > 10922); // Make sure it's in the 3rd shard
-            
-            // Initialize the keys with values
-            // let _: () = client1.set(slot0_key, "value1").await.unwrap();
-            let _: () = client1.set(other_shard_key, "value2").await.unwrap();
-            
-            // STEP 3: Launch a background task that will issue a blocking command to slot 0
-            let client1_handle = tokio::spawn(async move {
-                // This BLPOP will block until a MOVED error occurs from the slot migration
-                let now = Local::now();
-                println!("[{}] Sending BLPOP", now.format("%Y-%m-%d %H:%M:%S"));
-                let blpop_result = client1.blpop::<_, String>(slot0_key, 0.0).await;
-                let now = Local::now();
-                println!("[{}] BLPOP ret val: {:?}", now.format("%Y-%m-%d %H:%M:%S"), blpop_result);
-                
-                // We expect this to fail with a MOVED error when the slot is migrated
-                assert!(blpop_result.is_err());
-                
-                // Now immediately try to access the other key, which should work
-                // without waiting for the slot refresh to complete
-                let now = Local::now();
-                println!("[{}] Sending GET", now.format("%Y-%m-%d %H:%M:%S"));
-                
-                // Wrap the GET request with run_with_timeout to enforce timeout from call time
-                let get_result: String = tokio::time::timeout(
-                    Duration::from_millis(1000), // Match the response_timeout from the test setup
-                    client1.get(other_shard_key)
-                ).await
-                .expect("GET request timed out - indicates head-of-line blocking")
-                .unwrap();
-                
-                assert_eq!(get_result, "value2");
-                let now = Local::now();
-                println!("[{}] GET returned {:?}", now.format("%Y-%m-%d %H:%M:%S"), get_result);
-                
-                // Return success to indicate test passed
-                true
-            });
-            
-            // STEP 4: Give the BLPOP command time to start blocking
-            sleep(futures_time::time::Duration::from_millis(500)).await;
-            
-            // STEP 5: From client2, initiate slot migration and then pause the target node
-            // This will both trigger a MOVED error for the BLPOP and slow down the refresh
-            let mut pipe = redis::pipe();
-            pipe.atomic()
-                .cmd("CLUSTER").arg("SETSLOT").arg("0").arg("NODE").arg(&target_node_id).ignore()
-                .cmd("CLIENT").arg("PAUSE").arg(3000).ignore();
-                
-            // Execute the pipeline
-            let now = Local::now();
-            println!("[{}] Sending the Pipeline", now.format("%Y-%m-%d %H:%M:%S"));
-            let ret = client2
-                .route_pipeline(
-                    &pipe,
-                    0,
-                    2,
-                    Some(SingleNodeRoutingInfo::SpecificNode(
-                        Route::new(0, SlotAddr::Master)
-                    )),
-                    None,
-                )
-                .await;
-
-            println!("Pipeline ret value:{:?}", ret);
-            
-            // STEP 6: Wait for the client1 handle to complete and check its result
-            let result = tokio::time::timeout(
-                Duration::from_secs(5), // Give it 5 seconds max
-                client1_handle
-            ).await.unwrap().unwrap();
-            
-            assert!(result, "The test should have succeeded");
-
-            assert!(false, "The test should have succeeded");
-            
-            Ok::<_, RedisError>(())
-        })
-        .unwrap();
-    }
-
-    /// Helper function to extract node IDs from CLUSTER SHARDS response
-    fn extract_node_ids_from_shards(shards_info: Value) -> (String, String) {
-        let mut node_id_for_slot0 = None;
-        let mut other_node_id = None;
-        
-        match &shards_info {
-            Value::Array(shards) => {
-                for shard in shards {
-                    if let Value::Array(shard_data) = shard {
-                        let mut slots = None;
-                        let mut nodes = None;
-                        
-                        // Extract slots and nodes arrays
-                        for i in (0..shard_data.len()).step_by(2) {
-                            if i + 1 >= shard_data.len() {
-                                continue; // No value for this key
-                            }
-                            
-                            if let Value::BulkString(key_bytes) = &shard_data[i] {
-                                let key = String::from_utf8_lossy(key_bytes);
-                                if key.contains("slots") {
-                                    slots = shard_data.get(i + 1);
-                                } else if key.contains("nodes") {
-                                    nodes = shard_data.get(i + 1);
-                                }
-                            }
-                        }
-                        
-                        // Check if this shard has slot 0
-                        let has_slot0 = if let Some(Value::Array(slot_ranges)) = slots {
-                            if slot_ranges.len() >= 2 {
-                                if let (Value::Int(start), Value::Int(end)) = (&slot_ranges[0], &slot_ranges[1]) {
-                                    *start <= 0 && *end >= 0
-                                } else {
-                                    false
-                                }
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        };
-                        
-                        // Extract node ID if this is the slot 0 shard or we need another node
-                        if let Some(Value::Array(nodes_array)) = nodes {
-                            if !nodes_array.is_empty() {
-                                if let Value::Array(node_data) = &nodes_array[0] {
-                                    let mut node_id = None;
-                                    
-                                    // Find the node ID in the node data
-                                    for i in (0..node_data.len()).step_by(2) {
-                                        if i + 1 >= node_data.len() {
-                                            continue;
-                                        }
-                                        
-                                        if let Value::BulkString(key_bytes) = &node_data[i] {
-                                            let key = String::from_utf8_lossy(key_bytes);
-                                            if key.contains("id") {
-                                                if let Value::BulkString(id_bytes) = &node_data[i + 1] {
-                                                    node_id = Some(String::from_utf8_lossy(id_bytes).to_string());
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    if let Some(id) = node_id {
-                                        if has_slot0 {
-                                            node_id_for_slot0 = Some(id);
-                                        } else if other_node_id.is_none() {
-                                            other_node_id = Some(id);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Break early if we found both IDs
-                        if node_id_for_slot0.is_some() && other_node_id.is_some() {
-                            break;
-                        }
-                    }
-                }
-            }
-            _ => panic!("Unexpected CLUSTER SHARDS response type: {:?}", shards_info),
-        }
-        
-        if node_id_for_slot0.is_none() {
-            panic!("Could not find master node for slot 0 in CLUSTER SHARDS output");
-        }
-        
-        if other_node_id.is_none() {
-            panic!("Could not find another master node in CLUSTER SHARDS output");
-        }
-        
         (node_id_for_slot0.unwrap(), other_node_id.unwrap())
     }
 
