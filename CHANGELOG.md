@@ -79,6 +79,8 @@
 * Go: Add Script Kill ([#3670](https://github.com/valkey-io/valkey-glide/pull/3670))
 * Go: Add Script Show ([#3668](https://github.com/valkey-io/valkey-glide/pull/3668))
 * Go: Add Function List ([#3673](https://github.com/valkey-io/valkey-glide/pull/3673))
+* Go: Move private types to internal packages ([#3841](https://github.com/valkey-io/valkey-glide/pull/3841))
+* Go: Move private interfaces to internal packages ([#3856](https://github.com/valkey-io/valkey-glide/pull/3856))
 * Java, Python, Node: Fix logger docs, add option to log an exception ([#3844](https://github.com/valkey-io/valkey-glide/pull/3844))
 * Core: Refactor socket listener to use a runtime that lives for the application lifetime [#3842](https://github.com/valkey-io/valkey-glide/pull/3842)
 * Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))

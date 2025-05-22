@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // TestContext_CancelBeforeExecution tests what happens when the context is
 // cancelled before any command is executed
 func (suite *GlideTestSuite) TestContext_CancelBeforeExecution() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create a context that's already cancelled
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
@@ -31,7 +31,7 @@ func (suite *GlideTestSuite) TestContext_CancelBeforeExecution() {
 // TestContext_CancelDuringExecution tests what happens when the context is
 // cancelled while a command is being executed
 func (suite *GlideTestSuite) TestContext_CancelDuringExecution() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create a context with a short timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
@@ -48,7 +48,7 @@ func (suite *GlideTestSuite) TestContext_CancelDuringExecution() {
 // TestContext_CancelWithConnectionPasswordUpdate tests context cancellation
 // with connection password update operation
 func (suite *GlideTestSuite) TestContext_CancelWithConnectionPasswordUpdate() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create a context that's already cancelled
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
@@ -57,10 +57,10 @@ func (suite *GlideTestSuite) TestContext_CancelWithConnectionPasswordUpdate() {
 		var err error
 
 		switch c := client.(type) {
-		case api.GlideClientCommands:
+		case interfaces.GlideClientCommands:
 			// Try to update password with cancelled context
 			_, err = c.UpdateConnectionPassword(ctx, "dummy_password", true)
-		case api.GlideClusterClientCommands:
+		case interfaces.GlideClusterClientCommands:
 			// Try to update password with cancelled context
 			_, err = c.UpdateConnectionPassword(ctx, "dummy_password", true)
 		default:
@@ -76,8 +76,8 @@ func (suite *GlideTestSuite) TestContext_CancelWithConnectionPasswordUpdate() {
 // TestContext_CancelWithScan tests context cancellation with scan operation
 // which is specifically handled in the cluster client
 func (suite *GlideTestSuite) TestContext_CancelWithScan() {
-	suite.runWithSpecificClients(ClusterFlag, func(client api.BaseClient) {
-		clusterClient, _ := client.(api.GlideClusterClientCommands)
+	suite.runWithSpecificClients(ClusterFlag, func(client interfaces.BaseClientCommands) {
+		clusterClient, _ := client.(interfaces.GlideClusterClientCommands)
 
 		// Create a context that's already cancelled
 		ctx, cancel := context.WithCancel(context.Background())
