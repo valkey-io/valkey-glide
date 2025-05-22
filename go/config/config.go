@@ -286,7 +286,6 @@ func (config *ClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClientConfig
 //
 // WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
 func (config *ClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClientConfiguration {
-	// Convert back to milliseconds and check if requestTimeout exceeds bounds of a uint32
 	config.requestTimeout = requestTimeout
 	return config
 }
@@ -428,7 +427,6 @@ func (config *ClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *Clust
 //
 // WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
 func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClusterClientConfiguration {
-	// Convert back to milliseconds and check if requestTimeout exceeds bounds of a uint32
 	config.requestTimeout = requestTimeout
 	return config
 }
