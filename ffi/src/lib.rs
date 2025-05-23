@@ -1776,8 +1776,14 @@ pub unsafe extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
     let cmd = request_type
         .get_command()
         .expect("Couldn't fetch command type");
-    let cmd_bytes = cmd.command().unwrap();
-    let command_name = std::str::from_utf8(cmd_bytes.as_slice()).unwrap();
+    let cmd_bytes = match cmd.command() {
+        Some(bytes) => bytes,
+        None => return 0, // Return 0 if no command bytes available
+    };
+    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
+        Ok(name) => name,
+        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+    };
 
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
