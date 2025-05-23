@@ -1,13 +1,14 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package api
+package glide
 
 /*
 #cgo LDFLAGS: -lglide_ffi
-#include "../lib.h"
+#include "lib.h"
 #include <stdlib.h>
 */
 import "C"
+
 import (
 	"crypto/rand"
 	"fmt"
