@@ -1,6 +1,6 @@
 # GO wrapper
 
-The Valkey GLIDE Go Wrapper is currently in **public preview.** Please refer to [this page](https://pkg.go.dev/github.com/valkey-io/valkey-glide/go/api) for available commands.
+The Valkey GLIDE Go Wrapper is currently in **public preview.** Please refer to [this page](https://pkg.go.dev/github.com/valkey-io/valkey-glide/go/v2) for available commands.
 
 # Valkey GLIDE
 
@@ -18,8 +18,8 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
-- Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
-- Amazon Linux 2023 (AL2023) (x86_64)
+-   Ubuntu 20 (x86_64/amd64 and arm64/aarch64)
+-   Amazon Linux 2 (AL2) and 2023 (AL2023) (x86_64)
 
 **Note: Currently Alpine Linux / MUSL is NOT supported.**
 
@@ -30,7 +30,7 @@ macOS:
 
 ## GO supported versions
 
-Valkey GLIDE Go support Go version 1.22 and above.
+Valkey GLIDE Go supports Go version 1.22 and above.
 
 ## Installation and Setup
 
@@ -39,7 +39,7 @@ To install Valkey GLIDE in your Go project, follow these steps:
 1. Open your terminal in your project directory.
 2. Execute the commands below:
     ```bash
-    $ go get github.com/valkey-io/valkey-glide/go
+    $ go get github.com/valkey-io/valkey-glide/go/v2
     $ go mod tidy
     ```
 3. After installation, you can start up a Valkey server and run one of the examples in [Basic Examples](#basic-examples).
@@ -50,23 +50,24 @@ To install Valkey GLIDE in your Go project, follow these steps:
 
 ### Standalone Example:
 
-```go   
+```go
 package main
 
 import (
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api"
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
 	host := "localhost"
 	port := 6379
 
-	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: host, Port: port})
+	config := config.NewGlideClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := api.NewGlideClient(config)
+	client, err := glide.NewGlideClient(config)
 	if err != nil {
         fmt.Println("There was an error: ", err)
         return
@@ -85,23 +86,24 @@ func main() {
 
 ### Cluster Example:
 
-```go   
+```go
 package main
 
 import (
 	"fmt"
 
-	"github.com/valkey-io/valkey-glide/go/api"
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
 	host := "localhost"
 	port := 7001
 
-	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: host, Port: port})
+	config := config.NewGlideClusterClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := glide.NewGlideClusterClient(config)
 	if err != nil {
 		fmt.Println("There was an error: ", err)
 		return
@@ -121,12 +123,3 @@ func main() {
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
-
-### Known issues
-
-When building an application on macos, a notice like this may appear:
-```
-ld: warning: '...' has malformed LC_DYSYMTAB, expected 123 undefined symbols to start at index 17006, found 174 undefined symbols starting at index 68
-```
-It could be safely ignored. It is not an error, it could be suppressed by setting `LDFLAGS` for go as [described there](https://github.com/golang/go/issues/61229#issuecomment-1988965927).
-We're working on fixing this issue, you can track it in [#3177](https://github.com/valkey-io/valkey-glide/issues/3177).
