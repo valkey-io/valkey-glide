@@ -241,3 +241,65 @@ func TestConfig_AzAffinity(t *testing.T) {
 
 	assert.Equal(t, expected, result)
 }
+
+func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
+	// RequestTimeout Negative duration
+	config := NewClientConfiguration().
+		WithRequestTimeout(-1 * time.Hour)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Invalid duration was specified")
+
+	config2 := NewClusterClientConfiguration().
+		WithRequestTimeout(-1 * time.Hour)
+
+	_, err2 := config2.ToProtobuf()
+	assert.Error(t, err2)
+	assert.Contains(t, err2.Error(), "Invalid duration was specified")
+
+	// RequestTimeout 50 days
+	config3 := NewClientConfiguration().
+		WithRequestTimeout(1200 * time.Hour)
+
+	_, err3 := config3.ToProtobuf()
+	assert.Error(t, err3)
+	assert.Contains(t, err3.Error(), "Invalid duration was specified")
+
+	config4 := NewClusterClientConfiguration().
+		WithRequestTimeout(1200 * time.Hour)
+
+	_, err4 := config4.ToProtobuf()
+	assert.Error(t, err4)
+	assert.Contains(t, err4.Error(), "Invalid duration was specified")
+
+	// ConnectionTimeout Negative duration
+	config5 := NewClientConfiguration().
+		WithAdvancedConfiguration(NewAdvancedClientConfiguration().WithConnectionTimeout(-1 * time.Hour))
+
+	_, err5 := config5.ToProtobuf()
+	assert.Error(t, err5)
+	assert.Contains(t, err5.Error(), "Invalid duration was specified")
+
+	config6 := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(NewAdvancedClusterClientConfiguration().WithConnectionTimeout(-1 * time.Hour))
+
+	_, err6 := config6.ToProtobuf()
+	assert.Error(t, err6)
+	assert.Contains(t, err6.Error(), "Invalid duration was specified")
+
+	// RequestTimeout 50 days
+	config7 := NewClientConfiguration().
+		WithAdvancedConfiguration(NewAdvancedClientConfiguration().WithConnectionTimeout(1200 * time.Hour))
+
+	_, err7 := config7.ToProtobuf()
+	assert.Error(t, err7)
+	assert.Contains(t, err7.Error(), "Invalid duration was specified")
+
+	config8 := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(NewAdvancedClusterClientConfiguration().WithConnectionTimeout(1200 * time.Hour))
+
+	_, err8 := config8.ToProtobuf()
+	assert.Error(t, err8)
+	assert.Contains(t, err8.Error(), "Invalid duration was specified")
+}

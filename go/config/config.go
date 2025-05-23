@@ -120,10 +120,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	request.ReadFrom = mapReadFrom(config.readFrom)
 	if config.requestTimeout != 0 {
-		timeout, valid := utils.DurationToMilliseconds(config.requestTimeout)
-		if valid {
-			request.RequestTimeout = timeout
+		requestTimeout, err := utils.DurationToMilliseconds(config.requestTimeout)
+		if err != nil {
+			return nil, errors.New("Setting request timeout returned an error: " + err.Error())
 		}
+		request.RequestTimeout = requestTimeout
 	}
 
 	if config.clientName != "" {
@@ -232,10 +233,11 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	}
 
 	if config.AdvancedClientConfiguration.connectionTimeout != 0 {
-		timeout, valid := utils.DurationToMilliseconds(config.AdvancedClientConfiguration.connectionTimeout)
-		if valid {
-			request.ConnectionTimeout = timeout
+		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClientConfiguration.connectionTimeout)
+		if err != nil {
+			return nil, errors.New("Setting connection timeout returned an error: " + err.Error())
 		}
+		request.ConnectionTimeout = connectionTimeout
 	}
 
 	return request, nil
@@ -284,7 +286,7 @@ func (config *ClientConfiguration) WithReadFrom(readFrom ReadFrom) *ClientConfig
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
 //
-// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
+// If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds or is negative, an error is thrown.
 func (config *ClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
@@ -369,10 +371,11 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	request.ClusterModeEnabled = true
 	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
-		timeout, valid := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
-		if valid {
-			request.ConnectionTimeout = timeout
+		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
+		if err != nil {
+			return nil, errors.New("Setting connection timeout returned an error: " + err.Error())
 		}
+		request.ConnectionTimeout = connectionTimeout
 	}
 	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
@@ -425,7 +428,7 @@ func (config *ClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *Clust
 // specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be
 // used.
 //
-// WARNING: If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds, a default value will be used.
+// If requestTimeout exceeds the max duration of 2^32 - 1 milliseconds or is negative, an error is thrown.
 func (config *ClusterClientConfiguration) WithRequestTimeout(requestTimeout time.Duration) *ClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
 	return config
@@ -485,8 +488,8 @@ type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
 }
 
-// NewAdvancedGlideClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
-func NewAdvancedGlideClientConfiguration() *AdvancedClientConfiguration {
+// NewAdvancedClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
+func NewAdvancedClientConfiguration() *AdvancedClientConfiguration {
 	return &AdvancedClientConfiguration{}
 }
 
@@ -496,7 +499,7 @@ func NewAdvancedGlideClientConfiguration() *AdvancedClientConfiguration {
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
 // pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
 //
-// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds, the default value will be used.
+// If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds or is negative, an error is thrown.
 func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
 ) *AdvancedClientConfiguration {
@@ -517,7 +520,7 @@ func NewAdvancedClusterClientConfiguration() *AdvancedClusterClientConfiguration
 
 // WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 //
-// WARNING: If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds, the default value will be used.
+// If connectionTimeout exceeds the max duration of 2^32 - 1 milliseconds or is negative, an error is thrown.
 func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
 ) *AdvancedClusterClientConfiguration {
