@@ -92,6 +92,7 @@
 * Java: Implement support for Insecure TLS authentication mode([#3386](https://github.com/valkey-io/valkey-glide/pull/3386))
 * Go: SRandMemberCount command added ([#4037](https://github.com/valkey-io/valkey-glide/pull/4037))
 * Go: SPopCount command added ([#4026](https://github.com/valkey-io/valkey-glide/pull/4026))
+* Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
 
 #### Breaking Changes
 

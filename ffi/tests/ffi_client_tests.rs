@@ -176,6 +176,7 @@ fn execute_command(
             args_len_ptr,
             route_bytes,
             route_len,
+            0,
         )
     };
     if command_res_ptr.is_null() {
