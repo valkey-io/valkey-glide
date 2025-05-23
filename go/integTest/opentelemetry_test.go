@@ -16,7 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/valkey-io/valkey-glide/go/api"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 const (
@@ -39,17 +40,17 @@ func (suite *OpenTelemetryTestSuite) SetupSuite() {
 	suite.GlideTestSuite.SetupSuite()
 	WrongOpenTelemetryConfig(suite)
 	intervalMs := int64(otelSpanFlushIntervalMs)
-	openTelemetryConfig := api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	openTelemetryConfig := glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint:         validFileEndpointTraces,
 			SamplePercentage: 100,
 		},
-		Metrics: &api.OpenTelemetryMetricsConfig{
+		Metrics: &glide.OpenTelemetryMetricsConfig{
 			Endpoint: validEndpointMetrics,
 		},
 		FlushIntervalMs: &intervalMs,
 	}
-	err := api.GetInstance().Init(openTelemetryConfig)
+	err := glide.GetInstance().Init(openTelemetryConfig)
 	assert.NoError(suite.T(), err)
 }
 
@@ -73,69 +74,69 @@ func (suite *OpenTelemetryTestSuite) TearDownTest() {
 
 func WrongOpenTelemetryConfig(suite *OpenTelemetryTestSuite) {
 	// Test wrong traces endpoint
-	cfg := api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	cfg := glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint: "wrong.endpoint",
 		},
 	}
-	err := api.GetInstance().Init(cfg)
+	err := glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Parse error")
 
 	// Test wrong metrics endpoint
-	cfg = api.OpenTelemetryConfig{
-		Metrics: &api.OpenTelemetryMetricsConfig{
+	cfg = glide.OpenTelemetryConfig{
+		Metrics: &glide.OpenTelemetryMetricsConfig{
 			Endpoint: "wrong.endpoint",
 		},
 	}
-	err = api.GetInstance().Init(cfg)
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Parse error")
 
 	// Test negative flush interval
 	negativeFlushInterval := int64(-400)
-	cfg = api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	cfg = glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint:         validFileEndpointTraces,
 			SamplePercentage: 1,
 		},
 		FlushIntervalMs: &negativeFlushInterval,
 	}
-	err = api.GetInstance().Init(cfg)
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "flushIntervalMs must be a positive integer")
 
 	// Test out of range sample percentage
-	cfg = api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	cfg = glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint:         validFileEndpointTraces,
 			SamplePercentage: 400,
 		},
 	}
-	err = api.GetInstance().Init(cfg)
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "sample percentage must be between 0 and 100")
 	// Test wrong file path format
-	cfg = api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	cfg = glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint: "file:invalid-path/v1/traces.json",
 		},
 	}
-	err = api.GetInstance().Init(cfg)
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "File path must start with 'file://'")
 	// Test non-existent directory
-	cfg = api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
+	cfg = glide.OpenTelemetryConfig{
+		Traces: &glide.OpenTelemetryTracesConfig{
 			Endpoint: "file:///no-exists-path/v1/traces.json",
 		},
 	}
-	err = api.GetInstance().Init(cfg)
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "The directory does not exist")
 	// Test no traces or metrics provided
-	cfg = api.OpenTelemetryConfig{}
-	err = api.GetInstance().Init(cfg)
+	cfg = glide.OpenTelemetryConfig{}
+	err = glide.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "at least one of traces or metrics must be provided")
 }
@@ -187,7 +188,7 @@ func readAndParseSpanFile(path string) (SpanFileData, error) {
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
-	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
 		// Get initial memory stats
@@ -215,17 +216,17 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() 
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
-	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Try to initialize OpenTelemetry with wrong endpoint
-		wrongConfig := api.OpenTelemetryConfig{
-			Traces: &api.OpenTelemetryTracesConfig{
+		wrongConfig := glide.OpenTelemetryConfig{
+			Traces: &glide.OpenTelemetryTracesConfig{
 				Endpoint:         "wrong.endpoint",
 				SamplePercentage: 1,
 			},
 		}
 
 		// The init should not throw error because it can only be initialized once per process
-		err := api.GetInstance().Init(wrongConfig)
+		err := glide.GetInstance().Init(wrongConfig)
 		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
 
 		// Verify that the original configuration is still in effect
@@ -241,7 +242,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitiali
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
-	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
 
@@ -301,7 +302,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLif
 
 // cluster tests
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak() {
-	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
 
@@ -333,11 +334,11 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak()
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage() {
-	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Set sampling percentage to 0
-		err := api.GetInstance().SetSamplePercentage(0)
+		err := glide.GetInstance().SetSamplePercentage(0)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int32(0), api.GetInstance().GetSamplePercentage())
+		assert.Equal(suite.T(), int32(0), glide.GetInstance().GetSamplePercentage())
 
 		// Wait for any existing spans to be flushed
 		time.Sleep(500 * time.Millisecond)
@@ -362,7 +363,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPerc
 		assert.True(suite.T(), os.IsNotExist(err), "Span file should not exist with 0% sampling")
 
 		// Set sampling percentage to 100
-		err = api.GetInstance().SetSamplePercentage(100)
+		err = glide.GetInstance().SetSamplePercentage(100)
 		require.NoError(suite.T(), err)
 
 		// Execute commands with 100% sampling
@@ -393,17 +394,17 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPerc
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReinitialize() {
-	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Try to initialize OpenTelemetry with wrong endpoint
-		wrongConfig := api.OpenTelemetryConfig{
-			Traces: &api.OpenTelemetryTracesConfig{
+		wrongConfig := glide.OpenTelemetryConfig{
+			Traces: &glide.OpenTelemetryTracesConfig{
 				Endpoint:         "wrong.endpoint",
 				SamplePercentage: 1,
 			},
 		}
 
 		// The init should not throw error because it can only be initialized once per process
-		err := api.GetInstance().Init(wrongConfig)
+		err := glide.GetInstance().Init(wrongConfig)
 		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
 
 		// Execute a command to verify spans are still being exported
@@ -421,7 +422,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfig
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
-	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client1 api.BaseClient) {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client1 interfaces.BaseClientCommands) {
 		// Create a second client with the same configuration
 		client2 := suite.clusterClient(suite.defaultClusterClientConfig())
 		defer client2.Close()
