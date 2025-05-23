@@ -3,9 +3,16 @@
 package integTest
 
 import (
+	"context"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
+
+// General function type
+type fn func(context.Context)
 
 // check if sliceA is a subset of sliceB
 func isSubset[T comparable](sliceA []T, sliceB []T) bool {
@@ -132,4 +139,30 @@ func CreateLongRunningLuaScript(timeout int, readonly bool) string {
 	}
 
 	return code.String()
+}
+
+// This function wrapper makes it more convenient to generate context with timeouts
+// and performs timeout checking.
+//
+// Note:
+//
+//	When ctx reaches tihe timeout, it DOES NOT stop execution of the test inside the
+//	goroutine. However, if the test has additional commands to execute after timing out,
+//	the timed out ctx will tell executeWithRoute to not run additional commands.
+func RunWithTimeout(t assert.TestingT, requestedTimeout time.Duration, longTest fn) {
+	done := make(chan bool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestedTimeout*time.Second)
+	defer cancel()
+
+	go func() {
+		longTest(ctx)
+		done <- true
+	}()
+
+	select {
+	case <-ctx.Done():
+		assert.Fail(t, "Timeout exceeded")
+	case <-done:
+	}
 }
