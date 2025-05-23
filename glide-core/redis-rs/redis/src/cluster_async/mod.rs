@@ -706,7 +706,8 @@ struct Message<C: Sized> {
 }
 
 enum RecoverFuture {
-    RecoverSlots(BoxFuture<'static, RedisResult<()>>),
+    RefreshingSlots(oneshot::Receiver<RedisResult<()>>),
+    ReconnectToInitialNodes(BoxFuture<'static, ()>),
     Reconnect(BoxFuture<'static, ()>),
 }
 
@@ -1568,6 +1569,31 @@ where
         }
         debug!("trigger_refresh_connection_tasks: Done");
         notifiers
+    }
+
+    fn spawn_refresh_slots_task(
+        inner: Arc<InnerCore<C>>,
+        policy: &RefreshPolicy,
+    ) -> oneshot::Receiver<RedisResult<()>> {
+        // Create a channel
+        let (result_sender, result_receiver) = oneshot::channel();
+
+        // Clone references for task
+        let inner_clone = inner.clone();
+        let policy_clone = policy.clone();
+
+        // Spawn the background task
+        tokio::spawn(async move {
+            let result =
+                Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone)
+                    .await;
+
+            // Send the result on the channel
+            // Ignore errors if receiver was dropped
+            let _ = result_sender.send(result);
+        });
+
+        result_receiver
     }
 
     async fn aggregate_results(
@@ -2713,36 +2739,81 @@ where
     }
 
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
-        trace!("entered poll_recovere");
+        trace!("entered poll_recover");
+
         let recover_future = match &mut self.state {
             ConnectionState::PollComplete => return Poll::Ready(Ok(())),
             ConnectionState::Recover(future) => future,
         };
+
         match recover_future {
-            RecoverFuture::RecoverSlots(ref mut future) => match ready!(future.as_mut().poll(cx)) {
-                Ok(_) => {
-                    trace!("Recovered!");
-                    self.state = ConnectionState::PollComplete;
-                    Poll::Ready(Ok(()))
-                }
-                Err(err) => {
-                    trace!("Recover slots failed!");
-                    let next_state = if err.kind() == ErrorKind::AllConnectionsUnavailable {
-                        ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
-                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
-                        )))
-                    } else {
-                        ConnectionState::Recover(RecoverFuture::RecoverSlots(Box::pin(
-                            Self::refresh_slots_and_subscriptions_with_retries(
+            RecoverFuture::RefreshingSlots(result_receiver) => {
+                // Check if there's a result ready on the channel
+                match result_receiver.try_recv() {
+                    Ok(Ok(_)) => {
+                        // Task succeeded
+                        trace!("Slot refresh completed successfully!");
+                        self.state = ConnectionState::PollComplete;
+                        return Poll::Ready(Ok(()));
+                    }
+                    Ok(Err(e)) => {
+                        // Task failed with an error
+                        trace!("Slot refresh failed: {:?}", e);
+
+                        if e.kind() == ErrorKind::AllConnectionsUnavailable {
+                            // If all connections unavailable, try reconnect
+                            self.state =
+                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
+                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
+                                        self.inner.clone(),
+                                    )),
+                                ));
+                            return Poll::Ready(Err(e));
+                        } else {
+                            // Create a new task with a new channel
+                            let new_receiver = Self::spawn_refresh_slots_task(
                                 self.inner.clone(),
                                 &RefreshPolicy::Throttable,
-                            ),
-                        )))
-                    };
-                    self.state = next_state;
-                    Poll::Ready(Err(err))
+                            );
+
+                            // Update state with the new receiver
+                            self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
+                                new_receiver,
+                            ));
+
+                            return Poll::Ready(Ok(()));
+                        }
+                    }
+                    Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                        // No result yet, task is still running
+                        // Just continue and return Ok to not block poll_flush
+                    }
+                    Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                        // Sender was dropped without sending a value - task likely failed or was aborted
+                        trace!("Slot refresh task channel closed without result");
+
+                        // Create a new task with a new channel
+                        let new_receiver = Self::spawn_refresh_slots_task(
+                            self.inner.clone(),
+                            &RefreshPolicy::Throttable,
+                        );
+
+                        // Update state with the new receiver
+                        self.state =
+                            ConnectionState::Recover(RecoverFuture::RefreshingSlots(new_receiver));
+                    }
                 }
-            },
+
+                // Always return Ready to not block poll_flush
+                Poll::Ready(Ok(()))
+            }
+            // Other cases remain unchanged
+            RecoverFuture::ReconnectToInitialNodes(ref mut future) => {
+                ready!(future.as_mut().poll(cx));
+                trace!("Reconnected to initial nodes");
+                self.state = ConnectionState::PollComplete;
+                Poll::Ready(Ok(()))
+            }
             RecoverFuture::Reconnect(ref mut future) => {
                 ready!(future.as_mut().poll(cx));
                 trace!("Reconnected connections");
@@ -3016,12 +3087,21 @@ where
             match ready!(self.poll_complete(cx)) {
                 PollFlushAction::None => return Poll::Ready(Ok(())),
                 PollFlushAction::RebuildSlots => {
-                    self.state = ConnectionState::Recover(RecoverFuture::RecoverSlots(Box::pin(
-                        ClusterConnInner::refresh_slots_and_subscriptions_with_retries(
-                            self.inner.clone(),
-                            &RefreshPolicy::Throttable,
-                        ),
-                    )));
+                    // Spawn task with channel
+                    let result_receiver = ClusterConnInner::spawn_refresh_slots_task(
+                        self.inner.clone(),
+                        &RefreshPolicy::Throttable,
+                    );
+
+                    // Update state
+                    self.state =
+                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(result_receiver));
+                }
+                PollFlushAction::ReconnectFromInitialConnections => {
+                    self.state =
+                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
+                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
+                        )));
                 }
                 PollFlushAction::Reconnect(addresses) => {
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
@@ -3032,11 +3112,6 @@ where
                             true,
                         )
                         .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
-                    )));
-                }
-                PollFlushAction::ReconnectFromInitialConnections => {
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
-                        ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
                     )));
                 }
             }
