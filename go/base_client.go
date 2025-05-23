@@ -393,7 +393,7 @@ func (client *baseClient) executeBatch(
 	batch pipeline.Batch,
 	raiseOnError bool,
 	options *pipeline.BatchOptions,
-) (*C.struct_CommandResponse, error) {
+) ([]any, error) {
 	// Check if context is already done
 	select {
 	case <-ctx.Done():
@@ -455,23 +455,37 @@ func (client *baseClient) executeBatch(
 	if payload.error != nil {
 		return nil, payload.error
 	}
-	return payload.value, nil
+	response, err := handleAnyArrayResponse(payload.value)
+	if err != nil {
+		return nil, err
+	}
+	return batch.Convert(response)
 }
 
 func createBatchOptionsInfo(pinner pinner, options pipeline.BatchOptions) C.BatchOptionsInfo {
 	info := C.BatchOptionsInfo{}
-	info.retry_server_error = C._Bool(options.RetryStrategy.RetryServerError)
-	info.retry_connection_error = C._Bool(options.RetryStrategy.RetryConnectionError)
+	if options.RetryStrategy != nil {
+		info.retry_server_error = C._Bool(options.RetryStrategy.RetryServerError)
+		info.retry_connection_error = C._Bool(options.RetryStrategy.RetryConnectionError)
+	} else {
+		info.retry_server_error = C._Bool(false)
+		info.retry_connection_error = C._Bool(false)
+	}
 	if options.Timeout != nil {
 		info.has_timeout = C._Bool(true)
 		info.timeout = C.uint(*options.Timeout)
+	} else {
+		info.has_timeout = C._Bool(false)
 	}
 	if options.Route != nil {
-		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, options.Route))))
+		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, *options.Route))))
+	} else {
+		info.route_info = nil
 	}
 	return info
 }
 
+// TODO align with others to return struct, not a pointer
 func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	if route != nil {
 		routeInfo := C.RouteInfo{}

@@ -6,11 +6,15 @@ package pipeline
 import "C"
 
 import (
+	"fmt"
+	"reflect"
+
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
-// TODO docs for the god of docs
+// TODO docs
 
 // TODO - move to internals
 type Cmd struct {
@@ -30,8 +34,8 @@ type StandaloneBatchOptions struct {
 
 type ClusterBatchOptions struct {
 	BaseBatchOptions
-	Route         *config.NotMultiNode
-	RetryStrategy ClusterBatchRetryStrategy
+	Route         *config.Route
+	RetryStrategy *ClusterBatchRetryStrategy
 }
 
 type ClusterBatchRetryStrategy struct {
@@ -71,13 +75,14 @@ func (cbo *ClusterBatchOptions) WithTimeout(timeout uint32) *ClusterBatchOptions
 	return cbo
 }
 
-func (cbo *ClusterBatchOptions) WithRoute(route config.NotMultiNode) *ClusterBatchOptions {
+// ensure only single node route is allowed (use config.NotMultiNode?)
+func (cbo *ClusterBatchOptions) WithRoute(route config.Route) *ClusterBatchOptions {
 	cbo.Route = &route
 	return cbo
 }
 
 func (cbo *ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetryStrategy) *ClusterBatchOptions {
-	cbo.RetryStrategy = retryStrategy
+	cbo.RetryStrategy = &retryStrategy
 	return cbo
 }
 
@@ -86,8 +91,8 @@ func (cbo *ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetr
 // TODO - move this struct and convert methods to internals
 type BatchOptions struct {
 	Timeout       *uint32
-	Route         *config.NotMultiNode
-	RetryStrategy ClusterBatchRetryStrategy
+	Route         *config.Route
+	RetryStrategy *ClusterBatchRetryStrategy
 }
 
 func (sbo StandaloneBatchOptions) Convert() BatchOptions {
@@ -104,12 +109,13 @@ func (cbo ClusterBatchOptions) Convert() BatchOptions {
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
+	// TODO make private
+	Converters []func(any) any
 }
 
 type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
 	Batch
 	self *T
-	// TODO converters
 }
 
 type StandaloneBatch struct {
@@ -121,6 +127,16 @@ type ClusterBatch struct {
 }
 
 // ====================
+
+func (b Batch) Convert(response []any) ([]any, error) {
+	if len(response) != len(b.Converters) {
+		return nil, &errors.RequestError{Msg: "Converters misaligned"}
+	}
+	for i, res := range response {
+		response[i] = b.Converters[i](res)
+	}
+	return response, nil
+}
 
 // ====================
 
@@ -136,27 +152,64 @@ func NewClusterBatch(isAtomic bool) *ClusterBatch {
 	return &b
 }
 
-func (b *BaseBatch[T]) CustomCommand(args []string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: C.CustomCommand, Args: args})
+// Add a cmd to batch without response type checking nor conversion
+func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
+	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args})
+	b.Converters = append(b.Converters, func(res any) any { return res })
 	return b.self
+}
+
+// Add a cmd to batch with type checker but without response type conversion
+func (b *BaseBatch[T]) addCmdAndTypeChecker(
+	request C.RequestType,
+	args []string,
+	expectedType reflect.Kind,
+	isNilable bool,
+) *T {
+	return b.addCmdAndConverter(request, args, expectedType, isNilable, func(res any) any { return res })
+}
+
+// Add a cmd to batch with type checker and with response type conversion
+func (b *BaseBatch[T]) addCmdAndConverter(
+	request C.RequestType,
+	args []string,
+	expectedType reflect.Kind,
+	isNilable bool,
+	converter func(res any) any,
+) *T {
+	converterAndTypeChecker := func(res any) any {
+		if res == nil {
+			if isNilable {
+				return nil
+			}
+			return &errors.RequestError{
+				Msg: fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType),
+			}
+		}
+		if reflect.TypeOf(res).Kind() == expectedType {
+			return converter(res)
+		}
+		return &errors.RequestError{
+			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
+		}
+	}
+	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args})
+	b.Converters = append(b.Converters, converterAndTypeChecker)
+	return b.self
+}
+
+func (b *BaseBatch[T]) CustomCommand(args []string) *T {
+	return b.addCmd(C.CustomCommand, args)
 }
 
 func (b *BaseBatch[T]) Get(key string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: C.Get, Args: []string{key}})
-	return b.self
+	return b.addCmdAndTypeChecker(C.Get, []string{key}, reflect.String, true)
 }
 
 func (b *BaseBatch[T]) Set(key string, value string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: C.Set, Args: []string{key, value}})
-	return b.self
+	return b.addCmdAndTypeChecker(C.Set, []string{key, value}, reflect.String, false)
 }
 
 func (b *StandaloneBatch) Select(db int) *StandaloneBatch {
-	b.Commands = append(b.Commands, Cmd{RequestType: C.Select, Args: []string{utils.IntToString(int64(db))}})
-	return b
-}
-
-func (b *ClusterBatch) Ping(msg string) *ClusterBatch {
-	b.Commands = append(b.Commands, Cmd{RequestType: C.Ping, Args: []string{msg}})
-	return b
+	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(int64(db))}, reflect.String, false)
 }

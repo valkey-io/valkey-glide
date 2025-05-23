@@ -19,9 +19,9 @@ type Route interface {
 	IsMultiNode() bool
 }
 
-type NotMultiNode struct{}
+type notMultiNode struct{}
 
-func (*NotMultiNode) IsMultiNode() bool { return false }
+func (*notMultiNode) IsMultiNode() bool { return false }
 
 type SimpleNodeRoute int
 
@@ -60,7 +60,7 @@ const (
 type SlotIdRoute struct {
 	SlotType SlotType
 	SlotID   int32
-	NotMultiNode
+	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -75,7 +75,7 @@ func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
 type SlotKeyRoute struct {
 	SlotType SlotType
 	SlotKey  string
-	NotMultiNode
+	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -88,7 +88,7 @@ func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 type ByAddressRoute struct {
 	Host string
 	Port int32
-	NotMultiNode
+	notMultiNode
 }
 
 // Create a route using hostname/address and port.

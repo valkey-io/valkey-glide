@@ -66,14 +66,9 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	return &Client{client}, nil
 }
 
-// TODO docs for the god of docs
+// TODO docs
 func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
-	response, err := client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleAnyArrayResponse(response)
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
 }
 
 func (client *Client) ExecWithOptions(
@@ -83,12 +78,7 @@ func (client *Client) ExecWithOptions(
 	options pipeline.StandaloneBatchOptions,
 ) ([]any, error) {
 	converted := options.Convert()
-	response, err := client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleAnyArrayResponse(response)
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,

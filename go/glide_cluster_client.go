@@ -70,14 +70,9 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	return &ClusterClient{client}, nil
 }
 
-// TODO docs for the god of docs
+// TODO docs
 func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
-	response, err := client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleAnyArrayResponse(response)
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
 }
 
 func (client *ClusterClient) ExecWithOptions(
@@ -86,13 +81,11 @@ func (client *ClusterClient) ExecWithOptions(
 	raiseOnError bool,
 	options pipeline.ClusterBatchOptions,
 ) ([]any, error) {
-	converted := options.Convert()
-	response, err := client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
-	if err != nil {
-		return nil, err
+	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
+		return nil, &errors.RequestError{Msg: "Retry strategy is not supported for atomic batches (transactions)."}
 	}
-
-	return handleAnyArrayResponse(response)
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
