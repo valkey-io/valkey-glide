@@ -418,7 +418,7 @@ impl ClientAdapter {
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`Self::handle_custom_error`].
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`Self::handle_custom_error`].
     unsafe fn handle_redis_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
         let error_string = errors::error_message(&err);
         let error_type = errors::error_type(&err);
@@ -440,7 +440,7 @@ impl ClientAdapter {
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`Self::send_async_custom_error`].
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`Self::send_async_custom_error`].
     unsafe fn handle_custom_error(
         &self,
         error_string: String,
@@ -505,7 +505,7 @@ impl ClientAdapter {
     /// - `channel`: An identifier used to correlate the error to the original request.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`FailureCallback`].
     unsafe fn send_async_redis_error(
         failure_callback: FailureCallback,
         err: RedisError,

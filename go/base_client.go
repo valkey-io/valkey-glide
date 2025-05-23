@@ -412,7 +412,7 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+		return nil, &errors.ClosingError{Msg: "ExecuteBatch failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
