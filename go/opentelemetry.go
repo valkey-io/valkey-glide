@@ -151,13 +151,11 @@ func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 }
 
 // CreateSpan creates a new OpenTelemetry span with the given name and returns a pointer to the span.
-func (o *OpenTelemetry) CreateSpan(name string) uint64 {
-	if !o.IsInitialized() || name == "" {
+func (o *OpenTelemetry) CreateSpan(requestType C.RequestType) uint64 {
+	if !o.IsInitialized() {
 		return 0
 	}
-	cName := C.CString(name)
-	defer C.free(unsafe.Pointer(cName))
-	return uint64(C.create_otel_span(cName))
+	return uint64(C.create_otel_span(uint32(requestType)))
 }
 
 // DropSpan drops an OpenTelemetry span given its pointer.

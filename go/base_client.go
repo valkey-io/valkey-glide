@@ -287,8 +287,6 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
-	//fmt.Println("Starting executeCommandWithRoute===============================")
-	//fmt.Println("otelInstance.ShouldSample()===============================", otelInstance.ShouldSample())
 	// Check if context is already done
 	select {
 	case <-ctx.Done():
@@ -299,14 +297,9 @@ func (client *baseClient) executeCommandWithRoute(
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
 	if otelInstance != nil && otelInstance.ShouldSample() {
-		// Use the first argument as the command name, or "Batch" if it's a batch command
-		spanName := "Batch"
-		if len(args) > 0 {
-			spanName = args[0]
-		}
-		//fmt.Println("ready to create span===============================")
-		spanPtr = otelInstance.CreateSpan(spanName)
-		//fmt.Println("span created===============================", spanPtr)
+		// Pass the request type to determine the descriptive name of the command
+		// to use as the span name
+		spanPtr = otelInstance.CreateSpan(requestType)
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
@@ -321,7 +314,6 @@ func (client *baseClient) executeCommandWithRoute(
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
 			if spanPtr != 0 {
-				//fmt.Println("Dropping span at point 0===============================")
 				otelInstance.DropSpan(spanPtr)
 			}
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
@@ -329,7 +321,6 @@ func (client *baseClient) executeCommandWithRoute(
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
 			if spanPtr != 0 {
-				//fmt.Println("Dropping span at point 1===============================")
 				otelInstance.DropSpan(spanPtr)
 			}
 			return nil, err
@@ -350,7 +341,6 @@ func (client *baseClient) executeCommandWithRoute(
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		if spanPtr != 0 {
-			//fmt.Println("Dropping span at point 2===============================")
 			otelInstance.DropSpan(spanPtr)
 		}
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
@@ -373,7 +363,6 @@ func (client *baseClient) executeCommandWithRoute(
 	select {
 	case <-ctx.Done():
 		if spanPtr != 0 {
-			//fmt.Println("Dropping span at point 3===============================")
 			otelInstance.DropSpan(spanPtr)
 		}
 		client.mu.Lock()
@@ -391,7 +380,6 @@ func (client *baseClient) executeCommandWithRoute(
 		delete(client.pending, resultChannelPtr)
 	}
 	if spanPtr != 0 {
-		//fmt.Println("Dropping span at point 4===============================")
 		otelInstance.DropSpan(spanPtr)
 	}
 	client.mu.Unlock()
