@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Start by patching
+cd ../
+git apply -v go/scripts/rc-testing/gha.patch
+cd go
+
 # Check if version parameter is provided
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <version>"
@@ -14,10 +19,7 @@ VERSION=$1
 if ! [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
     echo "Error: Version must be in format vX.Y.Z or vX.Y.Z-rcN (e.g., v1.3.4-rc2)"
     exit 1
-fi
-
-# Extract major and minor version for branch name
-if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+(-rc[0-9]+)?$ ]]; then
+else
     MAJOR=${BASH_REMATCH[1]}
     MINOR=${BASH_REMATCH[2]}
     BRANCH="release-${MAJOR}.${MINOR}"
@@ -29,9 +31,6 @@ if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+(-rc[0-9]+)?$ ]]; then
     echo "Checking out $BRANCH branch..."
     git fetch origin $BRANCH
     git checkout $BRANCH
-else
-    echo "Error: Failed to extract version components"
-    exit 1
 fi
 
 # Modify go.mod file
