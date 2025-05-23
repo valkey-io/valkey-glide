@@ -288,7 +288,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 	assert.Error(t, err6)
 	assert.Contains(t, err6.Error(), "Invalid duration was specified")
 
-	// RequestTimeout 50 days
+	// ConnectionTimeout 50 days
 	config7 := NewClientConfiguration().
 		WithAdvancedConfiguration(NewAdvancedClientConfiguration().WithConnectionTimeout(1200 * time.Hour))
 
