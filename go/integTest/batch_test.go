@@ -102,3 +102,75 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 		assert.Contains(suite.T(), res[3].(*errors.RequestError).Error(), "no such key")
 	})
 }
+
+func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{stringKey}-"
+	if isAtomic {
+		prefix = ""
+	}
+
+	key1 := prefix + "1-" + uuid.NewString()
+
+	value1 := "value-1-" + uuid.NewString()
+
+	batch.Set(key1, value1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value1)"})
+	batch.Get(key1)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "Get(key1)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
+}
+
+type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
+
+func GetCommandGroupTestProviders() []BatchTestDataProvider {
+	return []BatchTestDataProvider{
+		CreateStringTest,
+		// more command groups here
+	}
+}
+
+type CommandTestData struct {
+	ExpectedResponse any
+	TestName         string
+}
+
+type BatchTestData struct {
+	CommandTestData []CommandTestData
+	TestName        string
+}
+
+func (suite *GlideTestSuite) TestBatchCommandGroups() {
+	for _, client := range suite.getDefaultClients() {
+		clientType := fmt.Sprintf("%T", client)[7:]
+		for _, isAtomic := range []bool{true, false} {
+			for _, testProvider := range GetCommandGroupTestProviders() {
+				batch := pipeline.NewClusterBatch(isAtomic)
+				testData := testProvider(batch, isAtomic)
+
+				suite.T().Run(fmt.Sprintf("%s %s isAtomic = %v", testData.TestName, clientType, isAtomic), func(t *testing.T) {
+					var res []any
+					var err error
+					switch c := client.(type) {
+					case *glide.ClusterClient:
+						res, err = c.Exec(context.Background(), *batch, true)
+					case *glide.Client:
+						// hacky hack ©
+						standaloneBatch := pipeline.StandaloneBatch{BaseBatch: pipeline.BaseBatch[pipeline.StandaloneBatch]{Batch: batch.BaseBatch.Batch}}
+						res, err = c.Exec(context.Background(), standaloneBatch, true)
+					}
+					assert.NoError(suite.T(), err)
+					suite.verifyBatchTestResult(res, testData.CommandTestData)
+				})
+			}
+		}
+	}
+}
+
+func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
+	assert.Equal(suite.T(), len(testData), len(result))
+	for i := range result {
+		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+	}
+}
