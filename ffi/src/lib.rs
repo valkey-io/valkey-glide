@@ -1028,6 +1028,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * `span_ptr` is a pointer to a span created by [`create_otel_span`]. The span must be valid until the command is finished.
 /// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn command(
@@ -1062,7 +1063,7 @@ pub unsafe extern "C" fn command(
         cmd.arg(command_arg);
     }
     if span_ptr != 0 {
-        cmd.set_span(get_unsafe_span_from_ptr(Some(span_ptr)));
+        cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
 
     let route = if !route_bytes.is_null() {
@@ -1768,25 +1769,26 @@ pub(crate) unsafe fn get_pipeline_options(
 
 /// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
 ///
-/// #Safety
-/// TODO
+/// # Safety
+/// * `request_type` must be a valid request type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn create_otel_span(name: *const c_char) -> u64 {
-    if name.is_null() {
-        return 0;
-    }
-    let c_str = unsafe { CStr::from_ptr(name) };
-    let name_str = match c_str.to_str() {
-        Ok(s) => s,
-        Err(_) => return 0,
-    };
-    let span = GlideOpenTelemetry::new_span(name_str);
+pub unsafe extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    let cmd = request_type
+        .get_command()
+        .expect("Couldn't fetch command type");
+    let cmd_bytes = cmd.command().unwrap();
+    let command_name = std::str::from_utf8(cmd_bytes.as_slice()).unwrap();
+
+    let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
     ptr as u64
 }
 
 /// Drops an OpenTelemetry span given its pointer as u64.
+///
+/// # Safety
+/// * `span_ptr` must be a valid pointer to a span created by [`create_otel_span`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     if span_ptr == 0 {
@@ -1963,7 +1965,7 @@ fn ensure_tokio_runtime() -> &'static Runtime {
 ///
 /// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
 /// * `None` - If the pointer is None
-fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
+unsafe fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
     command_span.map(|command_span| unsafe {
         Arc::increment_strong_count(command_span as *const GlideSpan);
         (*Arc::from_raw(command_span as *const GlideSpan)).clone()

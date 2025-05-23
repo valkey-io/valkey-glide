@@ -1,3 +1,5 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 package integTest
 
 import (
@@ -18,7 +20,6 @@ import (
 )
 
 const (
-	//otelSpanFile               = "/tmp/spans.json"
 	otelSpanFlushIntervalMs = 100
 	otelSpanTimeoutMs       = 50000
 	validEndpointTraces     = "/tmp/spans.json"
@@ -26,14 +27,14 @@ const (
 	validEndpointMetrics    = "https://valid-endpoint/v1/metrics"
 )
 
-type OpenTelemetryIntegrationSuite struct {
+type OpenTelemetryTestSuite struct {
 	GlideTestSuite
 }
 
 // OpenTelemetry standalone tests
 
 // SetupSuite runs once before all tests
-func (suite *OpenTelemetryIntegrationSuite) SetupSuite() {
+func (suite *OpenTelemetryTestSuite) SetupSuite() {
 	// One-time setup for all tests
 	suite.GlideTestSuite.SetupSuite()
 	WrongOpenTelemetryConfig(suite)
@@ -53,12 +54,12 @@ func (suite *OpenTelemetryIntegrationSuite) SetupSuite() {
 }
 
 // TearDownSuite runs once after all tests
-func (suite *OpenTelemetryIntegrationSuite) TearDownSuite() {
+func (suite *OpenTelemetryTestSuite) TearDownSuite() {
 	// One-time cleanup for all tests
 	suite.GlideTestSuite.TearDownSuite()
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TearDownTest() {
+func (suite *OpenTelemetryTestSuite) TearDownTest() {
 	time.Sleep(100 * time.Millisecond)
 	// Remove the span file if it exists
 	if _, err := os.Stat(validEndpointTraces); err == nil {
@@ -70,7 +71,7 @@ func (suite *OpenTelemetryIntegrationSuite) TearDownTest() {
 	suite.GlideTestSuite.TearDownTest()
 }
 
-func WrongOpenTelemetryConfig(suite *OpenTelemetryIntegrationSuite) {
+func WrongOpenTelemetryConfig(suite *OpenTelemetryTestSuite) {
 	// Test wrong traces endpoint
 	cfg := api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
@@ -185,7 +186,7 @@ func readAndParseSpanFile(path string) (SpanFileData, error) {
 	}, nil
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
 		// Force garbage collection
 		runtime.GC()
@@ -213,7 +214,7 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_AutomaticSpanLifec
 	})
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
 		// Try to initialize OpenTelemetry with wrong endpoint
 		wrongConfig := api.OpenTelemetryConfig{
@@ -239,7 +240,7 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_GlobalConfigNotRei
 	})
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
 		// Force garbage collection
 		runtime.GC()
@@ -298,6 +299,152 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_ConcurrentCommands
 	})
 }
 
-func TestOpenTelemetryIntegrationSuite(t *testing.T) {
-	suite.Run(t, new(OpenTelemetryIntegrationSuite))
+// cluster tests
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak() {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+		// Force garbage collection
+		runtime.GC()
+
+		// Get initial memory stats
+		var startMem runtime.MemStats
+		runtime.ReadMemStats(&startMem)
+
+		// Execute multiple commands sequentially
+		for i := 0; i < 100; i++ {
+			key := fmt.Sprintf("test_key_%d", i)
+			_, err := client.Set(context.Background(), key, fmt.Sprintf("value_%d", i))
+			require.NoError(suite.T(), err)
+			_, err = client.Get(context.Background(), key)
+			require.NoError(suite.T(), err)
+		}
+
+		// Force garbage collection again
+		runtime.GC()
+
+		// Get final memory stats
+		var endMem runtime.MemStats
+		runtime.ReadMemStats(&endMem)
+
+		// Allow small fluctuations (10% increase)
+		maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+		assert.Less(suite.T(), float64(endMem.HeapAlloc), maxAllowedMemory,
+			"Memory usage should not increase significantly")
+	})
+}
+
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage() {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+		// Set sampling percentage to 0
+		err := api.GetInstance().SetSamplePercentage(0)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int32(0), api.GetInstance().GetSamplePercentage())
+
+		// Wait for any existing spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Remove any existing span file
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			err = os.Remove(validEndpointTraces)
+			require.NoError(suite.T(), err)
+		}
+
+		// Execute commands with 0% sampling
+		for i := 0; i < 100; i++ {
+			_, err := client.Set(context.Background(), "GlideClusterClient_test_percentage_requests_config", "value")
+			require.NoError(suite.T(), err)
+		}
+
+		// Wait for spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Verify no spans were exported
+		_, err = os.Stat(validEndpointTraces)
+		assert.True(suite.T(), os.IsNotExist(err), "Span file should not exist with 0% sampling")
+
+		// Set sampling percentage to 100
+		err = api.GetInstance().SetSamplePercentage(100)
+		require.NoError(suite.T(), err)
+
+		// Execute commands with 100% sampling
+		for i := 0; i < 10; i++ {
+			key := fmt.Sprintf("GlideClusterClient_test_percentage_requests_config_%d", i)
+			_, err := client.Get(context.Background(), key)
+			require.NoError(suite.T(), err)
+		}
+
+		// Wait for spans to be flushed
+		time.Sleep(5 * time.Second)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Count Get spans
+		getSpanCount := 0
+		for _, name := range spans.SpanNames {
+			if name == "GET" {
+				getSpanCount++
+			}
+		}
+
+		// Verify we have exactly 10 Get spans
+		assert.Equal(suite.T(), 10, getSpanCount, "Should have exactly 10 Get spans")
+	})
+}
+
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReinitialize() {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client api.BaseClient) {
+		// Try to initialize OpenTelemetry with wrong endpoint
+		wrongConfig := api.OpenTelemetryConfig{
+			Traces: &api.OpenTelemetryTracesConfig{
+				Endpoint:         "wrong.endpoint",
+				SamplePercentage: 1,
+			},
+		}
+
+		// The init should not throw error because it can only be initialized once per process
+		err := api.GetInstance().Init(wrongConfig)
+		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
+
+		// Execute a command to verify spans are still being exported
+		_, err = client.Set(context.Background(), "GlideClusterClient_test_otel_global_config", "value")
+		require.NoError(suite.T(), err)
+
+		// Wait for spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Read spans to verify they're still being exported to the correct endpoint
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+		assert.Contains(suite.T(), spans.SpanNames, "SET", "Should find SET span in exported spans")
+	})
+}
+
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client1 api.BaseClient) {
+		// Create a second client with the same configuration
+		client2 := suite.clusterClient(suite.defaultClusterClientConfig())
+		defer client2.Close()
+
+		// Execute commands with both clients
+		_, err := client1.Set(context.Background(), "test_key", "value")
+		require.NoError(suite.T(), err)
+		_, err = client2.Get(context.Background(), "test_key")
+		require.NoError(suite.T(), err)
+
+		// Wait for spans to be flushed
+		time.Sleep(5 * time.Second)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Verify both SET and GET spans exist
+		assert.Contains(suite.T(), spans.SpanNames, "SET", "Should find SET span in exported spans")
+		assert.Contains(suite.T(), spans.SpanNames, "GET", "Should find GET span in exported spans")
+	})
+}
+
+func TestOpenTelemetryTestSuite(t *testing.T) {
+	suite.Run(t, new(OpenTelemetryTestSuite))
 }
