@@ -37,7 +37,7 @@ type OpenTelemetryConfig struct {
 //     Must be between 0 and 100. If not specified, defaults to 1.
 type OpenTelemetryTracesConfig struct {
 	Endpoint         string
-	SamplePercentage uint32
+	SamplePercentage int32
 }
 
 // OpenTelemetryMetricsConfig represents the configuration for exporting OpenTelemetry metrics.
@@ -51,8 +51,9 @@ type OpenTelemetryMetricsConfig struct {
 }
 
 var (
-	otelInstance *OpenTelemetry
-	otelConfig   *OpenTelemetryConfig
+	otelInstance    *OpenTelemetry
+	otelConfig      *OpenTelemetryConfig
+	otelInitialized bool = false
 )
 
 // OpenTelemetry provides functionality for OpenTelemetry integration.
@@ -71,6 +72,9 @@ func GetInstance() *OpenTelemetry {
 // Init initializes the OpenTelemetry instance with the provided configuration.
 // It can only be called once per process. Subsequent calls will be ignored.
 func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
+	if otelInitialized {
+		return nil // otel already initialized, ignore the new config
+	}
 	// At least one of traces or metrics must be provided
 	if openTelemetryConfig.Traces == nil && openTelemetryConfig.Metrics == nil {
 		return fmt.Errorf("at least one of traces or metrics must be provided for OpenTelemetry configuration")
@@ -106,18 +110,18 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 		return err
 	}
 	otelConfig = &openTelemetryConfig
-	otelInstance = o
+	otelInitialized = true
 	return nil
 }
 
 // IsInitialized returns true if the OpenTelemetry instance is initialized, false otherwise.
 func (o *OpenTelemetry) IsInitialized() bool {
-	return otelInstance != nil
+	return otelInitialized
 }
 
 // GetSamplePercentage returns the sample percentage for traces only if OpenTelemetry is initialized
 // and the traces config is set, otherwise returns 0.
-func (o *OpenTelemetry) GetSamplePercentage() uint32 {
+func (o *OpenTelemetry) GetSamplePercentage() int32 {
 	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
 		return 0
 	}
@@ -138,12 +142,9 @@ func (o *OpenTelemetry) ShouldSample() bool {
 // SetSamplePercentage sets the percentage of requests to be sampled and traced.
 // Must be a value between 0 and 100.
 // This setting only affects traces, not metrics.
-func (o *OpenTelemetry) SetSamplePercentage(percentage uint32) error {
+func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
 		return fmt.Errorf("OpenTelemetry config traces not initialized")
-	}
-	if percentage > 100 {
-		return fmt.Errorf("sample percentage must be between 0 and 100")
 	}
 	otelConfig.Traces.SamplePercentage = percentage
 	return nil

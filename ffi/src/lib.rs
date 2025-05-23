@@ -1767,6 +1767,9 @@ pub(crate) unsafe fn get_pipeline_options(
 }
 
 /// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
+///
+/// #Safety
+/// TODO
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_otel_span(name: *const c_char) -> u64 {
     if name.is_null() {
@@ -1782,19 +1785,6 @@ pub unsafe extern "C" fn create_otel_span(name: *const c_char) -> u64 {
     let ptr = Arc::into_raw(arc);
     ptr as u64
 }
-// pub extern "C" fn create_otel_span(name: *const c_char) -> u64 {
-//     if name.is_null() {
-//         return 0;
-//     }
-//     let c_str = unsafe { CStr::from_ptr(name) };
-//     let name_str = match c_str.to_str() {
-//         Ok(s) => s,
-//         Err(_) => return 0,
-//     };
-//     let span = GlideOpenTelemetry::new_span(name_str);
-//     let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
-//     return s as u64;
-// }
 
 /// Drops an OpenTelemetry span given its pointer as u64.
 #[unsafe(no_mangle)]
@@ -1804,7 +1794,6 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     }
     unsafe {
         Arc::from_raw(span_ptr as *const GlideSpan);
-        return;
     }
 }
 

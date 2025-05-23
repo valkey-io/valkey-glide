@@ -290,6 +290,8 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
+	//fmt.Println("Starting executeCommandWithRoute===============================")
+	//fmt.Println("otelInstance.ShouldSample()===============================", otelInstance.ShouldSample())
 	// Check if context is already done
 	select {
 	case <-ctx.Done():
@@ -297,7 +299,6 @@ func (client *baseClient) executeCommandWithRoute(
 	default:
 		// Continue with execution
 	}
-
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
 	if otelInstance != nil && otelInstance.ShouldSample() {
@@ -306,9 +307,10 @@ func (client *baseClient) executeCommandWithRoute(
 		if len(args) > 0 {
 			spanName = args[0]
 		}
+		//fmt.Println("ready to create span===============================")
 		spanPtr = otelInstance.CreateSpan(spanName)
+		//fmt.Println("span created===============================", spanPtr)
 	}
-
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -316,13 +318,13 @@ func (client *baseClient) executeCommandWithRoute(
 		cArgsPtr = &cArgs[0]
 		argLengthsPtr = &argLengths[0]
 	}
-
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
 			if spanPtr != 0 {
+				//fmt.Println("Dropping span at point 0===============================")
 				otelInstance.DropSpan(spanPtr)
 			}
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
@@ -330,6 +332,7 @@ func (client *baseClient) executeCommandWithRoute(
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
 			if spanPtr != 0 {
+				//fmt.Println("Dropping span at point 1===============================")
 				otelInstance.DropSpan(spanPtr)
 			}
 			return nil, err
@@ -338,7 +341,6 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesCount = C.uintptr_t(len(msg))
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
-
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -351,6 +353,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		if spanPtr != 0 {
+			//fmt.Println("Dropping span at point 2===============================")
 			otelInstance.DropSpan(spanPtr)
 		}
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
@@ -368,12 +371,12 @@ func (client *baseClient) executeCommandWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
-
 	// Wait for result or context cancellation
 	var payload payload
 	select {
 	case <-ctx.Done():
 		if spanPtr != 0 {
+			//fmt.Println("Dropping span at point 3===============================")
 			otelInstance.DropSpan(spanPtr)
 		}
 		client.mu.Lock()
@@ -389,6 +392,10 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.pending != nil {
 		delete(client.pending, resultChannelPtr)
+	}
+	if spanPtr != 0 {
+		//fmt.Println("Dropping span at point 4===============================")
+		otelInstance.DropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 
