@@ -20,6 +20,8 @@ import (
 type Cmd struct {
 	RequestType C.RequestType
 	Args        []string
+	// Response converter
+	Converter func(any) any
 }
 
 // ====================
@@ -109,8 +111,6 @@ func (cbo ClusterBatchOptions) Convert() BatchOptions {
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
-	// TODO make private
-	Converters []func(any) any
 }
 
 type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
@@ -129,11 +129,13 @@ type ClusterBatch struct {
 // ====================
 
 func (b Batch) Convert(response []any) ([]any, error) {
-	if len(response) != len(b.Converters) {
-		return nil, &errors.RequestError{Msg: "Converters misaligned"}
+	if len(response) != len(b.Commands) {
+		return nil, &errors.RequestError{
+			Msg: fmt.Sprintf("Response misaligned: received %d responses for %d commands", len(response), len(b.Commands)),
+		}
 	}
 	for i, res := range response {
-		response[i] = b.Converters[i](res)
+		response[i] = b.Commands[i].Converter(res)
 	}
 	return response, nil
 }
@@ -154,8 +156,7 @@ func NewClusterBatch(isAtomic bool) *ClusterBatch {
 
 // Add a cmd to batch without response type checking nor conversion
 func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args})
-	b.Converters = append(b.Converters, func(res any) any { return res })
+	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: func(res any) any { return res }})
 	return b.self
 }
 
@@ -193,8 +194,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
 		}
 	}
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args})
-	b.Converters = append(b.Converters, converterAndTypeChecker)
+	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
 	return b.self
 }
 
