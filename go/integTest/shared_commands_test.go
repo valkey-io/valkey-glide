@@ -9952,12 +9952,15 @@ func (suite *GlideTestSuite) TestGeoHash() {
 
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := suite.GenerateLargeUuid()
-		value := suite.GenerateLargeUuid()
-		suite.verifyOK(client.Set(context.Background(), key, value))
-		result, err := client.Get(context.Background(), key)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), value, result.Value())
+		// Run with a 5 second timeout
+		RunWithTimeout(suite.T(), 5, func(ctx context.Context) {
+			key := suite.GenerateLargeUuid()
+			value := suite.GenerateLargeUuid()
+			suite.verifyOK(client.Set(ctx, key, value))
+			result, err := client.Get(ctx, key)
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), value, result.Value())
+		})
 	})
 }
 
