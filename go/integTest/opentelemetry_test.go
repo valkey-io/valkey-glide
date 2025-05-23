@@ -1,68 +1,76 @@
 package integTest
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"runtime"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/valkey-io/valkey-glide/go/api"
 )
 
 const (
-	otelSpanFile            = "/tmp/spans.json"
+	//otelSpanFile               = "/tmp/spans.json"
 	otelSpanFlushIntervalMs = 100
+	otelSpanTimeoutMs       = 50000
+	validEndpointTraces     = "/tmp/spans.json"
+	validFileEndpointTraces = "file://" + validEndpointTraces
+	validEndpointMetrics    = "https://valid-endpoint/v1/metrics"
 )
 
 type OpenTelemetryIntegrationSuite struct {
 	GlideTestSuite
 }
 
-func (suite *OpenTelemetryIntegrationSuite) SetupTest() {
-	// Create an empty file for spans
-	file, err := os.Create(otelSpanFile)
-	if err != nil {
-		suite.T().Fatalf("Failed to create span file: %v", err)
+// OpenTelemetry standalone tests
+
+// SetupSuite runs once before all tests
+func (suite *OpenTelemetryIntegrationSuite) SetupSuite() {
+	// One-time setup for all tests
+	suite.GlideTestSuite.SetupSuite()
+	WrongOpenTelemetryConfig(suite)
+	intervalMs := int64(otelSpanFlushIntervalMs)
+	openTelemetryConfig := api.OpenTelemetryConfig{
+		Traces: &api.OpenTelemetryTracesConfig{
+			Endpoint:         validFileEndpointTraces,
+			SamplePercentage: 100,
+		},
+		Metrics: &api.OpenTelemetryMetricsConfig{
+			Endpoint: validEndpointMetrics,
+		},
+		FlushIntervalMs: &intervalMs,
 	}
-	file.Close()
+	err := api.GetInstance().Init(openTelemetryConfig)
+	assert.NoError(suite.T(), err)
+}
+
+// TearDownSuite runs once after all tests
+func (suite *OpenTelemetryIntegrationSuite) TearDownSuite() {
+	// One-time cleanup for all tests
+	suite.GlideTestSuite.TearDownSuite()
 }
 
 func (suite *OpenTelemetryIntegrationSuite) TearDownTest() {
-	// Clean up the span file
-	os.Remove(otelSpanFile)
-}
-
-func (suite *OpenTelemetryIntegrationSuite) readSpans() []map[string]interface{} {
-	data, err := os.ReadFile(otelSpanFile)
-	if err != nil {
-		return nil
-	}
-
-	var spans []map[string]interface{}
-	err = json.Unmarshal(data, &spans)
-	if err != nil {
-		return nil
-	}
-	return spans
-}
-
-func (suite *OpenTelemetryIntegrationSuite) getSpanNames() []string {
-	spans := suite.readSpans()
-	if spans == nil {
-		return nil
-	}
-
-	var names []string
-	for _, span := range spans {
-		if name, ok := span["name"].(string); ok {
-			names = append(names, name)
+	time.Sleep(100 * time.Millisecond)
+	// Remove the span file if it exists
+	if _, err := os.Stat(validEndpointTraces); err == nil {
+		if err := os.Remove(validEndpointTraces); err != nil {
+			suite.T().Logf("Failed to remove span file: %v", err)
 		}
 	}
-	return names
+
+	suite.GlideTestSuite.TearDownTest()
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetryConfig() {
+func WrongOpenTelemetryConfig(suite *OpenTelemetryIntegrationSuite) {
 	// Test wrong traces endpoint
 	cfg := api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
@@ -87,7 +95,7 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetry
 	negativeFlushInterval := int64(-400)
 	cfg = api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
-			Endpoint:         "file://" + otelSpanFile,
+			Endpoint:         validFileEndpointTraces,
 			SamplePercentage: 1,
 		},
 		FlushIntervalMs: &negativeFlushInterval,
@@ -96,17 +104,16 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetry
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "flushIntervalMs must be a positive integer")
 
-	// Test negative sample percentage
+	// Test out of range sample percentage
 	cfg = api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
-			Endpoint:         "file://" + otelSpanFile,
+			Endpoint:         validFileEndpointTraces,
 			SamplePercentage: 400,
 		},
 	}
 	err = api.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "sample percentage must be between 0 and 100")
-
 	// Test wrong file path format
 	cfg = api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
@@ -116,7 +123,6 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetry
 	err = api.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "File path must start with 'file://'")
-
 	// Test non-existent directory
 	cfg = api.OpenTelemetryConfig{
 		Traces: &api.OpenTelemetryTracesConfig{
@@ -126,7 +132,6 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetry
 	err = api.GetInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "The directory does not exist")
-
 	// Test no traces or metrics provided
 	cfg = api.OpenTelemetryConfig{}
 	err = api.GetInstance().Init(cfg)
@@ -134,18 +139,163 @@ func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_WrongOpenTelemetry
 	assert.Contains(suite.T(), err.Error(), "at least one of traces or metrics must be provided")
 }
 
-func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_SimpleOpenTelemetryInit() {
-	// Initialize OpenTelemetry with file exporter
-	flushIntervalMs := int64(otelSpanFlushIntervalMs)
-	cfg := api.OpenTelemetryConfig{
-		Traces: &api.OpenTelemetryTracesConfig{
-			Endpoint:         "file://" + otelSpanFile,
-			SamplePercentage: 100,
-		},
-		FlushIntervalMs: &flushIntervalMs,
+type SpanFileData struct {
+	SpanData  string
+	Spans     []string
+	SpanNames []string
+}
+
+func readAndParseSpanFile(path string) (SpanFileData, error) {
+	// Read file content
+	spanData, err := os.ReadFile(path)
+	if err != nil {
+		return SpanFileData{}, fmt.Errorf("failed to read or validate file with the error: %w", err)
 	}
-	err := api.GetInstance().Init(cfg)
-	assert.NoError(suite.T(), err)
+
+	// Split into lines and filter empty lines
+	lines := strings.Split(string(spanData), "\n")
+	var spans []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			spans = append(spans, line)
+		}
+	}
+
+	// Check that we have spans
+	if len(spans) == 0 {
+		return SpanFileData{}, fmt.Errorf("no spans found in the span file")
+	}
+
+	// Parse and extract span names
+	var spanNames []string
+	for _, line := range spans {
+		var span map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &span); err != nil {
+			continue // Skip invalid JSON lines
+		}
+		if name, ok := span["name"].(string); ok {
+			spanNames = append(spanNames, name)
+		}
+	}
+
+	return SpanFileData{
+		SpanData:  string(spanData),
+		Spans:     spans,
+		SpanNames: spanNames,
+	}, nil
+}
+
+func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+		// Force garbage collection
+		runtime.GC()
+		// Get initial memory stats
+		var startMem runtime.MemStats
+		runtime.ReadMemStats(&startMem)
+		// Execute multiple commands - each should automatically create and clean up its span
+		_, err := client.Set(context.Background(), "test_key1", "value1")
+		require.NoError(suite.T(), err)
+		_, err = client.Get(context.Background(), "test_key1")
+		require.NoError(suite.T(), err)
+		_, err = client.Set(context.Background(), "test_key2", "value2")
+		require.NoError(suite.T(), err)
+		_, err = client.Get(context.Background(), "test_key2")
+		require.NoError(suite.T(), err)
+		// Force garbage collection again
+		runtime.GC()
+		// Get final memory stats
+		var endMem runtime.MemStats
+		runtime.ReadMemStats(&endMem)
+		// Allow small fluctuations (10% increase)
+		maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+		assert.Less(suite.T(), float64(endMem.HeapAlloc), maxAllowedMemory,
+			"Memory usage should not increase significantly")
+	})
+}
+
+func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+		// Try to initialize OpenTelemetry with wrong endpoint
+		wrongConfig := api.OpenTelemetryConfig{
+			Traces: &api.OpenTelemetryTracesConfig{
+				Endpoint:         "wrong.endpoint",
+				SamplePercentage: 1,
+			},
+		}
+
+		// The init should not throw error because it can only be initialized once per process
+		err := api.GetInstance().Init(wrongConfig)
+		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
+
+		// Verify that the original configuration is still in effect
+		// by checking if spans are still being exported to the correct endpoint
+		_, err = client.Set(context.Background(), "test_key", "test_value")
+		require.NoError(suite.T(), err)
+
+		// Read spans to verify they're still being exported to the correct endpoint
+		// Use the actual file path, not the URL
+		spans, _ := readAndParseSpanFile(validEndpointTraces)
+		assert.NotNil(suite.T(), spans.Spans, "Spans should still be exported to the original endpoint")
+	})
+}
+
+func (suite *OpenTelemetryIntegrationSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client api.BaseClient) {
+		// Force garbage collection
+		runtime.GC()
+
+		// Get initial memory stats
+		var startMem runtime.MemStats
+		runtime.ReadMemStats(&startMem)
+
+		// Create a WaitGroup to wait for all commands to complete
+		var wg sync.WaitGroup
+		errChan := make(chan error, 6) // Buffer for all potential errors
+
+		// Define commands to execute concurrently
+		commands := []struct {
+			cmd func() error
+		}{
+			{cmd: func() error { _, err := client.Set(context.Background(), "test_key1", "value1"); return err }},
+			{cmd: func() error { _, err := client.Get(context.Background(), "test_key1"); return err }},
+			{cmd: func() error { _, err := client.Set(context.Background(), "test_key2", "value2"); return err }},
+			{cmd: func() error { _, err := client.Get(context.Background(), "test_key2"); return err }},
+			{cmd: func() error { _, err := client.Set(context.Background(), "test_key3", "value3"); return err }},
+			{cmd: func() error { _, err := client.Get(context.Background(), "test_key3"); return err }},
+		}
+
+		// Execute commands concurrently
+		for _, cmd := range commands {
+			wg.Add(1)
+			go func(cmd func() error) {
+				defer wg.Done()
+				if err := cmd(); err != nil {
+					errChan <- err
+				}
+			}(cmd.cmd)
+		}
+
+		// Wait for all commands to complete
+		wg.Wait()
+		close(errChan)
+
+		// Check for any errors
+		for err := range errChan {
+			require.NoError(suite.T(), err, "Command execution failed")
+		}
+
+		// Force garbage collection again
+		runtime.GC()
+
+		// Get final memory stats
+		var endMem runtime.MemStats
+		runtime.ReadMemStats(&endMem)
+
+		// Allow small fluctuations (10% increase)
+		maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+		assert.Less(suite.T(), float64(endMem.HeapAlloc), maxAllowedMemory,
+			"Memory usage should not increase significantly")
+	})
 }
 
 func TestOpenTelemetryIntegrationSuite(t *testing.T) {
