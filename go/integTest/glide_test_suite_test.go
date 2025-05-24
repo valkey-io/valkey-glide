@@ -61,6 +61,7 @@ var (
 	)
 	pubsubtest       = flag.Bool("pubsub", false, "Set to true to run pubsub tests")
 	longTimeoutTests = flag.Bool("long-timeout-tests", false, "Set to true to run tests with longer timeouts")
+	otelTest         = flag.Bool("otel-test", false, "Set to true to run opentelemetry tests")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
