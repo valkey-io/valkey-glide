@@ -4,6 +4,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -122,7 +123,7 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	if config.requestTimeout != 0 {
 		requestTimeout, err := utils.DurationToMilliseconds(config.requestTimeout)
 		if err != nil {
-			return nil, errors.New("setting request timeout returned an error: " + err.Error())
+			return nil, fmt.Errorf("setting request timeout returned an error: %w", err)
 		}
 		request.RequestTimeout = requestTimeout
 	}
