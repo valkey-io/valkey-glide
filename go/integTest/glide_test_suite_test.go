@@ -374,7 +374,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
-			config.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
+			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout))
 	return glide.NewClient(clientConfig)
 }
 
