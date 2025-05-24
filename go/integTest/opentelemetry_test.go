@@ -188,6 +188,9 @@ func readAndParseSpanFile(path string) (SpanFileData, error) {
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
@@ -216,6 +219,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() 
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Try to initialize OpenTelemetry with wrong endpoint
 		wrongConfig := glide.OpenTelemetryConfig{
@@ -244,6 +250,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitiali
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
@@ -304,6 +313,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLif
 
 // cluster tests
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Force garbage collection
 		runtime.GC()
@@ -336,6 +348,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak()
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Set sampling percentage to 0
 		err := glide.GetInstance().SetSamplePercentage(0)
@@ -396,6 +411,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPerc
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReinitialize() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Try to initialize OpenTelemetry with wrong endpoint
 		wrongConfig := glide.OpenTelemetryConfig{
@@ -424,6 +442,9 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfig
 }
 
 func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client1 interfaces.BaseClientCommands) {
 		// Create a second client with the same configuration
 		client2 := suite.clusterClient(suite.defaultClusterClientConfig())
