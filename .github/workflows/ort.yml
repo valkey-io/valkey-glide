@@ -97,7 +97,7 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
+                      enabledPackageManagers: [Cargo, GoMod, NPM, PIP, GradleInspector]
                   EOF
                   cat ~/.ort/config/config.yml
 
@@ -173,6 +173,18 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
+
+              ### GO ###
+            - name: Set up GO
+              uses: actions/setup-go@v5
+              with:
+                  go-version: 1.22
+
+            - name: Generate protobuf for GO
+              working-directory: ./go
+              run: |
+                  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+                  make generate-protobuf
 
             - name: Run ORT tools for Go
               uses: ./.github/workflows/run-ort-tools
