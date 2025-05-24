@@ -2,6 +2,12 @@
 
 package interfaces
 
+import (
+	"context"
+
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
+)
+
 type BaseClientCommands interface {
 	StringCommands
 	HashCommands
@@ -27,6 +33,14 @@ type GlideClientCommands interface {
 	ConnectionManagementCommands
 	ScriptingAndFunctionStandaloneCommands
 	PubSubStandaloneCommands
+
+	Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error)
+	ExecWithOptions(
+		ctx context.Context,
+		batch pipeline.StandaloneBatch,
+		raiseOnError bool,
+		options pipeline.StandaloneBatchOptions,
+	) ([]any, error)
 }
 
 type GlideClusterClientCommands interface {
@@ -36,4 +50,12 @@ type GlideClusterClientCommands interface {
 	ConnectionManagementClusterCommands
 	ScriptingAndFunctionClusterCommands
 	PubSubClusterCommands
+
+	Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error)
+	ExecWithOptions(
+		ctx context.Context,
+		batch pipeline.ClusterBatch,
+		raiseOnError bool,
+		options pipeline.ClusterBatchOptions,
+	) ([]any, error)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // Client interface compliance check.
@@ -65,6 +66,21 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	return &Client{client}, nil
 }
 
+// TODO docs
+func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+func (client *Client) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.StandaloneBatch,
+	raiseOnError bool,
+	options pipeline.StandaloneBatchOptions,
+) ([]any, error) {
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
+}
+
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
@@ -90,7 +106,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 	if err != nil {
 		return nil, err
 	}
-	return HandleInterfaceResponse(res)
+	return handleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.

@@ -7,8 +7,8 @@ use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
-use glide_core::errors;
 use glide_core::errors::RequestErrorType;
+use glide_core::errors::{self, error_message};
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
 use protobuf::Message;
@@ -19,7 +19,7 @@ use redis::cluster_routing::{
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{ClusterScanArgs, RedisError};
-use redis::{Cmd, RedisResult, Value};
+use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
 use std::ffi::CStr;
 use std::future::Future;
 use std::slice::from_raw_parts;
@@ -142,6 +142,7 @@ pub enum ResponseType {
     Map = 6,
     Sets = 7,
     Ok = 8,
+    Error = 9,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -328,7 +329,7 @@ impl ClientAdapter {
     ///
     /// For async clients, spawns the future and returns null immediately.
     /// For sync clients, blocks on the future and returns a `CommandResult`.
-    fn execute_command<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
+    fn execute_request<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
     {
@@ -361,6 +362,7 @@ impl ClientAdapter {
     ///
     /// For async clients, invokes the appropriate callback and returns null.
     /// For sync clients, returns a `CommandResult`.
+    // TODO SAFETY
     fn handle_result(
         result: RedisResult<Value>,
         success_callback: Option<SuccessCallback>,
@@ -383,19 +385,19 @@ impl ClientAdapter {
                 }
                 Err(err) => {
                     if let Some(failure_callback) = failure_callback {
-                        Self::send_async_error(failure_callback, err, channel);
+                        unsafe { Self::send_async_redis_error(failure_callback, err, channel) };
                     } else {
                         eprintln!("Error converting value to CommandResponse: {:?}", err);
-                        return create_error_result(err);
+                        return create_error_result_with_redis_error(err);
                     }
                 }
             },
             Err(err) => {
                 if let Some(failure_callback) = failure_callback {
-                    Self::send_async_error(failure_callback, err, channel);
+                    unsafe { Self::send_async_redis_error(failure_callback, err, channel) };
                 } else {
                     eprintln!("Error executing command: {:?}", err);
-                    return create_error_result(err);
+                    return create_error_result_with_redis_error(err);
                 }
             }
         };
@@ -408,23 +410,88 @@ impl ClientAdapter {
     /// This method ensures consistent error handling logic across both client types.
     ///
     /// # Parameters
-    /// - `err`: The error to handle.
+    /// - `err`: The `RedisError` to handle.
     /// - `channel`: The channel ID associated with the request.
     ///
     /// # Returns
     /// - For async clients: Returns a null pointer after invoking the failure callback.
     /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
-    fn handle_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
+    ///
+    /// # Safety
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`Self::handle_custom_error`].
+    unsafe fn handle_redis_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
+        let error_string = errors::error_message(&err);
+        let error_type = errors::error_type(&err);
+        unsafe { Self::handle_custom_error(self, error_string, error_type, channel) }
+    }
+
+    /// Handles a Redis error by either invoking the failure callback (for async clients)
+    /// or returning a heap-allocated `CommandResult` (for sync clients).
+    ///
+    /// This method ensures consistent error handling logic across both client types.
+    ///
+    /// # Parameters
+    /// - `error_string`: The error to handle.
+    /// - `error_type`: The error type.
+    /// - `channel`: The channel ID associated with the request.
+    ///
+    /// # Returns
+    /// - For async clients: Returns a null pointer after invoking the failure callback.
+    /// - For sync clients: Returns a pointer to a `CommandResult` containing the error.
+    ///
+    /// # Safety
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`Self::send_async_custom_error`].
+    unsafe fn handle_custom_error(
+        &self,
+        error_string: String,
+        error_type: RequestErrorType,
+        channel: usize,
+    ) -> *mut CommandResult {
+        //logger_core::log(logger_core::Level::Error, "ffi", &error_string);
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback: _,
                 failure_callback,
             } => {
-                Self::send_async_error(failure_callback, err, channel);
+                unsafe {
+                    Self::send_async_custom_error(
+                        failure_callback,
+                        error_string,
+                        error_type,
+                        channel,
+                    )
+                };
                 std::ptr::null_mut()
             }
-            ClientType::SyncClient => create_error_result(err),
+            ClientType::SyncClient => {
+                create_error_result_with_custom_error(error_string, error_type)
+            }
         }
+    }
+
+    /// Invokes the asynchronous failure callback with an error.
+    ///
+    /// This function is used in async client flows to report command execution failures
+    /// back to the calling language (e.g., Go) via a registered failure callback.
+    ///
+    /// # Parameters
+    /// - `failure_callback`: The callback to invoke with the error.
+    /// - `error_string`: The error message to report.
+    /// - `error_type`: The error type to report.
+    /// - `channel`: An identifier used to correlate the error to the original request.
+    ///
+    /// # Safety
+    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
+    unsafe fn send_async_custom_error(
+        failure_callback: FailureCallback,
+        error_string: String,
+        error_type: RequestErrorType,
+        channel: usize,
+    ) {
+        let err_ptr = CString::into_raw(
+            CString::new(error_string).expect("Couldn't convert error message to CString"),
+        );
+        unsafe { (failure_callback)(channel, err_ptr, error_type) };
     }
 
     /// Invokes the asynchronous failure callback with an error.
@@ -436,7 +503,14 @@ impl ClientAdapter {
     /// - `failure_callback`: The callback to invoke with the error.
     /// - `err`: The `RedisError` to report.
     /// - `channel`: An identifier used to correlate the error to the original request.
-    fn send_async_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
+    ///
+    /// # Safety
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`FailureCallback`].
+    unsafe fn send_async_redis_error(
+        failure_callback: FailureCallback,
+        err: RedisError,
+        channel: usize,
+    ) {
         let (c_err_str, error_type) = to_c_error(err);
         unsafe { (failure_callback)(channel, c_err_str, error_type) };
         _ = unsafe { CString::from_raw(c_err_str as *mut c_char) };
@@ -714,6 +788,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
         ResponseType::Map => c"Map",
         ResponseType::Sets => c"Sets",
         ResponseType::Ok => c"Ok",
+        ResponseType::Error => c"Error",
     };
     c_str.as_ptr()
 }
@@ -913,6 +988,19 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::Sets;
             Ok(command_response)
         }
+        Value::ServerError(server_error) => {
+            let error_message: String = error_message(&server_error.into());
+            // Convert the formatted string to bytes
+            let bytes = error_message.into_bytes();
+            // Process the bytes as before
+            let (vec_ptr, len) = convert_vec_to_pointer(bytes);
+            command_response.string_value = vec_ptr as *mut c_char;
+            command_response.string_value_len = len;
+            command_response.response_type = ResponseType::Error;
+
+            // Return as Ok to continue transaction processing
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -975,7 +1063,7 @@ pub unsafe extern "C" fn command(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_command(channel, async move {
+    client_adapter.execute_request(channel, async move {
         client
             .send_command(&cmd, get_route(route, Some(&cmd)))
             .await
@@ -1001,8 +1089,44 @@ pub unsafe extern "C" fn command(
 /// # Safety
 /// The returned pointer must be passed back to Rust for cleanup. Failing to call
 /// [`free_command_result`] will result in a memory leak.
-fn create_error_result(err: RedisError) -> *mut CommandResult {
+fn create_error_result_with_redis_error(err: RedisError) -> *mut CommandResult {
     let (c_err_str, error_type) = to_c_error(err);
+    Box::into_raw(Box::new(CommandResult {
+        response: std::ptr::null_mut(),
+        command_error: Box::into_raw(Box::new(CommandError {
+            command_error_message: c_err_str,
+            command_error_type: error_type,
+        })),
+    }))
+}
+
+/// Creates a heap-allocated `CommandResult` containing a `CommandError`.
+///
+/// This function is used to construct an error response when a Valkey command fails,
+/// intended to be returned through FFI to the calling language.
+///
+/// The resulting `CommandResult` contains:
+/// - A null `response` pointer.
+/// - A valid `command_error` pointer with error details (message and type).
+///
+/// # Parameters
+/// - `error_string`: The error message to be converted into a `CommandError`.
+/// - `error_type`: The error type.
+///
+/// # Returns
+/// A raw pointer to a `CommandResult`. This must be freed using [`free_command_result`]
+/// to avoid memory leaks.
+///
+/// # Safety
+/// The returned pointer must be passed back to Rust for cleanup. Failing to call
+/// [`free_command_result`] will result in a memory leak.
+fn create_error_result_with_custom_error(
+    error_string: String,
+    error_type: RequestErrorType,
+) -> *mut CommandResult {
+    let c_err_str = CString::into_raw(
+        CString::new(error_string).expect("Couldn't convert error message to CString"),
+    );
     Box::into_raw(Box::new(CommandResult {
         response: std::ptr::null_mut(),
         command_error: Box::into_raw(Box::new(CommandError {
@@ -1198,14 +1322,14 @@ pub unsafe extern "C" fn request_cluster_scan(
                 }
             }
             Err(e) => {
-                return client_adapter.handle_error(RedisError::from(e), channel);
+                return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
             }
         };
 
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
             Err(e) => {
-                return client_adapter.handle_error(RedisError::from(e), channel);
+                return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
             }
         };
 
@@ -1229,7 +1353,7 @@ pub unsafe extern "C" fn request_cluster_scan(
         Err(_error) => ScanStateRC::new(),
     };
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_command(channel, async move {
+    client_adapter.execute_request(channel, async move {
         client
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
             .await
@@ -1269,7 +1393,7 @@ pub unsafe extern "C" fn update_connection_password(
         Some(password.to_string())
     };
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_command(channel, async move {
+    client_adapter.execute_request(channel, async move {
         client
             .update_connection_password(password_option, immediate_auth)
             .await
@@ -1356,9 +1480,278 @@ pub unsafe extern "C" fn invoke_script(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_command(channel, async move {
+    client_adapter.execute_request(channel, async move {
         client
             .invoke_script(hash_str, &keys_vec, &args_vec, get_route(route, None))
             .await
     })
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum RouteType {
+    AllNodes = 0,
+    AllPrimaries,
+    Random,
+    SlotId,
+    SlotKey,
+    ByAddress,
+}
+
+/// A mirror of [`SlotAddr`]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum SlotType {
+    Primary = 0,
+    Replica,
+}
+
+impl From<&SlotType> for SlotAddr {
+    fn from(val: &SlotType) -> Self {
+        match val {
+            SlotType::Primary => SlotAddr::Master,
+            SlotType::Replica => SlotAddr::ReplicaRequired,
+        }
+    }
+}
+
+/// A structure which represents a route. To avoid extra pointer mandgling, it has fields for all route types.
+/// Depending on [`RouteType`], the struct stores:
+/// * Only `route_type` is filled, if route is a simple route;
+/// * `route_type`, `slot_id` and `slot_type`, if route is a Slot ID route;
+/// * `route_type`, `slot_key` and `slot_type`, if route is a Slot key route;
+/// * `route_type`, `hostname` and `port`, if route is a Address route;
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RouteInfo {
+    pub route_type: RouteType,
+    pub slot_id: i32,
+    /// zero pointer is valid, means no slot key is given (`None`)
+    pub slot_key: *const c_char,
+    pub slot_type: SlotType,
+    /// zero pointer is valid, means no hostname is given (`None`)
+    pub hostname: *const c_char,
+    pub port: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct CmdInfo {
+    pub request_type: RequestType,
+    pub args: *const *const u8,
+    pub arg_count: usize,
+    pub args_len: *const usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchInfo {
+    pub cmd_count: usize,
+    pub cmds: *const *const CmdInfo,
+    pub is_atomic: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct BatchOptionsInfo {
+    // two params from PipelineRetryStrategy
+    pub retry_server_error: bool,
+    pub retry_connection_error: bool,
+    pub has_timeout: bool,
+    pub timeout: u32,
+    pub route_info: *const RouteInfo,
+}
+
+/// Execute a batch.
+///
+/// # Safety
+/// * `client_ptr` must not be `null`.
+/// * `client_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
+/// * `batch_ptr` must not be `null`.
+/// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
+/// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
+#[allow(rustdoc::private_intra_doc_links)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn batch(
+    client_ptr: *const c_void,
+    callback_index: usize,
+    batch_ptr: *const BatchInfo,
+    raise_on_error: bool,
+    options_ptr: *const BatchOptionsInfo,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_ptr);
+        Arc::from_raw(client_ptr as *mut ClientAdapter)
+    };
+    let mut client = client_adapter.core.client.clone();
+
+    // TODO handle panics
+    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+        Ok(pipeline) => pipeline,
+        Err(err) => {
+            return unsafe {
+                client_adapter.handle_custom_error(
+                    err,
+                    RequestErrorType::Unspecified,
+                    callback_index,
+                )
+            };
+        }
+    };
+    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
+
+    client_adapter.execute_request(callback_index, async move {
+        if pipeline.is_atomic() {
+            client
+                .send_transaction(&pipeline, routing, timeout, raise_on_error)
+                .await
+        } else {
+            client
+                .send_pipeline(
+                    &pipeline,
+                    routing,
+                    raise_on_error,
+                    timeout,
+                    pipeline_retry_strategy,
+                )
+                .await
+        }
+    })
+}
+
+/// Convert raw C string to a rust string.
+///
+/// # Safety
+///
+/// * `ptr` must be able to be safely casted to a valid [`CStr`] via [`CStr::from_ptr`]. See the safety documentation of [`std::ffi::CStr::from_ptr`].
+unsafe fn ptr_to_str(ptr: *const c_char) -> String {
+    if !ptr.is_null() {
+        unsafe { CStr::from_ptr(ptr) }.to_str().unwrap().into()
+    } else {
+        "".into()
+    }
+}
+
+/// Convert route configuration to a corresponding object.
+///
+/// # Safety
+/// * `route_ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`RouteInfo`] struct.
+/// * `slot_key` and `hostname` in dereferenced [`RouteInfo`] struct must contain valid string pointers when corresponding `route_type` is set.
+///   See description of [`RouteInfo`] and the safety documentation of [`ptr_to_str`].
+pub(crate) unsafe fn create_route(
+    route_ptr: *const RouteInfo,
+    cmd: Option<&Cmd>,
+) -> Option<RoutingInfo> {
+    if route_ptr.is_null() {
+        return None;
+    }
+    let route = unsafe { *route_ptr };
+    match route.route_type {
+        RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+        RouteType::AllNodes => Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
+        ))),
+        RouteType::AllPrimaries => Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllMasters,
+            cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
+        ))),
+        RouteType::SlotId => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                route.slot_id as u16,
+                (&route.slot_type).into(),
+            )),
+        )),
+        RouteType::SlotKey => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                redis::cluster_topology::get_slot(unsafe { ptr_to_str(route.slot_key) }.as_bytes()),
+                (&route.slot_type).into(),
+            )),
+        )),
+        RouteType::ByAddress => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: unsafe { ptr_to_str(route.hostname) },
+            port: route.port as u16,
+        })),
+    }
+}
+
+/// Convert [`CmdInfo`] to a [`Cmd`].
+///
+/// # Safety
+/// * `cmd_ptr` must be able to be safely casted to a valid [`CmdInfo`]
+/// * `args` and `args_len` in a referred [`CmdInfo`] structure must not be `null`.
+/// * `data` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string pointers.
+/// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
+pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
+    let info = unsafe { *ptr };
+    let arg_vec = unsafe {
+        convert_double_pointer_to_vec(
+            info.args as *const *const c_void,
+            info.arg_count as c_ulong,
+            info.args_len as *const c_ulong,
+        )
+    };
+
+    let Some(mut cmd) = info.request_type.get_command() else {
+        return Err("Couldn't fetch command type".into());
+    };
+    for command_arg in arg_vec {
+        cmd.arg(command_arg);
+    }
+    Ok(cmd)
+}
+
+/// Convert [`BatchInfo`] to a [`Pipeline`].
+///
+/// # Safety
+/// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
+/// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
+/// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
+///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+/// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
+/// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
+pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
+    let info = unsafe { *ptr };
+    let cmd_pointers = unsafe { from_raw_parts(info.cmds, info.cmd_count) };
+    let mut pipeline = Pipeline::with_capacity(info.cmd_count);
+    for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
+        match unsafe { create_cmd(*cmd_ptr) } {
+            Ok(cmd) => pipeline.add_command(cmd),
+            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+        };
+    }
+    if info.is_atomic {
+        pipeline.atomic();
+    }
+
+    Ok(pipeline)
+}
+
+/// Convert [`BatchOptionsInfo`] to a tuple of corresponding values.
+///
+/// # Safety
+/// * `ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a [`BatchOptionsInfo`] struct.
+/// * `route_info` in dereferenced [`BatchOptionsInfo`] struct must contain a [`RouteInfo`] pointer.
+///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
+pub(crate) unsafe fn get_pipeline_options(
+    ptr: *const BatchOptionsInfo,
+) -> (Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy) {
+    if ptr.is_null() {
+        return (None, None, PipelineRetryStrategy::new(false, false));
+    }
+    let info = unsafe { *ptr };
+    let timeout = if info.has_timeout {
+        Some(info.timeout)
+    } else {
+        None
+    };
+    let route = unsafe { create_route(info.route_info, None) };
+
+    (
+        route,
+        timeout,
+        PipelineRetryStrategy::new(info.retry_server_error, info.retry_connection_error),
+    )
 }

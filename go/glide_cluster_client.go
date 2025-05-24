@@ -16,6 +16,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // GlideClusterClient interface compliance check.
@@ -69,6 +70,24 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	return &ClusterClient{client}, nil
 }
 
+// TODO docs
+func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+func (client *ClusterClient) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.ClusterBatch,
+	raiseOnError bool,
+	options pipeline.ClusterBatchOptions,
+) ([]any, error) {
+	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
+		return nil, &errors.RequestError{Msg: "Retry strategy is not supported for atomic batches (transactions)."}
+	}
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
+}
+
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
@@ -96,7 +115,7 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := HandleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
@@ -210,7 +229,7 @@ func (client *ClusterClient) CustomCommandWithRoute(ctx context.Context,
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := HandleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
