@@ -21629,7 +21629,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustversion:1.0.20
+Package: rustversion:1.0.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36148,7 +36148,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: google-auth:2.40.1
+Package: google-auth:2.40.2
 
 The following copyrights and licenses were found in the source code of this package:
 
