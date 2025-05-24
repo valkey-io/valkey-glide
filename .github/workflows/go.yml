@@ -39,6 +39,10 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            rc-version:
+                required: false
+                type: string
+                description: "RC Version number (Format: vX.Y.Z or vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string
@@ -118,6 +122,14 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Install & build & test
               working-directory: go
               run: |
@@ -150,6 +162,7 @@ jobs:
     lint:
         timeout-minutes: 10
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.rc-test != 'true' }}
         steps:
             - uses: actions/checkout@v4
 
@@ -173,7 +186,6 @@ jobs:
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
                       x86_64-unknown-linux-gnu
-
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
@@ -249,8 +261,17 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Run patch for RC testing
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Install & build & test
               working-directory: go
+              if: ${{ github.event.inputs.rc-test != 'true' }}
               run: |
                   make install-tools build
                   make -k unit-test integ-test
@@ -298,10 +319,18 @@ jobs:
             - name: Install zig
               uses: ./.github/workflows/install-zig
 
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
             - name: Upload test reports
               if: always()
@@ -355,6 +384,14 @@ jobs:
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version && github.event.inputs.rc-version >= 'v2.0.0' }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Install & build & test
               working-directory: go
