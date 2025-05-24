@@ -1,0 +1,39 @@
+[package]
+name = "aws_lambda_and_elasticache"
+version = "0.1.0"
+edition = "2024"
+
+# Note: Cargo Lambda has a limit of ~70MB for uploading.
+# Even relatively small examples, like this one, with all debugging
+# symbols from various dependencies can easily be hundreds of MB large.
+# The below options will strip the debug symbols, which is enough for
+# both Release and Dev modes.
+# More info here: https://github.com/johnthagen/min-sized-rust
+[profile.release]
+strip = true
+
+[profile.release.package."*"]
+strip = true
+
+[profile.dev]
+strip = true
+
+[profile.dev.package."*"]
+strip = true
+
+
+[dependencies]
+# NOTE: For external use, you can point to GitHub directly
+# e.g.
+# glide-core = { git = "https://github.com/valkey-io/valkey-glide.git", rev = "875088331f4fce35b4779ab37092de6399e9464e" }
+# redis = { git = "https://github.com/valkey-io/valkey-glide.git", rev = "875088331f4fce35b4779ab37092de6399e9464e" }
+redis = { path = "../../../glide-core/redis-rs/redis" }
+glide-core = { path = "../../../glide-core", features = ["rust_client"] }
+
+# AWS requirements
+lambda_http = "0.13.0"
+aws-config = "1.6.2"
+
+tokio = { version = "1", features = ["macros"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
