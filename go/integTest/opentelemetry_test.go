@@ -234,6 +234,8 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitiali
 		_, err = client.Set(context.Background(), "test_key", "test_value")
 		require.NoError(suite.T(), err)
 
+		time.Sleep(500 * time.Millisecond)
+
 		// Read spans to verify they're still being exported to the correct endpoint
 		// Use the actual file path, not the URL
 		spans, _ := readAndParseSpanFile(validEndpointTraces)
