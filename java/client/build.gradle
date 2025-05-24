@@ -19,7 +19,7 @@ configurations {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.2'
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
