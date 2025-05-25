@@ -152,10 +152,19 @@ class TlsAdvancedConfiguration:
     Represents advanced TLS configuration settings.
 
     Attributes:
-        insecure (Optional[bool]): Indicates whether to bypass TLS certificate verification.
-            When set to True, the client will bypass certificate validation (for example, when connecting
-            to servers with self-signed or unauthorized certificates). This setting is useful for development
-            or testing environments, but should not be used in production due to security risks.
+        insecure (Optional[bool]): Whether to bypass TLS certificate verification.
+
+            - When set to True, the client skips certificate validation.
+              This is useful when connecting to servers or clusters using self-signed certificates,
+              or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+
+            - This setting is typically used in development or testing environments. **It is
+              strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+
+            - Only valid if TLS is already enabled in the base client configuration.
+              Enabling it without TLS will result in a `ConfigurationError`.
+
+            - Default: False (verification is enforced).
     """
 
     def __init__(self, insecure: Optional[bool] = None):
@@ -190,13 +199,13 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config and self.tls_config.insecure:
-            if request.tls_mode == TlsMode.SecureTls:
-                request.tls_mode = TlsMode.InsecureTls
-            else:
+        if self.tls_config:
+            if request.tls_mode == TlsMode.NoTls:
                 raise ConfigurationError(
                     "TLS is configured as insecure, but TLS isn't in use."
                 )
+            if request.tls_mode == TlsMode.SecureTls and self.tls_config.insecure:
+                request.tls_mode = TlsMode.InsecureTls
 
         return request
 

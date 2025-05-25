@@ -1,5 +1,3 @@
-from typing import AsyncGenerator, Dict
-
 import pytest
 
 from glide.config import ProtocolVersion
