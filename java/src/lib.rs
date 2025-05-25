@@ -21,8 +21,8 @@ use jni::errors::Error as JniError;
 use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
 use jni::sys::{jint, jlong, jsize};
 use redis::Value;
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use std::sync::mpsc;
 
@@ -791,7 +791,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
 
 /// Creates an open telemetry span with the given name and returns a pointer to the span
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeakedOtelSpan<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeakedOtelSpan<
+    'local,
+>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     name: JString<'local>,
