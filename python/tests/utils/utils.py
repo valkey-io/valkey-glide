@@ -1,7 +1,19 @@
 import json
 import random
 import string
-from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
+from concurrent.futures import ThreadPoolExecutor
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import pytest
 from packaging import version
@@ -415,3 +427,29 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
         return await client.custom_command(
             ["ACL", "DELUSER", username], route=AllNodes()
         )
+
+
+def run_sync_func_with_timeout_in_thread(
+    func: Callable, timeout: float, on_timeout=None
+):
+    """
+    Executes a synchronous function in a separate thread with a timeout.
+
+    If the function does not complete within the given timeout, a TimeoutError is raised,
+    and an optional `on_timeout` callback is invoked. Otherwise, the result of `func` is returned.
+
+    Intended primarily for use in tests of blocking synchronous commands where there's
+    a need to prevent the test suite from hanging indefinitely.
+    """
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except Exception:
+            if on_timeout:
+                on_timeout()
+            raise TimeoutError("Function did not return within timeout")
+    finally:
+        # Shutdown with cancel_futures=True to prevent hanging
+        executor.shutdown(wait=False, cancel_futures=True)
