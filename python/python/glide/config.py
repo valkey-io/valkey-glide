@@ -199,13 +199,13 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config:
-            if request.tls_mode == TlsMode.NoTls:
+        if self.tls_config and self.tls_config.insecure:
+            if request.tls_mode == TlsMode.SecureTls:
+                request.tls_mode = TlsMode.InsecureTls
+            elif request.tls_mode == TlsMode.NoTls:
                 raise ConfigurationError(
                     "TLS is configured as insecure, but TLS isn't in use."
                 )
-            if request.tls_mode == TlsMode.SecureTls and self.tls_config.insecure:
-                request.tls_mode = TlsMode.InsecureTls
 
         return request
 
