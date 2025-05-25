@@ -209,7 +209,7 @@ jobs:
                   rm -rf node_modules/@valkey/valkey-glide/build-ts/*
                   cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
                   yarn run build
-                  cd ../depend-on-glide-dependant
+                  cd ../depend-on-glide-dependent
                   yarn install
                   yarn run build
 
