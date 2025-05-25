@@ -244,15 +244,15 @@ public class CommandManager {
         password.ifPresent(builder::setPassword);
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan("UpdateConnectionPassword");
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("UpdateConnectionPassword");
+
         CommandRequest.Builder command = CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             command.setRootSpanPtr(spanPtr);
         }
-        
+
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -299,12 +299,12 @@ public class CommandManager {
         populateCommandWithArgs(arguments, commandBuilder);
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan(requestType.name());
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+
         var builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
@@ -328,12 +328,12 @@ public class CommandManager {
         populateCommandWithArgs(arguments, commandBuilder);
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan(requestType.name());
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+
         var builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
@@ -355,8 +355,8 @@ public class CommandManager {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan("Batch");
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
@@ -387,10 +387,10 @@ public class CommandManager {
             Script script, List<GlideString> keys, List<GlideString> args) {
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan("ScriptInvocation");
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ScriptInvocation");
+
         CommandRequest.Builder builder;
-        
+
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
                 > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
@@ -422,12 +422,12 @@ public class CommandManager {
                                                     .collect(Collectors.toList()))
                                     .build());
         }
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
         }
-        
+
         return builder;
     }
 
@@ -461,8 +461,8 @@ public class CommandManager {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan("ClusterBatch");
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterBatch");
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
@@ -505,8 +505,8 @@ public class CommandManager {
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan("ClusterScan");
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterScan");
+
         CommandRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
                 CommandRequestOuterClass.ClusterScan.newBuilder();
 
@@ -536,12 +536,12 @@ public class CommandManager {
         }
 
         CommandRequest.Builder builder = CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
         }
-        
+
         return builder;
     }
 
@@ -559,16 +559,16 @@ public class CommandManager {
         populateCommandWithArgs(arguments, commandBuilder);
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan(requestType.name());
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+
         CommandRequest.Builder builder = CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
         }
-        
+
         return builder;
     }
 
@@ -586,16 +586,16 @@ public class CommandManager {
         populateCommandWithArgs(arguments, commandBuilder);
 
         // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createSpan(requestType.name());
-        
+        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+
         CommandRequest.Builder builder = CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
-        
+
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
         }
-        
+
         return builder;
     }
 
@@ -667,7 +667,7 @@ public class CommandManager {
         }
         throw new RuntimeException(e);
     }
-    
+
     /**
      * Drops an OpenTelemetry command span, releasing its resources.
      *
