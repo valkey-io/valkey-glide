@@ -2,6 +2,7 @@ import asyncio
 from typing import AsyncGenerator
 
 import pytest
+
 from glide.config import ProtocolVersion
 from glide.glide_client import TGlideClient
 from tests.conftest import create_client
@@ -69,7 +70,7 @@ async def glide_tls_client(
     await client.close()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestTls:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
