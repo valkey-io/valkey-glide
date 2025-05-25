@@ -4,8 +4,6 @@ import pytest
 
 from glide.config import ProtocolVersion
 from glide.glide_client import TGlideClient
-from tests.conftest import create_client
-from tests.utils.cluster import ValkeyCluster
 
 
 @pytest.mark.anyio
