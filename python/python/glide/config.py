@@ -229,7 +229,7 @@ class BaseClientConfiguration:
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
             Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
-            For advanced tls configuration, please use the AdvancedBaseClientConfiguration option.
+            For advanced tls configuration, please use `AdvancedBaseClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
             If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
