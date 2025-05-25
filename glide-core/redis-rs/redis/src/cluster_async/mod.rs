@@ -706,7 +706,7 @@ struct Message<C: Sized> {
 }
 
 enum RecoverFuture {
-    RefreshingSlots(oneshot::Receiver<RedisResult<()>>),
+    RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(BoxFuture<'static, ()>),
     Reconnect(BoxFuture<'static, ()>),
 }
@@ -1574,26 +1574,15 @@ where
     fn spawn_refresh_slots_task(
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
-    ) -> oneshot::Receiver<RedisResult<()>> {
-        // Create a channel
-        let (result_sender, result_receiver) = oneshot::channel();
-
+    ) -> JoinHandle<RedisResult<()>> {
         // Clone references for task
         let inner_clone = inner.clone();
         let policy_clone = policy.clone();
 
-        // Spawn the background task
+        // Spawn the background task and return its handle
         tokio::spawn(async move {
-            let result =
-                Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone)
-                    .await;
-
-            // Send the result on the channel
-            // Ignore errors if receiver was dropped
-            let _ = result_sender.send(result);
-        });
-
-        result_receiver
+            Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone).await
+        })
     }
 
     async fn aggregate_results(
@@ -2747,17 +2736,17 @@ where
         };
 
         match recover_future {
-            RecoverFuture::RefreshingSlots(result_receiver) => {
-                // Check if there's a result ready on the channel
-                match result_receiver.try_recv() {
-                    Ok(Ok(_)) => {
+            RecoverFuture::RefreshingSlots(handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(Ok(()))) => {
                         // Task succeeded
                         trace!("Slot refresh completed successfully!");
                         self.state = ConnectionState::PollComplete;
                         return Poll::Ready(Ok(()));
                     }
-                    Ok(Err(e)) => {
-                        // Task failed with an error
+                    Some(Ok(Err(e))) => {
+                        // Task completed but returned an engine error
                         trace!("Slot refresh failed: {:?}", e);
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
@@ -2770,37 +2759,31 @@ where
                                 ));
                             return Poll::Ready(Err(e));
                         } else {
-                            // Create a new task with a new channel
-                            let new_receiver = Self::spawn_refresh_slots_task(
+                            // Retry refresh
+                            let new_handle = Self::spawn_refresh_slots_task(
                                 self.inner.clone(),
                                 &RefreshPolicy::Throttable,
                             );
-
-                            // Update state with the new receiver
                             self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
-                                new_receiver,
+                                new_handle,
                             ));
-
                             return Poll::Ready(Ok(()));
                         }
                     }
-                    Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                        // No result yet, task is still running
-                        // Just continue and return Ok to not block poll_flush
-                    }
-                    Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-                        // Sender was dropped without sending a value - task likely failed or was aborted
-                        trace!("Slot refresh task channel closed without result");
-
-                        // Create a new task with a new channel
-                        let new_receiver = Self::spawn_refresh_slots_task(
+                    Some(Err(_)) => {
+                        // Task panicked or was cancelled
+                        trace!("Slot refresh task panicked or was cancelled");
+                        let new_handle = Self::spawn_refresh_slots_task(
                             self.inner.clone(),
                             &RefreshPolicy::Throttable,
                         );
-
-                        // Update state with the new receiver
                         self.state =
-                            ConnectionState::Recover(RecoverFuture::RefreshingSlots(new_receiver));
+                            ConnectionState::Recover(RecoverFuture::RefreshingSlots(new_handle));
+                        return Poll::Ready(Ok(()));
+                    }
+                    None => {
+                        // Task is still running
+                        // Just continue and return Ok to not block poll_flush
                     }
                 }
 
