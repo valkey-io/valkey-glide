@@ -7,7 +7,7 @@ export default tseslint.config(
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     ...tseslint.configs.stylistic,
-    { files: [ "**/*.js" ], ...tseslint.configs.disableTypeChecked },
+    { files: ["**/*.js"], ...tseslint.configs.disableTypeChecked },
     {
         ignores: [
             "*/ProtobufMessage.*",
@@ -63,10 +63,10 @@ export default tseslint.config(
                     ObjectExpression: 1,
                     FunctionDeclaration: { parameters: "first" },
                     FunctionExpression: { parameters: "first" },
-                    ignoredNodes: [ "TSTypeParameterInstantiation" ],
+                    ignoredNodes: ["TSTypeParameterInstantiation"],
                 },
             ],
         },
     },
-    prettierConfig
+    prettierConfig,
 );

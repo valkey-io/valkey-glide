@@ -8,16 +8,19 @@ const config: Config = {
     transformIgnorePatterns: [
         "node_modules/",
         "\\.(js|jsx)$",
-        "<rootDir>/build-js/",
+        "<rootDir>/build-ts/",
     ],
     testEnvironment: "node",
+    // Look for tests inside the /tests/ directory with .test or .spec extensions
     testRegex: "/tests/.*\\.(test|spec)?\\.(ts|tsx)$",
-    moduleFileExtensions: ["ts", "json", "node", "js"],
-    modulePathIgnorePatterns: ["rust-client/"],
+    moduleFileExtensions: ["ts", "js", "json", "node"],
+    modulePathIgnorePatterns: ["rust-client/", "build-js/"],
+
+    // Reporters: default + HTML report
     reporters: [
         "default",
         [
-            "./node_modules/jest-html-reporter",
+            "jest-html-reporter",
             {
                 includeFailureMsg: true,
                 includeSuiteFailure: true,
@@ -26,7 +29,11 @@ const config: Config = {
             },
         ],
     ],
-    setupFilesAfterEnv: ["./tests/setup.ts"],
+
+    // Setup file to configure the testing environment after Jest is installed
+    setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
+
+    // Coverage settings
     coverageProvider: "v8",
     collectCoverage: true,
     coverageReporters: ["text", "html"],
