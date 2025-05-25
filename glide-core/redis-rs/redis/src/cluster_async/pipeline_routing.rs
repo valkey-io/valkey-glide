@@ -97,6 +97,7 @@ pub(crate) type ResponsePoliciesMap =
 /// Adds a command to the pipeline map for a specific node address.
 ///
 /// `add_asking` is a boolean flag that determines whether to add an `ASKING` command before the command.
+/// `is_retrying` is a boolean flag that indicates whether this is a retry attempt.
 fn add_command_to_node_pipeline_map<C>(
     pipeline_map: &mut NodePipelineMap<C>,
     address: String,
@@ -105,9 +106,19 @@ fn add_command_to_node_pipeline_map<C>(
     index: usize,
     inner_index: Option<usize>,
     add_asking: bool,
+    is_retrying: bool,
 ) where
     C: Clone,
 {
+    if is_retrying {
+         // Record retry attempt metric if telemetry is initialized
+         if let Err(e) = GlideOpenTelemetry::record_retries() {
+            log_error(
+                "OpenTelemetry:retry_error",
+                format!("Failed to record retry attempt: {}", e),
+            );
+        }
+    }
     if add_asking {
         let asking_cmd = Arc::new(crate::cmd::cmd("ASKING"));
         pipeline_map
@@ -226,6 +237,7 @@ where
                                     index,
                                     Some(inner_index),
                                     false,
+                                    false,
                                 );
                             }
                         }
@@ -281,7 +293,7 @@ where
         .await
         .map_err(|err| (OperationTarget::NotFound, err))?;
 
-    add_command_to_node_pipeline_map(pipeline_map, address, conn, cmd, index, None, false);
+    add_command_to_node_pipeline_map(pipeline_map, address, conn, cmd, index, None, false, false);
     Ok(())
 }
 
@@ -325,6 +337,7 @@ where
                 new_cmd,
                 index,
                 Some(inner_index),
+                false,
                 false,
             );
         } else {
@@ -1089,6 +1102,7 @@ where
                                 index,
                                 inner_index,
                                 matches!(retry_method, RetryMethod::AskRedirect),
+                                true,
                             );
                             continue;
                         }
@@ -1204,15 +1218,9 @@ where
                     index,
                     inner_index,
                     false,
+                    true,
                 );
 
-                // Record retry attempt metric if telemetry is initialized
-                if let Err(e) = GlideOpenTelemetry::record_retries() {
-                    log_error(
-                        "OpenTelemetry:retry_error",
-                        format!("Failed to record retry attempt: {}", e),
-                    );
-                }
             }
             Err(redis_error) => {
                 error.append_detail(&redis_error.into());
