@@ -156,7 +156,7 @@ pub struct CommandResponse {
     pub array_value_len: c_long,
 
     /// Below two values represent the Map structure inside CommandResponse.
-    /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to Go.
+    /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to the foreign language.
     /// These are represented as pointers as the map can be null (optionally present).
     pub map_key: *mut CommandResponse,
     pub map_value: *mut CommandResponse,
@@ -208,6 +208,9 @@ pub enum ResponseType {
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `message` is the value returned by the command. The 'message' is managed by Rust and is freed when the callback returns control back to the caller.
+///
+/// # Safety
+/// Message must be a valid pointer to a `CommandResponse`.
 pub type SuccessCallback =
     unsafe extern "C-unwind" fn(index_ptr: usize, message: *const CommandResponse) -> ();
 
@@ -218,6 +221,9 @@ pub type SuccessCallback =
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `error_message` is the error message returned by server for the failed command. The 'error_message' is managed by Rust and is freed when the callback returns control back to the caller.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
+///
+/// # Safety
+/// Message must be a valid pointer to a `CommandResponse`.
 pub type FailureCallback = unsafe extern "C-unwind" fn(
     index_ptr: usize,
     error_message: *const c_char,
@@ -351,7 +357,7 @@ pub unsafe extern "C-unwind" fn free_command_result(command_result_ptr: *mut Com
 /// Specifies the type of client used to execute commands.
 ///
 /// This enum distinguishes between synchronous and asynchronous client modes.
-/// It is passed from the calling language (e.g., Go or Python) to determine how
+/// It is passed from the calling language (e.g. Go or Python) to determine how
 /// command execution should be handled.
 ///
 /// # Variants
@@ -490,7 +496,7 @@ impl ClientAdapter {
     /// Invokes the asynchronous failure callback with an error.
     ///
     /// This function is used in async client flows to report command execution failures
-    /// back to the calling language (e.g., Go) via a registered failure callback.
+    /// back to the calling language (e.g. Go) via a registered failure callback.
     ///
     /// # Parameters
     /// - `failure_callback`: The callback to invoke with the error.
@@ -620,7 +626,7 @@ fn create_client_internal(
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
-        .thread_name("Valkey-GLIDE Go thread")
+        .thread_name("Valkey-GLIDE thread")
         .build()
         .map_err(|err| {
             let redis_error = err.into();
@@ -690,6 +696,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
 ) -> *const ConnectionResponse {
+    assert!(!connection_request_bytes.is_null());
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
@@ -998,7 +1005,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
-/// * `channel` must be Go channel pointer and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `channel` must be a channel pointer from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
 /// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
@@ -1263,14 +1270,14 @@ impl Drop for ClusterScanCursor {
     }
 }
 
-/// CGO method which allows the Go client to request a cluster scan command to be executed.
+/// Allows the client to request a cluster scan command to be executed.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
-/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
+/// `channel` is a pointer to a valid payload buffer which is created in the client.
 /// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
-/// `arg_count` keeps track of how many option arguments are passed in the Go client.
-/// `args` is a pointer to C string representation of the string args passed in Go.
-/// `args_len` is a pointer to the lengths of the C string representation of the string args passed in Go.
+/// `arg_count` keeps track of how many option arguments are passed in the client.
+/// `args` is a pointer to C string representation of the string args.
+/// `args_len` is a pointer to the lengths of the C string representation of the string args.
 /// `success_callback` is the callback that will be called when a command succeeds.
 /// `failure_callback` is the callback that will be called when a command fails.
 ///
@@ -1310,7 +1317,8 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
 
         debug_assert!(arg_count <= arg_vec.len(), "arg_count greater than arg_vec length. This is probably due to a bug in convert_double_pointer_to_vec.");
 
-        if arg_count < usize::MAX {
+        // CLUSTER SCAN only takes up to 6 optional arguments
+        if arg_count < 6 {
             for i in 0..arg_count {
                 match arg_vec[i] {
                     b"MATCH" => {
@@ -1411,11 +1419,11 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
     })
 }
 
-/// CGO method which allows the Go client to request an update to the connection password.
+/// Allows the client to request an update to the connection password.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
-/// `channel` is a pointer to a valid payload buffer which is created in the Go client.
-/// `password` is a pointer to C string representation of the password passed in Go.
+/// `channel` is a pointer to a valid payload buffer which is created in the client.
+/// `password` is a pointer to C string representation of the password.
 /// `immediate_auth` is a boolean flag to indicate if the password should be updated immediately.
 /// `success_callback` is the callback that will be called when a command succeeds.
 /// `failure_callback` is the callback that will be called when a command fails.
