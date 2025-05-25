@@ -25,11 +25,6 @@ on:
                 required: true
                 type: boolean
                 default: false
-            create_node_tag:
-                description: "Create git tag with -node suffix"
-                required: false
-                type: boolean
-                default: false
 
 concurrency:
     group: node-cd-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -47,7 +42,6 @@ jobs:
             npm_tag: ${{ steps.get-params.outputs.npm_tag }}
             platform_matrix: ${{ steps.load-platform-matrix.outputs.platform_matrix }}
             should_publish: ${{ steps.get-params.outputs.should_publish }}
-            should_create_node_tag: ${{ steps.get-params.outputs.should_create_node_tag }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -72,10 +66,8 @@ jobs:
               run: |
                   RELEASE="255.255.255"
                   SHOULD_PUB="false"
-                  SHOULD_TAG="false"
                   echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
                   echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
-                  echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
                   echo "Pull request detected - using development version $RELEASE"
 
             - name: Handle workflow dispatch event
@@ -85,7 +77,6 @@ jobs:
               env:
                   INPUT_VER: ${{ github.event.inputs.version }}
                   INPUT_PUB: ${{ github.event.inputs.publish }}
-                  INPUT_TAG: ${{ github.event.inputs.create_node_tag }}
               run: |
                   # Validate version exists
                   if [[ -z "$INPUT_VER" ]]; then
@@ -100,11 +91,9 @@ jobs:
                   # All good - set variables
                   RELEASE="$INPUT_VER"
                   SHOULD_PUB="$INPUT_PUB"
-                  SHOULD_TAG="$INPUT_TAG"
                   echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
                   echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
-                  echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
-                  echo "Manual workflow run - using version $RELEASE (publish=$SHOULD_PUB, tag=$SHOULD_TAG)"
+                  echo "Manual workflow run - using version $RELEASE (publish=$SHOULD_PUB)"
 
             - name: Handle tag push event
               id: tag-push-params
@@ -114,10 +103,8 @@ jobs:
                   if [[ "${{ steps.event-check.outputs.ref }}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?)$ ]]; then
                     RELEASE="${BASH_REMATCH[1]}"
                     SHOULD_PUB="true"
-                    SHOULD_TAG="false" # Auto tag creation only for manual workflow runs
                     echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
                     echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
-                    echo "should_create_node_tag=$SHOULD_TAG" >> $GITHUB_OUTPUT
                     echo "Tag push detected - using version $RELEASE from tag"
                   else
                     echo "::error::Invalid tag format. Expected vX.Y.Z or vX.Y.Z-rcN"; exit 1
@@ -148,18 +135,15 @@ jobs:
                   RELEASE_VERSION: ${{ steps.pull-request-params.outputs.release_version || steps.workflow-dispatch-params.outputs.release_version || steps.tag-push-params.outputs.release_version }}
                   NPM_TAG: ${{ steps.determine-npm-tag.outputs.npm_tag }}
                   SHOULD_PUBLISH: ${{ steps.pull-request-params.outputs.should_publish || steps.workflow-dispatch-params.outputs.should_publish || steps.tag-push-params.outputs.should_publish }}
-                  SHOULD_CREATE_NODE_TAG: ${{ steps.pull-request-params.outputs.should_create_node_tag || steps.workflow-dispatch-params.outputs.should_create_node_tag || steps.tag-push-params.outputs.should_create_node_tag }}
               run: |
                   echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
                   echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
                   echo "should_publish=$SHOULD_PUBLISH" >> $GITHUB_OUTPUT
-                  echo "should_create_node_tag=$SHOULD_CREATE_NODE_TAG" >> $GITHUB_OUTPUT
 
                   echo "Final build parameters:"
                   echo "- Version: $RELEASE_VERSION"
                   echo "- NPM Tag: $NPM_TAG"
                   echo "- Publish: $SHOULD_PUBLISH"
-                  echo "- Create Node Tag: $SHOULD_CREATE_NODE_TAG"
 
             - name: Load Platform Matrix
               id: load-platform-matrix
@@ -466,41 +450,6 @@ jobs:
                       npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
-
-    create-node-tag:
-        needs: [get-build-parameters, test-published-release]
-        # Only create the tag if the publish was successful, tests passed, and the tag creation is requested
-        if: |
-            needs.get-build-parameters.outputs.should_publish == 'true' && 
-            needs.get-build-parameters.outputs.should_create_node_tag == 'true'
-        permissions:
-            contents: write
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-                  token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create and push Node tag
-              shell: bash
-              env:
-                  VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
-              run: |
-                  # Create node version tag
-                  NODE_TAG="v${VERSION}-node"
-                  echo "Creating node tag: ${NODE_TAG}"
-
-                  # Configure git
-                  git config --global user.name "GitHub Actions"
-                  git config --global user.email "actions@github.com"
-
-                  # Create and push the tag
-                  git tag -a "${NODE_TAG}" -m "Node.js release ${VERSION}"
-                  git push origin "${NODE_TAG}"
-
-                  echo "Successfully created and pushed tag: ${NODE_TAG}"
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]

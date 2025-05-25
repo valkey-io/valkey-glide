@@ -187,8 +187,8 @@ The project includes tests for TypeScript types and package manager compatibilit
 
 The test structure in `node/pm-and-types-tests/` includes:
 
-- `package1/`: A library that depends on valkey-glide
-- `package2/`: An application that depends on package1 (transitive dependency)
+- `depend-on-glide-package/`: A library that depends on valkey-glide
+- `depend-on-glide-dependent/`: An application that depends on depend-on-glide-package (transitive dependency)
 
 ### REPL (interactive shell)
 

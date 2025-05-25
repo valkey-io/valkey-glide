@@ -9,7 +9,7 @@
         "dev": "ts-node src/index.ts"
     },
     "dependencies": {
-        "@test/common": "file:../package1",
+        "@test/common": "file:../depend-on-glide-package",
         "winston": "^3.17.0"
     },
     "devDependencies": {
