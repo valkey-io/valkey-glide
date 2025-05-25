@@ -1,29 +1,22 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
-
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import glide.api.models.exceptions.ConfigurationException;
-import glide.api.models.exceptions.RequestException;
+import static org.junit.jupiter.api.Assertions.*;
+
 import glide.api.models.ClusterBatch;
 import glide.api.models.ProtocolVersion;
-import glide.utils.Logger;
+import glide.api.models.exceptions.ConfigurationException;
 import glide.utils.TestUtils;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class OpenTelemetryTest {
@@ -45,105 +38,96 @@ class OpenTelemetryTest {
 
         // Initialize OpenTelemetry with valid config
         OpenTelemetry.init(
-            OpenTelemetry.OpenTelemetryConfig.builder()
-                .traces(
-                    OpenTelemetry.TracesConfig.builder()
-                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                        .samplePercentage(100)
-                        .build()
-                )
-                .metrics(
-                    OpenTelemetry.MetricsConfig.builder()
-                        .endpoint(VALID_ENDPOINT_METRICS)
-                        .build()
-                )
-                .flushIntervalMs(100L)
-                .build()
-        );
+                OpenTelemetry.OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(100)
+                                        .build())
+                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint(VALID_ENDPOINT_METRICS).build())
+                        .flushIntervalMs(100L)
+                        .build());
     }
 
     private static void testWrongOpenTelemetryConfig() {
         // Wrong traces endpoint
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(
-                OpenTelemetry.OpenTelemetryConfig.builder()
-                    .traces(
-                        OpenTelemetry.TracesConfig.builder()
-                            .endpoint("wrong.endpoint")
-                            .build()
-                    )
-                    .build()
-            );
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(
+                            OpenTelemetry.OpenTelemetryConfig.builder()
+                                    .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
+                                    .build());
+                });
 
         // Wrong metrics endpoint
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(
-                OpenTelemetry.OpenTelemetryConfig.builder()
-                    .metrics(
-                        OpenTelemetry.MetricsConfig.builder()
-                            .endpoint("wrong.endpoint")
-                            .build()
-                    )
-                    .build()
-            );
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(
+                            OpenTelemetry.OpenTelemetryConfig.builder()
+                                    .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
+                                    .build());
+                });
 
         // Negative flush interval
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(
-                OpenTelemetry.OpenTelemetryConfig.builder()
-                    .traces(
-                        OpenTelemetry.TracesConfig.builder()
-                            .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                            .samplePercentage(1)
-                            .build()
-                    )
-                    .flushIntervalMs(-400L)
-                    .build()
-            );
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(
+                            OpenTelemetry.OpenTelemetryConfig.builder()
+                                    .traces(
+                                            OpenTelemetry.TracesConfig.builder()
+                                                    .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                                    .samplePercentage(1)
+                                                    .build())
+                                    .flushIntervalMs(-400L)
+                                    .build());
+                });
 
         // Negative sample percentage
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(
-                OpenTelemetry.OpenTelemetryConfig.builder()
-                    .traces(
-                        OpenTelemetry.TracesConfig.builder()
-                            .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                            .samplePercentage(-400)
-                            .build()
-                    )
-                    .build()
-            );
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(
+                            OpenTelemetry.OpenTelemetryConfig.builder()
+                                    .traces(
+                                            OpenTelemetry.TracesConfig.builder()
+                                                    .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                                    .samplePercentage(-400)
+                                                    .build())
+                                    .build());
+                });
 
         // Wrong traces file path
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(
-                OpenTelemetry.OpenTelemetryConfig.builder()
-                    .traces(
-                        OpenTelemetry.TracesConfig.builder()
-                            .endpoint("file:invalid-path/v1/traces.json")
-                            .build()
-                    )
-                    .build()
-            );
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(
+                            OpenTelemetry.OpenTelemetryConfig.builder()
+                                    .traces(
+                                            OpenTelemetry.TracesConfig.builder()
+                                                    .endpoint("file:invalid-path/v1/traces.json")
+                                                    .build())
+                                    .build());
+                });
 
         // No traces or metrics provided
-        assertThrows(ConfigurationException.class, () -> {
-            OpenTelemetry.init(OpenTelemetry.OpenTelemetryConfig.builder().build());
-        });
+        assertThrows(
+                ConfigurationException.class,
+                () -> {
+                    OpenTelemetry.init(OpenTelemetry.OpenTelemetryConfig.builder().build());
+                });
     }
 
     private static void testSpanNotExportedBeforeInitOtel() throws Exception {
         teardownOtelTest();
 
-        GlideClusterClient testClient = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(ProtocolVersion.RESP3)
-            .build();
+        GlideClusterClient testClient =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(ProtocolVersion.RESP3)
+                        .build();
 
         testClient.get("testSpanNotExportedBeforeInitOtel");
 
@@ -176,9 +160,8 @@ class OpenTelemetryTest {
 
     private static SpanData readAndParseSpanFile(String path) throws IOException {
         String spanData = Files.readString(Path.of(path));
-        List<String> spans = spanData.lines()
-            .filter(line -> !line.trim().isEmpty())
-            .collect(Collectors.toList());
+        List<String> spans =
+                spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
 
         if (spans.isEmpty()) {
             throw new IOException("No spans found in the span file");
@@ -219,10 +202,11 @@ class OpenTelemetryTest {
         System.gc();
         long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 
-        client = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        client =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         // Execute a series of commands sequentially
         for (int i = 0; i < 100; i++) {
@@ -241,10 +225,11 @@ class OpenTelemetryTest {
     @EnumSource(ProtocolVersion.class)
     @Order(2)
     void testPercentageRequestsConfig(ProtocolVersion protocol) throws Exception {
-        client = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        client =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         OpenTelemetry.setSamplePercentage(0);
         assertEquals(0, OpenTelemetry.getSamplePercentage());
@@ -279,20 +264,19 @@ class OpenTelemetryTest {
     @Order(3)
     void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) throws Exception {
         OpenTelemetry.init(
-            OpenTelemetry.OpenTelemetryConfig.builder()
-                .traces(
-                    OpenTelemetry.TracesConfig.builder()
-                        .endpoint("wrong.endpoint")
-                        .samplePercentage(1)
-                        .build()
-                )
-                .build()
-        );
+                OpenTelemetry.OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("wrong.endpoint")
+                                        .samplePercentage(1)
+                                        .build())
+                        .build());
 
-        client = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        client =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         client.set("GlideClusterClient_test_otel_global_config", "value");
 
@@ -309,10 +293,11 @@ class OpenTelemetryTest {
         System.gc();
         long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 
-        client = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        client =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         ClusterBatch batch = new ClusterBatch(true);
         batch.set("test_key", "foo");
@@ -322,7 +307,7 @@ class OpenTelemetryTest {
         assertNotNull(response);
         assertEquals(2, response.size());
         assertEquals("OK", response.get(0));
-        assertTrue((Long)response.get(1) >= 1);
+        assertTrue((Long) response.get(1) >= 1);
 
         System.gc();
         long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
@@ -334,15 +319,17 @@ class OpenTelemetryTest {
     @EnumSource(ProtocolVersion.class)
     @Order(5)
     void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) throws Exception {
-        GlideClusterClient client1 = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        GlideClusterClient client1 =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
-        GlideClusterClient client2 = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        GlideClusterClient client2 =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         client1.set("test_key", "value");
         client2.get("test_key");
@@ -364,10 +351,11 @@ class OpenTelemetryTest {
         System.gc();
         long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 
-        client = GlideClusterClient.builder()
-            .addresses(cluster.getAddresses())
-            .protocolVersion(protocol)
-            .build();
+        client =
+                GlideClusterClient.builder()
+                        .addresses(cluster.getAddresses())
+                        .protocolVersion(protocol)
+                        .build();
 
         ClusterBatch batch = new ClusterBatch(true);
         batch.set("test_key", "foo");
@@ -377,7 +365,7 @@ class OpenTelemetryTest {
         assertNotNull(response);
         assertEquals(2, response.size());
         assertEquals("OK", response.get(0));
-        assertTrue((Long)response.get(1) >= 1);
+        assertTrue((Long) response.get(1) >= 1);
 
         Thread.sleep(5000); // Wait for spans to be flushed
 

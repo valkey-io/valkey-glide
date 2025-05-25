@@ -246,7 +246,8 @@ public class CommandManager {
         // Create OpenTelemetry span
         long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("UpdateConnectionPassword");
 
-        CommandRequest.Builder command = CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
+        CommandRequest.Builder command =
+                CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
@@ -394,33 +395,35 @@ public class CommandManager {
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
                 > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            builder = CommandRequest.newBuilder()
-                    .setScriptInvocationPointers(
-                            ScriptInvocationPointers.newBuilder()
-                                    .setHash(script.getHash())
-                                    .setArgsPointer(
-                                            GlideValueResolver.createLeakedBytesVec(
-                                                    args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                    .setKeysPointer(
-                                            GlideValueResolver.createLeakedBytesVec(
-                                                    keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                    .build());
+            builder =
+                    CommandRequest.newBuilder()
+                            .setScriptInvocationPointers(
+                                    ScriptInvocationPointers.newBuilder()
+                                            .setHash(script.getHash())
+                                            .setArgsPointer(
+                                                    GlideValueResolver.createLeakedBytesVec(
+                                                            args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                            .setKeysPointer(
+                                                    GlideValueResolver.createLeakedBytesVec(
+                                                            keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                            .build());
         } else {
-            builder = CommandRequest.newBuilder()
-                    .setScriptInvocation(
-                            ScriptInvocation.newBuilder()
-                                    .setHash(script.getHash())
-                                    .addAllKeys(
-                                            keys.stream()
-                                                    .map(GlideString::getBytes)
-                                                    .map(ByteString::copyFrom)
-                                                    .collect(Collectors.toList()))
-                                    .addAllArgs(
-                                            args.stream()
-                                                    .map(GlideString::getBytes)
-                                                    .map(ByteString::copyFrom)
-                                                    .collect(Collectors.toList()))
-                                    .build());
+            builder =
+                    CommandRequest.newBuilder()
+                            .setScriptInvocation(
+                                    ScriptInvocation.newBuilder()
+                                            .setHash(script.getHash())
+                                            .addAllKeys(
+                                                    keys.stream()
+                                                            .map(GlideString::getBytes)
+                                                            .map(ByteString::copyFrom)
+                                                            .collect(Collectors.toList()))
+                                            .addAllArgs(
+                                                    args.stream()
+                                                            .map(GlideString::getBytes)
+                                                            .map(ByteString::copyFrom)
+                                                            .collect(Collectors.toList()))
+                                            .build());
         }
 
         // Set the root span pointer if a span was created
@@ -535,7 +538,8 @@ public class CommandManager {
             clusterScanBuilder.setAllowNonCoveredSlots(options.getAllowNonCoveredSlots());
         }
 
-        CommandRequest.Builder builder = CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
@@ -561,8 +565,9 @@ public class CommandManager {
         // Create OpenTelemetry span
         long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
 
-        CommandRequest.Builder builder = CommandRequest.newBuilder()
-                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder()
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
@@ -588,8 +593,9 @@ public class CommandManager {
         // Create OpenTelemetry span
         long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
 
-        CommandRequest.Builder builder = CommandRequest.newBuilder()
-                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder()
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
