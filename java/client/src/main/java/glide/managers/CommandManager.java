@@ -272,12 +272,16 @@ public class CommandManager {
             return errorFuture;
         }
 
+        // Store the root span pointer for cleanup after command execution
+        final long rootSpanPtr = command.hasRootSpanPtr() ? command.getRootSpanPtr() : 0;
+
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
                 .write(command, true)
                 .exceptionally(this::exceptionHandler)
-                .thenApplyAsync(responseHandler::apply);
+                .thenApplyAsync(responseHandler::apply)
+                .whenComplete((result, ex) -> dropCommandSpan(rootSpanPtr));
     }
 
     /**
@@ -662,6 +666,17 @@ public class CommandManager {
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);
+    }
+    
+    /**
+     * Drops an OpenTelemetry command span, releasing its resources.
+     *
+     * @param spanPtr The pointer to the span to drop, can be null/0
+     */
+    private void dropCommandSpan(long spanPtr) {
+        if (spanPtr != 0) {
+            OpenTelemetryResolver.dropSpan(spanPtr);
+        }
     }
 
     /**
