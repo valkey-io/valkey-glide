@@ -19,18 +19,29 @@ TODO: examples, UT, design docs
 
 Software Dependencies:
 
-- .Net SDK 6 or later
+- .Net SDK 8 and 9
 - git
-- rustup
-- valkey
+- valkey (for testing)
 
 Please also install the following packages to build [GLIDE core rust library](../glide-core/README.md):
 
+- rustup
 - GCC
-- protoc (protobuf compiler)
 - pkg-config
 - openssl
 - openssl-dev
+- ziglang and zigbuild (for GNU Linux only)
+
+**Valkey installation**
+
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
+```
 
 #### Prerequisites
 

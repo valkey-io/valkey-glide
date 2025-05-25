@@ -90,7 +90,7 @@ jobs:
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
 
     create-binaries:
-        needs: [load-platform-matrix]
+        needs: [load-platform-matrix, validate-release-version]
         if: success()
         strategy:
             fail-fast: false
@@ -120,9 +120,11 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
             - name: Build Go client
               working-directory: go
+              env:
+                  RELEASE_VERSION: ${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
               run: |
                   make install-build-tools
-                  make build
+                  make build GLIDE_VERSION="${RELEASE_VERSION}"
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@v4

@@ -10,6 +10,7 @@ use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
+use glide_core::scripts_container;
 use protobuf::Message;
 use redis::ObjectType;
 use redis::ScanStateRC;
@@ -31,6 +32,44 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+
+/// Store a Lua script in the script cache and return its SHA1 hash.
+///
+/// # Parameters
+///
+/// * `script_bytes`: Pointer to the script bytes.
+/// * `script_len`: Length of the script in bytes.
+///
+/// # Returns
+///
+/// A C string containing the SHA1 hash of the script. The caller is responsible for freeing this memory.
+/// We can free the memory using [`drop_script`].
+///
+/// # Safety
+///
+/// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
+/// * The returned C string must be freed by the caller.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn store_script(script_bytes: *const u8, script_len: usize) -> *mut c_char {
+    let script = unsafe { std::slice::from_raw_parts(script_bytes, script_len) };
+    let hash = scripts_container::add_script(script);
+    CString::new(hash).unwrap().into_raw()
+}
+
+/// Remove a script from the script cache.
+///
+/// # Parameters
+///
+/// * `hash`: The SHA1 hash of the script to remove.
+///
+/// # Safety
+///
+/// * `hash` must be a valid null-terminated C string created by [`store_script`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn drop_script(hash: *const c_char) {
+    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
+    scripts_container::remove_script(hash_str);
+}
 
 /// The struct represents the response of the command.
 ///
@@ -181,7 +220,7 @@ pub struct ConnectionResponse {
 /// # Safety
 ///
 /// The pointer `command_error_message` must remain valid and not be freed until after
-/// [`free_command_result`] or [`free_error_message`] is called.
+/// [`free_command_result`] is called.
 ///
 #[repr(C)]
 pub struct CommandError {
@@ -246,7 +285,7 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
         if !command_result.command_error.is_null() {
             let command_error = Box::from_raw(command_result.command_error);
             if !command_error.command_error_message.is_null() {
-                free_error_message(command_error.command_error_message as *mut c_char);
+                _ = CString::from_raw(command_error.command_error_message as *mut c_char);
             }
         }
     }
@@ -400,6 +439,7 @@ impl ClientAdapter {
     fn send_async_error(failure_callback: FailureCallback, err: RedisError, channel: usize) {
         let (c_err_str, error_type) = to_c_error(err);
         unsafe { (failure_callback)(channel, c_err_str, error_type) };
+        _ = unsafe { CString::from_raw(c_err_str as *mut c_char) };
     }
 }
 
@@ -691,7 +731,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
 pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
         let command_response = unsafe { Box::from_raw(command_response_ptr) };
-        free_command_response_elements(*command_response);
+        unsafe { free_command_response_elements(*command_response) };
     }
 }
 
@@ -709,7 +749,7 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 /// * The contained `map_key` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 /// * The contained `map_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * The contained `map_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
-fn free_command_response_elements(command_response: CommandResponse) {
+unsafe fn free_command_response_elements(command_response: CommandResponse) {
     let string_value = command_response.string_value;
     let string_value_len = command_response.string_value_len;
     let array_value = command_response.array_value;
@@ -726,7 +766,7 @@ fn free_command_response_elements(command_response: CommandResponse) {
         let len = array_value_len as usize;
         let vec = unsafe { Vec::from_raw_parts(array_value, len, len) };
         for element in vec.into_iter() {
-            free_command_response_elements(element);
+            unsafe { free_command_response_elements(element) };
         }
     }
     if !map_key.is_null() {
@@ -739,26 +779,9 @@ fn free_command_response_elements(command_response: CommandResponse) {
         let len = sets_value_len as usize;
         let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
         for element in vec.into_iter() {
-            free_command_response_elements(element);
+            unsafe { free_command_response_elements(element) };
         }
     }
-}
-
-/// Frees the error_message received on a command failure.
-/// TODO: Add a test case to check for memory leak.
-///
-/// # Panics
-///
-/// This functions panics when called with a null `c_char` pointer.
-///
-/// # Safety
-///
-/// `free_error_message` can only be called once per `error_message`. Calling it twice is undefined
-/// behavior, since the address will be freed twice.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
-    assert!(!error_message.is_null());
-    drop(unsafe { CString::from_raw(error_message as *mut c_char) });
 }
 
 /// Converts a double pointer to a vec.
@@ -972,7 +995,7 @@ pub unsafe extern "C" fn command(
 /// - `err`: The `RedisError` to be converted into a `CommandError`.
 ///
 /// # Returns
-/// A raw pointer to a `CommandResult`. This must be freed using [`free_error_message`]
+/// A raw pointer to a `CommandResult`. This must be freed using [`free_command_result`]
 /// to avoid memory leaks.
 ///
 /// # Safety
@@ -1005,9 +1028,6 @@ fn create_error_result(err: RedisError) -> *mut CommandResult {
 ///
 /// # Panics
 /// This function will panic if the error message cannot be converted into a `CString`.
-///
-/// # Safety
-/// The returned C string must be freed using [`free_error_message`].
 fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     let message = errors::error_message(&err);
     let error_type = errors::error_type(&err);
@@ -1252,6 +1272,93 @@ pub unsafe extern "C" fn update_connection_password(
     client_adapter.execute_command(channel, async move {
         client
             .update_connection_password(password_option, immediate_auth)
+            .await
+    })
+}
+
+/// Executes a Lua script.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid `GlideClusterClient` returned from [`create_client`].
+/// * `channel`: Pointer to a valid payload buffer created in the calling language.
+/// * `hash`: SHA1 hash of the script for script caching.
+/// * `keys_count`: Number of keys in the keys array.
+/// * `keys`: Array of keys used by the script.
+/// * `keys_len`: Array of lengths for each key.
+/// * `args_count`: Number of arguments in the args array.
+/// * `args`: Array of arguments to pass to the script.
+/// * `args_len`: Array of lengths for each argument.
+/// * `route_bytes`: Optional array of bytes for routing information.
+/// * `route_bytes_len`: Length of the route_bytes array.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `channel` must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `hash` must be a valid null-terminated C string.
+/// * `keys` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `keys_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `keys_count` must be 0 if `keys` and `keys_len` are null.
+/// * `keys` and `keys_len` must either be both null or be both not null.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invoke_script(
+    client_adapter_ptr: *const c_void,
+    channel: usize,
+    hash: *const c_char,
+    keys_count: c_ulong,
+    keys: *const usize,
+    keys_len: *const c_ulong,
+    args_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    // Convert hash to Rust string
+    let hash_str = unsafe { CStr::from_ptr(hash).to_str().unwrap_or("") };
+
+    // Convert keys to Vec<&[u8]>
+    let keys_vec: Vec<&[u8]> = if !keys.is_null() && !keys_len.is_null() && keys_count > 0 {
+        unsafe { convert_double_pointer_to_vec(keys as *const *const c_void, keys_count, keys_len) }
+    } else {
+        Vec::new()
+    };
+
+    // Convert args to Vec<&[u8]>
+    let args_vec: Vec<&[u8]> = if !args.is_null() && !args_len.is_null() && args_count > 0 {
+        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, args_count, args_len) }
+    } else {
+        Vec::new()
+    };
+
+    // Parse routing information if provided
+    let route = if !route_bytes.is_null() {
+        let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+        Routes::parse_from_bytes(r_bytes).unwrap()
+    } else {
+        Routes::default()
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_command(channel, async move {
+        client
+            .invoke_script(hash_str, &keys_vec, &args_vec, get_route(route, None))
             .await
     })
 }

@@ -3,17 +3,20 @@
 package integTest
 
 import (
+	"context"
 	"strings"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api/options"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {
 	client := suite.defaultClusterClient()
-	result, err := client.InfoWithOptions(
+	result, err := client.InfoWithOptions(context.Background(),
 		options.ClusterInfoOptions{
-			InfoOptions: &options.InfoOptions{Sections: []options.Section{options.Server}},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
 			RouteOption: nil,
 		},
 	)

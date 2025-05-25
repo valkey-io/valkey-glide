@@ -1,12 +1,12 @@
-module github.com/valkey-io/valkey-glide/go/benchmarks
+module github.com/valkey-io/valkey-glide/go/v2/benchmarks
 
 go 1.22
 
-replace github.com/valkey-io/valkey-glide/go => ../
+replace github.com/valkey-io/valkey-glide/go/v2 => ../
 
 require (
 	github.com/redis/go-redis/v9 v9.5.5
-	github.com/valkey-io/valkey-glide/go v0.0.0
+	github.com/valkey-io/valkey-glide/go/v2 v2.0.0
 )
 
 require (

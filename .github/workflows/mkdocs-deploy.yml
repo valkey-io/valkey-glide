@@ -1,20 +1,12 @@
 name: Deploy mkdocs website to GitHub Pages
 
 on:
-    push:
-        branches:
-            - main
-        paths:
-            - python/**
-            - node/**
-            - docs/**
-            - .github/workflows/mkdocs-deploy.yml
     workflow_dispatch:
 
 jobs:
     build-and-deploy-docs:
         runs-on: ubuntu-latest
-        if: github.repository_owner == 'valkey-io'
+        if: github.repository_owner == 'valkey-io' && startsWith(github.ref, 'refs/heads/release-')
 
         steps:
             - name: Checkout your branch

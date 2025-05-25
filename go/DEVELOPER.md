@@ -4,8 +4,6 @@ This document describes how to set up your development environment to build and 
 
 ### Development Overview
 
-We're excited to share that the GLIDE Go client is currently in development! However, it's important to note that this client is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue to develop this Go wrapper.
-
 The Valkey GLIDE Go wrapper consists of both Go and Rust code. The Go and Rust components communicate in two ways:
 
 1. Using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
@@ -26,6 +24,8 @@ Software Dependencies
 - openssl
 - openssl-dev
 - rustup
+- ziglang and zigbuild (for GNU Linux only)
+- valkey (for testing)
 
 **Valkey installation**
 
@@ -44,14 +44,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 ```
+
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for CentOS**
 
@@ -68,14 +63,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 ```
+
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for MacOS**
 
@@ -87,6 +77,14 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
+```
+
+**Install protobuf compiler**
+
+To install protobuf for MacOS, run:
+
+```bash
+brew install protobuf@3
 # Verify the Protobuf compiler installation
 protoc --version
 
@@ -96,6 +94,24 @@ source /Users/$USER/.bash_profile
 protoc --version
 ```
 
+For the remaining systems, do the following:
+
+```bash
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+protoc --version
+```
+
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
+```
+
 #### Building and installation steps
 
 Before starting this step, make sure you've installed all software requirements.
@@ -103,7 +119,7 @@ Before starting this step, make sure you've installed all software requirements.
 1. Clone the repository:
 
     ```bash
-    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+    VERSION=2.0.0 # You can modify this to other released version or set it to "main" to get the unstable branch
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
@@ -218,7 +234,7 @@ An example of what the report looks like when an error occurs:
 
 ### Generate protobuf files
 
-During the initial build, Go protobuf files were created in `go/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protobuf`), it becomes necessary to regenerate the Go protobuf files. To do so, run:
+During the initial build, Go protobuf files were created in `go/internal/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protobuf`), it becomes necessary to regenerate the Go protobuf files. To do so, run:
 
 ```bash
 make generate-protobuf
@@ -324,7 +340,7 @@ For example, this links `valkey.io` and the `XPendingOptions` type with the prop
 
 #### Examples
 
-In the Go client, we have runnable examples in the `api/*_test.go` files to supplement the documentation.
+In the Go client, we have runnable examples in the `*_test.go` files to supplement the documentation.
 
 Use the following command to run all examples:
 
@@ -338,7 +354,7 @@ Examples in Go are treated as tests by the framework. They must compile and exec
 
 To write an example for the command, find its respective group of commands and add the example to that `*_test.go` file. For example, `ZAdd` is a command that belongs to `sorted_set_commands` so we would add the example to `sorted_set_commands_test.go`.
 
-According to which client you are working with, you can use `getExampleGlideClient()` or `getExampleGlideClusterClient()` for your examples.
+According to which client you are working with, you can use `getExampleClient()` or `getExampleClusterClient()` for your examples.
 
 Your example should look something like this:
 
@@ -347,8 +363,8 @@ Your example should look something like this:
 
 
 // Template
-func ExampleGlideClient_Get() {
-    var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Get() {
+    var client *Client = getExampleClient() // example helper function
 
     // General set up and code execution
 
@@ -362,8 +378,8 @@ There can only be a single `Output:` directive in an example and it should be th
 
 ```go
 // Single-line example
-func ExampleGlideClient_Set() {
-    var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Set() {
+    var client *Client = getExampleClient() // example helper function
 
     result, err := client.Set("my_key", "my_value")
  if err != nil {
@@ -375,8 +391,8 @@ func ExampleGlideClient_Set() {
 }
 
 // Multi-line example
-func ExampleGlideClient_Sort() {
- var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_Sort() {
+ var client *Client = getExampleClient() // example helper function
  result, err := client.LPush("key1", []string{"1", "3", "2", "4"})
  result1, err := client.Sort("key1")
  if err != nil {
@@ -394,8 +410,8 @@ func ExampleGlideClient_Sort() {
 For complex return types, it may be difficult to understand a response with multiple nested maps and arrays. Consider outputing the response as formatted JSON or use multiple print statements to break down and test key parts of the response. For example:
 
 ```go
-func ExampleGlideClient_XPending() {
- var client *GlideClient = getExampleGlideClient() // example helper function
+func ExampleClient_XPending() {
+ var client *Client = getExampleClient() // example helper function
 
     // Setup here...
 
@@ -421,10 +437,10 @@ go install golang.org/x/pkgsite/cmd/pkgsite@latest
 pkgsite -open .
 ```
 
-In order for `pkgsite` to work properly, examples for API must be written in a very specific format. They should be located in one of the `*_test.go` files in `./api/` and follow this pattern: `Example<ClientType>_<FunctionName>()`. If we wanted to create an example for the `Get` command in `GlideClient`, we would name define our function as follows:
+In order for `pkgsite` to work properly, examples for API must be written in a very specific format. They should be located in one of the `*_test.go` files in `go` directory and follow this pattern: `Example<ClientType>_<FunctionName>()`. If we wanted to create an example for the `Get` command in `Client`, we would name define our function as follows:
 
 ```go
-func ExampleGlideClient_Get() {
+func ExampleClient_Get() {
     // Example code here
 }
 ```
@@ -433,16 +449,16 @@ In cases where we want to show more than one example, we can add extra endings t
 
 ```go
 // Bad: extension begins with upper case
-func ExampleGlideClient_Get_KeyExists() { ... }
+func ExampleClient_Get_KeyExists() { ... }
 
 // Bad: extension begins with number
-func ExampleGlideClient_Get_1() { ... }
+func ExampleClient_Get_1() { ... }
 
 // Good: extension begins with lower case letter
-func ExampleGlideClient_Get_one() { ... }
+func ExampleClient_Get_one() { ... }
 
 // Better: extension begins with lower case letter and is descriptive
-func ExampleGlideClient_Get_keyIsNil { ... }
+func ExampleClient_Get_keyIsNil { ... }
 ```
 
 **Note: `ClientType` and `FunctionName` are CASE-SENSITIVE.**
