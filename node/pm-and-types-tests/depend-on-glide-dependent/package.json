@@ -1,0 +1,20 @@
+{
+    "name": "@test/consumer",
+    "version": "1.0.0",
+    "description": "Consumer package that uses @test/common",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts"
+    },
+    "dependencies": {
+        "@test/common": "file:../depend-on-glide-package",
+        "winston": "^3.17.0"
+    },
+    "devDependencies": {
+        "@types/node": "22.15.19",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.0.4"
+    }
+}
