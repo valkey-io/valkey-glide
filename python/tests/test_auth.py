@@ -70,12 +70,12 @@ class TestAuthCommands:
         # Add a short delay to allow the server to apply the new password
         # without this delay, command may or may not time out while the client reconnect
         # ending up with a flaky test
-        await anyio.sleep(2)
+        await anyio.sleep(4)
         # Verify that the client is able to reconnect with the new password,
         value = await glide_client.get("test_key")
         assert value == b"test_value"
         await kill_connections(management_client)
-        await anyio.sleep(2)
+        await anyio.sleep(4)
         # Verify that the client is able to immediateAuth with the new password after client is killed
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
@@ -97,7 +97,7 @@ class TestAuthCommands:
         await glide_client.set("test_key", "test_value")
         await config_set_new_password(glide_client, NEW_PASSWORD)
         await kill_connections(management_client)
-        await anyio.sleep(2)
+        await anyio.sleep(4)
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )
@@ -220,7 +220,7 @@ class TestAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        await anyio.sleep(4)
 
         # The client should now reconnect with the new password automatically
         # Verify that the client is still able to perform operations
@@ -255,7 +255,7 @@ class TestAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        await anyio.sleep(4)
 
         result = await acl_glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
@@ -287,7 +287,7 @@ class TestAuthCommands:
         )
 
         # ensure client disconnection
-        await anyio.sleep(2)
+        await anyio.sleep(4)
 
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password(
