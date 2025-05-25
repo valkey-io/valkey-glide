@@ -363,20 +363,40 @@ public abstract class BaseClient
             ThreadPoolResource threadPoolResource =
                     ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             MessageHandler messageHandler = buildMessageHandler(config);
-            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
-            ConnectionManager connectionManager = buildConnectionManager(channelHandler);
+
+            // Create a temporary ConnectionManager first without a ChannelHandler
+            ConnectionManager connectionManager = new ConnectionManager(null);
+
+            // Now create the ChannelHandler with the ConnectionManager
+            ChannelHandler channelHandler =
+                    buildChannelHandler(threadPoolResource, messageHandler, connectionManager);
+
+            // Update ConnectionManager with the real ChannelHandler
+            connectionManager.setChannelHandler(channelHandler);
+
             CommandManager commandManager = buildCommandManager(channelHandler);
-            // TODO: Support exception throwing, including interrupted exceptions
-            return connectionManager
-                    .connectToValkey(config)
-                    .thenApply(
-                            ignored ->
-                                    constructor.apply(
-                                            new ClientBuilder(
-                                                    connectionManager,
-                                                    commandManager,
-                                                    messageHandler,
-                                                    Optional.ofNullable(config.getSubscriptionConfiguration()))));
+
+            // Check if lazy connection is enabled
+            CompletableFuture<Void> connectionFuture;
+            if (config.isLazyConnect()) {
+                // Skip immediate connection and complete future successfully
+                connectionFuture = CompletableFuture.completedFuture(null);
+                // Store config for later use
+                connectionManager.storeConfigForLazyConnection(config);
+            } else {
+                // Connect eagerly as before
+                connectionFuture = connectionManager.connectToValkey(config);
+            }
+
+            // Use the connection future
+            return connectionFuture.thenApply(
+                    ignored ->
+                            constructor.apply(
+                                    new ClientBuilder(
+                                            connectionManager,
+                                            commandManager,
+                                            messageHandler,
+                                            Optional.ofNullable(config.getSubscriptionConfiguration()))));
         } catch (InterruptedException e) {
             // Something bad happened while we were establishing netty connection to UDS
             var future = new CompletableFuture<T>();
@@ -465,10 +485,12 @@ public abstract class BaseClient
     }
 
     protected static ChannelHandler buildChannelHandler(
-            ThreadPoolResource threadPoolResource, MessageHandler messageHandler)
+            ThreadPoolResource threadPoolResource,
+            MessageHandler messageHandler,
+            ConnectionManager connectionManager)
             throws InterruptedException {
-        CallbackDispatcher callbackDispatcher = new CallbackDispatcher(messageHandler);
-        return new ChannelHandler(callbackDispatcher, getSocket(), threadPoolResource);
+        return new ChannelHandler(
+                new CallbackDispatcher(messageHandler), getSocket(), threadPoolResource, connectionManager);
     }
 
     protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
