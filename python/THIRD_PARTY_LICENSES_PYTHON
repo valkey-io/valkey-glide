@@ -18007,7 +18007,7 @@ the following restrictions:
 
 ----
 
-Package: mio:1.0.3
+Package: mio:1.0.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34945,7 +34945,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.45.0
+Package: tokio:1.45.1
 
 The following copyrights and licenses were found in the source code of this package:
 
