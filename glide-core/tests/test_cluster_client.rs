@@ -15,7 +15,7 @@ mod cluster_client_tests {
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
-    use redis::{InfoDict, Value};
+    use redis::{InfoDict, ProtocolVersion, Value};
     use rstest::rstest;
     use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
