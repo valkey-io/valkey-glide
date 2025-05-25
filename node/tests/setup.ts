@@ -9,7 +9,8 @@ beforeAll(() => {
     // Logger.setLoggerConfig("off");
 });
 
-// Clear all timers after each test to prevent hanging handles
+// Clear all timers after each test to prevent hanging handles,
+// Hanging handles are often caused by setTimeout, setInterval, or similar functions that are not cleared properly. Meaning we create a timer which something is waiting for it to finish, whether the test or some code piece, and not clearing it led to the test hanging. Causing memory leaks and other issues.
 afterEach(() => {
     jest.clearAllTimers();
 });
