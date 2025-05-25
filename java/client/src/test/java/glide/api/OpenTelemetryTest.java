@@ -1,12 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import glide.api.models.ClusterBatch;
 import glide.api.models.ProtocolVersion;
 import glide.api.models.exceptions.ConfigurationException;
 import glide.utils.TestUtils;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,9 +16,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class OpenTelemetryTest {
