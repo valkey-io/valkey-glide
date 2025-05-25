@@ -38,7 +38,7 @@ package glide.api;
 
 import glide.api.models.exceptions.ConfigurationException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
-import glide.utils.Logger;
+import glide.api.logging.Logger;
 
 import java.util.Random;
 
@@ -317,7 +317,7 @@ public class OpenTelemetry {
 
     private static void internalInit(OpenTelemetryConfig config) {
         openTelemetryConfig = config;
-        
+
         String tracesEndpoint = null;
         int tracesSamplePercentage = -1;
         if (config.getTraces() != null) {
@@ -326,22 +326,22 @@ public class OpenTelemetry {
                 tracesSamplePercentage = config.getTraces().getSamplePercentage();
             }
         }
-        
+
         String metricsEndpoint = null;
         if (config.getMetrics() != null) {
             metricsEndpoint = config.getMetrics().getEndpoint();
         }
-        
-        long flushIntervalMs = config.getFlushIntervalMs() != null ? 
+
+        long flushIntervalMs = config.getFlushIntervalMs() != null ?
             config.getFlushIntervalMs() : 5000L;
-        
+
         OpenTelemetryResolver.initOpenTelemetry(
             tracesEndpoint,
             tracesSamplePercentage,
             metricsEndpoint,
             flushIntervalMs
         );
-        
+
         instance = new OpenTelemetry();
     }
 
@@ -371,8 +371,8 @@ public class OpenTelemetry {
      */
     public static boolean shouldSample() {
         Integer percentage = getSamplePercentage();
-        return isInitialized() && 
-               percentage != null && 
+        return isInitialized() &&
+               percentage != null &&
                random.nextDouble() * 100 < percentage;
     }
 
@@ -391,7 +391,7 @@ public class OpenTelemetry {
 
         openTelemetryConfig.getTraces().setSamplePercentage(percentage);
     }
-    
+
     /**
      * Creates a new OpenTelemetry span with the given name.
      * @param name The name of the span
@@ -400,7 +400,7 @@ public class OpenTelemetry {
     public static long createSpan(String name) {
         return OpenTelemetryResolver.createLeakedOtelSpan(name);
     }
-    
+
     /**
      * Drops an OpenTelemetry span.
      * @param spanPtr The pointer to the span

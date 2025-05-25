@@ -675,7 +675,7 @@ public class CommandManager {
      */
     private void dropCommandSpan(long spanPtr) {
         if (spanPtr != 0) {
-            OpenTelemetryResolver.dropSpan(spanPtr);
+            OpenTelemetryResolver.dropOtelSpan(spanPtr);
         }
     }
 

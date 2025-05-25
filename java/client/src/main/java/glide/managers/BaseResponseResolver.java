@@ -29,7 +29,7 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
 
         // Drop the OpenTelemetry span if one was created
         if (response.hasRootSpanPtr() && response.getRootSpanPtr() != 0) {
-            OpenTelemetryResolver.dropSpan(response.getRootSpanPtr());
+            OpenTelemetryResolver.dropOtelSpan(response.getRootSpanPtr());
         }
 
         if (response.hasConstantResponse()) {

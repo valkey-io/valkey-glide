@@ -36,9 +36,27 @@ public class OpenTelemetryResolver {
     public static native long createSpan(String spanName);
     
     /**
+     * Creates a new OpenTelemetry span with the given name that will not be automatically
+     * dropped by the Rust core. The caller is responsible for dropping this span using
+     * {@link #dropOtelSpan(long)}.
+     *
+     * @param spanName The name of the span to create
+     * @return A pointer to the created span, or 0 if creation failed
+     */
+    public static native long createLeakedOtelSpan(String spanName);
+    
+    /**
      * Drops an OpenTelemetry span, releasing its resources.
      *
      * @param spanPtr The pointer to the span to drop
      */
     public static native void dropSpan(long spanPtr);
+    
+    /**
+     * Drops an OpenTelemetry span that was created with {@link #createLeakedOtelSpan(String)},
+     * releasing its resources.
+     *
+     * @param spanPtr The pointer to the span to drop
+     */
+    public static native void dropOtelSpan(long spanPtr);
 }
