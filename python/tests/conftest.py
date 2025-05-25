@@ -165,6 +165,20 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
+    pytest.valkey_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        load_module=load_module,
+        replica_count=2,
+    )
+    pytest.standalone_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=1,
+        load_module=load_module,
+    )
+
 
 @pytest.fixture(autouse=True, scope="session")
 def call_before_all_pytests(request):
@@ -200,6 +214,18 @@ def pytest_sessionfinish(session, exitstatus):
         del pytest.standalone_cluster
     except AttributeError:
         # standalone_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_tls_cluster
+    except AttributeError:
+        # valkey_tls_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.standalone_tls_cluster
+    except AttributeError:
+        # standalone_tls_cluster was not set, skip deletion
         pass
 
 
@@ -302,6 +328,36 @@ async def glide_client(
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
+
+
+@pytest.fixture(scope="function")
+async def glide_tls_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    tls_insecure: bool,
+) -> AsyncGenerator[TGlideClient, None]:
+    """
+    Get async socket client for tests with TLS enabled.
+    """
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        use_tls=True,
+        tls_insecure=tls_insecure,
+        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
+    )
+    yield client
+    await test_teardown(request, cluster_mode, protocol)
+    await client.close()
+
+
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)
 
 
 @pytest.fixture(scope="function")
