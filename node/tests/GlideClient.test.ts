@@ -10,7 +10,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { BufferReader, BufferWriter } from "protobufjs";
+import { BufferReader, BufferWriter } from "protobufjs/minimal";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
     Decoder,
@@ -24,9 +25,8 @@ import {
     RequestError,
     Script,
     convertGlideRecordToRecord,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { command_request } from "../src/ProtobufMessage";
+} from "../build-ts";
+import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     batchTest,

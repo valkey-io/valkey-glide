@@ -16,6 +16,7 @@ export default tseslint.config(
             "**/build-ts/**",
             "build/**",
             "jest.config.js",
+            "**/dist/**",
             "docs/**",
         ],
     },

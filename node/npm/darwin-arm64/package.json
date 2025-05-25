@@ -1,0 +1,46 @@
+{
+    "name": "@valkey/valkey-glide-darwin-arm64",
+    "version": "0.0.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://valkey.io/valkey-glide/node/",
+    "author": "Valkey GLIDE Maintainers",
+    "publishConfig": {
+        "access": "public"
+    },
+    "description": "Native bindings for valkey-glide on darwin-arm64",
+    "main": "valkey-glide.darwin-arm64.node",
+    "files": [
+        "valkey-glide.darwin-arm64.node"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "license": "Apache-2.0",
+    "keywords": [
+        "valkey",
+        "redis",
+        "client",
+        "driver",
+        "database",
+        "napi",
+        "typescript",
+        "rust",
+        "cross-platform",
+        "cluster",
+        "standalone",
+        "high-availability",
+        "performance",
+        "open-source",
+        "fault-tolerant",
+        "distributed",
+        "scalable",
+        "resilient",
+        "valkey-glide"
+    ]
+}

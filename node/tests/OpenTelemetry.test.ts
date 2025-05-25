@@ -4,15 +4,15 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
-import { OpenTelemetryConfig } from "glide-rs";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     ClusterBatch,
     GlideClient,
     GlideClusterClient,
     OpenTelemetry,
+    OpenTelemetryConfig,
     ProtocolVersion,
-} from "..";
-import ValkeyCluster from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,

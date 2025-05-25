@@ -4,7 +4,7 @@ excludes:
           reason: "DEV_DEPENDENCY_OF"
           comment: "Packages for development only."
     paths:
-        - pattern: "npm/glide/**"
+        - pattern: "npm/**"
           reason: "BUILD_TOOL_OF"
           comment: "Template file for CD"
 

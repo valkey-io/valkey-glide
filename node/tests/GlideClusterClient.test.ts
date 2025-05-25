@@ -11,6 +11,7 @@ import {
     it,
 } from "@jest/globals";
 import { gte } from "semver";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
     ClusterBatch,
@@ -35,8 +36,7 @@ import {
     SortOrder,
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import { runBaseTests } from "./SharedTests";
 import {
     batchTest,
