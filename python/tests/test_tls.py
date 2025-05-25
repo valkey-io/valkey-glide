@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict
 
 import pytest
 
@@ -9,15 +9,7 @@ from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
 
 
-@pytest.fixture(scope="module")
-def event_loop():
-    """A module-scoped event loop for async tests in this file only."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 async def tls_clusters():
     tls_valkey_cluster = ValkeyCluster(
         tls=True, cluster_mode=True, shard_count=3, replica_count=0
@@ -32,31 +24,32 @@ async def tls_clusters():
     del tls_valkey_standalone
 
 
-@pytest.fixture
-def tls_insecure(request) -> bool:
-    # If the test has param'd tls_insecure, use it
-    # Otherwise default to False
-    return getattr(request, "param", False)
+@pytest.fixture(scope="module")
+async def tls_clusters() -> AsyncGenerator[Dict[bool, ValkeyCluster], None]:
+    """Create TLS clusters once per module."""
+    cluster = ValkeyCluster(tls=True, cluster_mode=True, shard_count=3, replica_count=0)
+    standalone = ValkeyCluster(
+        tls=True, cluster_mode=False, shard_count=1, replica_count=0
+    )
+
+    yield {
+        True: cluster,
+        False: standalone,
+    }
+
+    del cluster
+    del standalone
 
 
 @pytest.fixture(scope="function")
 async def glide_tls_client(
     request,
-    tls_clusters,  # we get (cluster_mode=True, cluster_mode=False) ValkeyClusters as a tuple
-    cluster_mode: bool,  # this is coming from @pytest.mark.parametrize
+    tls_clusters,
+    cluster_mode: bool,
     protocol: ProtocolVersion,
     tls_insecure: bool,
-) -> "AsyncGenerator[TGlideClient, None]":
-    """
-    Return a GlideClusterClient that connects to either the cluster or standalone,
-    depending on the cluster_mode param.
-    """
-    (tls_valkey_cluster, tls_valkey_standalone) = tls_clusters
-
-    if cluster_mode:
-        chosen_cluster = tls_valkey_cluster
-    else:
-        chosen_cluster = tls_valkey_standalone
+) -> AsyncGenerator[TGlideClient, None]:
+    chosen_cluster = tls_clusters[cluster_mode]
 
     client = await create_client(
         request,

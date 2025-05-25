@@ -194,7 +194,7 @@ class AdvancedBaseClientConfiguration:
             if request.tls_mode == TlsMode.SecureTls:
                 request.tls_mode = TlsMode.InsecureTls
             else:
-                raise ValueError(
+                raise ConfigurationError(
                     "TLS is configured as insecure, but TLS isn't in use."
                 )
 

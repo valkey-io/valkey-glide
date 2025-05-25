@@ -7,6 +7,7 @@ from glide.config import (
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
     BaseClientConfiguration,
+    ConfigurationError,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -157,7 +158,7 @@ def test_reconnect_strategy_in_protobuf_request():
     )
 
 
-def test_tls__insecure_in_protobuf_request():
+def test_tls_insecure_in_protobuf_request():
     tls_conf = TlsAdvancedConfiguration(insecure=True)
 
     config = GlideClientConfiguration(
@@ -165,7 +166,7 @@ def test_tls__insecure_in_protobuf_request():
         use_tls=False,
         advanced_config=AdvancedGlideClientConfiguration(tls_config=tls_conf),
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationError):
         config._create_a_protobuf_conn_request()
 
     config = GlideClientConfiguration(
@@ -183,7 +184,7 @@ def test_tls__insecure_in_protobuf_request():
         use_tls=False,
         advanced_config=AdvancedGlideClusterClientConfiguration(tls_config=tls_conf),
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationError):
         config._create_a_protobuf_conn_request(cluster_mode=True)
 
     config = GlideClusterClientConfiguration(
