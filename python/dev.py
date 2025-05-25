@@ -135,7 +135,7 @@ def build_async_client(
     glide_version: str, release: bool, no_cache: bool = False
 ) -> None:
     print(
-        f"[INFO] Building async client in {'release' if release else 'debug'} mode..."
+        f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
     )
     env = activate_venv(no_cache)
     env.update(

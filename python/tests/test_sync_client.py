@@ -94,7 +94,7 @@ from tests.utils.utils import (
     get_random_string,
     parse_info_response,
     round_values,
-    run_with_timeout,
+    run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
 )
 
@@ -1314,10 +1314,10 @@ class TestCommands:
         def endless_blpop_call():
             glide_sync_client.blpop(["non_existent_key"], 0)
 
-        # blpop is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # blpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_blpop_call, timeout=3, on_timeout=glide_sync_client.close
             )
 
@@ -1400,7 +1400,7 @@ class TestCommands:
             glide_sync_client.blmpop([key3], ListDirection.LEFT, 0, 1)
 
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_blmpop_call, timeout=3, on_timeout=glide_sync_client.close
             )
 
@@ -1496,7 +1496,7 @@ class TestCommands:
         # brpop is called against a non-existing key with no timeout, but we wrap the call in the `run with timeout` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_brpop_call, timeout=3, on_timeout=glide_sync_client.close
             )
 
@@ -1714,7 +1714,7 @@ class TestCommands:
             )
 
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_blmove_call, timeout=3, on_timeout=glide_sync_client.close
             )
 
@@ -3916,10 +3916,10 @@ class TestCommands:
         def endless_bzpopmin_call():
             glide_sync_client.bzpopmin(["non_existent_key"], 0)
 
-        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call the `run_with_timeout` function
+        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_bzpopmin_call, timeout=0.5, on_timeout=glide_sync_client.close
             )
 
@@ -3977,10 +3977,10 @@ class TestCommands:
         def endless_bzpopmax_call():
             glide_sync_client.bzpopmax(["non_existent_key"], 0)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_bzpopmax_call, timeout=0.5, on_timeout=glide_sync_client.close
             )
 
@@ -4654,10 +4654,10 @@ class TestCommands:
         def endless_bzmpop_call():
             glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
 
-        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in the `run_with_timeout` function
+        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_bzmpop_call, timeout=0.5, on_timeout=glide_sync_client.close
             )
 
@@ -5519,7 +5519,7 @@ class TestCommands:
         # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
         # to avoid the test getting stuck forever.
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_xread_call, timeout=3, on_timeout=test_client.close
             )
 
@@ -5961,7 +5961,7 @@ class TestCommands:
         # when xreadgroup is called with a block timeout of 0, it should never timeout, but we wrap the test with a
         # timeout to avoid the test getting stuck forever.
         with pytest.raises(TimeoutError):
-            run_with_timeout(
+            run_sync_func_with_timeout_in_thread(
                 endless_xreadgroup_call, timeout=3, on_timeout=test_client.close
             )
 

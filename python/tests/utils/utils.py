@@ -2,7 +2,18 @@ import json
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import pytest
 from glide.commands.core_options import InfoSection
@@ -417,7 +428,18 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
         )
 
 
-def run_with_timeout(func, timeout, on_timeout=None):
+def run_sync_func_with_timeout_in_thread(
+    func: Callable, timeout: float, on_timeout=None
+):
+    """
+    Executes a synchronous function in a separate thread with a timeout.
+
+    If the function does not complete within the given timeout, a TimeoutError is raised,
+    and an optional `on_timeout` callback is invoked. Otherwise, the result of `func` is returned.
+
+    Intended primarily for use in tests of blocking synchronous commands where there's
+    a need to prevent the test suite from hanging indefinitely.
+    """
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         future = executor.submit(func)
