@@ -1,4 +1,3 @@
-import asyncio
 from typing import AsyncGenerator, Dict
 
 import pytest
@@ -14,21 +13,6 @@ def tls_insecure(request) -> bool:
     # If the test has param'd tls_insecure, use it
     # Otherwise default to False
     return getattr(request, "param", False)
-
-
-@pytest.fixture(scope="function", autouse=True)
-async def tls_clusters():
-    tls_valkey_cluster = ValkeyCluster(
-        tls=True, cluster_mode=True, shard_count=3, replica_count=0
-    )
-    tls_valkey_standalone = ValkeyCluster(
-        tls=True, cluster_mode=False, shard_count=1, replica_count=0
-    )
-
-    yield (tls_valkey_cluster, tls_valkey_standalone)
-
-    del tls_valkey_cluster
-    del tls_valkey_standalone
 
 
 @pytest.fixture(scope="module")
