@@ -9,6 +9,13 @@ from tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
 
 
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)
+
+
 @pytest.fixture(scope="function", autouse=True)
 async def tls_clusters():
     tls_valkey_cluster = ValkeyCluster(
