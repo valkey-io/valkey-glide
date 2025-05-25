@@ -768,7 +768,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                     if let Err(e) = glide_core::GlideOpenTelemetry::initialise(config.build()) {
                         logger_core::log(
                             logger_core::Level::Error,
-                            "OpenTelemetry".to_string(),
+                            "OpenTelemetry",
                             format!("Failed to initialize OpenTelemetry: {}", e),
                         );
                         return Err(FFIError::OpenTelemetry(format!(
