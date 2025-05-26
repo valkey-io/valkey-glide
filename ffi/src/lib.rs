@@ -58,7 +58,7 @@ pub struct ScriptHashBuffer {
 /// * `script_bytes` must point to `script_len` consecutive properly initialized bytes.
 /// * The returned buffer must be freed by the caller using [`free_script_hash_buffer`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn store_script(
+pub unsafe extern "C" fn store_script(
     script_bytes: *const u8,
     script_len: usize,
 ) -> *mut ScriptHashBuffer {
@@ -83,7 +83,7 @@ pub unsafe extern "C-unwind" fn store_script(
 ///
 /// * `buffer` must be a pointer returned from [`store_script`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn free_script_hash_buffer(buffer: *mut ScriptHashBuffer) {
+pub unsafe extern "C" fn free_script_hash_buffer(buffer: *mut ScriptHashBuffer) {
     let buffer = unsafe { Box::from_raw(buffer) };
     let _hash = unsafe { String::from_raw_parts(buffer.ptr, buffer.len, buffer.capacity) };
 }
@@ -101,7 +101,7 @@ pub unsafe extern "C-unwind" fn free_script_hash_buffer(buffer: *mut ScriptHashB
 ///
 /// * `hash` must be a valid pointer to a UTF-8 string obtained from [`store_script`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn drop_script(hash: *mut u8, len: usize) -> *mut c_char {
+pub unsafe extern "C" fn drop_script(hash: *mut u8, len: usize) -> *mut c_char {
     if !hash.is_null() {
         let slice = std::ptr::slice_from_raw_parts_mut(hash, len);
         let Ok(hash_str) = str::from_utf8(unsafe { &*slice }) else {
@@ -126,7 +126,7 @@ pub unsafe extern "C-unwind" fn drop_script(hash: *mut u8, len: usize) -> *mut c
 ///
 /// * `error` must be an error returned by [`drop_script`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn free_drop_script_error(error: *mut c_char) {
+pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
     _ = unsafe { CString::from_raw(error) };
 }
 
@@ -337,7 +337,7 @@ pub struct CommandResult {
 /// * If `command_error.command_error_message` is non-null, it must be a valid pointer obtained from Rust
 ///   and must outlive the `CommandError` itself.
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn free_command_result(command_result_ptr: *mut CommandResult) {
+pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandResult) {
     if command_result_ptr.is_null() {
         return;
     }
@@ -733,7 +733,7 @@ pub unsafe extern "C-unwind" fn create_client(
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn close_client(client_adapter_ptr: *const c_void) {
+pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
     // This will bring the strong count down to 0 once all client requests are done.
     unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
@@ -755,7 +755,7 @@ pub unsafe extern "C-unwind" fn close_client(client_adapter_ptr: *const c_void) 
 /// * The contained `connection_error_message` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * The contained `connection_error_message` must be valid until `free_connection_response` is called and it must outlive the `ConnectionResponse` that contains it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn free_connection_response(
+pub unsafe extern "C" fn free_connection_response(
     connection_response_ptr: *mut ConnectionResponse,
 ) {
     assert!(!connection_response_ptr.is_null());
@@ -771,7 +771,7 @@ pub unsafe extern "C-unwind" fn free_connection_response(
 ///
 /// Important: the returned pointer is a pointer to a constant string and should not be freed.
 #[unsafe(no_mangle)]
-pub extern "C-unwind" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
+pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
     let c_str = match response_type {
         ResponseType::Null => c"Null",
         ResponseType::Int => c"Int",
@@ -796,7 +796,7 @@ pub extern "C-unwind" fn get_response_type_string(response_type: ResponseType) -
 /// * `command_response_ptr` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * `command_response_ptr` must be valid until `free_command_response` is called.
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn free_command_response(command_response_ptr: *mut CommandResponse) {
+pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
         let command_response = unsafe { Box::from_raw(command_response_ptr) };
         unsafe { free_command_response_elements(*command_response) };
@@ -1219,7 +1219,7 @@ impl ClusterScanCursor {
     ///     * The entire memory range of this CStr must be contained within a single allocated object!
     /// * The nul terminator must be within `isize::MAX` from `new_cursor`.
     #[unsafe(no_mangle)]
-    pub unsafe extern "C-unwind" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
+    pub unsafe extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
         if !new_cursor.is_null() && unsafe { CStr::from_ptr(new_cursor) }.to_str().is_ok() {
             ClusterScanCursor { cursor: new_cursor }
         } else {
@@ -1246,9 +1246,9 @@ impl Drop for ClusterScanCursor {
     // so we use a "smart constructor" to guarantee that a valid ClusterScanCursor
     // is able to be safely dropped.
     fn drop(&mut self) {
-        let c_str = unsafe { CStr::from_ptr(self.cursor) };
-        let temp_str = c_str.to_str().expect("Must be UTF-8");
-        glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
+        if let Ok(temp_str) = unsafe { CStr::from_ptr(self.cursor).to_str() } {
+            glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
+        }
     }
 }
 
@@ -1299,58 +1299,44 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
 
-        debug_assert!(
-            arg_count <= arg_vec.len() as u64,
-            "arg_count greater than arg_vec length. This is probably due to a bug in convert_double_pointer_to_vec."
-        );
-
-        // CLUSTER SCAN only takes up to 6 optional arguments
-        if arg_count < 6 {
-            for i in 0..arg_count as usize {
-                match arg_vec[i] {
-                    b"MATCH" => {
-                        pattern = match arg_vec.get(i + 1) {
-                            Some(pat) => pat,
-                            None => {
-                                let err = RedisError::from((
-                                    ErrorKind::ClientError,
-                                    "No argument following MATCH.",
-                                ));
-                                return client_adapter.handle_error(err, channel);
-                            }
-                        }
+        let mut iter = arg_vec.iter().peekable();
+        while let Some(arg) = iter.next() {
+            match *arg {
+                b"MATCH" => match iter.next() {
+                    Some(pat) => pattern = pat,
+                    None => {
+                        let err = RedisError::from((
+                            ErrorKind::ClientError,
+                            "No argument following MATCH.",
+                        ));
+                        return client_adapter.handle_error(err, channel);
                     }
-                    b"TYPE" => {
-                        object_type = match arg_vec.get(i + 1) {
-                            Some(obj_type) => obj_type,
-                            None => {
-                                let err = RedisError::from((
-                                    ErrorKind::ClientError,
-                                    "No argument following TYPE.",
-                                ));
-                                return client_adapter.handle_error(err, channel);
-                            }
-                        }
+                },
+                b"TYPE" => match iter.next() {
+                    Some(obj_type) => object_type = obj_type,
+                    None => {
+                        let err = RedisError::from((
+                            ErrorKind::ClientError,
+                            "No argument following TYPE.",
+                        ));
+                        return client_adapter.handle_error(err, channel);
                     }
-                    b"COUNT" => {
-                        count = match arg_vec.get(i + 1) {
-                            Some(count) => count,
-                            None => {
-                                let err = RedisError::from((
-                                    ErrorKind::ClientError,
-                                    "No argument following COUNT.",
-                                ));
-                                return client_adapter.handle_error(err, channel);
-                            }
-                        }
+                },
+                b"COUNT" => match iter.next() {
+                    Some(c) => count = c,
+                    None => {
+                        let err = RedisError::from((
+                            ErrorKind::ClientError,
+                            "No argument following COUNT.",
+                        ));
+                        return client_adapter.handle_error(err, channel);
                     }
-                    _ => {}
+                },
+                _ => {
+                    // Unknown or unsupported arg — safely skip or log
+                    continue;
                 }
             }
-        } else {
-            let err =
-                RedisError::from((ErrorKind::ClientError, "Maximum argument count exceeded."));
-            return client_adapter.handle_error(RedisError::from(err), channel);
         }
 
         // Convert back to proper types
