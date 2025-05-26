@@ -339,6 +339,7 @@ async def acl_glide_client(
         cluster_mode,
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
