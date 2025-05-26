@@ -129,7 +129,8 @@ public class OpenTelemetryTests {
                         .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
                         .build();
 
-        Exception exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
+        Exception exception =
+                assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
         assertTrue(exception.getMessage().contains("Parse error"));
 
         // Wrong metrics endpoint
