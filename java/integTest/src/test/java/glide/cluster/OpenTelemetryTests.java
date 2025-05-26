@@ -12,7 +12,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.OpenTelemetry;
-import glide.api.OpenTelemetryConfig;
+import glide.api.OpenTelemetry.OpenTelemetryConfig;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
