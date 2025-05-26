@@ -7,7 +7,7 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
