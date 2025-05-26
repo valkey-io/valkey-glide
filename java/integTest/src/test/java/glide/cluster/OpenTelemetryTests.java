@@ -107,16 +107,16 @@ public class OpenTelemetryTests {
         testSpanNotExportedBeforeInitOtel();
 
         // Initialize OpenTelemetry with valid configuration
-        OpenTelemetryConfig openTelemetryConfig = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                .samplePercentage(100)
-                .build())
-            .metrics(OpenTelemetry.MetricsConfig.builder()
-                .endpoint(VALID_ENDPOINT_METRICS)
-                .build())
-            .flushIntervalMs(100L)
-            .build();
+        OpenTelemetryConfig openTelemetryConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(100)
+                                        .build())
+                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint(VALID_ENDPOINT_METRICS).build())
+                        .flushIntervalMs(100L)
+                        .build();
 
         OpenTelemetry.init(openTelemetryConfig);
     }
@@ -124,75 +124,83 @@ public class OpenTelemetryTests {
     @SneakyThrows
     private static void wrongOpenTelemetryConfig() {
         // Wrong traces endpoint
-        OpenTelemetryConfig config = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint("wrong.endpoint")
-                .build())
-            .build();
+        OpenTelemetryConfig config =
+                OpenTelemetryConfig.builder()
+                        .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
+                        .build();
 
         Exception exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(exception.getMessage().contains("Parse error"));
 
         // Wrong metrics endpoint
-        config = OpenTelemetryConfig.builder()
-            .metrics(OpenTelemetry.MetricsConfig.builder()
-                .endpoint("wrong.endpoint")
-                .build())
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(exception.getMessage().contains("Parse error"));
 
         // Negative flush interval
-        config = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                .samplePercentage(1)
-                .build())
-            .flushIntervalMs(-400L)
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(1)
+                                        .build())
+                        .flushIntervalMs(-400L)
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive integer"));
 
         // Negative sample percentage
-        config = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                .samplePercentage(-400)
-                .build())
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(-400)
+                                        .build())
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(
                 exception.getMessage().contains("Trace sample percentage must be between 0 and 100"));
 
         // Wrong traces file path
-        config = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint("file:invalid-path/v1/traces.json")
-                .build())
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("file:invalid-path/v1/traces.json")
+                                        .build())
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
 
         // Wrong metrics file path
-        config = OpenTelemetryConfig.builder()
-            .metrics(OpenTelemetry.MetricsConfig.builder()
-                .endpoint("file:invalid-path/v1/metrics.json")
-                .build())
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .metrics(
+                                OpenTelemetry.MetricsConfig.builder()
+                                        .endpoint("file:invalid-path/v1/metrics.json")
+                                        .build())
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
 
         // Wrong directory path
-        config = OpenTelemetryConfig.builder()
-            .traces(OpenTelemetry.TracesConfig.builder()
-                .endpoint("file:///no-exits-path/v1/traces.json")
-                .build())
-            .build();
+        config =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("file:///no-exits-path/v1/traces.json")
+                                        .build())
+                        .build();
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
         assertTrue(
