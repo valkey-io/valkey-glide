@@ -1,10 +1,9 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-use once_cell::sync::OnceCell;
 use std::{
     path::{Path, PathBuf},
-    sync::RwLock,
+    sync::{OnceLock, RwLock},
 };
 use tracing::{self, event};
 use tracing_appender::rolling::{RollingFileAppender, RollingWriter, Rotation};
@@ -47,11 +46,11 @@ pub struct Reloads {
 }
 
 pub struct InitiateOnce {
-    init_once: OnceCell<Reloads>,
+    init_once: OnceLock<Reloads>,
 }
 
 pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
-    init_once: OnceCell::new(),
+    init_once: OnceLock::new(),
 };
 
 const FILE_DIRECTORY: &str = "glide-logs";
@@ -61,7 +60,7 @@ const ENV_GLIDE_LOG_DIR: &str = "GLIDE_LOG_DIR";
 /// allowing [init] to disable file logging on read-only filesystems.
 /// This is needed because [RollingFileAppender] tries to create the log directory on initialization.
 struct LazyRollingFileAppender {
-    file_appender: OnceCell<RollingFileAppender>,
+    file_appender: OnceLock<RollingFileAppender>,
     rotation: Rotation,
     directory: PathBuf,
     filename_prefix: PathBuf,
@@ -74,7 +73,7 @@ impl LazyRollingFileAppender {
         filename_prefix: impl AsRef<Path>,
     ) -> LazyRollingFileAppender {
         LazyRollingFileAppender {
-            file_appender: OnceCell::new(),
+            file_appender: OnceLock::new(),
             rotation,
             directory: directory.as_ref().to_path_buf(),
             filename_prefix: filename_prefix.as_ref().to_path_buf(),

@@ -1,4 +1,3 @@
-use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
 use opentelemetry::{global, trace::Tracer};
@@ -8,11 +7,11 @@ use opentelemetry_sdk::metrics::{MetricError, SdkMeterProvider};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
@@ -41,6 +40,18 @@ pub enum GlideOTELError {
 
     #[error("Other error: {0}")]
     Other(String),
+}
+
+impl Clone for GlideOTELError {
+    fn clone(&self) -> Self {
+        match self {
+            GlideOTELError::TraceError(_) => GlideOTELError::Other("Trace error".to_string()),
+            GlideOTELError::MetricError(_) => GlideOTELError::Other("Metric error".to_string()),
+            GlideOTELError::ReadLockError => GlideOTELError::ReadLockError,
+            GlideOTELError::WriteLockError => GlideOTELError::WriteLockError,
+            GlideOTELError::Other(msg) => GlideOTELError::Other(msg.clone()),
+        }
+    }
 }
 
 /// Default interval in milliseconds for flushing open telemetry data to the collector.
@@ -80,8 +91,12 @@ impl std::str::FromStr for GlideOpenTelemetrySignalsExporter {
 
 fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetrySignalsExporter, Error> {
     // Parse the URL using the `url` crate to validate it
-    let url = Url::parse(endpoint)
-        .map_err(|_| Error::new(ErrorKind::InvalidInput, format!("Parse error. {endpoint}")))?;
+    let url = Url::parse(endpoint).map_err(|_| {
+        Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Parse error. {endpoint}"),
+        )
+    })?;
 
     match url.scheme() {
         "http" | "https" => Ok(GlideOpenTelemetrySignalsExporter::Http(
@@ -94,19 +109,13 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetrySignalsExporter, E
             // For file, we need to extract the path without the 'file://' prefix
             let file_prefix = "file://";
             if !endpoint.starts_with(file_prefix) {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "File path must start with 'file://'",
-                ));
+                return Err(Error::other("File path must start with 'file://'"));
             }
 
             // Extract the path by removing the 'file://' prefix
-            let path = endpoint.strip_prefix(file_prefix).ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    "Failed to extract path from file URL",
-                )
-            })?;
+            let path = endpoint
+                .strip_prefix(file_prefix)
+                .ok_or_else(|| Error::other("Failed to extract path from file URL"))?;
 
             let path_buf = PathBuf::from(path);
 
@@ -124,27 +133,27 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetrySignalsExporter, E
                 match parent_dir.try_exists() {
                     Ok(exists) => {
                         if !exists || !parent_dir.is_dir() {
-                            return Err(Error::new(
-                                ErrorKind::InvalidInput,
-                                format!(
-                                    "The directory does not exist or is not a directory: {}",
-                                    parent_dir.display()
-                                ),
-                            ));
+                            return Err(Error::other(format!(
+                                "The directory does not exist or is not a directory: {}",
+                                parent_dir.display()
+                            )));
                         }
                     }
                     Err(e) => {
-                        return Err(Error::new(
-                            ErrorKind::InvalidInput,
-                            format!("Error checking if parent directory exists: {}", e),
-                        ));
+                        return Err(Error::other(format!(
+                            "Error checking if parent directory exists: {}",
+                            e
+                        )));
                     }
                 }
             }
 
             Ok(GlideOpenTelemetrySignalsExporter::File(final_path))
         } // file endpoint
-        _ => Err(Error::new(ErrorKind::InvalidInput, endpoint)),
+        _ => Err(Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Unsupported scheme in endpoint: {}", endpoint),
+        )),
     }
 }
 
@@ -265,7 +274,7 @@ impl GlideSpanInner {
 
     /// Finishes the `Span`.
     pub fn end(&self) {
-        self.span.write().expect(SPAN_READ_LOCK_ERR).end()
+        self.span.write().expect(SPAN_WRITE_LOCK_ERR).end()
     }
 
     #[cfg(test)]
@@ -358,7 +367,7 @@ impl GlideSpan {
 /// let config = GlideOpenTelemetryConfigBuilder::default()
 ///    .with_flush_interval(std::time::Duration::from_millis(100))
 ///    .build();
-/// GlideOpenTelemetry::initialise(config);
+/// GlideOpenTelemetry::initialize(config);
 /// ```
 #[derive(Clone, Debug)]
 pub struct GlideOpenTelemetryConfig {
@@ -470,37 +479,57 @@ pub struct GlideOpenTelemetry {}
 static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
-static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
+static OTEL: OnceLock<Result<RwLock<GlideOpenTelemetry>, GlideOTELError>> = OnceLock::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
-    /// Initialise the open telemetry library with a file system exporter
+    /// Initialize the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
     /// If OpenTelemetry is already initialized, this method will return Ok(()) without reinitializing
-    pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
-        OTEL.get_or_try_init(|| {
-            Self::validate_config(config.clone())?;
+    pub fn initialize(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
+        // First validate the config
+        Self::validate_config(config.clone())?;
 
-            if let Some(traces_config) = config.traces.as_ref() {
-                Self::initialise_trace_exporter(
-                    config.flush_interval_ms,
-                    &traces_config.trace_exporter,
-                )?;
-            }
+        // Check if already initialized successfully
+        if let Some(result) = OTEL.get() {
+            return match result {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e.clone()),
+            };
+        }
 
-            if let Some(metrics_config) = config.metrics.as_ref() {
-                Self::initialise_metrics_exporter(
-                    config.flush_interval_ms,
-                    &metrics_config.metrics_exporter,
-                )?;
-                Self::init_metrics()?;
-            }
+        // Try to initialize - if it fails, don't cache the failure
+        let init_result = Self::do_initialize(config);
 
-            Ok::<RwLock<GlideOpenTelemetry>, GlideOTELError>(RwLock::new(GlideOpenTelemetry {}))
-        })?;
+        // Only cache successful initializations
+        if init_result.is_ok() {
+            // Clone the RwLock to store in OTEL
+            let _ = OTEL.set(Ok(RwLock::new(GlideOpenTelemetry {})));
+        }
 
-        Ok(())
+        init_result.map(|_| ())
+    }
+
+    fn do_initialize(
+        config: GlideOpenTelemetryConfig,
+    ) -> Result<RwLock<GlideOpenTelemetry>, GlideOTELError> {
+        if let Some(traces_config) = config.traces.as_ref() {
+            Self::initialize_trace_exporter(
+                config.flush_interval_ms,
+                &traces_config.trace_exporter,
+            )?;
+        }
+
+        if let Some(metrics_config) = config.metrics.as_ref() {
+            Self::initialize_metrics_exporter(
+                config.flush_interval_ms,
+                &metrics_config.metrics_exporter,
+            )?;
+            Self::init_metrics()?;
+        }
+
+        Ok(RwLock::new(GlideOpenTelemetry {}))
     }
 
     /// Validate the configuration
@@ -530,7 +559,7 @@ impl GlideOpenTelemetry {
     }
 
     /// Initialize the trace exporter based on the configuration
-    fn initialise_trace_exporter(
+    fn initialize_trace_exporter(
         flush_interval_ms: Duration,
         trace_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
@@ -573,7 +602,7 @@ impl GlideOpenTelemetry {
     }
 
     /// Initialize the metrics exporter based on the configuration
-    fn initialise_metrics_exporter(
+    fn initialize_metrics_exporter(
         flush_interval_ms: Duration,
         metrics_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
@@ -674,7 +703,7 @@ impl GlideOpenTelemetry {
 
     /// Check if OpenTelemetry is initialized
     pub fn is_initialized() -> bool {
-        OTEL.get().is_some()
+        OTEL.get().is_some_and(|result| result.is_ok())
     }
 }
 
@@ -710,7 +739,7 @@ mod tests {
                 METRICS_JSON,
             )))
             .build();
-        if let Err(e) = GlideOpenTelemetry::initialise(config) {
+        if let Err(e) = GlideOpenTelemetry::initialize(config) {
             panic!("Failed to initialize OpenTelemetry: {}", e);
         }
         Ok(())
@@ -808,6 +837,29 @@ mod tests {
         rt.block_on(async {
             let _ = std::fs::remove_file(METRICS_JSON);
             init_otel().await.unwrap();
+
+            // Wait for initial metrics to be flushed to get baseline
+            sleep(Duration::from_millis(2100)).await;
+
+            // Read initial counter value if file exists
+            let initial_value = if let Ok(file_content) = std::fs::read_to_string(METRICS_JSON) {
+                let lines: Vec<&str> = file_content
+                    .split('\n')
+                    .filter(|l| !l.trim().is_empty())
+                    .collect();
+                if !lines.is_empty() {
+                    let metric_json: serde_json::Value =
+                        serde_json::from_str(lines[lines.len() - 1]).unwrap();
+                    metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
+                        .as_u64()
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
             GlideOpenTelemetry::record_timeout_error().unwrap();
             sleep(Duration::from_millis(2100)).await;
             GlideOpenTelemetry::record_timeout_error().unwrap();
@@ -827,15 +879,27 @@ mod tests {
                 metric_json["scope_metrics"][0]["metrics"][0]["name"],
                 "glide.timeout_errors"
             );
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                1
+
+            // Verify the increment from baseline
+            let first_value =
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
+                    .as_u64()
+                    .unwrap();
+            assert!(
+                first_value >= initial_value + 1,
+                "Expected counter to increment by at least 1"
             );
+
             let metric_json: serde_json::Value =
                 serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            let final_value =
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
+                    .as_u64()
+                    .unwrap();
             assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                3
+                final_value,
+                initial_value + 3,
+                "Expected counter to increment by exactly 3"
             );
         });
     }

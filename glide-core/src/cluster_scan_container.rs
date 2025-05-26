@@ -2,9 +2,11 @@
 
 use logger_core::log_debug;
 use nanoid::nanoid;
-use once_cell::sync::Lazy;
 use redis::{RedisResult, ScanStateRC};
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
 
 // This is a container for storing the cursor of a cluster scan.
 // The cursor for a cluster scan is a ref to the actual ScanState struct in redis-rs.
@@ -14,8 +16,8 @@ use std::{collections::HashMap, sync::Mutex};
 // In wrapper layer we wrap the id in an object, which, when dropped, trigger the removal of the cursor from the container.
 // When the ref is removed from the container, the actual ScanState struct is dropped by Rust GC.
 
-static CONTAINER: Lazy<Mutex<HashMap<String, ScanStateRC>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static CONTAINER: LazyLock<Mutex<HashMap<String, ScanStateRC>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
     let id = nanoid!();

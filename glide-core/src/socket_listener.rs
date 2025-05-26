@@ -16,7 +16,6 @@ use PipeListeningResult::*;
 use bytes::Bytes;
 use directories::BaseDirs;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
-use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -33,7 +32,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
 use std::str;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
@@ -903,7 +902,7 @@ pub fn get_socket_path_from_name(socket_name: String) -> String {
 pub fn get_socket_path() -> String {
     // Ensure the socket name is unique by appending the process ID and a random UUID
     // to the socket name. The UUID is used to ensure that the socket name is unique for situations in which PID can be resused such as with dockers.
-    static SOCKET_NAME: Lazy<String> = Lazy::new(|| {
+    static SOCKET_NAME: LazyLock<String> = LazyLock::new(|| {
         format!(
             "{}-{}-{}.sock",
             SOCKET_FILE_NAME,
@@ -923,8 +922,8 @@ pub fn start_socket_listener_internal<InitCallback>(
 ) where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
-    static INITIALIZED_SOCKETS: Lazy<RwLock<HashSet<String>>> =
-        Lazy::new(|| RwLock::new(HashSet::new()));
+    static INITIALIZED_SOCKETS: LazyLock<RwLock<HashSet<String>>> =
+        LazyLock::new(|| RwLock::new(HashSet::new()));
 
     let socket_path = socket_path.unwrap_or_else(get_socket_path);
 

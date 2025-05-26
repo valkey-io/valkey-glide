@@ -2,11 +2,10 @@
 
 use bytes::BytesMut;
 use logger_core::{log_info, log_warn};
-use once_cell::sync::Lazy;
 use sha1_smol::Sha1;
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 const LOCK_ERR: &str = "Failed to acquire the scripts container lock";
 
@@ -19,8 +18,8 @@ struct ScriptEntry {
     ref_count: Cell<u32>,
 }
 
-static CONTAINER: Lazy<Mutex<HashMap<String, ScriptEntry>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static CONTAINER: LazyLock<Mutex<HashMap<String, ScriptEntry>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn add_script(script: &[u8]) -> String {
     let mut hash = Sha1::new();
