@@ -83,9 +83,9 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 //
 // Return value:
 //
-//	A list of results corresponding to the execution of each command in the batch.
-//	If a command returns a value, it will be included in the list. If a command doesn't return a value,
-//	the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
 //
 // [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
@@ -111,9 +111,9 @@ func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, 
 //
 // Return value:
 //
-//	A list of results corresponding to the execution of each command in the batch.
-//	If a command returns a value, it will be included in the list. If a command doesn't return a value,
-//	the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
 //
 // [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
