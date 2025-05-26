@@ -584,6 +584,7 @@ export type ReadFrom =
  *     - After this limit is reached, the retry interval becomes constant.
  *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
  *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
  *
  * @example
  * ```typescript
