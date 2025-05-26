@@ -141,14 +141,16 @@ public class CommandManager {
      * Build a Batch and send.
      *
      * @param batch Batch request with multiple commands
+     * @param raiseOnError Determines how errors are handled within the batch response.
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewBatch(
             Batch batch,
+            boolean raiseOnError,
             Optional<BatchOptions> options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        CommandRequest.Builder command = prepareCommandRequest(batch, options);
+        CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -193,15 +195,17 @@ public class CommandManager {
      * Build a Cluster Batch and send.
      *
      * @param batch Batch request with multiple commands
+     * @param raiseOnError Determines how errors are handled within the batch response.
      * @param options Batch options
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewBatch(
             ClusterBatch batch,
+            boolean raiseOnError,
             Optional<ClusterBatchOptions> options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        CommandRequest.Builder command = prepareCommandRequest(batch, options);
+        CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -312,20 +316,21 @@ public class CommandManager {
      * Build a protobuf Batch request object.
      *
      * @param batch Valkey batch with commands
+     * @param raiseOnError Determines how errors are handled within the batch response.
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
     protected CommandRequest.Builder prepareCommandRequest(
-            Batch batch, Optional<BatchOptions> options) {
+            Batch batch, boolean raiseOnError, Optional<BatchOptions> options) {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
             var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
 
-            builder.setBatch(batchBuilder.build());
+            builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
-            builder.setBatch(batch.getProtobufBatch().build());
+            builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());
         }
 
         return builder;
@@ -395,12 +400,13 @@ public class CommandManager {
      * Build a protobuf Batch request object with options.
      *
      * @param batch Valkey batch with commands
+     * @param raiseOnError Determines how errors are handled within the batch response.
      * @param options Batch options
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
     protected CommandRequest.Builder prepareCommandRequest(
-            ClusterBatch batch, Optional<ClusterBatchOptions> options) {
+            ClusterBatch batch, boolean raiseOnError, Optional<ClusterBatchOptions> options) {
 
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
@@ -417,13 +423,13 @@ public class CommandManager {
                 batchBuilder.setRetryConnectionError(opts.getRetryStrategy().isRetryConnectionError());
             }
 
-            builder.setBatch(batchBuilder.build());
+            builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
 
             if (opts.getRoute() != null) {
                 return prepareCommandRequestRoute(builder, opts.getRoute());
             }
         } else {
-            builder.setBatch(batch.getProtobufBatch().build());
+            builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());
         }
 
         return builder;
@@ -509,10 +515,6 @@ public class CommandManager {
             CommandRequestOuterClass.Batch.Builder batchBuilder, BaseBatchOptions options) {
         if (options.getTimeout() != null) {
             batchBuilder.setTimeout(options.getTimeout());
-        }
-
-        if (options.getRaiseOnError() != null) {
-            batchBuilder.setRaiseOnError(options.getRaiseOnError());
         }
 
         return batchBuilder;

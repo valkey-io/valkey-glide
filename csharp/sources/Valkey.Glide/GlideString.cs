@@ -4,6 +4,8 @@ using System.Collections;
 using System.ComponentModel;
 using System.Text;
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 namespace Valkey.Glide;
 
 /// <summary>
@@ -40,6 +42,13 @@ public static class GlideStringExtensions
     public static GlideString[] ToGlideStrings(this byte[][] strings) => [.. strings.Select(s => new GlideString(s))];
 
     /// <summary>
+    /// Convert an <see langword="Section[]" /> to an <see langword="GlideString[]" />.
+    /// </summary>
+    /// <param name="strings">An array of <see langword="string" />s to convert.</param>
+    /// <returns>An array of <see cref="GlideString" />s.</returns>
+    public static GlideString[] ToGlideStrings(this Section[] strings) => [.. strings.Select(s => new GlideString(s.ToString()))];
+
+    /// <summary>
     /// Convert an <see langword="GlideString[]" /> to an <see langword="string[]" />.<br />
     /// <b>Note:</b> a resulting <see langword="string" /> may be incorrect if original <see cref="GlideString" />
     /// stores a non-UTF8 compatible sequence of bytes.
@@ -62,6 +71,8 @@ public static class GlideStringExtensions
 /// This class stores data as <see langword="byte[]" /> too, but provides API to represent data
 /// as a <see langword="string" /> if conversion is possible.<br />
 /// A <see cref="GlideString" /> could be implicitly instatiated from a <see langword="string" />.
+/// </summary>
+/// <remarks>
 /// <example>
 /// <code>
 /// GlideString gs1 = "123";
@@ -75,7 +86,7 @@ public static class GlideStringExtensions
 /// }
 /// </code>
 /// </example>
-/// </summary>
+/// </remarks>
 [ImmutableObject(true)]
 public sealed class GlideString : IComparable<GlideString>
 {
@@ -94,7 +105,7 @@ public sealed class GlideString : IComparable<GlideString>
     /// <summary>
     /// Create a <see cref="GlideString" /> initiated by a <see langword="string" />.<br />
     /// </summary>
-    /// <param name="string">A <see langword="byte[]" /> to store.</param>
+    /// <param name="string">A <see langword="string" /> to store.</param>
     public GlideString(string @string)
     {
         _canConvertToString = true;
@@ -122,6 +133,8 @@ public sealed class GlideString : IComparable<GlideString>
     /// <b>Note:</b> a resulting <see langword="string" /> may be incorrect if original <see cref="GlideString" />
     /// stores a non-UTF8 compatible sequence of bytes. It is <b>highly recommended</b> to call to
     /// <see cref="CanConvertToString()" /> prior to do a conversion.
+    /// </summary>
+    /// <remarks>
     /// <example>
     /// <code>
     /// GlideString gs = new byte[] { 0, 42, 255, 243, 0, 253, 15 };
@@ -131,7 +144,7 @@ public sealed class GlideString : IComparable<GlideString>
     /// }
     /// </code>
     /// </example>
-    /// </summary>
+    /// </remarks>
     /// <returns>A <see langword="string" /> representation of this <see cref="GlideString" />.</returns>
     public string GetString()
     {

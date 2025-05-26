@@ -7,14 +7,24 @@ import {
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    createLeakedOtelSpan,
+    dropOtelSpan,
     getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
+    BatchOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -25,6 +35,7 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClusterBatchOptions,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -247,6 +258,7 @@ import {
     Routes,
 } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { OpenTelemetry } from "./OpenTelemetry";
 import {
     command_request,
     connection_request,
@@ -281,6 +293,7 @@ export type GlideReturnType =
     | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
+    | RequestError
     | GlideReturnType[];
 
 /**
@@ -302,7 +315,16 @@ export enum Decoder {
     String,
 }
 
-/** An extension to command option types with {@link Decoder}. */
+/**
+ * An extension to command option types with {@link Decoder}.
+ *
+ * WARNING:
+ *
+ * Be aware that if decoding fails during a command execution (due to
+ * invalid inputs, incorrect decoder), data COULD BE UNRECOVERABLY LOST.
+ *
+ * Use with caution.
+ */
 export interface DecoderOption {
     /**
      * {@link Decoder} type which defines how to handle the response.
@@ -477,14 +499,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -744,10 +766,20 @@ export interface PubSubMsg {
 
 /**
  * @internal
- * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
- * See - {@link DecoderOption} and {@link RouteOption}
+ * Options used when creating a write promise for a command.
+ *
+ * This type combines {@link RouteOption} and {@link DecoderOption} with optional support for
+ * {@link ClusterBatchOptions} or {@link BatchOptions}.
+ *
+ * @see {@link DecoderOption}
+ * @see {@link RouteOption}
+ * @see {@link ClusterBatchOptions}
+ * @see {@link BatchOptions}
  */
-export type WritePromiseOptions = RouteOption & DecoderOption;
+type BaseOptions = RouteOption & DecoderOption;
+export type WritePromiseOptions =
+    | BaseOptions
+    | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
 /**
  * Base client interface for GLIDE
@@ -921,6 +953,16 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof Long) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -962,7 +1004,9 @@ export class BaseClient {
                 reject(
                     err instanceof ValkeyError
                         ? err
-                        : new Error(`Decoding error: '${err}'`),
+                        : new Error(
+                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                          ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -970,6 +1014,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1054,22 +1100,81 @@ export class BaseClient {
 
     /**
      * @internal
+     *
+     * Creates a promise that resolves or rejects based on the result of a command request.
+     *
+     * @template T - The type of the result expected from the promise.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param options - Optional settings for the write operation, including route, batch options and decoder.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @returns A promise that resolves with the result of the command(s) or rejects with an error.
      */
     protected createWritePromise<T>(
         command: command_request.Command | command_request.Command[],
         options: WritePromiseOptions = {},
+        isAtomic = false,
+        raiseOnError = false,
     ): Promise<T> {
         this.ensureClientIsOpen();
 
         const route = this.toProtobufRoute(options?.route);
-        return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
+        const callbackIndex = this.getCallbackIndex();
+        const basePromise = new Promise<T>((resolve, reject) => {
+            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+
+            if (OpenTelemetry.shouldSample()) {
+                const commandName =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandName);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+
+            this.writeOrBufferCommandRequest(
+                callbackIndex,
+                command,
+                route,
+                spanPtr,
+                isAtomic,
+                raiseOnError,
+                options as ClusterBatchOptions,
+            );
+        });
+
+        if (!Array.isArray(command)) {
+            return basePromise;
+        }
+
+        return basePromise.then((result: T) => {
+            if (Array.isArray(result)) {
+                const loopLen = result.length;
+
+                for (let i = 0; i < loopLen; i++) {
+                    const item = result[i];
+
+                    // Check if the item is an instance of napi Error
+                    // Can be checked by checking if the constructor name is "Error"
+                    // and if there is a name property with the value "RequestError" (that we added in the Rust code)
+                    if (
+                        item?.constructor?.name === "Error" &&
+                        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                        (item as any).name === "RequestError"
+                    ) {
+                        Object.setPrototypeOf(item, RequestError.prototype);
+                    }
+                }
+            }
+
+            return result;
         });
     }
 
@@ -1127,31 +1232,66 @@ export class BaseClient {
         });
     }
 
+    /**
+     * @internal
+     *
+     * @param callbackIdx - The requests callback index.
+     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
+     * @param route - Optional routing information for the command.
+     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
+     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @param options - Optional settings for batch requests.
+     */
     protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        commandSpanPtr?: number | Long | null,
+        isAtomic = false,
+        raiseOnError = false,
+        options: ClusterBatchOptions | BatchOptions = {},
     ) {
-        const message = Array.isArray(command)
-            ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  batch: command_request.Batch.create({
-                      isAtomic: true,
-                      commands: command,
-                      // TODO: add support for timeout, raiseOnError and retryStrategy
-                  }),
-                  route,
-              })
-            : command_request.CommandRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-                  route,
-              });
+        if (isAtomic && "retryStrategy" in options) {
+            throw new RequestError(
+                "Retry strategy is not supported for atomic batches.",
+            );
+        }
+
+        const isBatch = Array.isArray(command);
+        let batch: command_request.Batch | undefined;
+
+        if (isBatch) {
+            let retryServerError: boolean | undefined;
+            let retryConnectionError: boolean | undefined;
+
+            if ("retryStrategy" in options) {
+                retryServerError = options.retryStrategy?.retryServerError;
+                retryConnectionError =
+                    options.retryStrategy?.retryConnectionError;
+            }
+
+            batch = command_request.Batch.create({
+                isAtomic,
+                commands: command,
+                raiseOnError,
+                timeout: options.timeout,
+                retryServerError,
+                retryConnectionError,
+            });
+        }
+
+        const message = command_request.CommandRequest.create({
+            callbackIdx,
+            singleCommand: isBatch ? undefined : command,
+            batch,
+            route,
+            rootSpanPtr: commandSpanPtr,
+        });
 
         this.writeOrBufferRequest(
             message,
-            (message: command_request.CommandRequest, writer: Writer) => {
-                command_request.CommandRequest.encodeDelimited(message, writer);
+            (msg: command_request.CommandRequest, writer: Writer) => {
+                command_request.CommandRequest.encodeDelimited(msg, writer);
             },
         );
     }
@@ -1169,7 +1309,7 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
-    // Define a common function to process the result of a transaction with set commands
+    // Define a common function to process the result of a batch with set commands
     /**
      * @internal
      */
@@ -1181,10 +1321,12 @@ export class BaseClient {
             return null;
         }
 
-        for (const index of setCommandsIndexes) {
-            result[index] = new Set<GlideReturnType>(
-                result[index] as GlideReturnType[],
-            );
+        for (let i = 0, len = setCommandsIndexes.length; i < len; i++) {
+            if (Array.isArray(result[setCommandsIndexes[i]])) {
+                result[setCommandsIndexes[i]] = new Set<GlideReturnType>(
+                    result[setCommandsIndexes[i]] as GlideReturnType[],
+                );
+            }
         }
 
         return result;
@@ -1369,13 +1511,13 @@ export class BaseClient {
         }
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      *
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return `null`.
      *
      * @example
      * ```typescript
@@ -1383,8 +1525,8 @@ export class BaseClient {
      * const result = await client.get("key");
      * console.log(result); // Output: 'value'
      * // Example usage of get method to retrieve the value of a key with Bytes decoder
-     * const result = await client.get("key", Decoder.Bytes);
-     * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
+     * const result = await client.get("key", { decoder: Decoder.Bytes });
+     * console.log(result); // Output: <Buffer 76 61 6c 75 65>
      * ```
      */
     public async get(
@@ -2490,9 +2632,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      *
@@ -2518,9 +2660,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
@@ -5741,7 +5883,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `tuple` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -5816,7 +5958,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      * @returns An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
@@ -5936,7 +6078,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
      *
      * @example
@@ -5972,14 +6114,14 @@ export class BaseClient {
      * console.log(infoResult);
      * // Output: {
      * //   length: 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
      * //   groups: 1,
      * // }
      * ```
@@ -5990,27 +6132,27 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   'length': 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'entries': [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     * //   'groups': [ {
-     * //     'name': 'group',
-     * //     'last-delivered-id': '1719877599564-0',
-     * //     'entries-read': 1,
-     * //     'lag': 1,
-     * //     'pel-count': 1,
-     * //     'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     * //     'consumers': [ {
-     * //         'name': 'consumer',
-     * //         'seen-time': 1722624726802,
-     * //         'active-time': 1722624726802,
-     * //         'pel-count': 1,
-     * //         'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //   "length": 2,
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],
+     * //   "groups': [ {
+     * //     "name': "group",
+     * //     "last-delivered-id": "1719877599564-0",
+     * //     "entries-read": 1,
+     * //     "lag": 1,
+     * //     "pel-count": 1,
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
+     * //     "consumers": [ {
+     * //         "name": "consumer",
+     * //         "seen-time": 1722624726802,
+     * //         "active-time": 1722624726802,
+     * //         "pel-count": 1,
+     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
      * //         }
      * //       ]
      * //     }
@@ -7276,14 +7418,14 @@ export class BaseClient {
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const transaction = new Batch(true).set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
@@ -7384,6 +7526,7 @@ export class BaseClient {
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      *
      * @example
      * ```typescript

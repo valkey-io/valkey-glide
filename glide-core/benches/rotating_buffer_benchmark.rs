@@ -3,15 +3,15 @@
 use std::{io::Write, ptr::from_mut};
 
 use bytes::BufMut;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use glide_core::{
-    command_request::{command, command_request},
     command_request::{Command, CommandRequest, RequestType},
+    command_request::{command, command_request},
     rotating_buffer::RotatingBuffer,
 };
 use integer_encoding::VarInt;
 use protobuf::Message;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{Rng, distributions::Alphanumeric};
 
 fn benchmark(
     c: &mut Criterion,

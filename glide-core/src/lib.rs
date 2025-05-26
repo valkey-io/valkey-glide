@@ -3,7 +3,6 @@
 #[cfg(feature = "proto")]
 include!("generated/mod.rs");
 pub mod client;
-mod retry_strategies;
 #[cfg(feature = "socket-layer")]
 pub mod rotating_buffer;
 #[cfg(feature = "socket-layer")]
@@ -15,4 +14,7 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod request_type;
-pub use telemetrylib::Telemetry;
+pub use telemetrylib::{
+    DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
+    GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
+};

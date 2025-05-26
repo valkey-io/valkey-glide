@@ -205,7 +205,7 @@ def run_tests(extra_args: Optional[List[str]] = None) -> None:
     print("[INFO] Running test suite...")
     env = get_venv_env()
 
-    cmd = ["pytest", "-v", "--asyncio-mode=auto"]
+    cmd = ["pytest", "-v"]
     if extra_args:
         cmd += extra_args
 
