@@ -365,17 +365,24 @@ impl Client {
         Ok(())
     }
 
+    /// Resolves the lazy connection by initializing it if it is currently a lazy client.
+    async fn resolve_lazy_connection(&mut self) -> RedisResult<()> {
+        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
+            self.initialize_lazy_connection().await?;
+        }
+        Ok(())
+    }
+
     /// Send a command to the server.
     /// This function will route the command to the correct node, and retry if needed.
+
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-                self.initialize_lazy_connection().await?;
-            }
+            self.resolve_lazy_connection().await?;
 
             let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
@@ -447,9 +454,7 @@ impl Client {
         let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
 
         // Check and initialize if lazy *inside* the async block
-        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-            self.initialize_lazy_connection().await?;
-        }
+        self.resolve_lazy_connection().await?;
 
         match &mut self.internal_client {
             ClientWrapper::Standalone(_) => {
@@ -555,9 +560,7 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-                self.initialize_lazy_connection().await?;
-            }
+            self.resolve_lazy_connection().await?;
 
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
@@ -634,9 +637,7 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-                self.initialize_lazy_connection().await?;
-            }
+            self.resolve_lazy_connection().await?;
 
             let command_count = pipeline.cmd_iter().count();
             if pipeline.is_empty() {
@@ -701,9 +702,7 @@ impl Client {
         args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
-        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-            self.initialize_lazy_connection().await?;
-        }
+        self.resolve_lazy_connection().await?;
 
         let eval = eval_cmd(hash, keys, args);
         let result = self.send_command(&eval, routing.clone()).await;
@@ -767,9 +766,7 @@ impl Client {
         // Since the password update operation is not a command that go through the regular command pipeline,
         // it is not have the regular timeout handling, as such we need to handle it separately.
         match tokio::time::timeout(timeout, async {
-            if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-                self.initialize_lazy_connection().await?;
-            }
+            self.resolve_lazy_connection().await?;
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.update_connection_password(password.clone()).await
@@ -823,9 +820,7 @@ impl Client {
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
     async fn get_username(&mut self) -> RedisResult<Option<String>> {
-        if let ClientWrapper::Lazy(_) = &mut self.internal_client {
-            self.initialize_lazy_connection().await?;
-        }
+        self.resolve_lazy_connection().await?;
 
         match &mut self.internal_client {
             ClientWrapper::Cluster { client } => match client.get_username().await {
