@@ -8,17 +8,14 @@ from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
-
-from tests.async_tests.conftest import (
-    auth_client,
-    config_set_new_password,
-    kill_connections,
-)
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
+    auth_client,
+    config_set_new_password,
     delete_acl_username_and_password,
+    kill_connections,
     set_new_acl_username_with_password,
 )
 

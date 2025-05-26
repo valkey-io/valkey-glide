@@ -3,6 +3,7 @@
 from typing import Generator, List, Optional
 
 import pytest
+
 from glide.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -13,17 +14,16 @@ from glide.config import (
     ServerCredentials,
 )
 from glide.exceptions import ClosingError
-from glide.glide_client import GlideClient, GlideClusterClient
-from glide.logger import Logger
-from glide.routes import AllNodes
 from glide.sync import GlideClient as SyncGlideClient
 from glide.sync import GlideClusterClient as SyncGlideClusterClient
 from glide.sync import TGlideClient as TSyncGlideClient
-
 from tests.utils.cluster import ValkeyCluster
-from tests.utils.utils import DEFAULT_TEST_LOG_LEVEL, NEW_PASSWORD, create_client_config
-
-Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
+from tests.utils.utils import (
+    NEW_PASSWORD,
+    auth_client,
+    config_set_new_password,
+    create_client_config,
+)
 
 
 @pytest.fixture(scope="function")
@@ -32,7 +32,7 @@ def glide_sync_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> Generator[TSyncGlideClient, None, None]:
-    "Get async socket client for tests"
+    "Get sync socket client for tests"
     client = create_sync_client(request, cluster_mode, protocol=protocol)
     yield client
     sync_test_teardown(request, cluster_mode, protocol)
@@ -86,37 +86,6 @@ def create_sync_client(
         return SyncGlideClient.create(config)
 
 
-def sync_auth_client(client: TSyncGlideClient, password):
-    """
-    Authenticates the given TGlideClient server connected.
-    """
-    if isinstance(client, GlideClient):
-        client.custom_command(["AUTH", password])
-    elif isinstance(client, GlideClusterClient):
-        client.custom_command(["AUTH", password], route=AllNodes())
-
-
-def sync_config_set_new_password(client: TSyncGlideClient, password):
-    """
-    Sets a new password for the given TGlideClient server connected.
-    This function updates the server to require a new password.
-    """
-    if isinstance(client, GlideClient):
-        client.config_set({"requirepass": password})
-    elif isinstance(client, GlideClusterClient):
-        client.config_set({"requirepass": password}, route=AllNodes())
-
-
-def sync_kill_connections(client: TSyncGlideClient):
-    """
-    Kills all connections to the given TGlideClient server connected.
-    """
-    if isinstance(client, GlideClient):
-        client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
-    elif isinstance(client, GlideClusterClient):
-        client.custom_command(["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes())
-
-
 def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     """
     Perform teardown tasks such as flushing all data from the cluster.
@@ -145,9 +114,9 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 credentials=credentials,
             )
             try:
-                sync_auth_client(client, NEW_PASSWORD)
+                auth_client(client, NEW_PASSWORD)
                 # Reset the server password back to empty
-                sync_config_set_new_password(client, "")
+                config_set_new_password(client, "")
                 client.update_connection_password(None)
                 # Perform the teardown
                 client.custom_command(["FLUSHALL"])

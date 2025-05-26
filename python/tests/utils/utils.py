@@ -39,9 +39,12 @@ from glide.constants import (
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.routes import AllNodes
+from glide.sync import GlideClient as SyncGlideClient
+from glide.sync import GlideClusterClient as SyncGlideClusterClient
 from glide.sync import TGlideClient as TSyncGlideClient
-
 from tests.utils.cluster import ValkeyCluster
+
+TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
 T = TypeVar("T")
 DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
@@ -447,6 +450,7 @@ async def delete_acl_username_and_password(client: TGlideClient, username: str):
             ["ACL", "DELUSER", username], route=AllNodes()
         )
 
+
 def create_client_config(
     request,
     cluster_mode: bool,
@@ -510,6 +514,7 @@ def create_client_config(
         )
     return config
 
+
 def run_sync_func_with_timeout_in_thread(
     func: Callable, timeout: float, on_timeout=None
 ):
@@ -534,3 +539,42 @@ def run_sync_func_with_timeout_in_thread(
     finally:
         # Shutdown with cancel_futures=True to prevent hanging
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+def auth_client(client: TAnyGlideClient, password: str, username: str = "default"):
+    """
+    Authenticates the given TGlideClient server connected.
+    When passing a sync client, this returns the result of the AUTH command.
+    When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["AUTH", username, password])
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(["AUTH", username, password], route=AllNodes())
+
+
+def config_set_new_password(client: TAnyGlideClient, password):
+    """
+    Sets a new password for the given TGlideClient server connected.
+    This function updates the server to require a new password.
+    When passing a sync client, this returns the reuslt of the CONFIG SET command.
+    When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.config_set({"requirepass": password})
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.config_set({"requirepass": password}, route=AllNodes())
+
+
+def kill_connections(client: TAnyGlideClient):
+    """
+    Kills all connections to the given TGlideClient server connected.
+    When passing a sync client, this returns the reuslt of the CLIENT KILL command.
+    When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+        )

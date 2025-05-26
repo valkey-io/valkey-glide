@@ -61,7 +61,6 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
-
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,

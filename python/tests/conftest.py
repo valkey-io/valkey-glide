@@ -241,6 +241,8 @@ def anyio_backend(request):
         )
 
     return request.param[0]
+
+
 @pytest.fixture(autouse=True)
 def skip_if_version_below(request):
     """
@@ -254,7 +256,7 @@ def skip_if_version_below(request):
     if request.node.get_closest_marker("skip_if_version_below"):
         min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
         client = create_sync_client(request, False)
-        try: 
+        try:
             if sync_check_if_server_version_lt(client, min_version):
                 pytest.skip(
                     reason=f"This feature added in version {min_version}",

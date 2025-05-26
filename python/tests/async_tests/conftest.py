@@ -3,6 +3,7 @@
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
+
 from glide.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -15,14 +16,14 @@ from glide.config import (
 from glide.exceptions import ClosingError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Logger
-from glide.routes import AllNodes
-
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     DEFAULT_TEST_LOG_LEVEL,
     INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
+    auth_client,
+    config_set_new_password,
     create_client_config,
     set_new_acl_username_with_password,
 )
@@ -132,41 +133,6 @@ async def create_client(
         return await GlideClusterClient.create(config)
     else:
         return await GlideClient.create(config)
-
-
-async def auth_client(client: TGlideClient, password: str, username: str = "default"):
-    """
-    Authenticates the given TGlideClient server connected. If no username is provided, uses the 'default' user.
-    """
-    if isinstance(client, GlideClient):
-        return await client.custom_command(["AUTH", username, password])
-    elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(
-            ["AUTH", username, password], route=AllNodes()
-        )
-
-
-async def config_set_new_password(client: TGlideClient, password):
-    """
-    Sets a new password for the given TGlideClient server connected.
-    This function updates the server to require a new password.
-    """
-    if isinstance(client, GlideClient):
-        await client.config_set({"requirepass": password})
-    elif isinstance(client, GlideClusterClient):
-        await client.config_set({"requirepass": password}, route=AllNodes())
-
-
-async def kill_connections(client: TGlideClient):
-    """
-    Kills all connections to the given TGlideClient server connected.
-    """
-    if isinstance(client, GlideClient):
-        await client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
-    elif isinstance(client, GlideClusterClient):
-        await client.custom_command(
-            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
-        )
 
 
 async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
