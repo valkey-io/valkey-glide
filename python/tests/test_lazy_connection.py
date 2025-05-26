@@ -124,13 +124,10 @@ class TestLazyConnection:
             # 6. Check client count after the first command
             # In cluster mode, the client count is not reliable due to the nature of cluster connections.
             if not cluster_mode:
-                await anyio.sleep(0.5)
                 clients_after_first_command = await get_standalone_client_count(
                     cast(GlideClient, monitoring_client)
                 )
-                print(
-                    f"{mode_str} - Protocol: {protocol}, Clients after first command: {clients_after_first_command}"
-                )
+
                 assert clients_after_first_command == clients_before_lazy_init + 1, (
                     f"Lazy client (standalone, {protocol}) should establish one new connection after the first command. "
                     f"Before: {clients_before_lazy_init}, After first command: {clients_after_first_command}"
