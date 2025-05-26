@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.ClusterBatch;
-import glide.api.models.configuration.ProtocolVersion;
 import glide.api.OpenTelemetry;
 import glide.api.OpenTelemetry.OpenTelemetryConfig;
+import glide.api.models.ClusterBatch;
+import glide.api.models.configuration.ProtocolVersion;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
