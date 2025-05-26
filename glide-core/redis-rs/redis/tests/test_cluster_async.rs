@@ -22,7 +22,9 @@ mod cluster_async {
     use std::ops::Add;
     use std::path::PathBuf;
     use std::str::FromStr;
+    use std::sync::OnceLock;
     use telemetrylib::*;
+    use tokio::runtime::Runtime;
 
     use redis::{
         aio::{ConnectionLike, MultiplexedConnection},
@@ -202,6 +204,11 @@ mod cluster_async {
         }
     }
 
+    fn shared_runtime() -> &'static Runtime {
+        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+        RUNTIME.get_or_init(|| Runtime::new().expect("Failed to create runtime"))
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_basic_cmd() {
@@ -225,519 +232,658 @@ mod cluster_async {
         .unwrap();
     }
 
-    #[tokio::test]
-    async fn test_async_open_telemetry_config() {
-        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_flush_interval(std::time::Duration::from_millis(400))
-            .with_trace_exporter(
-                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-                Some(100),
-            )
-            .with_metrics_exporter(
-                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
-            )
-            .build();
-        let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
-        assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
+    #[test]
+    fn test_async_open_telemetry_config() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(std::time::Duration::from_millis(400))
+                .with_trace_exporter(
+                    GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
+                    Some(100),
+                )
+                .with_metrics_exporter(
+                    GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
+                )
+                .build();
+            let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
+            assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
+        });
     }
 
-    #[tokio::test]
-    async fn test_async_open_telemetry_invalid_config() {
-        let result = GlideOpenTelemetrySignalsExporter::from_str("invalid-protocol.com");
-        assert!(result.is_err(), "Expected `from_str` to return an error");
-        assert_eq!(
-            result.unwrap_err().kind(),
-            std::io::ErrorKind::InvalidInput,
-            "Expected ErrorKind::InvalidInput"
-        );
+    #[test]
+    fn test_async_open_telemetry_invalid_config() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let result = GlideOpenTelemetrySignalsExporter::from_str("invalid-protocol.com");
+            assert!(result.is_err(), "Expected `from_str` to return an error");
+            assert_eq!(
+                result.unwrap_err().kind(),
+                std::io::ErrorKind::InvalidInput,
+                "Expected ErrorKind::InvalidInput"
+            );
+        });
     }
 
-    #[tokio::test]
-    async fn test_async_open_telemetry_interval_config() {
-        let exporter = GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
-        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_flush_interval(Duration::from_millis(400))
-            .with_trace_exporter(exporter.clone(), Some(100))
-            .build();
-        assert_eq!(
-            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config),
-            Duration::from_millis(400)
-        );
-        // check the default interval
-        let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
-            .with_trace_exporter(exporter, Some(100))
-            .build();
-        assert_eq!(
-            GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config.clone()),
-            Duration::from_millis(5000)
-        );
+    #[test]
+    fn test_async_open_telemetry_interval_config() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let exporter =
+                GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap();
+            let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
+                .with_flush_interval(Duration::from_millis(400))
+                .with_trace_exporter(exporter.clone(), Some(100))
+                .build();
+            assert_eq!(
+                GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config),
+                Duration::from_millis(400)
+            );
+            // check the default interval
+            let glide_ot_config = GlideOpenTelemetryConfigBuilder::default()
+                .with_trace_exporter(exporter, Some(100))
+                .build();
+            assert_eq!(
+                GlideOpenTelemetry::get_flush_interval_ms(glide_ot_config.clone()),
+                Duration::from_millis(5000)
+            );
+        });
     }
 
-    #[tokio::test]
-    async fn test_async_open_telemetry_moved_pipeline_atomic() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(2),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-
-        let nodes_and_slots = slot_distribution
-            .iter()
-            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
-            .collect::<Vec<_>>();
-
-        let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
-
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline.atomic().incr(&moved_key, 5).get(&moved_key);
-
-        let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
-        // connection.route_command(cmd, routing)
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
+    #[test]
+    fn test_async_open_telemetry_moved_pipeline_atomic() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
                 3,
-                1,
-                Some(route),
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await;
-
-        print!("############### Pipeline result: {:?}", result);
-
-        let expected = vec![Value::Array(vec![
-            Value::Int(5),
-            Value::BulkString(b"5".to_vec()),
-        ])];
-        let result = result.expect("Pipeline execution failed");
-        assert_eq!(
-            result, expected,
-            "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Actual result: {:?}",
-            moved_key, key2, key_slot, result
-        );
-
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
-        sleep(Duration::from_millis(2100).into()).await;
-
-        let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-
-        let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        let moved_errors = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.moved_errors")
-            .unwrap();
-
-        assert_eq!(moved_errors["data_points"][0]["value"], 1);
-
-        let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.retries_attempts")
-            .unwrap();
-        assert_eq!(retry_attempts["data_points"][0]["value"], 1);
-    }
-
-    #[tokio::test]
-    async fn test_async_open_telemetry_moved_pipeline_non_atomic() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new(3, 0);
-        let mut connection = cluster.async_connection(None).await;
-
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
-
-        let nodes_and_slots = slot_distribution
-            .iter()
-            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
-            .collect::<Vec<_>>();
-
-        let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
-
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
-
-        // Create a pipeline with several commands.
-        let mut pipeline = redis::pipe();
-        pipeline
-            .incr(&key2, 5)
-            .set(&moved_key, "value")
-            .get(&moved_key);
-        // connection.route_command(cmd, routing)
-        // Execute the pipeline.
-        let result = connection
-            .route_pipeline(
-                &pipeline,
                 0,
-                3,
-                None,
-                Some(PipelineRetryStrategy {
-                    retry_server_error: true,
-                    retry_connection_error: false,
-                }),
-            )
-            .await
-            .expect("Pipeline execution failed");
+                |builder| builder.retries(2),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
 
-        let expected = vec![
-            Value::Int(5),
-            Value::Okay,
-            Value::BulkString(b"value".to_vec()),
-        ];
-        assert_eq!(
-            result, expected,
-            "Pipeline result did not match expected output.\n\
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
+
+            let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
+            let key_slot = get_slot(moved_key.as_str().as_bytes());
+
+            cluster
+                .move_specific_slot(key_slot, slot_distribution)
+                .await;
+
+            // Create a pipeline with several commands.
+            let mut pipeline = redis::pipe();
+            pipeline.atomic().incr(&moved_key, 5).get(&moved_key);
+
+            let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
+            // connection.route_command(cmd, routing)
+            // Execute the pipeline.
+            let result = connection
+                .route_pipeline(
+                    &pipeline,
+                    3,
+                    1,
+                    Some(route),
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await;
+
+            let expected = vec![Value::Array(vec![
+                Value::Int(5),
+                Value::BulkString(b"5".to_vec()),
+            ])];
+            let result = result.expect("Pipeline execution failed");
+            assert_eq!(
+                result, expected,
+                "Pipeline result did not match expected output.\n\
                      Keys chosen: ('{}', '{}')\n\
                      key_slot: {}\n\
                      Actual result: {:?}",
-            moved_key, key2, key_slot, result
-        );
+                moved_key, key2, key_slot, result
+            );
 
-        assert_error_occurred(&mut connection, "MOVED", 2).await;
-        sleep(Duration::from_millis(2100).into()).await;
+            assert_error_occurred(&mut connection, "MOVED", 2).await;
+            sleep(Duration::from_millis(2100).into()).await;
 
-        let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
-        let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        let moved_errors = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.moved_errors")
-            .unwrap();
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            let moved_errors = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.moved_errors")
+                .unwrap();
 
-        assert_eq!(moved_errors["data_points"][0]["value"], 2);
+            assert_eq!(moved_errors["data_points"][0]["value"], 1);
 
-        let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.retries_attempts")
-            .unwrap();
-        assert_eq!(retry_attempts["data_points"][0]["value"], 2);
+            let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.retry_attempts")
+                .unwrap();
+            assert_eq!(retry_attempts["data_points"][0]["value"], 1);
+        });
     }
 
-    #[tokio::test]
-    async fn test_async_open_telemetry_moved_command() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        // Create a test cluster with 3 masters and no replicas.
-        let cluster = TestClusterContext::new(3, 0);
-        let mut connection = cluster.async_connection(None).await;
+    #[test]
+    fn test_async_open_telemetry_moved_pipeline_non_atomic() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new(3, 0);
+            let mut connection = cluster.async_connection(None).await;
 
-        // Get the current slot distribution.
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        let nodes_and_slots = slot_distribution
-            .iter()
-            .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
-            .collect::<Vec<_>>();
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
 
-        let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-        let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
+            let key_slot = get_slot(moved_key.as_str().as_bytes());
 
-        cluster
-            .move_specific_slot(key_slot, slot_distribution)
-            .await;
+            cluster
+                .move_specific_slot(key_slot, slot_distribution)
+                .await;
 
-        let mut cmd: Cmd = redis::cmd("SET");
-        cmd.arg(&moved_key).arg("value");
+            // Create a pipeline with several commands.
+            let mut pipeline = redis::pipe();
+            pipeline
+                .incr(&key2, 5)
+                .set(&moved_key, "value")
+                .get(&moved_key);
+            // connection.route_command(cmd, routing)
+            // Execute the pipeline.
+            let result = connection
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    3,
+                    None,
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await
+                .expect("Pipeline execution failed");
 
-        let result = connection
-            .route_command(
-                &cmd,
-                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                    key_slot,
-                    SlotAddr::Master,
-                ))),
-            )
-            .await
-            .expect("Failed to route command");
+            let expected = vec![
+                Value::Int(5),
+                Value::Okay,
+                Value::BulkString(b"value".to_vec()),
+            ];
+            assert_eq!(
+                result, expected,
+                "Pipeline result did not match expected output.\n\
+                     Keys chosen: ('{}', '{}')\n\
+                     key_slot: {}\n\
+                     Actual result: {:?}",
+                moved_key, key2, key_slot, result
+            );
 
-        let expected = Value::Okay;
+            assert_error_occurred(&mut connection, "MOVED", 2).await;
+            sleep(Duration::from_millis(2100).into()).await;
 
-        assert_eq!(
-            result, expected,
-            "Command result did not match expected output.\n\
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            let moved_errors = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.moved_errors")
+                .unwrap();
+
+            assert_eq!(moved_errors["data_points"][0]["value"], 2);
+
+            let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.retry_attempts")
+                .unwrap();
+            assert_eq!(retry_attempts["data_points"][0]["value"], 2);
+        });
+    }
+
+    #[test]
+    fn test_async_open_telemetry_moved_command() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            // Create a test cluster with 3 masters and no replicas.
+            let cluster = TestClusterContext::new(3, 0);
+            let mut connection = cluster.async_connection(None).await;
+
+            // Get the current slot distribution.
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+            let nodes_and_slots = slot_distribution
+                .iter()
+                .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+                .collect::<Vec<_>>();
+
+            let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
+            let key_slot = get_slot(moved_key.as_str().as_bytes());
+
+            cluster
+                .move_specific_slot(key_slot, slot_distribution)
+                .await;
+
+            let mut cmd: Cmd = redis::cmd("SET");
+            cmd.arg(&moved_key).arg("value");
+
+            let result = connection
+                .route_command(
+                    &cmd,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        key_slot,
+                        SlotAddr::Master,
+                    ))),
+                )
+                .await
+                .expect("Failed to route command");
+
+            let expected = Value::Okay;
+
+            assert_eq!(
+                result, expected,
+                "Command result did not match expected output.\n\
                      Keys chosen: ('{}', '{}')\n\
                      key_slot: {}\n\
                      Expected result: {:?}\n\
                      Actual result: {:?}",
-            moved_key, key2, key_slot, expected, result
-        );
+                moved_key, key2, key_slot, expected, result
+            );
 
-        assert_error_occurred(&mut connection, "MOVED", 1).await;
-        sleep(Duration::from_millis(2100).into()).await;
+            assert_error_occurred(&mut connection, "MOVED", 1).await;
+            sleep(Duration::from_millis(2100).into()).await;
 
-        let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
-        let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        let moved_errors = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.moved_errors")
-            .unwrap();
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            let moved_errors = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.moved_errors")
+                .unwrap();
 
-        assert_eq!(moved_errors["data_points"][0]["value"], 1);
+            assert_eq!(moved_errors["data_points"][0]["value"], 1);
 
-        let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|m| m["name"] == "glide.retries_attempts")
-            .unwrap();
-        assert_eq!(retry_attempts["data_points"][0]["value"], 1);
+            let retry_attempts = metric_json["scope_metrics"][0]["metrics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["name"] == "glide.retry_attempts")
+                .unwrap();
+            assert_eq!(retry_attempts["data_points"][0]["value"], 1);
+        });
     }
 
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn test_pipeline_with_ask_and_try_again_errors() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        //todo: this is the test of retry and again -> find out how to do it with no pipeline. change the batch regular commands
-        // Create a test cluster with 3 masters and no replicas.
-        let retry = true;
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(10),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-        let mut stable_conn = cluster.async_connection(None).await;
+    #[test]
+    fn test_async_open_telemetry_retry_pipeline_non_atomic() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            // Create a test cluster with 3 masters and no replicas.
+            let retry = true;
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
+                3,
+                0,
+                |builder| builder.retries(10),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
+            let mut stable_conn = cluster.async_connection(None).await;
 
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        let migrated_key = generate_random_string(10);
-        let key_slot = get_slot(migrated_key.as_str().as_bytes());
-        let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
-        let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
+            let migrated_key = generate_random_string(10);
+            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
+            let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
 
-        let stable_future = async {
-            // This future completes the slot migration, which resolves the `TryAgain` error.
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
-            cluster_setslot_cmd
-                .arg("SETSLOT")
-                .arg(key_slot)
-                .arg("NODE")
-                .arg(des_node);
-            let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
-            stable_conn
-                .route_command(&cluster_setslot_cmd, all_nodes)
-                .await
-                .expect("Failed to move slot completely");
-        };
+            let stable_future = async {
+                // This future completes the slot migration, which resolves the `TryAgain` error.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
+                cluster_setslot_cmd
+                    .arg("SETSLOT")
+                    .arg(key_slot)
+                    .arg("NODE")
+                    .arg(des_node);
+                let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+                stable_conn
+                    .route_command(&cluster_setslot_cmd, all_nodes)
+                    .await
+                    .expect("Failed to move slot completely");
+            };
 
-        let future = async {
-            let mut pipeline = redis::pipe();
-            pipeline
-                .get(&migrated_key)
-                .set(&migrated_key, "value")
-                .mget(&[&migrated_key, &key]);
+            let future = async {
+                let mut pipeline = redis::pipe();
+                pipeline
+                    .get(&migrated_key)
+                    .set(&migrated_key, "value")
+                    .mget(&[&migrated_key, &key]);
 
-            // Execute the pipeline.
-            let result = connection
-                .route_pipeline(
-                    &pipeline,
-                    0,
-                    3,
-                    None,
-                    Some(PipelineRetryStrategy {
-                        retry_server_error: retry,
-                        retry_connection_error: false,
-                    }),
-                )
-                .await
-                .expect("Pipeline execution failed");
-            result
-        };
+                // Execute the pipeline.
+                let result = connection
+                    .route_pipeline(
+                        &pipeline,
+                        0,
+                        3,
+                        None,
+                        Some(PipelineRetryStrategy {
+                            retry_server_error: retry,
+                            retry_connection_error: false,
+                        }),
+                    )
+                    .await
+                    .expect("Pipeline execution failed");
+                result
+            };
 
-        let ((), result) = tokio::join!(stable_future, future);
+            let ((), result) = tokio::join!(stable_future, future);
 
-        let expected = vec![Value::Nil, Value::Okay];
+            let expected = vec![Value::Nil, Value::Okay];
 
-        assert_eq!(
-            result[0..2],
-            expected,
-            "Pipeline result did not match expected output.\n\
+            assert_eq!(
+                result[0..2],
+                expected,
+                "Pipeline result did not match expected output.\n\
                  Keys chosen: ('{}', '{}')\n\
                  key_slot: {}\n\
                  Actual result: {:?}",
-            migrated_key,
-            key,
-            key_slot,
-            result
-        );
+                migrated_key,
+                key,
+                key_slot,
+                result
+            );
 
-        sleep(Duration::from_millis(2100).into()).await;
-        
+            sleep(Duration::from_millis(2100).into()).await;
+
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.retry_attempts"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                4
+            );
+        });
     }
 
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn test_with_ask_and_try_again_errors() {
-        let _ = std::fs::remove_file(METRICS_JSON);
-        init_otel().await.unwrap();
-        //todo: this is the test of retry and again -> find out how to do it with no pipeline. change the batch regular commands
-        // Create a test cluster with 3 masters and no replicas.
-        let retry = true;
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| builder.retries(10),
-            false,
-        );
-        let mut connection = cluster.async_connection(None).await;
-        let mut stable_conn = cluster.async_connection(None).await;
+    #[test]
+    fn test_async_open_telemetry_retry_pipeline_atomic() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            // Create a test cluster with 3 masters and no replicas.
+            let retry = true;
+            let cluster = TestClusterContext::new_with_cluster_client_builder(
+                3,
+                0,
+                |builder| builder.retries(10),
+                false,
+            );
+            let mut connection = cluster.async_connection(None).await;
+            let mut stable_conn = cluster.async_connection(None).await;
 
-        let cluster_nodes = cluster.get_cluster_nodes().await;
-        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
-        let migrated_key = generate_random_string(10);
-        let key_slot = get_slot(migrated_key.as_str().as_bytes());
-        let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
-        let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
+            let migrated_key = generate_random_string(10);
+            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
+            let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
 
-        let stable_future = async {
-            // This future completes the slot migration, which resolves the `TryAgain` error.
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
-            cluster_setslot_cmd
-                .arg("SETSLOT")
-                .arg(key_slot)
-                .arg("NODE")
-                .arg(des_node);
-            let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
-            stable_conn
-                .route_command(&cluster_setslot_cmd, all_nodes)
-                .await
-                .expect("Failed to move slot completely");
-        };
+            let stable_future = async {
+                // This future completes the slot migration, which resolves the `TryAgain` error.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
+                cluster_setslot_cmd
+                    .arg("SETSLOT")
+                    .arg(key_slot)
+                    .arg("NODE")
+                    .arg(des_node);
+                let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+                stable_conn
+                    .route_command(&cluster_setslot_cmd, all_nodes)
+                    .await
+                    .expect("Failed to move slot completely");
+            };
 
-        let future = async {
-            let mut pipeline = redis::pipe();
-            pipeline
-                .get(&migrated_key)
-                .set(&migrated_key, "value")
-                .mget(&[&migrated_key, &key]);
+            let future = async {
+                let mut pipeline = redis::pipe();
+                pipeline
+                    .atomic()
+                    .get(&migrated_key)
+                    .set(&migrated_key, "value");
+                let route =
+                    SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
 
-            // Execute the pipeline.
-            let result = connection
-                .route_pipeline(
-                    &pipeline,
-                    0,
-                    3,
-                    None,
-                    Some(PipelineRetryStrategy {
-                        retry_server_error: retry,
-                        retry_connection_error: false,
-                    }),
-                )
-                .await
-                .expect("Pipeline execution failed");
-            result
-        };
+                // Execute the pipeline.
+                let result = connection
+                    .route_pipeline(
+                        &pipeline,
+                        3,
+                        1,
+                        Some(route),
+                        Some(PipelineRetryStrategy {
+                            retry_server_error: retry,
+                            retry_connection_error: false,
+                        }),
+                    )
+                    .await
+                    .expect("Pipeline execution failed");
+                result
+            };
 
-        let ((), result) = tokio::join!(stable_future, future);
+            let ((), result) = tokio::join!(stable_future, future);
 
-        let expected = vec![Value::Nil, Value::Okay];
+            let expected = vec![Value::Array(vec![Value::Nil, Value::Okay])];
 
-        assert_eq!(
-            result[0..2],
-            expected,
-            "Pipeline result did not match expected output.\n\
+            assert_eq!(
+                result[0..1],
+                expected,
+                "Pipeline result did not match expected output.\n\
                  Keys chosen: ('{}', '{}')\n\
                  key_slot: {}\n\
                  Actual result: {:?}",
-            migrated_key,
-            key,
-            key_slot,
-            result
-        );
+                migrated_key,
+                key,
+                key_slot,
+                result
+            );
 
-        // When retry is enabled, TRYAGAIN errors should be retried, and `MGET` should return expected values.
-        assert_eq!(
-            result[2],
-            Value::Array(vec![Value::BulkString(b"value".to_vec()), Value::Nil]),
-            "Pipeline result did not match expected output.\n\
-                         Keys chosen: ('{}', '{}')\n\
-                         key_slot: {}\n\
-                         Actual result: {:?}",
-            migrated_key,
-            key,
-            key_slot,
-            result
-        );
+            sleep(Duration::from_millis(2100).into()).await;
 
-        assert_error_occurred(&mut connection, "ASK", 3).await;
-        assert_error_occurred(&mut connection, "TRYAGAIN", 1).await;
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
 
-        // wait for the metrics to be flushed
-        sleep(Duration::from_millis(2100).into()).await;
-
-        sleep(Duration::from_millis(2100).into()).await;
-
-        let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
-        let lines: Vec<&str> = file_content
-            .split('\n')
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-
-        let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        assert_eq!(
-            metric_json["scope_metrics"][0]["metrics"][0]["name"],
-            "glide.retries_attempts"
-        );
-        assert_eq!(
-            metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-            1
-        );
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.retry_attempts"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                1
+            );
+        });
     }
+
+    //todo: implement correctly
+    // #[test]
+    // fn test_async_open_telemetry_retry_command() {
+    //     let rt = shared_runtime();
+    //     rt.block_on(async {
+    //         let _ = std::fs::remove_file(METRICS_JSON);
+    //         init_otel().await.unwrap();
+    //         // Create a test cluster with 3 masters and no replicas.
+    //         let retry = true;
+    //         let cluster = TestClusterContext::new_with_cluster_client_builder(
+    //             3,
+    //             0,
+    //             |builder| builder.retries(10),
+    //             false,
+    //         );
+    //         let mut connection = cluster.async_connection(None).await;
+    //         let mut stable_conn = cluster.async_connection(None).await;
+
+    //         let cluster_nodes = cluster.get_cluster_nodes().await;
+    //         let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+    //         let migrated_key = generate_random_string(10);
+    //         let key_slot = get_slot(migrated_key.as_str().as_bytes());
+    //         let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
+    //         let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
+
+    //         let stable_future = async {
+    //             // This future completes the slot migration, which resolves the `TryAgain` error.
+    //             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    //             let mut cluster_setslot_cmd = redis::cmd("CLUSTER");
+    //             cluster_setslot_cmd
+    //                 .arg("SETSLOT")
+    //                 .arg(key_slot)
+    //                 .arg("NODE")
+    //                 .arg(des_node);
+    //             let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+    //             stable_conn
+    //                 .route_command(&cluster_setslot_cmd, all_nodes)
+    //                 .await
+    //                 .expect("Failed to move slot completely");
+    //         };
+
+    //         let future = async {
+    //             let mut pipeline = redis::pipe();
+    //             pipeline
+    //                 .get(&migrated_key)
+    //                 .set(&migrated_key, "value")
+    //                 .mget(&[&migrated_key, &key]);
+
+    //             // Execute the pipeline.
+    //             let result = connection
+    //                 .route_pipeline(
+    //                     &pipeline,
+    //                     0,
+    //                     3,
+    //                     None,
+    //                     Some(PipelineRetryStrategy {
+    //                         retry_server_error: retry,
+    //                         retry_connection_error: false,
+    //                     }),
+    //                 )
+    //                 .await
+    //                 .expect("Pipeline execution failed");
+    //             result
+    //         };
+
+    //         let ((), result) = tokio::join!(stable_future, future);
+
+    //         let expected = vec![Value::Nil, Value::Okay];
+
+    //         assert_eq!(
+    //             result[0..2],
+    //             expected,
+    //             "Pipeline result did not match expected output.\n\
+    //              Keys chosen: ('{}', '{}')\n\
+    //              key_slot: {}\n\
+    //              Actual result: {:?}",
+    //             migrated_key,
+    //             key,
+    //             key_slot,
+    //             result
+    //         );
+
+    //         // When retry is enabled, TRYAGAIN errors should be retried, and `MGET` should return expected values.
+    //         assert_eq!(
+    //             result[2],
+    //             Value::Array(vec![Value::BulkString(b"value".to_vec()), Value::Nil]),
+    //             "Pipeline result did not match expected output.\n\
+    //                      Keys chosen: ('{}', '{}')\n\
+    //                      key_slot: {}\n\
+    //                      Actual result: {:?}",
+    //             migrated_key,
+    //             key,
+    //             key_slot,
+    //             result
+    //         );
+
+    //         assert_error_occurred(&mut connection, "ASK", 3).await;
+    //         assert_error_occurred(&mut connection, "TRYAGAIN", 1).await;
+
+    //         // wait for the metrics to be flushed
+    //         sleep(Duration::from_millis(2100).into()).await;
+
+    //         // let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+    //         // let lines: Vec<&str> = file_content
+    //         //     .split('\n')
+    //         //     .filter(|l| !l.trim().is_empty())
+    //         //     .collect();
+
+    //         // let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    //         // assert_eq!(
+    //         //     metric_json["scope_metrics"][0]["metrics"][0]["name"],
+    //         //     "glide.retry_attempts"
+    //         // );
+    //         // assert_eq!(
+    //         //     metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+    //         //     1
+    //         // );
+    //     });
+    // }
 
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
