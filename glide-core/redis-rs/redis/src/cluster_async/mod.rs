@@ -2770,16 +2770,34 @@ where
                             return Poll::Ready(Ok(()));
                         }
                     }
-                    Some(Err(_)) => {
-                        // Task panicked or was cancelled
-                        trace!("Slot refresh task panicked or was cancelled");
-                        let new_handle = Self::spawn_refresh_slots_task(
-                            self.inner.clone(),
-                            &RefreshPolicy::Throttable,
-                        );
-                        self.state =
-                            ConnectionState::Recover(RecoverFuture::RefreshingSlots(new_handle));
-                        return Poll::Ready(Ok(()));
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            // Task was intentionally aborted - don't treat as an error
+                            trace!("Slot refresh task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                            return Poll::Ready(Ok(()));
+                        } else {
+                            // Task panicked - try reconnecting to initial nodes as a recovery strategy
+                            warn!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err);
+
+                            // TODO - consider a gracefully closing of the client
+                            // Since a panic indicates a bug in the refresh logic,
+                            // it might be safer to close the client entirely
+                            self.state =
+                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
+                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
+                                        self.inner.clone(),
+                                    )),
+                                ));
+
+                            // Report this critical error to clients
+                            let err = RedisError::from((
+                                ErrorKind::ClientError,
+                                "Slot refresh task panicked",
+                                format!("{:?}", join_err),
+                            ));
+                            return Poll::Ready(Err(err));
+                        }
                     }
                     None => {
                         // Task is still running
