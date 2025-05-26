@@ -212,7 +212,9 @@ public class ConnectionManager {
             ConnectionRequest.Builder connectionRequestBuilder,
             AdvancedBaseClientConfiguration advancedConfiguration) {
 
-        connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
+        if (advancedConfiguration.getConnectionTimeout() != null) {
+            connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
+        }
 
         if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
             if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {

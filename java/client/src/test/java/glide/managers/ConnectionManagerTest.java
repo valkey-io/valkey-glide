@@ -174,7 +174,6 @@ public class ConnectionManagerTest {
                                         .setPort(DEFAULT_PORT)
                                         .build())
                         .setTlsMode(TlsMode.SecureTls)
-                        .setConnectionTimeout(250)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.PreferReplica)
                         .setClusterModeEnabled(false)
                         .setAuthenticationInfo(
@@ -310,7 +309,6 @@ public class ConnectionManagerTest {
                                         .setPort(DEFAULT_PORT)
                                         .build())
                         .setTlsMode(TlsMode.SecureTls)
-                        .setConnectionTimeout(250)
                         .setReadFrom(mapReadFrom(readFrom))
                         .setClientAz(az)
                         .build();
@@ -492,7 +490,6 @@ public class ConnectionManagerTest {
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.InsecureTls)
-                        .setConnectionTimeout(250)
                         .setClusterModeEnabled(true)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
                         .build();
