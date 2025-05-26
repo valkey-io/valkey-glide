@@ -13,6 +13,7 @@ import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
 import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
+import glide.api.OpenTelemetry;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
@@ -242,9 +243,11 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         var builder = UpdateConnectionPassword.newBuilder().setImmediateAuth(immediateAuth);
         password.ifPresent(builder::setPassword);
-
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("UpdateConnectionPassword");
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("UpdateConnectionPassword");
+        }
 
         CommandRequest.Builder command =
                 CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
@@ -299,8 +302,11 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
 
         var builder =
                 CommandRequest.newBuilder()
@@ -328,8 +334,11 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
 
         var builder =
                 CommandRequest.newBuilder()
@@ -355,8 +364,11 @@ public class CommandManager {
             Batch batch, boolean raiseOnError, Optional<BatchOptions> options) {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
+        }
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
@@ -387,8 +399,11 @@ public class CommandManager {
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ScriptInvocation");
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ScriptInvocation");
+        }
 
         CommandRequest.Builder builder;
 
@@ -463,8 +478,11 @@ public class CommandManager {
 
         CommandRequest.Builder builder = CommandRequest.newBuilder();
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterBatch");
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterBatch");
+        }
 
         // Set the root span pointer if a span was created
         if (spanPtr != 0) {
@@ -507,8 +525,11 @@ public class CommandManager {
     protected CommandRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterScan");
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterScan");
+        }
 
         CommandRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
                 CommandRequestOuterClass.ClusterScan.newBuilder();
@@ -562,8 +583,11 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
 
         CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
@@ -590,8 +614,11 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        // Create OpenTelemetry span
-        long spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
 
         CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
