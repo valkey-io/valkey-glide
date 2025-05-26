@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
     Batch,
@@ -57,8 +58,7 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,

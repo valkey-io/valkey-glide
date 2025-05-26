@@ -54,6 +54,11 @@ pub(crate) fn convert_to_expected_type(
         return Ok(value);
     };
 
+    // If the value is a server error, return it as is, without conversion.
+    if let Value::ServerError(_) = value {
+        return Ok(value);
+    }
+
     match expected {
         ExpectedReturnType::Map {
             key_type,

@@ -1318,6 +1318,66 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_failed_commands_skip_conversion(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] atomic: bool,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut pipeline = Pipeline::new();
+            if atomic {
+                pipeline.atomic();
+            }
+            pipeline.set("key", "value");
+            pipeline.hgetall("key");
+
+            let result = if atomic {
+                test_basics
+                    .client
+                    .send_transaction(&pipeline, None, None, false)
+                    .await
+                    .expect("Transaction failed")
+            } else {
+                test_basics
+                    .client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy {
+                            retry_server_error: false,
+                            retry_connection_error: false,
+                        },
+                    )
+                    .await
+                    .expect("Pipeline failed")
+            };
+
+            let arr = match result {
+                Value::Array(ref arr) => arr,
+                _ => panic!("Expected array result, got: {:?}", result),
+            };
+
+            assert_eq!(arr[0], Value::Okay, "Pipeline result: {arr:?}");
+            assert!(
+                matches!(&arr[1], Value::ServerError(err) if err.err_code().contains("WRONGTYPE")),
+                "Pipeline result: {arr:?}"
+            );
+        });
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_client_telemetry_standalone() {

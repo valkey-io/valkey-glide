@@ -10,6 +10,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
     ConfigurationError,
@@ -22,8 +23,7 @@ import {
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
-} from "..";
-import ValkeyCluster from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getRandomKey,

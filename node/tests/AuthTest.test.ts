@@ -10,14 +10,14 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
     GlideClient,
     GlideClusterClient,
     ProtocolVersion,
     RequestError,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getServerVersion,

@@ -1,0 +1,49 @@
+{
+    "name": "@valkey/valkey-glide-linux-arm64-musl",
+    "description": "Native bindings for valkey-glide on linux-arm64-musl",
+    "version": "0.0.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://valkey.io/valkey-glide/node/",
+    "author": "Valkey GLIDE Maintainers",
+    "publishConfig": {
+        "access": "public"
+    },
+    "main": "valkey-glide.linux-arm64-musl.node",
+    "files": [
+        "valkey-glide.linux-arm64-musl.node"
+    ],
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "license": "Apache-2.0",
+    "keywords": [
+        "valkey",
+        "redis",
+        "client",
+        "driver",
+        "database",
+        "napi",
+        "typescript",
+        "rust",
+        "cross-platform",
+        "cluster",
+        "standalone",
+        "high-availability",
+        "performance",
+        "open-source",
+        "fault-tolerant",
+        "distributed",
+        "scalable",
+        "resilient",
+        "valkey-glide"
+    ]
+}

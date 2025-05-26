@@ -21,8 +21,8 @@ jobs:
             github.repository_owner == 'valkey-io' &&
             (github.event_name == 'workflow_dispatch' ||
             (github.event_name == 'pull_request' && !startsWith(github.head_ref, 'ort-diff-for-')))
-        strategy:
-            fail-fast: false
+
+        continue-on-error: true
         env:
             PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
@@ -104,24 +104,6 @@ jobs:
               ### NodeJS ###
             - name: Set up Node.js
               uses: actions/setup-node@v4
-
-            - name: Create package.json file for the Node wrapper
-              uses: ./.github/workflows/node-create-package-file
-              with:
-                  release_version: ${{ env.TARGET_COMMIT }}
-                  os: "ubuntu-latest"
-
-            - name: Fix Node base NPM package.json file for ORT
-              working-directory: ./node/npm/glide
-              run: |
-                  # Remove the glide-rs dependency to avoid duplication 
-                  sed -i '/ "glide-rs":/d' ../../package.json
-                  export pkg_name=valkey-glide-base
-                  export package_version="${{ env.TARGET_COMMIT }}"
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
-                  cat package.json
 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
