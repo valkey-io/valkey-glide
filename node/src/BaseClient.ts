@@ -743,11 +743,11 @@ export interface BaseClientConfiguration {
      * When `lazyConnect` is set to `true`, the client will not attempt to connect to the specified
      * nodes during initialization. Instead, connections will be established only when a command is
      * actually executed.
-     * 
+     *
      * Note that the first command executed with lazy connections may experience additional latency
      * as it needs to establish the connection first. During this initial connection, the standard
      * request timeout does not apply yet - instead, the connection establishment is governed by
-     * `AdvancedBaseClientConfiguration::connectionTimeout`. The request timeout (`requestTimeout`) 
+     * `AdvancedBaseClientConfiguration::connectionTimeout`. The request timeout (`requestTimeout`)
      * only begins counting after the connection has been successfully established. This behavior
      * can effectively increase the total time needed for the first command to complete.
      *
