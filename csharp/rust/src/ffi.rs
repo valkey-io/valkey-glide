@@ -71,6 +71,8 @@ pub struct ConnectionConfig {
     pub protocol: redis::ProtocolVersion,
     /// zero pointer is valid, means no client name is given (`None`)
     pub client_name: *const c_char,
+    pub has_lazy_connect: bool,
+    pub lazy_connect: bool,
     /*
     TODO below
     pub periodic_checks: Option<PeriodicCheck>,
@@ -146,6 +148,11 @@ pub(crate) unsafe fn create_connection_request(
             Some(config.connection_retry_strategy)
         } else {
             None
+        },
+        lazy_connect: if config.has_lazy_connect {
+            config.lazy_connect
+        } else {
+            false // Default to eager connections for backward compatibility
         },
         // TODO below
         periodic_checks: None,
