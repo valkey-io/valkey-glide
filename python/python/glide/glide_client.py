@@ -36,6 +36,7 @@ from glide.exceptions import (
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
+from glide.opentelemetry import OpenTelemetry
 from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
@@ -47,6 +48,8 @@ from .glide import (
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
     create_leaked_bytes_vec,
+    create_otel_span,
+    drop_otel_span,
     get_statistics,
     start_socket_listener_external,
     value_from_pointer,
@@ -413,16 +416,9 @@ class BaseClient(CoreCommands):
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         span = None
-        if (
-            hasattr(self.config, "advanced_config")
-            and self.config.advanced_config
-            and self.config.advanced_config.opentelemetry_config
-        ):
-            from glide.opentelemetry import OpenTelemetry
-            if OpenTelemetry.should_sample():
-                from glide.opentelemetry import GlideSpan
-                command_name = RequestType.Name(request_type)
-                span = GlideSpan(command_name)
+        if OpenTelemetry.should_sample():
+            command_name = RequestType.Name(request_type)
+            span = create_otel_span(command_name)
 
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
@@ -441,16 +437,10 @@ class BaseClient(CoreCommands):
 
         # Add span pointer to request if span was created
         if span:
-            request.root_span_ptr = span.ptr
+            request.root_span_ptr = span
 
         set_protobuf_route(request, route)
-
-        try:
-            return await self._write_request_await_response(request)
-        finally:
-            # Clean up span if it was created
-            if span:
-                del span
+        return await self._write_request_await_response(request)
 
     async def _execute_batch(
         self,
@@ -469,17 +459,10 @@ class BaseClient(CoreCommands):
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         span = None
-        if (
-            hasattr(self.config, "advanced_config")
-            and self.config.advanced_config
-            and self.config.advanced_config.opentelemetry_config
-        ):
-            from glide.opentelemetry import OpenTelemetry
-            if OpenTelemetry.should_sample():
-                from glide.opentelemetry import GlideSpan
-                span = GlideSpan(
-                    "Batch"
-                )  # Use "Batch" as span name for transactions, matching Node.js binding
+
+        if OpenTelemetry.should_sample():
+            # Use "Batch" as span name for transactions
+            span = create_otel_span("Batch")
 
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
@@ -502,19 +485,13 @@ class BaseClient(CoreCommands):
             request.batch.timeout = timeout
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
-        
+
         # Add span pointer to request if span was created
         if span:
-            request.root_span_ptr = span.ptr
-        
-        set_protobuf_route(request, route)
+            request.root_span_ptr = span
 
-        try:
-            return await self._write_request_await_response(request)
-        finally:
-            # Clean up span if it was created
-            if span:
-                del span
+        set_protobuf_route(request, route)
+        return await self._write_request_await_response(request)
 
     async def _execute_script(
         self,
@@ -527,6 +504,11 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        span = None
+        if OpenTelemetry.should_sample():
+            span = create_otel_span(f"Script: {hash}")
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         (encoded_keys, keys_size) = self._encode_and_sum_size(keys)
@@ -544,6 +526,11 @@ class BaseClient(CoreCommands):
             request.script_invocation_pointers.args_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span
+
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -706,6 +693,10 @@ class BaseClient(CoreCommands):
                 res_future.set_result(OK)
             else:
                 res_future.set_result(None)
+
+        # Clean up span if it was created
+        if response.HasField("root_span_ptr"):
+            drop_otel_span(response.root_span_ptr)
 
     async def _process_push(self, response: Response) -> None:
         if response.HasField("closing_error") or not response.HasField("resp_pointer"):

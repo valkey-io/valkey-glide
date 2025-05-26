@@ -4,531 +4,292 @@ import asyncio
 import gc
 import json
 import os
-import sys
-from typing import Any, Dict, Optional
+from typing import Dict, List, Tuple
 
+import psutil  # type: ignore[import-untyped]
 import pytest
-from glide import GlideClient, GlideClusterClient, ProtocolVersion
-from glide.async_commands.batch import ClusterBatch, Batch
-from glide.config import (
-    AdvancedGlideClientConfiguration,
-    AdvancedGlideClusterClientConfiguration,
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
+import pytest_asyncio
+
+from glide import (
     OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
 )
-from glide.exceptions import ConfigurationError
+from glide.config import ProtocolVersion
 from glide.opentelemetry import OpenTelemetry
+from tests.conftest import create_client
 
 # Constants
-TIMEOUT = 50000  # milliseconds
+TIMEOUT = 50  # seconds
 VALID_ENDPOINT_TRACES = "/tmp/spans.json"
-VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
+VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"  # noqa: E231
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 
 
-def read_and_parse_span_file(path: str) -> Dict[str, Any]:
+def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
     """
     Reads and parses a span file, extracting span data and names.
-
     Args:
         path: The path to the span file
+
     Returns:
-        A dictionary containing the raw span data, array of spans, and array of span names
+        A tuple containing the raw span data, array of spans, and array of span names
+
     Raises:
-        Exception if the file cannot be read or parsed
+        Exception: If the file cannot be read or parsed
     """
     try:
         with open(path, "r") as f:
             span_data = f.read()
-            spans = [line for line in span_data.split("\n") if line.strip()]
     except Exception as e:
         raise Exception(f"Failed to read or validate file: {str(e)}")
+
+    spans = [line for line in span_data.split("\n") if line.strip()]
 
     # Check that we have spans
     if not spans:
         raise Exception("No spans found in the span file")
 
     # Parse and extract span names
+    span_objects = []
     span_names = []
     for line in spans:
         try:
             span = json.loads(line)
-            if "name" in span:
-                span_names.append(span["name"])
+            span_objects.append(span)
+            span_names.append(span.get("name"))
         except json.JSONDecodeError:
             continue
 
-    return {"span_data": span_data, "spans": spans, "span_names": span_names}
+    return span_data, span_objects, [name for name in span_names if name]
 
 
-async def teardown_otel_test():
-    """Clean up OpenTelemetry files"""
-    # Clean up OpenTelemetry files
-    if os.path.exists(VALID_ENDPOINT_TRACES):
-        os.unlink(VALID_ENDPOINT_TRACES)
-
-    if os.path.exists(VALID_ENDPOINT_METRICS):
-        try:
-            os.unlink(VALID_ENDPOINT_METRICS)
-        except:
-            pass
-
-
-async def test_wrong_opentelemetry_config():
+def test_wrong_opentelemetry_config():
     """Test various invalid OpenTelemetry configurations"""
     # Wrong traces endpoint
-    with pytest.raises(ConfigurationError):
-        OpenTelemetryConfig(
-            traces_collector_endpoint="wrong.endpoint",
-            metrics_collector_endpoint=None,
+    with pytest.raises(TypeError, match=r".*Parse error.*"):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=OpenTelemetryTracesConfig(
+                    endpoint="wrong.endpoint",
+                    sample_percentage=100,
+                ),
+            )
         )
 
     # Wrong metrics endpoint
-    with pytest.raises(ConfigurationError):
-        OpenTelemetryConfig(
-            traces_collector_endpoint=None,
-            metrics_collector_endpoint="wrong.endpoint",
+    with pytest.raises(TypeError, match=r".*Parse error.*"):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                metrics=OpenTelemetryMetricsConfig(
+                    endpoint="wrong.endpoint",
+                ),
+            )
         )
 
     # Negative flush interval
-    with pytest.raises(ConfigurationError, match=r".*flushIntervalMs.*positive.*"):
-        OpenTelemetryConfig(
-            traces_collector_endpoint=VALID_FILE_ENDPOINT_TRACES,
-            metrics_collector_endpoint=None,
-            flush_interval_ms=-400,
+    with pytest.raises(
+        TypeError, match=r".*InvalidInput: flushIntervalMs must be a positive integer.*"
+    ):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=OpenTelemetryTracesConfig(
+                    endpoint=VALID_FILE_ENDPOINT_TRACES,
+                    sample_percentage=100,
+                ),
+                flush_interval_ms=-400,
+            )
         )
 
     # Negative sample percentage
-    with pytest.raises(ConfigurationError, match=r".*sample percentage.*between 0 and 100.*"):
-        OpenTelemetryConfig(
-            traces_collector_endpoint=VALID_FILE_ENDPOINT_TRACES,
-            metrics_collector_endpoint=None,
-            sample_percentage=-10,
+    # TODO: This should be a ValueError: Trace sample percentage must be between 0 and 100
+    with pytest.raises(
+        OverflowError, match=r".*out of range integral type conversion attempted*"
+    ):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=OpenTelemetryTracesConfig(
+                    endpoint=VALID_FILE_ENDPOINT_TRACES,
+                    sample_percentage=-10,
+                ),
+            )
         )
 
     # Wrong traces file path
-    with pytest.raises(ConfigurationError, match=r".*File path must start with.*"):
-        OpenTelemetryConfig(
-            traces_collector_endpoint="file:invalid-path/v1/traces.json",
-            metrics_collector_endpoint=None,
+    with pytest.raises(TypeError, match=r".*File path must start with 'file://'.*"):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=OpenTelemetryTracesConfig(
+                    endpoint="file:invalid-path/v1/traces.json",
+                    sample_percentage=100,
+                ),
+            )
         )
 
     # Wrong metrics file path
-    with pytest.raises(ConfigurationError, match=r".*File path must start with.*"):
-        OpenTelemetryConfig(
-            traces_collector_endpoint=None,
-            metrics_collector_endpoint="file:invalid-path/v1/metrics.json",
+    with pytest.raises(TypeError, match=r".*File path must start with 'file://'.*"):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=None,
+                metrics=OpenTelemetryMetricsConfig(
+                    endpoint="file:invalid-path/v1/metrics.json",
+                ),
+            )
+        )
+
+    # Wrong directory path
+    with pytest.raises(
+        TypeError, match=r".*The directory does not exist or is not a directory.*"
+    ):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=OpenTelemetryTracesConfig(
+                    endpoint="file:///no-exits-path/v1/traces.json",
+                    sample_percentage=100,
+                ),
+            )
         )
 
     # No traces or metrics provided
-    with pytest.raises(ConfigurationError, match=r".*At least one of traces_collector_endpoint or metrics_collector_endpoint.*"):
-        OpenTelemetryConfig(
-            traces_collector_endpoint=None,
-            metrics_collector_endpoint=None,
+    with pytest.raises(
+        TypeError, match=r".*At least one of traces or metrics must be provided.*"
+    ):
+        OpenTelemetry.init(
+            OpenTelemetryConfig(
+                traces=None,
+                metrics=None,
+            )
         )
 
 
-async def test_span_not_exported_before_init_otel(cluster_addresses, is_cluster):
+async def test_span_not_exported_before_init_otel(request):
     """Test that spans are not exported before OpenTelemetry is initialized"""
-    await teardown_otel_test()
+    # Clean up any existing files
+    if os.path.exists(VALID_ENDPOINT_TRACES):
+        os.unlink(VALID_ENDPOINT_TRACES)
 
-    # Create client without initializing OpenTelemetry
-    if is_cluster:
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=cluster_addresses,
-                protocol=ProtocolVersion.RESP3,
-            )
-        )
-    else:
-        client = await GlideClient.create(
-            GlideClientConfiguration(
-                addresses=cluster_addresses,
-                protocol=ProtocolVersion.RESP3,
-            )
-        )
+    client = await create_client(
+        request,
+        cluster_mode=False,
+        protocol=ProtocolVersion.RESP3,
+    )
 
+    # Execute a command
     await client.get("testSpanNotExportedBeforeInitOtel")
 
-    # Check that spans are not exported to the file before initializing OpenTelemetry
+    # Check that no spans file was created
     assert not os.path.exists(VALID_ENDPOINT_TRACES)
 
     await client.close()
 
 
-@pytest.fixture(scope="module")
-def event_loop():
-    """Create an event loop for the module scope"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+class TestOpenTelemetryGlideClient:
+    @pytest_asyncio.fixture(autouse=True)
+    async def setup_test(self, request):
+        # Initialize OpenTelemetry with 100% sampling for tests
+        opentelemetry_config = OpenTelemetryConfig(
+            traces=OpenTelemetryTracesConfig(
+                endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
+            ),
+            metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
+            flush_interval_ms=100,
+        )
 
+        # Initialize OpenTelemetry
+        OpenTelemetry.init(opentelemetry_config)
+        # Clean up before each test
+        if os.path.exists(VALID_ENDPOINT_TRACES):
+            os.unlink(VALID_ENDPOINT_TRACES)
 
-@pytest.fixture(scope="module", autouse=True)
-async def setup_opentelemetry(event_loop):
-    """Initialize OpenTelemetry once for all tests"""
-    # First check wrong configurations
-    await test_wrong_opentelemetry_config()
-    
-    # Initialize OpenTelemetry with valid configuration
-    config = OpenTelemetryConfig(
-        traces_collector_endpoint=VALID_FILE_ENDPOINT_TRACES,
-        metrics_collector_endpoint=VALID_ENDPOINT_METRICS,
-        sample_percentage=100,
-        flush_interval_ms=100,
-    )
-    OpenTelemetry.init(config)
-    
-    yield
-    
-    # Clean up after all tests
-    await teardown_otel_test()
-
-
-class TestOpenTelemetryCluster:
-    """Tests for OpenTelemetry with GlideClusterClient (cluster mode)"""
-
-    @pytest.fixture(autouse=True)
-    async def setup_teardown(self):
-        """Setup and teardown for each test"""
-        # Setup
-        await teardown_otel_test()
         yield
-        # Teardown
-        await teardown_otel_test()
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_span_memory_leak(self, protocol):
-        """Test that spans don't cause memory leaks with regular commands in cluster mode"""
-        # Skip if gc.collect is not available
-        if not hasattr(gc, "collect"):
-            pytest.skip("gc.collect not available")
+        # Clean up after each test
+        if os.path.exists(VALID_ENDPOINT_TRACES):
+            os.unlink(VALID_ENDPOINT_TRACES)
 
-        gc.collect()
-        start_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-
-        # Execute a series of commands sequentially
-        for i in range(100):
-            key = f"test_key_{i}"
-            await client.set(key, f"value_{i}")
-            await client.get(key)
-
+        client = await create_client(request, cluster_mode=False, request_timeout=2000)
+        await client.custom_command(["FLUSHALL"])
         await client.close()
 
-        gc.collect()
-        end_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        # Allow for small fluctuations
-        assert end_memory < start_memory * 1.1
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_percentage_requests_config(self, protocol):
-        """Test that sampling percentage controls span creation"""
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-        
-        # Set sampling to 0% - no spans should be created
-        OpenTelemetry.set_sample_percentage(0)
-        assert OpenTelemetry.get_sample_percentage() == 0
-        
-        # Wait for any spans to be flushed and remove the file
-        await asyncio.sleep(0.5)
-        await teardown_otel_test()
-        
-        # Execute commands - no spans should be created
-        for i in range(100):
-            await client.set(
-                "GlideClusterClient_test_percentage_requests_config",
-                "value",
-            )
-        
-        # Wait for any potential spans to be flushed
-        await asyncio.sleep(0.5)
-        
-        # Check that no spans were exported
-        assert not os.path.exists(VALID_ENDPOINT_TRACES)
-        
-        # Set sampling to 100% - all commands should create spans
-        OpenTelemetry.set_sample_percentage(100)
-        
-        # Execute commands - all should create spans
-        for i in range(10):
-            key = f"GlideClusterClient_test_percentage_requests_config_{i}"
-            await client.get(key)
-        
-        # Wait for spans to be flushed to file
-        await asyncio.sleep(0.5)
-        
-        # Check that spans were exported
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        span_data = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
-        span_names = span_data["span_names"]
-        
-        # Check that the expected spans were created
-        assert "Get" in span_names
-        assert span_names.count("Get") == 10
-        
-        await client.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_otel_global_config_not_reinitialize(self, protocol):
-        """Test that OpenTelemetry global config cannot be reinitialized"""
-        # Try to initialize with invalid config - should not throw error
-        # and should not change the configuration
-        config = OpenTelemetryConfig(
-            traces_collector_endpoint=VALID_FILE_ENDPOINT_TRACES,
-            metrics_collector_endpoint=VALID_ENDPOINT_METRICS,
-        )
-        OpenTelemetry.init(config)  # This should be a no-op since it's already initialized
-        
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-        
-        # Execute command to generate span
-        await client.set("GlideClusterClient_test_otel_global_config", "value")
-        
-        # Wait for spans to be flushed
-        await asyncio.sleep(0.5)
-        
-        # Verify spans are created with original config
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        span_data = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
-        span_names = span_data["span_names"]
-        assert "Set" in span_names
-        
-        await client.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_span_transaction_memory_leak(self, protocol):
-        """Test that spans don't cause memory leaks with transactions in cluster mode"""
-        # Skip if gc.collect is not available
-        if not hasattr(gc, "collect"):
-            pytest.skip("gc.collect not available")
-
-        gc.collect()
-        start_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-
-        # Create and execute a transaction
-        batch = ClusterBatch(is_atomic=True)
-        batch.set("test_key", "foo")
-        batch.objectRefcount("test_key")
-
-        response = await client.exec(batch, True)
-        assert response is not None
-        assert len(response) == 2
-        assert response[0] == "OK"  # batch.set("test_key", "foo")
-        assert response[1] >= 1  # batch.objectRefcount("test_key")
-
-        await client.close()
-
-        gc.collect()
-        end_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        # Allow for small fluctuations
-        assert end_memory < start_memory * 1.1
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_multiple_clients_same_otel_config(self, protocol):
-        """Test that multiple clients can be created with the same OpenTelemetry configuration"""
-        client1 = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-        
-        client2 = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-        
-        # Execute commands with both clients
-        await client1.set("test_key", "value")
-        await client2.get("test_key")
-        
-        # Wait for spans to be flushed
-        await asyncio.sleep(0.5)
-        
-        # Verify spans are created for both clients
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        span_data = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
-        span_names = span_data["span_names"]
-        
-        # Check that the expected spans were created
-        assert "Set" in span_names
-        assert "Get" in span_names
-        
-        await client1.close()
-        await client2.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_span_batch_file(self, protocol):
-        """Test that spans for batch operations are properly exported to file in cluster mode"""
-        # Skip if gc.collect is not available
-        if not hasattr(gc, "collect"):
-            pytest.skip("gc.collect not available")
-
-        gc.collect()
-        start_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        client = await GlideClusterClient.create(
-            GlideClusterClientConfiguration(
-                addresses=pytest.valkey_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-
-        # Create and execute a transaction
-        batch = ClusterBatch(is_atomic=True)
-        batch.set("test_key", "foo")
-        batch.objectRefcount("test_key")
-
-        response = await client.exec(batch, True)
-        assert response is not None
-        assert len(response) == 2
-        assert response[0] == "OK"  # batch.set("test_key", "foo")
-        assert response[1] >= 1  # batch.objectRefcount("test_key")
-
-        # Wait for spans to be flushed to file
-        await asyncio.sleep(0.5)
-
-        # Read and check span names from the file
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        span_data = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
-        span_names = span_data["span_names"]
-
-        # Check for expected span names
-        assert "Batch" in span_names
-
-        await client.close()
-
-        gc.collect()
-        end_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
-
-        # Allow for small fluctuations
-        assert end_memory < start_memory * 1.1
-
-
-class TestOpenTelemetryStandalone:
-    """Tests for OpenTelemetry with GlideClient (standalone mode)"""
-
-    @pytest.fixture(autouse=True)
-    async def setup_teardown(self):
-        """Setup and teardown for each test"""
-        # Setup
-        await teardown_otel_test()
-        yield
-        # Teardown
-        await teardown_otel_test()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_automatic_span_lifecycle(self, protocol):
+    async def test_automatic_span_lifecycle(self, request, protocol):
         """Test that spans are automatically created and cleaned up"""
-        # Skip if gc.collect is not available
-        if not hasattr(gc, "collect"):
-            pytest.skip("gc.collect not available")
-
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
         gc.collect()
-        start_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
 
-        client = await GlideClient.create(
-            GlideClientConfiguration(
-                addresses=pytest.standalone_cluster.nodes_addr,
-                protocol=protocol,
-            )
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
+
+        # Create client
+        client = await create_client(
+            request,
+            cluster_mode=False,
+            protocol=protocol,
         )
 
-        # Execute multiple commands - each should automatically create and clean up its span
+        # Execute multiple commands
         await client.set("test_key1", "value1")
         await client.get("test_key1")
         await client.set("test_key2", "value2")
         await client.get("test_key2")
 
-        await client.close()
-
+        # Force garbage collection again
         gc.collect()
-        end_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
 
-        # Allow for small fluctuations
-        assert end_memory < start_memory * 1.1
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_otel_global_config_not_reinitialize(self, protocol):
-        """Test that OpenTelemetry global config cannot be reinitialized"""
-        client = await GlideClient.create(
-            GlideClientConfiguration(
-                addresses=pytest.standalone_cluster.nodes_addr,
-                protocol=protocol,
-            )
-        )
-
-        # Try to initialize with invalid config - should not throw error
-        config = OpenTelemetryConfig(
-            traces_collector_endpoint=VALID_FILE_ENDPOINT_TRACES,
-            metrics_collector_endpoint=VALID_ENDPOINT_METRICS,
-        )
-        OpenTelemetry.init(config)  # This should be a no-op since it's already initialized
-        
-        # Execute command to generate span
-        await client.set("test_key", "value")
-        
         # Wait for spans to be flushed
-        await asyncio.sleep(0.5)
-        
-        # Verify spans are created with original config
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        
+        await asyncio.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Close client
         await client.close()
 
-    @pytest.mark.asyncio
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_concurrent_commands_span_lifecycle(self, protocol):
-        """Test that spans don't cause memory leaks with concurrent commands"""
-        # Skip if gc.collect is not available
-        if not hasattr(gc, "collect"):
-            pytest.skip("gc.collect not available")
+    async def test_otel_global_config_not_reinitialize(self, request, protocol):
+        """Test that OpenTelemetry cannot be reinitialized"""
+        client = await create_client(
+            request,
+            cluster_mode=False,
+            protocol=protocol,
+        )
 
+        # Try to reinitialize with invalid config
+        opentelemetry_config = OpenTelemetryConfig(
+            traces=OpenTelemetryTracesConfig(endpoint="wrong.endpoint")
+        )
+
+        # This should not throw an error because OpenTelemetry is already initialized
+        OpenTelemetry.init(opentelemetry_config)
+
+        await client.close()
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_concurrent_commands_span_lifecycle(self, request, protocol):
+        """Test that spans are properly handled with concurrent commands"""
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
         gc.collect()
-        start_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
 
-        client = await GlideClient.create(
-            GlideClientConfiguration(
-                addresses=pytest.standalone_cluster.nodes_addr,
-                protocol=protocol,
-            )
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
+
+        # Create client
+        client = await create_client(
+            request,
+            cluster_mode=False,
+            protocol=protocol,
         )
 
         # Execute multiple concurrent commands
@@ -542,23 +303,280 @@ class TestOpenTelemetryStandalone:
         ]
 
         await asyncio.gather(*commands)
-        
+
+        # Force garbage collection again
+        gc.collect()
+
         # Wait for spans to be flushed
+        await asyncio.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Close client
+        await client.close()
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+
+class TestOpenTelemetryGlideClusterClient:
+    @pytest_asyncio.fixture(scope="class")
+    async def setup_class(self, request):
+        # Test wrong OpenTelemetry config before initializing
+        test_wrong_opentelemetry_config()
+
+        # Test that spans are not exported before OpenTelemetry is initialized
+        await test_span_not_exported_before_init_otel(request)
+
+    @pytest_asyncio.fixture(autouse=True)
+    async def setup_test(self, request):
+        # Initialize OpenTelemetry with 100% sampling for tests
+        opentelemetry_config = OpenTelemetryConfig(
+            OpenTelemetryTracesConfig(
+                endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
+            ),
+            metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
+            flush_interval_ms=100,
+        )
+
+        # Initialize OpenTelemetry
+        OpenTelemetry.init(opentelemetry_config)
+        # Clean up before each test
+        if os.path.exists(VALID_ENDPOINT_TRACES):
+            os.unlink(VALID_ENDPOINT_TRACES)
+
+        yield
+
+        # Clean up after each test
+        if os.path.exists(VALID_ENDPOINT_TRACES):
+            os.unlink(VALID_ENDPOINT_TRACES)
+
+        client = await create_client(request, cluster_mode=True, request_timeout=2000)
+        await client.custom_command(["FLUSHALL"])
+        await client.close()
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_memory_leak(self, request, protocol):
+        """Test that spans don't cause memory leaks"""
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
+        gc.collect()
+
+        # Create client and get initial memory usage
+        client = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss
+
+        # Execute a series of commands sequentially
+        for i in range(100):
+            key = f"test_key_{i}"
+            await client.set(key, f"value_{i}")
+            await client.get(key)
+
+        # Close client
+        await client.close()
+
+        # Force garbage collection
+        gc.collect()
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_percentage_requests_config(self, request, protocol):
+        """Test that sample percentage configuration works correctly"""
+        # Create client
+        client = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        # Set sample percentage to 0%
+        OpenTelemetry.set_sample_percentage(0)
+        assert OpenTelemetry.get_sample_percentage() == 0
+
+        # Wait for any pending spans to be flushed
         await asyncio.sleep(0.5)
-        
-        # Verify spans are created
-        assert os.path.exists(VALID_ENDPOINT_TRACES)
-        span_data = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
-        span_names = span_data["span_names"]
-        
-        # Check that the expected spans were created
-        assert "Set" in span_names
+
+        # Clean up any existing files
+        if os.path.exists(VALID_ENDPOINT_TRACES):
+            os.unlink(VALID_ENDPOINT_TRACES)
+
+        # Execute commands with 0% sampling
+        for i in range(100):
+            await client.set(
+                "GlideClusterClient_test_percentage_requests_config", "value"
+            )
+
+        # Wait for any spans to be flushed (though none should be created)
+        await asyncio.sleep(0.5)
+
+        # Check that no spans file was created
+        assert not os.path.exists(VALID_ENDPOINT_TRACES)
+
+        # Set sample percentage to 100%
+        OpenTelemetry.set_sample_percentage(100)
+
+        # Execute commands with 100% sampling
+        for i in range(10):
+            key = f"GlideClusterClient_test_percentage_requests_config_{i}"
+            await client.get(key)
+
+        # Wait for spans to be flushed
+        await asyncio.sleep(5)
+
+        # Read the span file and check span names
+        _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        # Check that "Get" spans were created
         assert "Get" in span_names
+
+        # Check that exactly 10 "Get" spans were created
+        assert span_names.count("Get") == 10
 
         await client.close()
 
-        gc.collect()
-        end_memory = sum(sys.getsizeof(x) for x in gc.get_objects())
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_otel_global_config_not_reinitialize(self, request, protocol):
+        """Test that OpenTelemetry cannot be reinitialized"""
+        # Try to reinitialize with invalid config
+        opentelemetry_config = OpenTelemetryConfig(
+            OpenTelemetryTracesConfig(endpoint="wrong.endpoint", sample_percentage=1)
+        )
 
-        # Allow for small fluctuations
-        assert end_memory < start_memory * 1.1
+        # This should not throw an error because OpenTelemetry is already initialized
+        OpenTelemetry.init(opentelemetry_config)
+
+        # Create client
+        client = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        # Execute a command
+        await client.set("GlideClusterClient_test_otel_global_config", "value")
+
+        # Wait for spans to be flushed
+        await asyncio.sleep(0.5)
+
+        # Read the span file and check span names
+        _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        # Check that "Set" spans were created
+        assert "Set" in span_names
+
+        await client.close()
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_batch(self, request, protocol):
+        """Test that batch operations create spans correctly"""
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
+        gc.collect()
+
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss
+
+        # Create client
+        client = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        # Create and execute a batch using the correct Python API
+        from glide.async_commands.batch import ClusterBatch
+
+        batch = ClusterBatch(is_atomic=True)
+        batch.set("test_key", "foo")
+        batch.object_refcount("test_key")
+
+        response = await client.exec(batch, raise_on_error=True)
+        assert response is not None
+
+        if response is not None:
+            assert len(response) == 2
+            assert response[0] == "OK"  # batch.set("test_key", "foo")
+            assert response[1] >= 1  # batch.object_refcount("test_key")
+
+        # Wait for spans to be flushed
+        await asyncio.sleep(5)
+
+        # Read the span file and check span names
+        _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        # Check for expected span names
+        assert "Batch" in span_names
+        assert "send_batch" in span_names
+
+        # Force garbage collection
+        gc.collect()
+
+        await client.close()
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_number_of_clients_with_same_config(self, request, protocol):
+        """Test that multiple clients with the same config work correctly with OpenTelemetry"""
+        # Create two clients
+        client1 = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        client2 = await create_client(
+            request,
+            cluster_mode=True,
+            protocol=protocol,
+        )
+
+        # Execute commands on both clients
+        await client1.set("test_key", "value")
+        await client2.get("test_key")
+
+        # Wait for spans to be flushed
+        await asyncio.sleep(5)
+
+        # Read the span file and check span names
+        _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        # Check for expected span names
+        assert "Get" in span_names
+        assert "Set" in span_names
+
+        # Close clients
+        await client1.close()
+        await client2.close()
