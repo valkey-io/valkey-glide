@@ -124,25 +124,25 @@ public class OpenTelemetryTests {
     @SneakyThrows
     private static void wrongOpenTelemetryConfig() {
         // Wrong traces endpoint
-        OpenTelemetryConfig config =
+        OpenTelemetryConfig wrongTracesConfig =
                 OpenTelemetryConfig.builder()
                         .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
                         .build();
 
-        Exception exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        Exception exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
         assertTrue(exception.getMessage().contains("Parse error"));
 
         // Wrong metrics endpoint
-        config =
+        OpenTelemetryConfig wrongMetricsConfig =
                 OpenTelemetryConfig.builder()
                         .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
         assertTrue(exception.getMessage().contains("Parse error"));
 
         // Negative flush interval
-        config =
+        OpenTelemetryConfig negativeFlushConfig =
                 OpenTelemetryConfig.builder()
                         .traces(
                                 OpenTelemetry.TracesConfig.builder()
@@ -152,11 +152,11 @@ public class OpenTelemetryTests {
                         .flushIntervalMs(-400L)
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeFlushConfig));
         assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive integer"));
 
         // Negative sample percentage
-        config =
+        OpenTelemetryConfig negativeSampleConfig =
                 OpenTelemetryConfig.builder()
                         .traces(
                                 OpenTelemetry.TracesConfig.builder()
@@ -165,12 +165,12 @@ public class OpenTelemetryTests {
                                         .build())
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeSampleConfig));
         assertTrue(
                 exception.getMessage().contains("Trace sample percentage must be between 0 and 100"));
 
         // Wrong traces file path
-        config =
+        OpenTelemetryConfig wrongTracesPathConfig =
                 OpenTelemetryConfig.builder()
                         .traces(
                                 OpenTelemetry.TracesConfig.builder()
@@ -178,11 +178,11 @@ public class OpenTelemetryTests {
                                         .build())
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesPathConfig));
         assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
 
         // Wrong metrics file path
-        config =
+        OpenTelemetryConfig wrongMetricsPathConfig =
                 OpenTelemetryConfig.builder()
                         .metrics(
                                 OpenTelemetry.MetricsConfig.builder()
@@ -190,11 +190,11 @@ public class OpenTelemetryTests {
                                         .build())
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsPathConfig));
         assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
 
         // Wrong directory path
-        config =
+        OpenTelemetryConfig wrongDirPathConfig =
                 OpenTelemetryConfig.builder()
                         .traces(
                                 OpenTelemetry.TracesConfig.builder()
@@ -202,14 +202,14 @@ public class OpenTelemetryTests {
                                         .build())
                         .build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
         assertTrue(
                 exception.getMessage().contains("The directory does not exist or is not a directory"));
 
         // No traces or metrics provided
-        config = OpenTelemetryConfig.builder().build();
+        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
 
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(config));
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
         assertTrue(
                 exception.getMessage().contains("At least one of traces or metrics must be provided"));
     }
