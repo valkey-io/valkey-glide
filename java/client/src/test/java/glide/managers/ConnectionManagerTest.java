@@ -85,7 +85,6 @@ public class ConnectionManagerTest {
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.NoTls)
-                        .setConnectionTimeout(250)
                         .setClusterModeEnabled(false)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
                         .build();
