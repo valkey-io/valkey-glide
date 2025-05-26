@@ -3,7 +3,7 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/errors"
 )
 
 type BitOpType string

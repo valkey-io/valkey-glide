@@ -2,7 +2,7 @@
 
 package errors
 
-// #include "../../lib.h"
+// #include "../lib.h"
 import "C"
 
 // ConnectionError is a client error that occurs when there is an error while connecting or when a connection

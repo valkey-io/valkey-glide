@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
