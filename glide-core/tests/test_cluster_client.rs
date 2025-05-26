@@ -468,8 +468,7 @@ mod cluster_client_tests {
             lazy_connection_request_pb.protocol = match protocol {
                 RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
                 RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
-            }
-            .into();
+            };
 
             // 5. Create the lazy client directly using Client::new
             let mut lazy_glide_client = Client::new(lazy_connection_request_pb.into(), None) // .into() converts protobuf to core::ConnectionRequest
