@@ -422,8 +422,8 @@ mod cluster_client_tests {
             let base_config_for_dedicated_cluster = TestConfiguration {
                 use_tls: USE_TLS,
                 protocol: match protocol {
-                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2.into(),
-                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3.into(),
+                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
+                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
                 },
                 shared_server: false, // <<<< This ensures a dedicated cluster is made
                 cluster_mode: ClusterMode::Enabled,
