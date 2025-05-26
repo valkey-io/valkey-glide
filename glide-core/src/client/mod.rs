@@ -375,7 +375,6 @@ impl Client {
 
     /// Send a command to the server.
     /// This function will route the command to the correct node, and retry if needed.
-
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a Cmd,
