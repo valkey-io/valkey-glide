@@ -73,7 +73,7 @@ class BackoffStrategy:
     """
     Represents the strategy used to determine how and when to reconnect, in case of connection failures.
     The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
-    is the number of failed attempts.
+    is the number of failed attempts, and `rand(...)` applies a jitter of up to `jitter_percent`% to introduce randomness and reduce retry storms.
     Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
     successful.
     The client will attempt to reconnect indefinitely.
