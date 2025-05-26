@@ -458,20 +458,17 @@ mod cluster_client_tests {
             // 4. Manually create the ConnectionRequest for the lazy client,
             //    pointing to the DEDICATED Cluster A.
             //    We use the `base_config_for_dedicated_cluster` for other settings.
-            let mut lazy_connection_request_pb = utilities::create_connection_request(
-                &dedicated_cluster_addresses,
-                &base_config_for_dedicated_cluster,
-            );
-            // Ensure lazy_connect is true for the protobuf request
-            lazy_connection_request_pb.lazy_connect = true;
-            // Ensure protocol is correctly set from the test parameter for the protobuf request
-            lazy_connection_request_pb.protocol = match protocol {
-                RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2.into(),
-                RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3.into(),
-            };
+            let mut lazy_client_config = base_config_for_dedicated_cluster.clone();
+            lazy_client_config.lazy_connect = true;
 
-            // 5. Create the lazy client directly using Client::new
-            let mut lazy_glide_client = Client::new(lazy_connection_request_pb.into(), None) // .into() converts protobuf to core::ConnectionRequest
+            // Create connection request directly with our dedicated cluster addresses
+            let lazy_connection_request = utilities::create_connection_request(
+                &dedicated_cluster_addresses,
+                &lazy_client_config, // Uses the same config but with lazy_connect=true
+            );
+
+            // 5. Create the client
+            let mut lazy_glide_client = Client::new(lazy_connection_request.into(), None)
                 .await
                 .expect("Failed to create lazy client for Cluster A");
 
