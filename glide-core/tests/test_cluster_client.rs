@@ -17,7 +17,7 @@ mod cluster_client_tests {
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
-    use redis::{InfoDict, ProtocolVersion, Value};
+    use redis::{InfoDict, Value};
 
     use rstest::rstest;
     use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
@@ -422,8 +422,8 @@ mod cluster_client_tests {
             let base_config_for_dedicated_cluster = TestConfiguration {
                 use_tls: USE_TLS,
                 protocol: match protocol {
-                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
-                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
+                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2.into(),
+                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3.into(),
                 },
                 shared_server: false, // <<<< This ensures a dedicated cluster is made
                 cluster_mode: ClusterMode::Enabled,
@@ -466,8 +466,8 @@ mod cluster_client_tests {
             lazy_connection_request_pb.lazy_connect = true;
             // Ensure protocol is correctly set from the test parameter for the protobuf request
             lazy_connection_request_pb.protocol = match protocol {
-                RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
-                RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
+                RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2.into(),
+                RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3.into(),
             };
 
             // 5. Create the lazy client directly using Client::new
