@@ -343,10 +343,14 @@ public class OpenTelemetryTests {
     @SneakyThrows
     public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
         // Try to reinitialize with invalid config
-        OpenTelemetryConfig openTelemetryConfig = new OpenTelemetryConfig();
-        openTelemetryConfig.setTraces(new OpenTelemetryConfig.TracesConfig());
-        openTelemetryConfig.getTraces().setEndpoint("wrong.endpoint");
-        openTelemetryConfig.getTraces().setSamplePercentage(1);
+        OpenTelemetryConfig openTelemetryConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("wrong.endpoint")
+                                        .samplePercentage(1)
+                                        .build())
+                        .build();
 
         // This should not throw an error because init can only be called once per process
         OpenTelemetry.init(openTelemetryConfig);
