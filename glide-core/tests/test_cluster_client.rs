@@ -13,6 +13,7 @@ mod cluster_client_tests {
     use glide_core::connection_request::{
         self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
     };
+    use redis::ProtocolVersion as RedisProtocolVersion;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
@@ -410,7 +411,8 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_lazy_cluster_connection_establishes_on_first_command(
-        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+        #[values(RedisProtocolVersion::RESP2, RedisProtocolVersion::RESP3)]
+        protocol: RedisProtocolVersion,
     ) {
         block_on_all(async move {
             const USE_TLS: bool = false;
