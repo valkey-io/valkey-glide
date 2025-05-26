@@ -70,11 +70,104 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	return &ClusterClient{client}, nil
 }
 
-// TODO docs
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Routing Behavior:
+//
+//   - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+//     If no key is found, the request is sent to a random node.
+//   - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+//     key's slot. If no key is present, routing follows the command's default request policy.
+//     Multi-node commands are automatically split and dispatched to the appropriate nodes.
+//
+// Behavior notes:
+//
+//	Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+//	If keys span different slots, the transaction will fail. If the transaction fails due to a
+//	`WATCH` command, `Exec` will return `nil`.
+//
+// Retry and Redirection:
+//
+//   - If a redirection error occurs:
+//   - Atomic batches (Transactions): The entire transaction will be redirected.
+//   - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+//   - Retries for failures will be handled according to the `retry_server_error` and
+//     `retry_connection_error` parameters.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//
+// Return value:
+//
+//	A list of results corresponding to the execution of each command in the batch.
+//	If a command returns a value, it will be included in the list. If a command doesn't return a value,
+//	the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
 func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
 }
 
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Routing Behavior:
+//
+//   - If a `route` is specified:
+//   - The entire batch is sent to the specified node.
+//   - If no `route` is specified:
+//   - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+//     If no key is found, the request is sent to a random node.
+//   - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+//     key's slot. If no key is present, routing follows the command's default request policy.
+//     Multi-node commands are automatically split and dispatched to the appropriate nodes.
+//
+// Behavior notes:
+//
+//	Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+//	If keys span different slots, the transaction will fail. If the transaction fails due to a
+//	`WATCH` command, `Exec` will return `nil`.
+//
+// Retry and Redirection:
+//
+//   - If a redirection error occurs:
+//   - Atomic batches (Transactions): The entire transaction will be redirected.
+//   - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+//   - Retries for failures will be handled according to the `retry_server_error` and
+//     `retry_connection_error` parameters.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//	options - A [ClusterBatchOptions] object containing execution options.
+//
+// Return value:
+//
+//	A list of results corresponding to the execution of each command in the batch.
+//	If a command returns a value, it will be included in the list. If a command doesn't return a value,
+//	the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
 func (client *ClusterClient) ExecWithOptions(
 	ctx context.Context,
 	batch pipeline.ClusterBatch,
