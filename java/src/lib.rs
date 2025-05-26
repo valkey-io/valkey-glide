@@ -737,7 +737,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                         if traces_sample_percentage >= 0 {
                             Some(traces_sample_percentage as u32)
                         } else {
-                            None
+                            return Err(FFIError::OpenTelemetry(format!(
+                                "InvalidInput: traces_sample_percentage must be a positive integer (got: {})",
+                                traces_sample_percentage
+                                ))
+                            );
                         },
                     );
                 }

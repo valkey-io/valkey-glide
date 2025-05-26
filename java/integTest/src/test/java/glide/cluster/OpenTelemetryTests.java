@@ -168,7 +168,9 @@ public class OpenTelemetryTests {
 
         exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeSampleConfig));
         assertTrue(
-                exception.getMessage().contains("Trace sample percentage must be between 0 and 100"));
+                exception.getMessage()
+                        .contains("InvalidInput: traces_sample_percentage must be a positive integer (got: -400)")
+        );
 
         // Wrong traces file path
         OpenTelemetryConfig wrongTracesPathConfig =
