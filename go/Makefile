@@ -134,7 +134,7 @@ unit-test:
 	mkdir -p reports
 	set -o pipefail; \
 	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
+	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/internal/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)
 example-test:
