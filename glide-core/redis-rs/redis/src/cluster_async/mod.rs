@@ -2908,7 +2908,7 @@ where
                 Next::Done => {}
                 Next::Retry { request } => {
                     // Record retries error metric if telemetry is initialized
-                    if let Err(e) = GlideOpenTelemetry::record_retries() {
+                    if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
                         log_error(
                             "OpenTelemetry:retry_error",
                             format!("Failed to record retry attempt: {}", e),
@@ -2925,7 +2925,7 @@ where
                 }
                 Next::RetryBusyLoadingError { request, address } => {
                     // Record retry attempt metric if telemetry is initialized
-                    if let Err(e) = GlideOpenTelemetry::record_retries() {
+                    if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
                         log_error(
                             "OpenTelemetry:retry_error",
                             format!("Failed to record retry attempt: {}", e),

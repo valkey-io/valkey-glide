@@ -23,7 +23,7 @@ const TRACE_SCOPE: &str = "valkey_glide";
 
 // Metric names
 const TIMEOUT_ERROR_METRIC: &str = "glide.timeout_errors";
-const RETRIES_METRIC: &str = "glide.retries_attempts";
+const RETRIES_METRIC: &str = "glide.retry_attempts";
 const MOVED_ERROR_METRIC: &str = "glide.moved_errors";
 
 /// Custom error type for OpenTelemetry errors in Glide
@@ -696,7 +696,7 @@ impl GlideOpenTelemetry {
     /// Record a retry attempt
     ///
     /// If OpenTelemetry is not initialized, this method will do nothing.
-    pub fn record_retries() -> Result<(), GlideOTELError> {
+    pub fn record_retry_attempt() -> Result<(), GlideOTELError> {
         if GlideOpenTelemetry::is_initialized() {
             RETRIES_COUNTER
                 .lock()
@@ -920,10 +920,10 @@ mod tests {
         rt.block_on(async {
             let _ = std::fs::remove_file(METRICS_JSON);
             init_otel().await.unwrap();
-            GlideOpenTelemetry::record_retries().unwrap();
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
             sleep(Duration::from_millis(2100)).await;
-            GlideOpenTelemetry::record_retries().unwrap();
-            GlideOpenTelemetry::record_retries().unwrap();
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
 
             // Add a sleep to wait for the metrics to be flushed
             sleep(Duration::from_millis(2100)).await;
@@ -937,7 +937,7 @@ mod tests {
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["name"],
-                "glide.retries_attempts"
+                "glide.retry_attempts"
             );
             assert_eq!(
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
