@@ -236,7 +236,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	if config.AdvancedClientConfiguration.connectionTimeout != 0 {
 		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClientConfiguration.connectionTimeout)
 		if err != nil {
-			return nil, errors.New("Setting connection timeout returned an error: " + err.Error())
+			return nil, fmt.Errorf("setting connection timeout returned an error: %w", err)
 		}
 		request.ConnectionTimeout = connectionTimeout
 	}
@@ -375,7 +375,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
 		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
 		if err != nil {
-			return nil, errors.New("Setting connection timeout returned an error: " + err.Error())
+			return nil, fmt.Errorf("setting connection timeout returned an error: %w", err)
 		}
 		request.ConnectionTimeout = connectionTimeout
 	}

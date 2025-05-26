@@ -260,6 +260,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err2 := config2.ToProtobuf()
 	assert.Error(t, err2)
+	assert.ErrorAs(t, err2, &errorType)
 	assert.Contains(t, err2.Error(), "invalid duration was specified")
 
 	// RequestTimeout 50 days
@@ -268,6 +269,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err3 := config3.ToProtobuf()
 	assert.Error(t, err3)
+	assert.ErrorAs(t, err3, &errorType)
 	assert.Contains(t, err3.Error(), "invalid duration was specified")
 
 	config4 := NewClusterClientConfiguration().
@@ -275,6 +277,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err4 := config4.ToProtobuf()
 	assert.Error(t, err4)
+	assert.ErrorAs(t, err4, &errorType)
 	assert.Contains(t, err4.Error(), "invalid duration was specified")
 
 	// ConnectionTimeout Negative duration
@@ -283,6 +286,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err5 := config5.ToProtobuf()
 	assert.Error(t, err5)
+	assert.ErrorAs(t, err5, &errorType)
 	assert.Contains(t, err5.Error(), "invalid duration was specified")
 
 	config6 := NewClusterClientConfiguration().
@@ -290,6 +294,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err6 := config6.ToProtobuf()
 	assert.Error(t, err6)
+	assert.ErrorAs(t, err6, &errorType)
 	assert.Contains(t, err6.Error(), "invalid duration was specified")
 
 	// ConnectionTimeout 50 days
@@ -298,6 +303,7 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err7 := config7.ToProtobuf()
 	assert.Error(t, err7)
+	assert.ErrorAs(t, err7, &errorType)
 	assert.Contains(t, err7.Error(), "invalid duration was specified")
 
 	config8 := NewClusterClientConfiguration().
@@ -305,5 +311,6 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 
 	_, err8 := config8.ToProtobuf()
 	assert.Error(t, err8)
+	assert.ErrorAs(t, err8, &errorType)
 	assert.Contains(t, err8.Error(), "invalid duration was specified")
 }
