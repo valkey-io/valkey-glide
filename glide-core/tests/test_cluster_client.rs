@@ -9,6 +9,7 @@ mod cluster_client_tests {
     use super::*;
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
     use glide_core::client::Client;
+    use glide_core::connection_request::ProtocolVersion as GlideProtocolVersion;
     use glide_core::connection_request::{
         self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
     };
@@ -16,6 +17,7 @@ mod cluster_client_tests {
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
     use redis::{InfoDict, ProtocolVersion, Value};
+
     use rstest::rstest;
     use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
@@ -458,7 +460,11 @@ mod cluster_client_tests {
             // Ensure lazy_connect is true for the protobuf request
             lazy_connection_request_pb.lazy_connect = true;
             // Ensure protocol is correctly set from the test parameter for the protobuf request
-            lazy_connection_request_pb.protocol = protocol.into();
+            lazy_connection_request_pb.protocol = match protocol {
+                RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
+                RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
+            }
+            .into();
 
             // 5. Create the lazy client directly using Client::new
             let mut lazy_glide_client = Client::new(lazy_connection_request_pb.into(), None) // .into() converts protobuf to core::ConnectionRequest
