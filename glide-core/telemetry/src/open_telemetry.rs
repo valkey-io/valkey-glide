@@ -831,9 +831,9 @@ mod tests {
                 .split('\n')
                 .filter(|l| !l.trim().is_empty())
                 .collect();
-            assert_eq!(lines.len(), 4, "file content: {file_content:?}");
+            assert_eq!(lines.len(), 3, "file content: {file_content:?}");
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(span_json["name"], "Network_Span");
             let network_span_id = span_json["span_id"].to_string();
             let network_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -842,7 +842,7 @@ mod tests {
             // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
             assert!(network_span_end_time - network_span_start_time >= 100_000);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_1");
             assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
             let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -857,7 +857,7 @@ mod tests {
             let child_span_id = span_json["links"][0]["span_id"].to_string();
             assert_eq!(child_span_id, network_span_id);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[3]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_2");
             assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
         });
@@ -1021,7 +1021,6 @@ mod tests {
             sleep(Duration::from_millis(2100)).await;
 
             let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
-            println!("File content: {file_content:?}");
             let lines: Vec<&str> = file_content
                 .split('\n')
                 .filter(|l| !l.trim().is_empty())

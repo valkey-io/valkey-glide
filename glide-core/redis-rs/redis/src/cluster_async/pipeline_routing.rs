@@ -98,6 +98,7 @@ pub(crate) type ResponsePoliciesMap =
 ///
 /// `add_asking` is a boolean flag that determines whether to add an `ASKING` command before the command.
 /// `is_retrying` is a boolean flag that indicates whether this is a retry attempt.
+#[allow(clippy::too_many_arguments)]
 fn add_command_to_node_pipeline_map<C>(
     pipeline_map: &mut NodePipelineMap<C>,
     address: String,
@@ -111,8 +112,8 @@ fn add_command_to_node_pipeline_map<C>(
     C: Clone,
 {
     if is_retrying {
-         // Record retry attempt metric if telemetry is initialized
-         if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
+        // Record retry attempt metric if telemetry is initialized
+        if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
             log_error(
                 "OpenTelemetry:retry_error",
                 format!("Failed to record retry attempt: {}", e),
@@ -1220,7 +1221,6 @@ where
                     false,
                     true,
                 );
-
             }
             Err(redis_error) => {
                 error.append_detail(&redis_error.into());
