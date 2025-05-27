@@ -849,7 +849,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSp
                 Ok(())
             }
             let result = drop_otel_span(span_ptr);
-            handle_errors(&mut env, result)
+            println!("In result drop otel span=====");
+            println!("Drop span Result is: {:?}", result.is_ok());
+            let handled = handle_errors(&mut env, result);
+            println!("After handle_errors in drop span: {:?}", handled.is_some());
+            handled
         },
         "dropOtelSpan",
     )

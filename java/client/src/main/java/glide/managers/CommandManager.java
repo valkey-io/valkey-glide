@@ -284,8 +284,7 @@ public class CommandManager {
         return channel
                 .write(command, true)
                 .exceptionally(this::exceptionHandler)
-                .thenApplyAsync(responseHandler::apply)
-                .whenComplete((result, ex) -> dropCommandSpan(rootSpanPtr));
+                .thenApplyAsync(responseHandler::apply);
     }
 
     /**
@@ -708,17 +707,6 @@ public class CommandManager {
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);
-    }
-
-    /**
-     * Drops an OpenTelemetry command span, releasing its resources.
-     *
-     * @param spanPtr The pointer to the span to drop, can be null/0
-     */
-    private void dropCommandSpan(long spanPtr) {
-        if (spanPtr != 0) {
-            OpenTelemetryResolver.dropOtelSpan(spanPtr);
-        }
     }
 
     /**

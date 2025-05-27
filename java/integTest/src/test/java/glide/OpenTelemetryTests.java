@@ -324,38 +324,40 @@ public class OpenTelemetryTests {
     //    }
     //
 
-    // Works-------------------------
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testPercentageRequestsConfig(ProtocolVersion protocol) {
-    //        client =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                .get();
-    //
-    //        // Set sample percentage to 0%
-    //        OpenTelemetry.setSamplePercentage(0);
-    //        assertEquals(0, OpenTelemetry.getSamplePercentage());
-    //
-    //        // Wait for spans to be flushed and remove the file
-    //        Thread.sleep(500);
-    //        teardownOtelTest();
-    //
-    //        // Execute commands with 0% sampling
-    //        for (int i = 0; i < 100; i++) {
-    //            client.set("testPercentageRequestsConfig", "value").get();
-    //        }
-    //
-    //        Thread.sleep(500);
-    //        // Check that no spans were exported due to 0% sampling
-    //        assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
-    //    }
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testPercentageRequestsConfig(ProtocolVersion protocol) {
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        // Set sample percentage to 0%
+        OpenTelemetry.setSamplePercentage(0);
+        assertEquals(0, OpenTelemetry.getSamplePercentage());
+
+        // Wait for spans to be flushed and remove the file
+        Thread.sleep(500);
+        teardownOtelTest();
+
+        // Execute commands with 0% sampling
+        for (int i = 0; i < 100; i++) {
+            client.set("testPercentageRequestsConfig", "value").get();
+        }
+
+        Thread.sleep(500);
+        // Check that no spans were exported due to 0% sampling
+        assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
+    }
 
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
     public void testPercentageRequestsConfig100Percent(ProtocolVersion protocol) {
+        client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().requestTimeout(20000).protocol(protocol).build())
+                        .get();
 
         // Set sample percentage to 100%
         OpenTelemetry.setSamplePercentage(100);
@@ -363,15 +365,9 @@ public class OpenTelemetryTests {
 
         // Execute a series of commands
         for (int i = 0; i < 10; i++) {
-            System.out.println("set------" + i);
             String key = "testPercentageRequestsConfig_" + i;
-            client =
-                    GlideClusterClient.createClient(
-                                    commonClusterClientConfig().requestTimeout(20000).protocol(protocol).build())
-                            .get();
             client.get(key).get();
         }
-        System.out.println("Before delay--------");
         // Wait for spans to be flushed to file
         Thread.sleep(5000);
 
@@ -382,6 +378,7 @@ public class OpenTelemetryTests {
         // Check that spans were exported exactly 10 times
         assertEquals(10, spanData.spanNames.stream().filter(name -> name.equals("Get")).count());
     }
+
     //
     //    @ParameterizedTest
     //    @MethodSource("getClients")
