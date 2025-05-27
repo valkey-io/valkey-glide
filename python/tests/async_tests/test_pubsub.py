@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 import anyio
 import pytest
 
-from glide.commands.async_commands.core import CoreCommands
+from glide.commands.core_options import PubSubMsg
 from glide.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -85,20 +85,20 @@ async def create_two_clients_with_pubsub(
     return client1, client2
 
 
-def decode_pubsub_msg(msg: Optional[CoreCommands.PubSubMsg]) -> CoreCommands.PubSubMsg:
+def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
     if not msg:
-        return CoreCommands.PubSubMsg("", "", None)
+        return PubSubMsg("", "", None)
     string_msg = cast(bytes, msg.message).decode()
     string_channel = cast(bytes, msg.channel).decode()
     string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
-    decoded_msg = CoreCommands.PubSubMsg(string_msg, string_channel, string_pattern)
+    decoded_msg = PubSubMsg(string_msg, string_channel, string_pattern)
     return decoded_msg
 
 
 async def get_message_by_method(
     method: MethodTesting,
     client: TGlideClient,
-    messages: Optional[List[CoreCommands.PubSubMsg]] = None,
+    messages: Optional[List[PubSubMsg]] = None,
     index: Optional[int] = None,
 ):
     if method == MethodTesting.Async:
@@ -151,8 +151,8 @@ def create_pubsub_subscription(
     )
 
 
-def new_message(msg: CoreCommands.PubSubMsg, context: Any):
-    received_messages: List[CoreCommands.PubSubMsg] = context
+def new_message(msg: PubSubMsg, context: Any):
+    received_messages: List[PubSubMsg] = context
     received_messages.append(msg)
 
 
@@ -226,7 +226,7 @@ class TestPubSub:
             message = get_random_string(5)
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -349,7 +349,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -499,7 +499,7 @@ class TestPubSub:
             publish_response = 1
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -640,7 +640,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -725,7 +725,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -857,7 +857,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages
@@ -944,7 +944,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1064,7 +1064,7 @@ class TestPubSub:
             }
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1096,7 +1096,7 @@ class TestPubSub:
                 pub_sub_exact,
             )
 
-            callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
+            callback_messages_pattern: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages_pattern
@@ -1224,7 +1224,7 @@ class TestPubSub:
             publish_response = 1
 
             callback, context = None, None
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1372,9 +1372,9 @@ class TestPubSub:
             publish_response = 1
 
             callback, context = None, None
-            callback_messages_exact: List[CoreCommands.PubSubMsg] = []
-            callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
-            callback_messages_sharded: List[CoreCommands.PubSubMsg] = []
+            callback_messages_exact: List[PubSubMsg] = []
+            callback_messages_pattern: List[PubSubMsg] = []
+            callback_messages_sharded: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1581,9 +1581,9 @@ class TestPubSub:
             MESSAGE_SHARDED = get_random_string(5)
 
             callback, context = None, None
-            callback_messages_exact: List[CoreCommands.PubSubMsg] = []
-            callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
-            callback_messages_sharded: List[CoreCommands.PubSubMsg] = []
+            callback_messages_exact: List[PubSubMsg] = []
+            callback_messages_pattern: List[PubSubMsg] = []
+            callback_messages_sharded: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1734,8 +1734,8 @@ class TestPubSub:
             MESSAGE_EXACT = get_random_string(10)
             MESSAGE_PATTERN = get_random_string(7)
             callback, context_exact, context_pattern = None, None, None
-            callback_messages_exact: List[CoreCommands.PubSubMsg] = []
-            callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
+            callback_messages_exact: List[PubSubMsg] = []
+            callback_messages_pattern: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -1847,9 +1847,9 @@ class TestPubSub:
                 None,
                 None,
             )
-            callback_messages_exact: List[CoreCommands.PubSubMsg] = []
-            callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
-            callback_messages_sharded: List[CoreCommands.PubSubMsg] = []
+            callback_messages_exact: List[PubSubMsg] = []
+            callback_messages_pattern: List[PubSubMsg] = []
+            callback_messages_sharded: List[PubSubMsg] = []
 
             if method == MethodTesting.Callback:
                 callback = new_message
@@ -2137,7 +2137,7 @@ class TestPubSub:
             channel = get_random_string(10)
             message = "0" * 12 * 1024 * 1024
 
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             callback, context = new_message, callback_messages
 
             pub_sub = create_pubsub_subscription(
@@ -2195,7 +2195,7 @@ class TestPubSub:
             channel = get_random_string(10)
             message = "0" * 512 * 1024 * 1024
 
-            callback_messages: List[CoreCommands.PubSubMsg] = []
+            callback_messages: List[PubSubMsg] = []
             callback, context = new_message, callback_messages
 
             pub_sub = create_pubsub_subscription(
@@ -2252,7 +2252,7 @@ class TestPubSub:
     ):
         """Tests that when creating a PUBSUB client in callback method with context but no callback raises an error"""
         channel = get_random_string(5)
-        context: List[CoreCommands.PubSubMsg] = []
+        context: List[PubSubMsg] = []
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},

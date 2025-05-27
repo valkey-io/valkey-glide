@@ -1,5 +1,4 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
 
 from glide.commands.bitmap import (
@@ -18,6 +17,7 @@ from glide.commands.core_options import (
     ExpirySet,
     InsertPosition,
     OnlyIfEqual,
+    PubSubMsg,
     UpdateOptions,
     _build_sort_args,
 )
@@ -6651,21 +6651,6 @@ class CoreCommands(Protocol):
             TOK,
             await self._execute_command(RequestType.Watch, keys),
         )
-
-    @dataclass
-    class PubSubMsg:
-        """
-        Describes the incoming pubsub message
-
-        Attributes:
-            message (TEncodable): Incoming message.
-            channel (TEncodable): Name of an channel that triggered the message.
-            pattern (Optional[TEncodable]): Pattern that triggered the message.
-        """
-
-        message: TEncodable
-        channel: TEncodable
-        pattern: Optional[TEncodable]
 
     async def get_pubsub_message(self) -> PubSubMsg:
         """
