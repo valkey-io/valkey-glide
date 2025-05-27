@@ -719,6 +719,37 @@ func (client *Client) RandomKey(ctx context.Context) (models.Result[string], err
 	return handleStringOrNilResponse(result)
 }
 
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *Client) FunctionKill(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns information about the function that's currently running and information about the
 // available execution engines.
 // `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
@@ -770,6 +801,114 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionDelete, []string{libName})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *Client) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
+	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
+}
+
+// Returns the serialized payload of all loaded libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *Client) FunctionDump(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *Client) FunctionRestore(ctx context.Context, payload string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *Client) FunctionRestoreWithPolicy(
+	ctx context.Context,
+	payload string,
+	policy constants.FunctionRestorePolicy,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

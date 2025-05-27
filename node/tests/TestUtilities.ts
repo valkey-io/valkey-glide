@@ -6,6 +6,7 @@ import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { Socket } from "net";
 import { promisify } from "util";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -40,8 +41,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
-} from "..";
-import ValkeyCluster from "../../utils/TestUtils";
+} from "../build-ts";
 const execAsync = promisify(exec);
 
 export function getRandomKey() {

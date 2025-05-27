@@ -9,15 +9,13 @@ import {
     GlideRecord,
     GlideReturnType,
     GlideString,
-} from "../BaseClient";
-import { GlideClient } from "../GlideClient";
-import { GlideClusterClient } from "../GlideClusterClient";
-import {
+    GlideClient,
+    GlideClusterClient,
     Field,
     FtAggregateOptions,
     FtCreateOptions,
     FtSearchOptions,
-} from "./GlideFtOptions";
+} from "..";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
 export type FtInfoReturnType = Record<

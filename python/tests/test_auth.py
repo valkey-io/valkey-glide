@@ -257,6 +257,9 @@ class TestAuthCommands:
         # Sleep to allow enough time for reconnecting
         await anyio.sleep(2)
 
+        # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
+        # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
+        # TODO: We do not fully understand why such a long timeout is required.
         result = await acl_glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
         )

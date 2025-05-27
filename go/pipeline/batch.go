@@ -326,7 +326,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	return b.self
 }
 
-// Select changes the currently selected database.
+// Changes the currently selected database.
 //
 // For details see [valkey.io].
 //
@@ -343,7 +343,7 @@ func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
 	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
 }
 
-// Move key from the currently selected database to the database specified by `dbIndex`.
+// Moves key from the currently selected database to the database specified by `dbIndex`.
 //
 // See [valkey.io] for details.
 //
@@ -362,7 +362,7 @@ func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
 	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
 }
 
-// Publish posts a message to the specified sharded channel. Returns the number of clients that received the message.
+// Posts a message to the specified sharded channel. Returns the number of clients that received the message.
 //
 // Channel can be any string, but common patterns include using "." to create namespaces like
 // "news.sports" or "news.weather".
