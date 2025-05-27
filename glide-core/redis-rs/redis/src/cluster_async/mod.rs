@@ -3088,15 +3088,15 @@ where
             match ready!(self.poll_complete(cx)) {
                 PollFlushAction::None => return Poll::Ready(Ok(())),
                 PollFlushAction::RebuildSlots => {
-                    // Spawn task with channel
-                    let result_receiver = ClusterConnInner::spawn_refresh_slots_task(
+                    // Spawn refresh task
+                    let task_handle = ClusterConnInner::spawn_refresh_slots_task(
                         self.inner.clone(),
                         &RefreshPolicy::Throttable,
                     );
 
                     // Update state
                     self.state =
-                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(result_receiver));
+                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
                     self.state =
