@@ -19,18 +19,29 @@ TODO: examples, UT, design docs
 
 Software Dependencies:
 
-- .Net SDK 6 or later
+- .Net SDK 8 and 9
 - git
-- rustup
-- valkey
+- valkey (for testing)
 
 Please also install the following packages to build [GLIDE core rust library](../glide-core/README.md):
 
+- rustup
 - GCC
-- protoc (protobuf compiler)
 - pkg-config
 - openssl
 - openssl-dev
+- ziglang and zigbuild (for GNU Linux only)
+
+**Valkey installation**
+
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
+
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
+```
 
 #### Prerequisites
 
@@ -161,3 +172,7 @@ cargo fmt --all -- --check
 6. Test framework and style
 
 The CSharp Valkey-Glide client uses xUnit v3 for testing code. The test code styles are defined in `.editorcofing` (see `dotnet_diagnostic.xUnit..` rules). The xUnit rules are enforced by the [xUnit analyzers](https://github.com/xunit/xunit.analyzers) referenced in the main xunit.v3 NuGet package. If you choose to use xunit.v3.core instead, you can reference xunit.analyzers explicitly. For additional info, please, refer to https://xunit.net and https://github.com/xunit/xunit
+
+## Community and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

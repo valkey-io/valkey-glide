@@ -1,6 +1,16 @@
-# Valkey GLIDE
+# Welcome to Valkey GLIDE!
 
-Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
+Valkey General Language Independent Driver for the Enterprise (GLIDE) is the official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
+
+# Why Choose Valkey GLIDE?
+
+- **Community and Open Source**: Join our vibrant community and contribute to the project. We are always here to respond, and the client is for the community.
+- **Reliability**: Built with best practices learned from over a decade of operating Redis OSS-compatible services.
+- **Performance**: Optimized for high performance and low latency.
+- **High Availability**: Designed to ensure your applications are always up and running.
+- **Cross-Language Support**: Implemented using a core driver framework written in Rust, with language-specific extensions to ensure consistency and reduce complexity.
+- **Stability and Fault Tolerance**: We brought our years of experience to create a bulletproof client.
+- **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
 
 ## Documentation
 
@@ -17,22 +27,30 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 The release of Valkey GLIDE was tested on the following platforms:
 
-Linux:
+### Linux GNU
 
-- Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
-- Amazon Linux 2023 (AL2023) (x86_64/amd64 and arm64/aarch64)
+Linux with **glibc 2.17** or higher.
 
-macOS:
+### MacOS (Darwin)
 
-- macOS 14.7 (Apple silicon/aarch_64)
+MacOS Apple Silicon/aarch_64 and x86_64/amd64.
 
-Alpine:
+- Full tests are running on MacOS 15.0 arm64/aarch64
+- Minimal tests are running on: MacOS 13.5 x86*64/amd64*(We do not recommend using MacOS Intel for production, It is supported for development purposes)\_
+
+### Alpine
+
+All alpine versions that are using *musl libc* 1.2.3 (All Alpine non deprecated alpine versions) or higher should be supported.
+Tests are running on:
 
 - node:alpine (x86_64/amd64 and arm64/aarch64)
 
 ## NodeJS supported version
 
 Node.js 16 or higher.
+**For npm users on linux it is recommended to use npm >=11 since it support optional download base on libc, yarn users should not be concerned**
+
+- Note: The library is dependent on the [protobufjs library](https://protobufjs.github.io/protobuf.js/#installation), which add a size to the package. The package is using the protobufjs/minimal version, hence, if size matter, bundlers should be able to strip the unused code. It should reduce the size of the dependency from 19kb gzipped to 6.5kb gzipped.
 
 ### Building & Testing
 
@@ -110,4 +128,8 @@ Currently, the package is tested on:
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `arm64`           |
+| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
+
+## Community and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

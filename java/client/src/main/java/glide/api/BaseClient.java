@@ -360,11 +360,8 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
-            ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
-            if (threadPoolResource == null) {
-                threadPoolResource =
-                        ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
-            }
+            ThreadPoolResource threadPoolResource =
+                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             MessageHandler messageHandler = buildMessageHandler(config);
             ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
@@ -1477,7 +1474,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LRange,
                 new String[] {key, Long.toString(start), Long.toString(end)},
-                response -> castArray(handleArrayOrNullResponse(response), String.class));
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -4785,7 +4782,9 @@ public abstract class BaseClient
             long ttl,
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
-        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key, gs(Long.toString(ttl)), gs(value)}, restoreOptions.toArgs());
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 

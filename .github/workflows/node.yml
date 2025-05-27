@@ -12,7 +12,6 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/build-node-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -26,7 +25,6 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/build-node-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -92,10 +90,18 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
+            # Install software dependencies
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            # Setup Node.js
             - name: Setup Node
               uses: actions/setup-node@v4
-              env:
-                  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
               with:
                   node-version: ${{ matrix.node }}
 
@@ -109,22 +115,106 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.host.OS }}
-                  named_os: ${{ matrix.host.NAMED_OS }}
-                  arch: ${{ matrix.host.ARCH }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-
-            - name: test
-              run: npm test
+            # Install npm dependencies and build with release flag to ensure we testing the release version
+            - name: Install and Build
               working-directory: ./node
+              run: |
+                  npm install
+                  npm run build:release
 
-            - name: test hybrid node modules - commonjs
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+            - name: Test
+              shell: bash
+              run: |
+                  npm run build
+                  npm run test
+              working-directory: ./node
+              env:
+                  JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: node-test-reports-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}-${{ matrix.node }}-${{ github.run_id }}
+                  path: |
+                      node/test-report*.html
+
+    test-node-extras:
+        name: Node Extra Tests (ES/CJS, Yarn, Types, Benchmarks)
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Output job information
+              run: |
+                  echo "Running one-time Node.js extra tests"
+                  echo "Target: x86_64-unknown-linux-gnu"
+                  echo "Node: 23.x"
+                  echo "Engine: 8.0"
+
+            # Install software dependencies
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "8.0"
+
+            # Setup Node.js
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 23.x
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-node-extras
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            # Install npm dependencies and build with release flag
+            - name: Install and Build
+              working-directory: ./node
+              run: |
+                  npm install
+                  npm run build:release
+
+            - name: Install Yarn
+              id: install-yarn
+              shell: bash
+              run: |
+                  curl -o- -L https://yarnpkg.com/install.sh | bash
+
+            - name: Add Yarn to PATH
+              id: add-yarn-to-path
+              if: ${{ steps.install-yarn.outcome == 'success' }}
+              run: |
+                  echo "$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin" >> $GITHUB_PATH
+                  echo "Yarn PATH configured"
+
+            - name: Test yarn compatibility and correct typescript
+              if: ${{ steps.add-yarn-to-path.outcome == 'success' }}
+              working-directory: ./node/pm-and-types-tests
+              shell: bash
+              run: |
+                  cd depend-on-glide-package
+                  yarn install
+                  rm -rf node_modules/@valkey/valkey-glide/build-ts/*
+                  cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
+                  yarn run build
+                  cd ../depend-on-glide-dependent
+                  yarn install
+                  yarn run build
+
+            # Test hybrid node modules - commonjs
+            - name: Test hybrid node modules - commonjs
               run: |
                   npm install
                   npm run test
@@ -132,8 +222,7 @@ jobs:
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
-            - name: test hybrid node modules - ecma
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+            - name: Test hybrid node modules - ecma
               run: |
                   npm install
                   npm run test
@@ -141,8 +230,8 @@ jobs:
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
 
-            - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.node == '20.x' }}
+            - name: Run benchmarks
+              uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -node
 
@@ -151,9 +240,9 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
+                  name: node-extra-test-reports-${{ github.run_id }}
                   path: |
-                      node/test-report*.html
+                      node/hybrid-node-tests/**/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -200,33 +289,55 @@ jobs:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
-            - name: Install git
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
+            - name: Install git and required tools
               run: |
-                  apk update
-                  apk add --no-cache git tar
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    # Basic tools needed for actions to work properly
+                    yum install -y git tar which
+                    yum install -y --allowerasing curl
+                  elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
+                    # Basic tools needed for actions to work properly
+                    apk update
+                    apk add git bash tar curl which build-base python3
+                  fi
+
+            - name: Create directory structure if needed
+              run: mkdir -p $GITHUB_WORKSPACE
 
             - name: Checkout code
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               uses: actions/checkout@v4
-
-            - name: Setup musl on Linux
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
-              uses: ./.github/workflows/setup-musl-on-linux
               with:
-                  npm-scope: ${{ secrets.NPM_SCOPE }}
-                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Set permissions after checkout
+              run: chown -R $(id -u):$(id -g) $GITHUB_WORKSPACE
+
+            # Install shared dependencies including Rust and Protocol Buffers
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            # Ensure Rust is in PATH for container environments
+            - name: Setup Rust PATH
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
+                  source "$HOME/.cargo/env"
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+                  # Verify Rust is available
+                  which cargo || echo "Cargo still not found in PATH"
+                  echo "Current PATH: $PATH"
 
             - name: Setup Node
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               uses: actions/setup-node@v4
-              env:
-                  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
               with:
                   node-version: ${{ matrix.node }}
 
             - uses: actions/cache@v4
-              if: ${{ matrix.host.ARCH != 'arm64' }} # JavaScript Actions in Alpine containers are not supported on arm
               with:
                   path: |
                       node/rust-client/target
@@ -234,21 +345,29 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Build Node wrapper
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.host.OS }}
-                  named_os: ${{ matrix.host.NAMED_OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-                  arch: ${{ matrix.host.ARCH }}
-
-            - name: test
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
-              run: npm test
+            - name: Build and Test
               working-directory: ./node
+              env:
+                  PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
+              run: |
+                  # Verify Rust is available
+                  which cargo || echo "Cargo not found in PATH"
+                  echo "Current PATH: $PATH"
+
+                  # Check where cargo is installed
+                  find / -name cargo -type f 2>/dev/null || echo "Could not find cargo executable"
+
+                  # Explicitly source cargo env before build
+                  if [ -f "$HOME/.cargo/env" ]; then
+                    source "$HOME/.cargo/env"
+                    echo "Sourced $HOME/.cargo/env"
+                  fi
+
+                  # Try to find rustc version
+                  rustc --version || echo "rustc command failed"
+
+                  npm run build
+                  npm run test
 
             - name: Sanitize IMAGE variable
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
@@ -256,7 +375,6 @@ jobs:
               run: echo "SANITIZED_IMAGE=${{ matrix.host.IMAGE }}" | sed -r 's/:/-/g' >> $GITHUB_ENV
 
             - name: Upload test reports
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
@@ -282,7 +400,7 @@ jobs:
             - name: Install Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: 20.x
+                  node-version: latest
 
             - uses: actions/cache@v4
               with:
@@ -294,17 +412,14 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ubuntu
-                  named_os: linux
-                  arch: arm64
-                  target: aarch64-unknown-linux-gnu
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Install and build
+              working-directory: ./node
+              run: |
+                  npm install
+                  npm run build
 
             - name: test
-              run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
+              run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
 
             - name: Upload test reports

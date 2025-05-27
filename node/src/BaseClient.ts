@@ -1,17 +1,15 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -26,8 +24,15 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClosingError,
     ClusterBatchOptions,
+    ConfigurationError,
+    ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -37,20 +42,29 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     HScanOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
     ListDirection,
+    Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    OpenTelemetry,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RequestError,
     RestoreOptions,
+    RouteOption,
+    Routes,
     ScoreFilter,
+    Script,
     SearchOrigin,
     SetOptions,
     SortOptions,
+    StartSocketConnection,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -59,6 +73,8 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    TimeoutError,
+    ValkeyError,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -128,6 +144,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLeakedOtelSpan,
     createMGet,
     createMSet,
     createMSetNX,
@@ -232,29 +249,15 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
-import {
-    ClosingError,
-    ConfigurationError,
-    ConnectionError,
-    ExecAbortError,
-    RequestError,
-    TimeoutError,
-    ValkeyError,
-} from "./Errors";
-import { GlideClientConfiguration } from "./GlideClient";
-import {
-    GlideClusterClientConfiguration,
-    RouteOption,
-    Routes,
-} from "./GlideClusterClient";
-import { Logger } from "./Logger";
+    dropOtelSpan,
+    getStatistics,
+    valueFromSplitPointer,
+} from ".";
 import {
     command_request,
     connection_request,
     response,
-} from "./ProtobufMessage";
-
+} from "../build-ts/ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -489,14 +492,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -575,6 +578,14 @@ export type ReadFrom =
  *
  * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
  *
+ * ### Reconnection Strategy
+ * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
+ *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
+ *     - After this limit is reached, the retry interval becomes constant.
+ *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
+ *
  * @example
  * ```typescript
  * const config: BaseClientConfiguration = {
@@ -594,6 +605,12 @@ export type ReadFrom =
  *   clientAz: 'us-east-1a',
  *   defaultDecoder: Decoder.String,
  *   inflightRequestsLimit: 1000,
+ *   connectionBackoff: {
+ *     numberOfRetries: 10, // Maximum retries before delay becomes constant
+ *     factor: 500,        // Base delay in milliseconds
+ *     exponentBase: 2,    // Delay doubles with each retry (2^N)
+ *     jitterPercent: 20,   // Optional jitter percentage
+ *   },
  * };
  * ```
  */
@@ -679,6 +696,38 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+
+    /**
+     * Strategy used to determine how and when to reconnect, in case of connection failures.
+     * The time between attempts grows exponentially, following the formula rand(0 ... factor * (exponentBase ^ N)), where N is the number of failed attempts,
+     * and rand(...) applies a jitter of up to `jitterPercent`% to introduce randomness and reduce retry storms.
+     * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+     * reconnect attempt is successful.
+     * If not set, a default backoff strategy will be used.
+     */
+    connectionBackoff?: {
+        /**
+         * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+         * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
+         * Value must be an integer.
+         */
+        numberOfRetries: number;
+        /**
+         * The multiplier that will be applied to the waiting time between each retry.
+         * Value must be an integer.
+         */
+        factor: number;
+        /**
+         * The exponent base configured for the strategy.
+         * Value must be an integer.
+         */
+        exponentBase: number;
+        /** The Jitter percent on the calculated duration.
+         * If not set, a default value will be used.
+         * Value is optional, and must be an integer.
+         */
+        jitterPercent?: number;
+    };
 }
 
 /**
@@ -767,7 +816,7 @@ export interface PubSubMsg {
  * @see {@link BatchOptions}
  */
 type BaseOptions = RouteOption & DecoderOption;
-export type WritePromiseOptions =
+type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
@@ -943,6 +992,16 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof Long) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -994,6 +1053,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1099,6 +1160,18 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         const callbackIndex = this.getCallbackIndex();
         const basePromise = new Promise<T>((resolve, reject) => {
+            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+
+            if (OpenTelemetry.shouldSample()) {
+                const commandName =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandName);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
@@ -1109,6 +1182,7 @@ export class BaseClient {
                 callbackIndex,
                 command,
                 route,
+                spanPtr,
                 isAtomic,
                 raiseOnError,
                 options as ClusterBatchOptions,
@@ -1211,6 +1285,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        commandSpanPtr?: number | Long | null,
         isAtomic = false,
         raiseOnError = false,
         options: ClusterBatchOptions | BatchOptions = {},
@@ -1249,6 +1324,7 @@ export class BaseClient {
             singleCommand: isBatch ? undefined : command,
             batch,
             route,
+            rootSpanPtr: commandSpanPtr,
         });
 
         this.writeOrBufferRequest(
@@ -1474,13 +1550,13 @@ export class BaseClient {
         }
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      *
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return `null`.
      *
      * @example
      * ```typescript
@@ -2595,9 +2671,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      *
@@ -2623,9 +2699,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
@@ -5846,7 +5922,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `tuple` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -5921,7 +5997,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      * @returns An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
@@ -6041,7 +6117,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
      *
      * @example
@@ -6077,14 +6153,14 @@ export class BaseClient {
      * console.log(infoResult);
      * // Output: {
      * //   length: 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
      * //   groups: 1,
      * // }
      * ```
@@ -6095,27 +6171,27 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   'length': 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'entries': [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     * //   'groups': [ {
-     * //     'name': 'group',
-     * //     'last-delivered-id': '1719877599564-0',
-     * //     'entries-read': 1,
-     * //     'lag': 1,
-     * //     'pel-count': 1,
-     * //     'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     * //     'consumers': [ {
-     * //         'name': 'consumer',
-     * //         'seen-time': 1722624726802,
-     * //         'active-time': 1722624726802,
-     * //         'pel-count': 1,
-     * //         'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //   "length": 2,
+     * //   "radix-tree-keys": 1,
+     * //   "radix-tree-nodes": 2,
+     * //   "last-generated-id": "1719877599564-1",
+     * //   "max-deleted-entry-id": "0-0",
+     * //   "entries-added": 2,
+     * //   "recorded-first-entry-id": "1719877599564-0",
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],
+     * //   "groups': [ {
+     * //     "name': "group",
+     * //     "last-delivered-id": "1719877599564-0",
+     * //     "entries-read": 1,
+     * //     "lag": 1,
+     * //     "pel-count": 1,
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
+     * //     "consumers": [ {
+     * //         "name": "consumer",
+     * //         "seen-time": 1722624726802,
+     * //         "active-time": 1722624726802,
+     * //         "pel-count": 1,
+     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
      * //         }
      * //       ]
      * //     }
@@ -7489,6 +7565,7 @@ export class BaseClient {
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      *
      * @example
      * ```typescript
@@ -7770,6 +7847,7 @@ export class BaseClient {
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
+
         return {
             protocol,
             clientName: options.clientName,
@@ -7783,6 +7861,7 @@ export class BaseClient {
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
+            connectionRetryStrategy: options.connectionBackoff,
         };
     }
 

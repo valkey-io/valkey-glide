@@ -102,7 +102,7 @@ jobs:
               shell: bash
               run: |
                   if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
+                    R_VERSION="0.1.0"
                   elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
@@ -125,7 +125,7 @@ jobs:
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i $SED_FOR_MACOS "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
                   # Log the edited Cargo.toml file
                   cat Cargo.toml
 
@@ -168,7 +168,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -177,7 +177,7 @@ jobs:
                       then
                         echo "installing unzip and curl"
                         apt-get update
-                        apt install unzip curl python3.13 -y
+                        apt install unzip curl python3.13 pypy3 -y
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -195,6 +195,96 @@ jobs:
                       unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
                       export PATH="$PATH:$HOME/.local/bin"
 
+                      # Install PyPy
+                      if [[ "$ARCH" == "x86_64" ]]; then
+                        PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
+                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
+                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-linux64
+
+                        echo "Downloading PyPy 3.9 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2"  --exclude="*/bin/python*" -C /opt
+
+                        echo "Downloading PyPy 3.10 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+
+                        echo "Downloading PyPy 3.11 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+
+                      elif [[ "$ARCH" == "aarch64" ]]; then
+                        PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
+                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64  
+                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-aarch64
+
+                        echo "Downloading PyPy 3.9 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        
+                        echo "Downloading PyPy 3.10 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+
+                        echo "Downloading PyPy 3.11 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+                      else 
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1 
+                      fi
+
+            - name: Setup PyPy for macOS
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
+              run: |
+                  # Install pypy
+                  ARCH=$(uname -m)
+
+                  if [[ "$ARCH" == "arm64" ]]; then
+                    # Download PyPy for Apple Silicon
+                    PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
+                    PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
+                    PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
+                    
+                    echo "Downloading PyPy 3.9 for arm64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    
+                    echo "Downloading PyPy 3.10 for arm64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    
+                    echo "Downloading PyPy 3.11 for arm64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    
+                  elif [[ "$ARCH" == "x86_64" ]]; then
+                    PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
+                    PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
+                    PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
+                    
+                    echo "Downloading PyPy 3.9 for x86_64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    
+                    echo "Downloading PyPy 3.10 for x86_64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    
+                    echo "Downloading PyPy 3.11 for x86_64"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2" 
+                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                  fi
+
+                  echo "/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
+
+                  sudo chmod -R a+rx /opt/pypy*/bin
+                  sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
+
             - name: Build Python wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
@@ -202,7 +292,7 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
@@ -228,7 +318,7 @@ jobs:
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  sed -i "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
 
             - name: Build source distributions
               uses: PyO3/maturin-action@v1
@@ -257,7 +347,12 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
-        needs: [build-source-dist-and-publish-to-pypi, load-platform-matrix]
+        needs:
+            [
+                build-source-dist-and-publish-to-pypi,
+                publish-binaries,
+                load-platform-matrix,
+            ]
         strategy:
             fail-fast: false
             matrix:
@@ -275,6 +370,46 @@ jobs:
               with:
                   python-version: 3.12
 
+            - name: Setup PyPy for testing
+              run: |
+                  ARCH=$(uname -m)
+
+                  if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
+                    if [[ "$ARCH" == "x86_64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
+                      echo "Downloading PyPy 3.10 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      
+                    elif [[ "$ARCH" == "aarch64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
+                      echo "Downloading PyPy 3.10 for aarch64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    fi
+
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+
+                  elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
+                    if [[ "$ARCH" == "arm64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
+                      echo "Downloading PyPy 3.10 for arm64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      
+                    else
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
+                      echo "Downloading PyPy 3.10 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    fi
+
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/lib/*.dylib
+                  fi
+
+                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
+
             - name: Install engine
               uses: ./.github/workflows/install-engine
               with:
@@ -283,8 +418,10 @@ jobs:
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
+              env:
+                  RELEASE_VERSION: ${{ needs.publish-binaries.outputs.release_version }}
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ "$RELEASE_VERSION" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
                     echo "PIP_PRE=true" >> $GITHUB_ENV
@@ -292,6 +429,11 @@ jobs:
                     echo "This is a stable release"
                     echo "PIP_PRE=false" >> $GITHUB_ENV
                   fi
+
+                  # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
+                  PYPI_VERSION="${RELEASE_VERSION#v}"
+                  PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
+                  echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
 
             - name: Run the tests
               shell: bash
@@ -301,11 +443,25 @@ jobs:
                   source venv/bin/activate
                   pip install -U pip
                   if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install --pre valkey-glide
+                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
                   else
                     pip install valkey-glide
                   fi
                   python rc_test.py
+
+            - name: Run the tests with PyPy
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  pypy3 -m venv pypy_venv
+                  source pypy_venv/bin/activate
+                  pip install -U pip
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide
+                  fi
+                  pypy3 rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.

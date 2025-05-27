@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Union, cast
 
 import pytest
+
 from glide import RequestError, TimeoutError
 from glide.async_commands.batch import (
     BaseBatch,
@@ -60,7 +61,6 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
-
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -1000,9 +1000,8 @@ async def exec_batch(
         )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestBatch:
-
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(
@@ -1401,6 +1400,15 @@ class TestBatch:
         assert isinstance(result2, list)
         assert result2[0] == OK
         assert result2[1] == b"value"
+
+        # Restore with frequency and idletime both set.
+        with pytest.raises(RequestError) as e:
+            await glide_client.restore(
+                key2, 0, b"", replace=True, idletime=-10, frequency=10
+            )
+        assert "syntax error: IDLETIME and FREQ cannot be set at the same time." in str(
+            e
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

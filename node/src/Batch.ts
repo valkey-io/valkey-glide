@@ -3,23 +3,6 @@
  */
 
 import {
-    ElementAndScore,
-    GlideRecord,
-    GlideString,
-    HashDataType,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    Score,
-    convertGlideRecord,
-} from "./BaseClient";
-
-import {
-    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-} from "./GlideClient";
-import {
-    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-} from "./GlideClusterClient";
-
-import {
     AggregationType,
     BaseScanOptions,
     BitFieldGet,
@@ -33,6 +16,7 @@ import {
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ElementAndScore,
     ExpireOptions,
     FlushMode,
     FunctionListOptions,
@@ -47,7 +31,12 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
+    GlideString,
     HScanOptions,
+    HashDataType,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -58,7 +47,9 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     RestoreOptions,
+    Score,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -74,6 +65,7 @@ import {
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
+    convertGlideRecord,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -271,8 +263,8 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
-import { command_request } from "./ProtobufMessage";
+} from ".";
+import { command_request } from "../build-ts/ProtobufMessage";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
@@ -324,12 +316,12 @@ export class BaseBatch<T extends BaseBatch<T>> {
         return this as unknown as T;
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      *
-     * Command Response - If `key` exists, returns the value of `key`. Otherwise, return null.
+     * Command Response - If `key` exists, returns the value of `key`. Otherwise, return `null`.
      */
     public get(key: GlideString): T {
         return this.addAndReturn(createGet(key));
@@ -419,6 +411,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
 
     /**
      * Gets information and statistics about the server.
+     *
+     * Starting from server version 7, command supports multiple section arguments.
      *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
@@ -1007,8 +1001,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      *
      * Command Response - An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
@@ -1026,8 +1020,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      *
      * Command Response - A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
@@ -2551,6 +2545,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
 
     /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+     *
      * @see {@link https://valkey.io/commands/xadd/|valkey.io} for details.
      *
      * @param key - The key of the stream.
@@ -2885,7 +2880,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      *
      * Command Response - An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -2931,7 +2926,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      *
      * Command Response - An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -2972,7 +2967,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the stream.
      * @param groupName - The newly created consumer group name.
      * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     *     group's perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @param options - The group options {@link StreamGroupOptions}
      *
      * Command Response - `"OK"`.
      */
@@ -2993,7 +2989,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      *
      * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
      */
@@ -3899,6 +3895,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param count - (Optional) The maximum number of popped elements.
      *
      * Command Response - A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      */
     public lmpop(
         keys: GlideString[],

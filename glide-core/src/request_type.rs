@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use redis::{cmd, Cmd};
+use redis::{Cmd, cmd};
 
 #[cfg(feature = "proto")]
 use crate::command_request::RequestType as ProtobufRequestType;
