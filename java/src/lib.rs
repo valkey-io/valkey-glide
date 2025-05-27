@@ -814,6 +814,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
                 Ok(s as jlong)
             }
             let result = create_leaked_otel_span(&mut env, name);
+            println!("In result=====");
             handle_errors(&mut env, result)
         },
         "createLeakedOtelSpan",
