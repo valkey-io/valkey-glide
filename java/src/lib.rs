@@ -812,7 +812,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
                 let span = glide_core::GlideOpenTelemetry::new_span(&name_str);
                 let s = Arc::into_raw(Arc::new(span)) as *mut glide_core::GlideSpan;
                 println!("Calling glide open telemetry======");
-                println!("{:?}",s as jlong);
+                println!("{:?}", s as jlong);
                 Ok(s as jlong)
             }
             let result = create_leaked_otel_span(&mut env, name);
