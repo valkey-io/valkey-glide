@@ -2,12 +2,16 @@
 from enum import Enum
 from typing import List, Optional, Union, cast
 
-from glide.commands.server_modules.ft_options.ft_aggregate_options import (
+from glide.constants import TEncodable
+from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
-from glide.commands.server_modules.ft_options.ft_constants import FtProfileKeywords
-from glide.commands.server_modules.ft_options.ft_search_options import FtSearchOptions
-from glide.constants import TEncodable
+from glide.shared.commands.server_modules.ft_options.ft_constants import (
+    FtProfileKeywords,
+)
+from glide.shared.commands.server_modules.ft_options.ft_search_options import (
+    FtSearchOptions,
+)
 
 
 class QueryType(Enum):

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
-from glide.commands.sync_commands.core import CoreCommands
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -13,13 +11,23 @@ from glide.constants import (
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
+    TSingleNodeRoute,
 )
+from glide.glide import ClusterScanCursor, Script
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
+from glide.shared.commands.async_commands.core import CoreCommands
+from glide.shared.commands.batch import ClusterBatch
+from glide.shared.commands.command_args import ObjectType
+from glide.shared.commands.core_options import (
+    FlushMode,
+    FunctionRestorePolicy,
+    InfoSection,
+)
 
 
 class ClusterCommands(CoreCommands):
-    def custom_command(
+    async def custom_command(
         self, command_args: List[TEncodable], route: Optional[Route] = None
     ) -> TClusterResponse[TResult]:
         """
@@ -27,9 +35,13 @@ class ClusterCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
             For example - Return a list of all pub/sub clients from all nodes::
 
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
+                await client.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
 
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
@@ -43,16 +55,18 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[TResult],
-            self._execute_command(RequestType.CustomCommand, command_args, route),
+            await self._execute_command(RequestType.CustomCommand, command_args, route),
         )
 
-    def info(
+    async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
     ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the server.
+
+        Starting from server version 7, command supports multiple section arguments.
 
         See [valkey.io](https://valkey.io/commands/info/) for details.
 
@@ -72,10 +86,146 @@ class ClusterCommands(CoreCommands):
         )
         return cast(
             TClusterResponse[bytes],
-            self._execute_command(RequestType.Info, args, route),
+            await self._execute_command(RequestType.Info, args, route),
         )
 
-    def config_resetstat(
+    async def exec(
+        self,
+        batch: ClusterBatch,
+        raise_on_error: bool,
+        route: Optional[TSingleNodeRoute] = None,
+        timeout: Optional[int] = None,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
+    ) -> Optional[List[TResult]]:
+        """
+        Executes a batch by processing the queued commands.
+
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) for details.
+        See [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        #### Routing Behavior:
+
+        - If a `route` is specified:
+            - The entire batch is sent to the specified node.
+
+        - If no `route` is specified:
+            - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+              If no key is found, the request is sent to a random node.
+            - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+              key's slot. If no key is present, routing follows the command's default request policy.
+              Multi-node commands are automatically split and dispatched to the appropriate nodes.
+
+        #### Behavior notes:
+
+        - Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+          If keys span different slots, the transaction will fail. If the transaction fails due to a
+          `WATCH` command, `exec` will return `None`.
+
+        #### Retry and Redirection:
+
+        - If a redirection error occurs:
+            - Atomic batches (Transactions): The entire transaction will be redirected.
+            - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+
+        - Retries for failures will be handled according to the `retry_server_error` and
+          `retry_connection_error` parameters.
+
+        Args:
+            batch (ClusterBatch): A `ClusterBatch` object containing a list of commands to be executed.
+            raise_on_error (bool): Determines how errors are handled within the batch response. When set to
+                `True`, the first encountered error in the batch will be raised as a `RequestError`
+                exception after all retries and reconnections have been executed. When set to `False`,
+                errors will be included as part of the batch response array, allowing the caller to process both
+                successful and failed commands together. In this case, error details will be provided as
+                instances of `RequestError`.
+            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
+                will send the batch to the specified node defined by `route`.
+
+                If a redirection error occurs:
+                - For Atomic Batches (Transactions), the entire transaction will be redirected.
+                - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+                will be redirected.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries.
+
+                If the specified timeout is exceeded, a timeout error will be raised. If not explicitly set,
+                the client's default request timeout will be used.
+            retry_server_error (bool): If `True`, retriable server errors (e.g., `TRYAGAIN`) will trigger a retry.
+                Warning: Retrying server errors may cause commands targeting the same slot to execute out of order.
+                Note: Currently supported only for non-atomic batches. Recommended to increase timeout when enabled.
+            retry_connection_error (bool): If `True`, connection failures will trigger a retry. Warning:
+                Retrying connection errors may lead to duplicate executions, as it is unclear which commands have
+                already been processed. Note: Currently supported only for non-atomic batches. Recommended to increase
+                timeout when enabled.
+
+        Returns:
+            Optional[List[TResult]]: A list of results corresponding to the execution of each command in the batch.
+                If a command returns a value, it will be included in the list. If a command doesn't return a value,
+                the list entry will be `None`. If the batch failed due to a `WATCH` command, `exec` will return
+                `None`.
+
+        Examples:
+            # Example 1: Atomic Batch (Transaction)
+            >>> atomic_batch = ClusterBatch(is_atomic=True)  # Atomic (Transaction)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(atomic_batch, false)
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Expected Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 2: Non-Atomic Batch (Pipeline)
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, false)
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Expected Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+
+            # Example 3: Atomic batch with options
+            >>> atomic_batch = ClusterBatch(is_atomic=True)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = await cluster_client.exec(
+            ...     atomic_batch,
+            ...     timeout=1000,  # Set a timeout of 1000 milliseconds
+            ...     raise_on_error=False  # Do not raise an error on failure
+            ... )
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Example 4: Non-atomic batch with retry options
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = await cluster_client.exec(
+            ...     non_atomic_batch,
+            ...     raise_on_error=False,
+            ...     retry_server_error=True,
+            ...     retry_connection_error=False
+            ... )
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+        """
+        commands = batch.commands[:]
+        return await self._execute_batch(
+            commands,
+            batch.is_atomic,
+            raise_on_error,
+            retry_server_error,
+            retry_connection_error,
+            route,
+            timeout,
+        )
+
+    async def config_resetstat(
         self,
         route: Optional[Route] = None,
     ) -> TOK:
@@ -91,9 +241,11 @@ class ClusterCommands(CoreCommands):
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
-        return cast(TOK, self._execute_command(RequestType.ConfigResetStat, [], route))
+        return cast(
+            TOK, await self._execute_command(RequestType.ConfigResetStat, [], route)
+        )
 
-    def config_rewrite(
+    async def config_rewrite(
         self,
         route: Optional[Route] = None,
     ) -> TOK:
@@ -110,12 +262,14 @@ class ClusterCommands(CoreCommands):
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is raised.
 
         Example:
-            >>> client.config_rewrite()
+            >>> await client.config_rewrite()
                 'OK'
         """
-        return cast(TOK, self._execute_command(RequestType.ConfigRewrite, [], route))
+        return cast(
+            TOK, await self._execute_command(RequestType.ConfigRewrite, [], route)
+        )
 
-    def client_id(
+    async def client_id(
         self,
         route: Optional[Route] = None,
     ) -> TClusterResponse[int]:
@@ -138,10 +292,10 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[int],
-            self._execute_command(RequestType.ClientId, [], route),
+            await self._execute_command(RequestType.ClientId, [], route),
         )
 
-    def ping(
+    async def ping(
         self, message: Optional[TEncodable] = None, route: Optional[Route] = None
     ) -> bytes:
         """
@@ -159,15 +313,17 @@ class ClusterCommands(CoreCommands):
            bytes: b'PONG' if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
-            >>> client.ping()
+            >>> await client.ping()
                 b"PONG"
-            >>> client.ping("Hello")
+            >>> await client.ping("Hello")
                 b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(bytes, self._execute_command(RequestType.Ping, argument, route))
+        return cast(
+            bytes, await self._execute_command(RequestType.Ping, argument, route)
+        )
 
-    def config_get(
+    async def config_get(
         self, parameters: List[TEncodable], route: Optional[Route] = None
     ) -> TClusterResponse[Dict[bytes, bytes]]:
         """
@@ -191,17 +347,17 @@ class ClusterCommands(CoreCommands):
             with type of Dict[bytes, Dict[bytes, bytes]].
 
         Examples:
-            >>> client.config_get(["timeout"] , RandomNode())
+            >>> await client.config_get(["timeout"] , RandomNode())
                 {b'timeout': b'1000'}
-            >>> client.config_get(["timeout" , b"maxmemory"])
+            >>> await client.config_get(["timeout" , b"maxmemory"])
                 {b'timeout': b'1000', b"maxmemory": b"1GB"}
         """
         return cast(
             TClusterResponse[Dict[bytes, bytes]],
-            self._execute_command(RequestType.ConfigGet, parameters, route),
+            await self._execute_command(RequestType.ConfigGet, parameters, route),
         )
 
-    def config_set(
+    async def config_set(
         self,
         parameters_map: Mapping[TEncodable, TEncodable],
         route: Optional[Route] = None,
@@ -222,7 +378,7 @@ class ClusterCommands(CoreCommands):
             OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
 
         Examples:
-            >>> client.config_set({"timeout": "1000", b"maxmemory": b"1GB"})
+            >>> await client.config_set({"timeout": "1000", b"maxmemory": b"1GB"})
                 OK
         """
         parameters: List[TEncodable] = []
@@ -230,10 +386,10 @@ class ClusterCommands(CoreCommands):
             parameters.extend(pair)
         return cast(
             TOK,
-            self._execute_command(RequestType.ConfigSet, parameters, route),
+            await self._execute_command(RequestType.ConfigSet, parameters, route),
         )
 
-    def client_getname(
+    async def client_getname(
         self, route: Optional[Route] = None
     ) -> TClusterResponse[Optional[bytes]]:
         """
@@ -256,17 +412,17 @@ class ClusterCommands(CoreCommands):
             with type of Dict[str, Optional[str]].
 
         Examples:
-            >>> client.client_getname()
+            >>> await client.client_getname()
                 b'Connection Name'
-            >>> client.client_getname(AllNodes())
+            >>> await client.client_getname(AllNodes())
                 {b'addr': b'Connection Name', b'addr2': b'Connection Name', b'addr3': b'Connection Name'}
         """
         return cast(
             TClusterResponse[Optional[bytes]],
-            self._execute_command(RequestType.ClientGetName, [], route),
+            await self._execute_command(RequestType.ClientGetName, [], route),
         )
 
-    def dbsize(self, route: Optional[Route] = None) -> int:
+    async def dbsize(self, route: Optional[Route] = None) -> int:
         """
         Returns the number of keys in the database.
 
@@ -283,12 +439,12 @@ class ClusterCommands(CoreCommands):
             different nodes.
 
         Examples:
-            >>> client.dbsize()
+            >>> await client.dbsize()
                 10  # Indicates there are 10 keys in the cluster.
         """
-        return cast(int, self._execute_command(RequestType.DBSize, [], route))
+        return cast(int, await self._execute_command(RequestType.DBSize, [], route))
 
-    def echo(
+    async def echo(
         self, message: TEncodable, route: Optional[Route] = None
     ) -> TClusterResponse[bytes]:
         """
@@ -311,17 +467,17 @@ class ClusterCommands(CoreCommands):
             with type of Dict[bytes, bytes].
 
         Examples:
-            >>> client.echo(b"Valkey GLIDE")
+            >>> await client.echo(b"Valkey GLIDE")
                 b'Valkey GLIDE'
-            >>> client.echo("Valkey GLIDE", AllNodes())
+            >>> await client.echo("Valkey GLIDE", AllNodes())
                 {b'addr': b'Valkey GLIDE', b'addr2': b'Valkey GLIDE', b'addr3': b'Valkey GLIDE'}
         """
         return cast(
             TClusterResponse[bytes],
-            self._execute_command(RequestType.Echo, [message], route),
+            await self._execute_command(RequestType.Echo, [message], route),
         )
 
-    def function_load(
+    async def function_load(
         self,
         library_code: TEncodable,
         replace: bool = False,
@@ -344,21 +500,21 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> code = "#!lua name=mylib \\n redis.register_function('myfunc', function(keys, args) return args[1] end)"
-            >>> client.function_load(code, True, RandomNode())
+            >>> await client.function_load(code, True, RandomNode())
                 b"mylib"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             bytes,
-            self._execute_command(
+            await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
                 route,
             ),
         )
 
-    def function_list(
+    async def function_list(
         self,
         library_name_pattern: Optional[TEncodable] = None,
         with_code: bool = False,
@@ -380,7 +536,7 @@ class ClusterCommands(CoreCommands):
             about all or selected libraries and their functions.
 
         Examples:
-            >>> response = client.function_list("myLib?_backup", True)
+            >>> response = await client.function_list("myLib?_backup", True)
                 [{
                     b"library_name": b"myLib5_backup",
                     b"engine": b"LUA",
@@ -403,14 +559,14 @@ class ClusterCommands(CoreCommands):
             args.append("WITHCODE")
         return cast(
             TClusterResponse[TFunctionListResponse],
-            self._execute_command(
+            await self._execute_command(
                 RequestType.FunctionList,
                 args,
                 route,
             ),
         )
 
-    def function_flush(
+    async def function_flush(
         self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
         """
@@ -427,21 +583,21 @@ class ClusterCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> client.function_flush(FlushMode.SYNC)
+            >>> await client.function_flush(FlushMode.SYNC)
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            self._execute_command(
+            await self._execute_command(
                 RequestType.FunctionFlush,
                 [mode.value] if mode else [],
                 route,
             ),
         )
 
-    def function_delete(
+    async def function_delete(
         self, library_name: TEncodable, route: Optional[Route] = None
     ) -> TOK:
         """
@@ -458,21 +614,21 @@ class ClusterCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> client.function_delete("my_lib")
+            >>> await client.function_delete("my_lib")
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            self._execute_command(
+            await self._execute_command(
                 RequestType.FunctionDelete,
                 [library_name],
                 route,
             ),
         )
 
-    def function_kill(self, route: Optional[Route] = None) -> TOK:
+    async def function_kill(self, route: Optional[Route] = None) -> TOK:
         """
         Kills a function that is currently executing.
         This command only terminates read-only functions.
@@ -487,21 +643,21 @@ class ClusterCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> client.function_kill()
+            >>> await client.function_kill()
                 "OK"
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
-            self._execute_command(
+            await self._execute_command(
                 RequestType.FunctionKill,
                 [],
                 route,
             ),
         )
 
-    def fcall_route(
+    async def fcall_route(
         self,
         function: TEncodable,
         arguments: Optional[List[TEncodable]] = None,
@@ -527,7 +683,7 @@ class ClusterCommands(CoreCommands):
             the queried node and the value contains the function's return value.
 
         Example:
-            >>> client.fcall(
+            >>> await client.fcall(
             ...     "Deep_Thought",
             ...     ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"],
             ...     RandomNode()
@@ -541,10 +697,10 @@ class ClusterCommands(CoreCommands):
             args.extend(arguments)
         return cast(
             TClusterResponse[TResult],
-            self._execute_command(RequestType.FCall, args, route),
+            await self._execute_command(RequestType.FCall, args, route),
         )
 
-    def fcall_ro_route(
+    async def fcall_ro_route(
         self,
         function: TEncodable,
         arguments: Optional[List[TEncodable]] = None,
@@ -566,7 +722,7 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[TResult]: The return value depends on the function that was executed.
 
         Examples:
-            >>> client.fcall_ro_route("Deep_Thought", ALL_NODES)
+            >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
                 42 # The return value on the function that was executed
 
         Since: Valkey version 7.0.0.
@@ -576,10 +732,10 @@ class ClusterCommands(CoreCommands):
             args.extend(arguments)
         return cast(
             TClusterResponse[TResult],
-            self._execute_command(RequestType.FCallReadOnly, args, route),
+            await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 
-    def function_stats(
+    async def function_stats(
         self, route: Optional[Route] = None
     ) -> TClusterResponse[TFunctionStatsSingleNodeResponse]:
         """
@@ -601,7 +757,7 @@ class ClusterCommands(CoreCommands):
             See example for more details.
 
         Examples:
-            >>> client.function_stats(RandomNode())
+            >>> await client.function_stats(RandomNode())
                 {
                     'running_script': {
                         'name': 'foo',
@@ -620,10 +776,12 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[TFunctionStatsSingleNodeResponse],
-            self._execute_command(RequestType.FunctionStats, [], route),
+            await self._execute_command(RequestType.FunctionStats, [], route),
         )
 
-    def function_dump(self, route: Optional[Route] = None) -> TClusterResponse[bytes]:
+    async def function_dump(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[bytes]:
         """
         Returns the serialized payload of all loaded libraries.
 
@@ -638,20 +796,20 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[bytes]: The serialized payload of all loaded libraries.
 
         Examples:
-            >>> payload = client.function_dump()
+            >>> payload = await client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> client.function_restore(payload)
+            >>> await client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
         Since: Valkey 7.0.0.
         """
         return cast(
             TClusterResponse[bytes],
-            self._execute_command(RequestType.FunctionDump, [], route),
+            await self._execute_command(RequestType.FunctionDump, [], route),
         )
 
-    def function_restore(
+    async def function_restore(
         self,
         payload: TEncodable,
         policy: Optional[FunctionRestorePolicy] = None,
@@ -673,12 +831,12 @@ class ClusterCommands(CoreCommands):
             TOK: OK.
 
         Examples:
-            >>> payload = client.function_dump()
+            >>> payload = await client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> client.function_restore(payload, AllPrimaries())
+            >>> await client.function_restore(payload, AllPrimaries())
                 "OK" # The serialized dump response was used to restore the libraries with the specified route.
-            >>> client.function_restore(payload, FunctionRestorePolicy.FLUSH, AllPrimaries())
+            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH, AllPrimaries())
                 "OK" # The serialized dump response was used to restore the libraries with the specified route and policy.
 
         Since: Valkey 7.0.0.
@@ -688,10 +846,12 @@ class ClusterCommands(CoreCommands):
             args.append(policy.value)
 
         return cast(
-            TOK, self._execute_command(RequestType.FunctionRestore, args, route)
+            TOK, await self._execute_command(RequestType.FunctionRestore, args, route)
         )
 
-    def time(self, route: Optional[Route] = None) -> TClusterResponse[List[bytes]]:
+    async def time(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[List[bytes]]:
         """
         Returns the server time.
 
@@ -713,9 +873,9 @@ class ClusterCommands(CoreCommands):
             with type of Dict[bytes, List[bytes]].
 
         Examples:
-            >>> client.time()
+            >>> await client.time()
                 [b'1710925775', b'913580']
-            >>> client.time(AllNodes())
+            >>> await client.time(AllNodes())
                 {
                     b'addr': [b'1710925775', b'913580'],
                     b'addr2': [b'1710925775', b'913580'],
@@ -724,10 +884,10 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[List[bytes]],
-            self._execute_command(RequestType.Time, [], route),
+            await self._execute_command(RequestType.Time, [], route),
         )
 
-    def lastsave(self, route: Optional[Route] = None) -> TClusterResponse[int]:
+    async def lastsave(self, route: Optional[Route] = None) -> TClusterResponse[int]:
         """
         Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
 
@@ -747,18 +907,115 @@ class ClusterCommands(CoreCommands):
             address of the queried node and the value contains the Unix time of the last successful DB save.
 
         Examples:
-            >>> client.lastsave()
+            >>> await client.lastsave()
                 1710925775  # Unix time of the last DB save
-            >>> client.lastsave(AllNodes())
+            >>> await client.lastsave(AllNodes())
                 {b'addr1': 1710925775, b'addr2': 1710925775, b'addr3': 1710925775}  # Unix time of the last DB save on
                                                                                     # each node
         """
         return cast(
             TClusterResponse[int],
-            self._execute_command(RequestType.LastSave, [], route),
+            await self._execute_command(RequestType.LastSave, [], route),
         )
 
-    def flushall(
+    async def publish(
+        self,
+        message: TEncodable,
+        channel: TEncodable,
+        sharded: bool = False,
+    ) -> int:
+        """
+        Publish a message on pubsub channel.
+        This command aggregates PUBLISH and SPUBLISH commands functionalities.
+        The mode is selected using the 'sharded' parameter.
+        For both sharded and non-sharded mode, request is routed using hashed channel as key.
+
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
+
+        Args:
+            message (TEncodable): Message to publish.
+            channel (TEncodable): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
+
+        Returns:
+            int: Number of subscriptions in that node that received the message.
+
+        Examples:
+            >>> await client.publish("Hi all!", "global-channel", False)
+                1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
+            >>> await client.publish(b"Hi to sharded channel1!", b"channel1", True)
+                2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
+        """
+        result = await self._execute_command(
+            RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
+        )
+        return cast(int, result)
+
+    async def pubsub_shardchannels(
+        self, pattern: Optional[TEncodable] = None
+    ) -> List[bytes]:
+        """
+        Lists the currently active shard channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
+                If not provided, all active shard channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active shard channels matching the given pattern.
+            If no pattern is specified, all active shard channels are returned.
+
+        Examples:
+            >>> await client.pubsub_shardchannels()
+                [b'channel1', b'channel2']
+
+            >>> await client.pubsub_shardchannels("channel*")
+                [b'channel1', b'channel2']
+        """
+        command_args = [pattern] if pattern is not None else []
+        return cast(
+            List[bytes],
+            await self._execute_command(RequestType.PubSubShardChannels, command_args),
+        )
+
+    async def pubsub_shardnumsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
+        subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
+                If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
+
+        Examples:
+            >>> await client.pubsub_shardnumsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> await client.pubsub_shardnumsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            await self._execute_command(
+                RequestType.PubSubShardNumSub, channels if channels else []
+            ),
+        )
+
+    async def flushall(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
         """
@@ -775,9 +1032,9 @@ class ClusterCommands(CoreCommands):
             TOK: A simple OK response.
 
         Examples:
-            >>> client.flushall(FlushMode.ASYNC)
+            >>> await client.flushall(FlushMode.ASYNC)
                 OK  # This command never fails.
-            >>> client.flushall(FlushMode.ASYNC, AllNodes())
+            >>> await client.flushall(FlushMode.ASYNC, AllNodes())
                 OK  # This command never fails.
         """
         args: List[TEncodable] = []
@@ -786,10 +1043,10 @@ class ClusterCommands(CoreCommands):
 
         return cast(
             TOK,
-            self._execute_command(RequestType.FlushAll, args, route),
+            await self._execute_command(RequestType.FlushAll, args, route),
         )
 
-    def flushdb(
+    async def flushdb(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
         """
@@ -806,11 +1063,11 @@ class ClusterCommands(CoreCommands):
             TOK: A simple OK response.
 
         Examples:
-            >>> client.flushdb()
+            >>> await client.flushdb()
                 OK  # The keys of the currently selected database were deleted.
-            >>> client.flushdb(FlushMode.ASYNC)
+            >>> await client.flushdb(FlushMode.ASYNC)
                 OK  # The keys of the currently selected database were deleted asynchronously.
-            >>> client.flushdb(FlushMode.ASYNC, AllNodes())
+            >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
                 OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
         """
         args: List[TEncodable] = []
@@ -819,10 +1076,10 @@ class ClusterCommands(CoreCommands):
 
         return cast(
             TOK,
-            self._execute_command(RequestType.FlushDB, args, route),
+            await self._execute_command(RequestType.FlushDB, args, route),
         )
 
-    def copy(
+    async def copy(
         self,
         source: TEncodable,
         destination: TEncodable,
@@ -846,10 +1103,10 @@ class ClusterCommands(CoreCommands):
             bool: True if the source was copied. Otherwise, returns False.
 
         Examples:
-            >>> client.set("source", "sheep")
-            >>> client.copy(b"source", b"destination")
+            >>> await client.set("source", "sheep")
+            >>> await client.copy(b"source", b"destination")
                 True # Source was copied
-            >>> client.get("destination")
+            >>> await client.get("destination")
                 b"sheep"
 
         Since: Valkey version 6.2.0.
@@ -859,10 +1116,10 @@ class ClusterCommands(CoreCommands):
             args.append("REPLACE")
         return cast(
             bool,
-            self._execute_command(RequestType.Copy, args),
+            await self._execute_command(RequestType.Copy, args),
         )
 
-    def lolwut(
+    async def lolwut(
         self,
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
@@ -893,7 +1150,7 @@ class ClusterCommands(CoreCommands):
             with type of Dict[bytes, bytes].
 
         Examples:
-            >>> client.lolwut(6, [40, 20], RandomNode());
+            >>> await client.lolwut(6, [40, 20], RandomNode());
                 b"Redis ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
@@ -904,10 +1161,10 @@ class ClusterCommands(CoreCommands):
                 args.extend(str(var))
         return cast(
             TClusterResponse[bytes],
-            self._execute_command(RequestType.Lolwut, args, route),
+            await self._execute_command(RequestType.Lolwut, args, route),
         )
 
-    def random_key(self, route: Optional[Route] = None) -> Optional[bytes]:
+    async def random_key(self, route: Optional[Route] = None) -> Optional[bytes]:
         """
         Returns a random existing key name.
 
@@ -921,15 +1178,15 @@ class ClusterCommands(CoreCommands):
             Optional[bytes]: A random existing key name.
 
         Examples:
-            >>> client.random_key()
+            >>> await client.random_key()
                 b"random_key_name"  # "random_key_name" is a random existing key name.
         """
         return cast(
             Optional[bytes],
-            self._execute_command(RequestType.RandomKey, [], route),
+            await self._execute_command(RequestType.RandomKey, [], route),
         )
 
-    def wait(
+    async def wait(
         self,
         numreplicas: int,
         timeout: int,
@@ -952,12 +1209,270 @@ class ClusterCommands(CoreCommands):
             int: The number of replicas reached by all the writes performed in the context of the current connection.
 
         Examples:
-            >>> client.set("key", "value");
-            >>> client.wait(1, 1000);
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
             # return 1 when a replica is reached or 0 if 1000ms is reached.
         """
         args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
             int,
-            self._execute_command(RequestType.Wait, args, route),
+            await self._execute_command(RequestType.Wait, args, route),
+        )
+
+    async def unwatch(self, route: Optional[Route] = None) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, [], route),
+        )
+
+    async def scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+        allow_non_covered_slots: bool = False,
+    ) -> List[Union[ClusterScanCursor, List[bytes]]]:
+        """
+        Incrementally iterates over the keys in the cluster.
+        The method returns a list containing the next cursor and a list of keys.
+
+        This command is similar to the SCAN command but is designed to work in a cluster environment.
+        For each iteration, the new cursor object should be used to continue the scan.
+        Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+        For more information about the Cluster Scan implementation, see
+        [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
+
+        Like the SCAN command, the method can be used to iterate over the keys in the database,
+        returning all keys the database has from when the scan started until the scan ends.
+        The same key can be returned in multiple scan iterations.
+
+        See [valkey.io](https://valkey.io/commands/scan/) for more details.
+
+        Args:
+            cursor (ClusterScanCursor): The cursor object that wraps the scan state.
+                To start a new scan, create a new empty ClusterScanCursor using ClusterScanCursor().
+            match (Optional[TEncodable]): A pattern to match keys against.
+            count (Optional[int]): The number of keys to return in a single iteration.
+                The actual number returned can vary and is not guaranteed to match this count exactly.
+                This parameter serves as a hint to the server on the number of steps to perform in each iteration.
+                The default value is 10.
+            type (Optional[ObjectType]): The type of object to scan for.
+            allow_non_covered_slots (bool): If set to True, the scan will perform even if some slots are not covered by any
+                node.
+                It's important to note that when set to True, the scan has no guarantee to cover all keys in the cluster,
+                and the method loses its way to validate the progress of the scan. Defaults to False.
+
+        Returns:
+            List[Union[ClusterScanCursor, List[TEncodable]]]: A list containing the next cursor and a list of keys,
+            formatted as [ClusterScanCursor, [key1, key2, ...]].
+
+        Examples:
+            >>> # Iterate over all keys in the cluster.
+            >>> await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
+
+            >>> # Iterate over keys matching the pattern "*key*".
+            >>> await client.mset(
+            ...     {
+            ...         b"key1": b"value1",
+            ...         b"key2": b"value2",
+            ...         b"not_my_key": b"value3",
+            ...         b"something_else": b"value4"
+            ...     }
+            ... )
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, match=b"*key*", count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'not_my_key']
+
+            >>> # Iterate over keys of type STRING.
+            >>> await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> await client.sadd(b"this_is_a_set", [b"value4"])
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, type=ObjectType.STRING, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
+        """
+        return cast(
+            List[Union[ClusterScanCursor, List[bytes]]],
+            await self._cluster_scan(
+                cursor=cursor,
+                match=match,
+                count=count,
+                type=type,
+                allow_non_covered_slots=allow_non_covered_slots,
+            ),
+        )
+
+    async def script_exists(
+        self, sha1s: List[TEncodable], route: Optional[Route] = None
+    ) -> TClusterResponse[List[bool]]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TClusterResponse[List[bool]]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await client.script_exists([lua_script.get_hash(), "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            TClusterResponse[List[bool]],
+            await self._execute_command(RequestType.ScriptExists, sha1s, route),
+        )
+
+    async def script_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else [], route
+            ),
+        )
+
+    async def script_kill(self, route: Optional[Route] = None) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_kill()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.ScriptKill, [], route))
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        Note:
+            When in cluster mode, each `key` must map to the same hash slot.
+
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script. To ensure the correct execution of
+                the script, all names of keys that a script accesses must be explicitly provided as `keys`.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args)
+
+    async def invoke_script_route(
+        self,
+        script: Script,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its arguments and route.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in
+                which case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { ARGV[1] }")
+            >>> await client.invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+                [b"bar"]
+        """
+        return await self._execute_script(
+            script.get_hash(), keys=None, args=args, route=route
         )

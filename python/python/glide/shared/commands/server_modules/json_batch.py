@@ -22,14 +22,14 @@ Examples:
 
 from typing import List, Optional, Union
 
-from glide.commands.batch import TBatch
-from glide.commands.core_options import ConditionalChange
-from glide.commands.server_modules.glide_json import (
+from glide.constants import TEncodable
+from glide.shared.commands.batch import TBatch
+from glide.shared.commands.core_options import ConditionalChange
+from glide.shared.commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.constants import TEncodable
 
 
 def set(

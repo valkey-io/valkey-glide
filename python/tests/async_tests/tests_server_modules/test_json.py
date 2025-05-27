@@ -8,19 +8,19 @@ from typing import List, Optional
 
 import pytest
 
-from glide.commands.batch import ClusterBatch
-from glide.commands.core_options import ConditionalChange
-from glide.commands.server_modules import glide_json as json
-from glide.commands.server_modules import json_batch
-from glide.commands.server_modules.glide_json import (
-    JsonArrIndexOptions,
-    JsonArrPopOptions,
-    JsonGetOptions,
-)
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient, TGlideClient
+from glide.shared.commands.batch import ClusterBatch
+from glide.shared.commands.core_options import ConditionalChange
+from glide.shared.commands.server_modules import glide_json as json
+from glide.shared.commands.server_modules import json_batch
+from glide.shared.commands.server_modules.glide_json import (
+    JsonArrIndexOptions,
+    JsonArrPopOptions,
+    JsonGetOptions,
+)
 from tests.async_tests.test_async_client import get_random_string
 
 

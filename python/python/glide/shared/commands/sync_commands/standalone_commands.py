@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
-from glide.commands.core_options import FlushMode, FunctionRestorePolicy, InfoSection
-from glide.commands.sync_commands.core import CoreCommands
 from glide.constants import (
     TOK,
     TEncodable,
@@ -14,6 +12,12 @@ from glide.constants import (
     TResult,
 )
 from glide.protobuf.command_request_pb2 import RequestType
+from glide.shared.commands.core_options import (
+    FlushMode,
+    FunctionRestorePolicy,
+    InfoSection,
+)
+from glide.shared.commands.sync_commands.core import CoreCommands
 
 
 class StandaloneCommands(CoreCommands):

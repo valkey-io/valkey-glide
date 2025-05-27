@@ -4,11 +4,11 @@ import anyio
 import pytest
 
 from glide import ByAddressRoute
-from glide.commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
 from glide.glide import ClusterScanCursor
 from glide.glide_client import GlideClient, GlideClusterClient
+from glide.shared.commands.command_args import ObjectType
 from tests.async_tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import get_random_string

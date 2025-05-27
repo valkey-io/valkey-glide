@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 import anyio
 import pytest
 
-from glide.commands.core_options import PubSubMsg
 from glide.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -17,6 +16,7 @@ from glide.config import (
 from glide.constants import OK
 from glide.exceptions import ConfigurationError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.shared.commands.core_options import PubSubMsg
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 

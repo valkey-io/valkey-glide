@@ -15,13 +15,13 @@ from glide import (
     RequestError,
 )
 from glide import TimeoutError as GlideTimeoutError
-from glide.commands.server_modules import ft, glide_json
-from glide.commands.server_modules.ft_options.ft_create_options import (
+from glide.shared.commands.server_modules import ft, glide_json
+from glide.shared.commands.server_modules.ft_options.ft_create_options import (
     DataType,
     FtCreateOptions,
     NumericField,
 )
-from glide.commands.server_modules.ft_options.ft_search_options import (
+from glide.shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
