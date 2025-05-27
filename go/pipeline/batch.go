@@ -557,8 +557,8 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 		cmdArgs, _ := cmd.ToArgs()
 		args = append(args, cmdArgs...)
 	}
-	// TODO: fix to use an expected type?
-	return b.addCmd(C.BitField, args)
+
+	return b.addCmdAndTypeChecker(C.BitField, args, reflect.Slice, false)
 }
 
 // Reads the array of bits representing the string that is held at key
@@ -589,8 +589,7 @@ func (b *BaseBatch[T]) BitFieldRO(key string, commands []options.BitFieldROComma
 		args = append(args, cmdArgs...)
 	}
 
-	// TODO: fix to use an expected type?
-	return b.addCmd(C.BitFieldReadOnly, args)
+	return b.addCmdAndTypeChecker(C.BitFieldReadOnly, args, reflect.Slice, false)
 }
 
 // Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
