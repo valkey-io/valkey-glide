@@ -159,11 +159,6 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(0).SetEnd(6))
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPosWithOptions(key, 1, 0, 6)"})
 
-	// TODO: FIND A BETTER WAY TO HANDLE BITFIELD RESULTS
-	var expectedBfInterfaces []interface{}
-	expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
-	expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
-	expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(1)))
 	commands := []options.BitFieldSubCommands{
 		options.NewBitFieldGet(options.SignedInt, 8, 16),
 		options.NewBitFieldOverflow(options.SAT),
@@ -171,22 +166,18 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 		options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
 	}
 	batch.BitField(bitfieldkey1, commands)
-	testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces, TestName: "BitField(key, commands)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(0), int64(0), int64(1)}, TestName: "BitField(key, commands)"})
 
-	var expectedBfInterfaces2 []interface{}
-	var expectedBfInterfaces3 []interface{}
-	expectedBfInterfaces2 = append(expectedBfInterfaces2, interface{}(int64(0)))
-	expectedBfInterfaces3 = append(expectedBfInterfaces3, interface{}(int64(24)))
 	bfcommands := []options.BitFieldSubCommands{
 		options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
 	}
 	batch.BitField(bitfieldkey2, bfcommands)
-	testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces2, TestName: "BitField(key, bfcommands)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(0)}, TestName: "BitField(key, bfcommands)"})
 	commands2 := []options.BitFieldROCommands{
 		options.NewBitFieldGet(options.UnsignedInt, 8, 0),
 	}
 	batch.BitFieldRO(bitfieldkey2, commands2)
-	testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces3, TestName: "BitFieldRO(key, commands2)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(24)}, TestName: "BitFieldRO(key, commands2)"})
 
 	batch.Set(bitopkey1, "foobar")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey1, foobar)"})
