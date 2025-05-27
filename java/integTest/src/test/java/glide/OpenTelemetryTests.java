@@ -2,9 +2,7 @@
 package glide;
 
 import static glide.TestUtilities.commonClusterClientConfig;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import glide.api.GlideClusterClient;
 import glide.api.OpenTelemetry;
@@ -18,14 +16,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-// @Timeout(30) // seconds
+@Timeout(30) // seconds
 public class OpenTelemetryTests {
 
     private static final String VALID_ENDPOINT_TRACES = "/tmp/spans.json";
@@ -44,47 +40,47 @@ public class OpenTelemetryTests {
         String spanData = "";
         List<String> spans = new ArrayList<>();
         List<String> spanNames = new ArrayList<>();
-        try {
-            System.out.println("path====" + path);
-            if (!Files.exists(Paths.get(path))) {
-                System.out.println("path not ------");
-            }
-            spanData = new String(Files.readAllBytes(Paths.get(path)));
-            System.out.println("span data=" + spanData);
+        //        try {
+        // System.out.println("path====" + path);
+        //            if (!Files.exists(Paths.get(path))) {
+        //                System.out.println("path not ------");
+        //            }
+        spanData = new String(Files.readAllBytes(Paths.get(path)));
+        //            System.out.println("span data=" + spanData);
 
-            spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
-            System.out.println(spans);
+        spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
+        //            System.out.println(spans);
 
-            // Check that we have spans
-            if (spans.isEmpty()) {
-                throw new Exception("No spans found in the span file");
-            }
-
-            // Parse and extract span names
-            spanNames =
-                    spans.stream()
-                            .map(
-                                    line -> {
-                                        try {
-                                            // Simple extraction of the "name" field from JSON
-                                            int nameIndex = line.indexOf("\"name\":");
-                                            if (nameIndex != -1) {
-                                                int startQuote = line.indexOf("\"", nameIndex + 7);
-                                                int endQuote = line.indexOf("\"", startQuote + 1);
-                                                if (startQuote != -1 && endQuote != -1) {
-                                                    return line.substring(startQuote + 1, endQuote);
-                                                }
-                                            }
-                                            return null;
-                                        } catch (Exception e) {
-                                            return null;
-                                        }
-                                    })
-                            .filter(name -> name != null)
-                            .collect(Collectors.toList());
-        } catch (Exception e) {
-            throw e;
+        // Check that we have spans
+        if (spans.isEmpty()) {
+            throw new Exception("No spans found in the span file");
         }
+
+        // Parse and extract span names
+        spanNames =
+                spans.stream()
+                        .map(
+                                line -> {
+                                    try {
+                                        // Simple extraction of the "name" field from JSON
+                                        int nameIndex = line.indexOf("\"name\":");
+                                        if (nameIndex != -1) {
+                                            int startQuote = line.indexOf("\"", nameIndex + 7);
+                                            int endQuote = line.indexOf("\"", startQuote + 1);
+                                            if (startQuote != -1 && endQuote != -1) {
+                                                return line.substring(startQuote + 1, endQuote);
+                                            }
+                                        }
+                                        return null;
+                                    } catch (Exception e) {
+                                        return null;
+                                    }
+                                })
+                        .filter(name -> name != null)
+                        .collect(Collectors.toList());
+        //        } catch (Exception e) {
+        //            throw e;
+        //        }
 
         return new SpanFileData(spanData, spans, spanNames);
     }
@@ -105,11 +101,107 @@ public class OpenTelemetryTests {
         return Stream.of(Arguments.of(ProtocolVersion.RESP2), Arguments.of(ProtocolVersion.RESP3));
     }
 
+    @SneakyThrows
+    public static void wrongOpenTelemetryConfig() {
+        Exception exception;
+        // Wrong traces endpoint
+        OpenTelemetryConfig wrongTracesConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
+        assertTrue(exception.getMessage().contains("Parse error"));
+
+        // Wrong metrics endpoint
+        OpenTelemetryConfig wrongMetricsConfig =
+                OpenTelemetryConfig.builder()
+                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
+        assertTrue(exception.getMessage().contains("Parse error"));
+
+        // Negative flush interval
+        OpenTelemetryConfig negativeFlushConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(1)
+                                        .build())
+                        .flushIntervalMs(-400L)
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeFlushConfig));
+        assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive integer"));
+
+        // Negative sample percentage
+        OpenTelemetryConfig negativeSampleConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .samplePercentage(-400)
+                                        .build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeSampleConfig));
+        assertTrue(
+                exception
+                        .getMessage()
+                        .contains(
+                                "InvalidInput: traces_sample_percentage must be a positive integer (got: -400)"));
+
+        // Wrong traces file path
+        OpenTelemetryConfig wrongTracesPathConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("file:invalid-path/v1/traces.json")
+                                        .build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesPathConfig));
+        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
+
+        // Wrong metrics file path
+        OpenTelemetryConfig wrongMetricsPathConfig =
+                OpenTelemetryConfig.builder()
+                        .metrics(
+                                OpenTelemetry.MetricsConfig.builder()
+                                        .endpoint("file:invalid-path/v1/metrics.json")
+                                        .build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsPathConfig));
+        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
+
+        // Wrong directory path
+        OpenTelemetryConfig wrongDirPathConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("file:///no-exits-path/v1/traces.json")
+                                        .build())
+                        .build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
+        assertTrue(
+                exception.getMessage().contains("The directory does not exist or is not a directory"));
+
+        // No traces or metrics provided
+        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
+
+        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
+        assertTrue(
+                exception.getMessage().contains("At least one of traces or metrics must be provided"));
+    }
+
     @BeforeAll
     @SneakyThrows
     public static void setup() {
-        // Check wrong OpenTelemetry configurations before initializing
-        //        wrongOpenTelemetryConfig();
+        wrongOpenTelemetryConfig();
 
         // Test that spans are not exported before initializing OpenTelemetry
         testSpanNotExportedBeforeInitOtel();
@@ -127,117 +219,7 @@ public class OpenTelemetryTests {
                         .build();
 
         OpenTelemetry.init(openTelemetryConfig);
-        System.out.println("------before each");
     }
-
-    //    @Test
-    //    @SneakyThrows
-    //    public void wrongOpenTelemetryConfig() {
-    //        // Wrong traces endpoint
-    //        OpenTelemetryConfig wrongTracesConfig =
-    //                OpenTelemetryConfig.builder()
-    //
-    // .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
-    //                        .build();
-    //
-    //        Exception exception =
-    //                assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
-    //        assertTrue(exception.getMessage().contains("Parse error"));
-    //
-    //        // Wrong metrics endpoint
-    //        OpenTelemetryConfig wrongMetricsConfig =
-    //                OpenTelemetryConfig.builder()
-    //
-    // .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
-    //        assertTrue(exception.getMessage().contains("Parse error"));
-    //
-    //        // Negative flush interval
-    //        OpenTelemetryConfig negativeFlushConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .traces(
-    //                                OpenTelemetry.TracesConfig.builder()
-    //                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-    //                                        .samplePercentage(1)
-    //                                        .build())
-    //                        .flushIntervalMs(-400L)
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () ->
-    // OpenTelemetry.init(negativeFlushConfig));
-    //        assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive
-    // integer"));
-    //
-    //        // Negative sample percentage
-    //        OpenTelemetryConfig negativeSampleConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .traces(
-    //                                OpenTelemetry.TracesConfig.builder()
-    //                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-    //                                        .samplePercentage(-400)
-    //                                        .build())
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () ->
-    // OpenTelemetry.init(negativeSampleConfig));
-    //        assertTrue(
-    //                exception
-    //                        .getMessage()
-    //                        .contains(
-    //                                "InvalidInput: traces_sample_percentage must be a positive
-    // integer (got: -400)"));
-    //
-    //        // Wrong traces file path
-    //        OpenTelemetryConfig wrongTracesPathConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .traces(
-    //                                OpenTelemetry.TracesConfig.builder()
-    //                                        .endpoint("file:invalid-path/v1/traces.json")
-    //                                        .build())
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () ->
-    // OpenTelemetry.init(wrongTracesPathConfig));
-    //        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-    //
-    //        // Wrong metrics file path
-    //        OpenTelemetryConfig wrongMetricsPathConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .metrics(
-    //                                OpenTelemetry.MetricsConfig.builder()
-    //                                        .endpoint("file:invalid-path/v1/metrics.json")
-    //                                        .build())
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () ->
-    // OpenTelemetry.init(wrongMetricsPathConfig));
-    //        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-    //
-    //        // Wrong directory path
-    //        OpenTelemetryConfig wrongDirPathConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .traces(
-    //                                OpenTelemetry.TracesConfig.builder()
-    //                                        .endpoint("file:///no-exits-path/v1/traces.json")
-    //                                        .build())
-    //                        .build();
-    //
-    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
-    //        assertTrue(
-    //                exception.getMessage().contains("The directory does not exist or is not a
-    // directory"));
-    //
-    //        // No traces or metrics provided
-    //        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
-    //
-    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
-    //        assertTrue(
-    //                exception.getMessage().contains("At least one of traces or metrics must be
-    // provided"));
-    //        System.out.println("-------------Wrong config test");
-    //    }
 
     @SneakyThrows
     private static void testSpanNotExportedBeforeInitOtel() {
@@ -255,7 +237,6 @@ public class OpenTelemetryTests {
         assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
 
         tempClient.close();
-        System.out.println("-----------testSpanNotExportedBeforeInitOtel");
     }
 
     @AfterEach
