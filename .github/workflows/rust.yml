@@ -111,7 +111,7 @@ jobs:
 
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry
-              run: cargo test --all-features
+              run: cargo test --all-features -- --test-threads=1
 
             - name: Run glide-ffi tests
               working-directory: ./ffi

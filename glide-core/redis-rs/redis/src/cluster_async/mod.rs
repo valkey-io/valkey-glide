@@ -921,13 +921,7 @@ impl<C> Future for Request<C> {
                 Next::Done.into()
             }
             Err((target, err)) => {
-                println!("Request error: {:?}", err);
-
                 let request = this.request.as_mut().unwrap();
-                print!(
-                    "Retry {}, max {}",
-                    request.retry, this.retry_params.number_of_retries
-                );
                 // TODO - would be nice if we didn't need to repeat this code twice, with & without retries.
                 if request.retry >= this.retry_params.number_of_retries {
                     let retry_method = err.retry_method();
