@@ -6815,8 +6815,8 @@ func (client *baseClient) XInfoGroups(ctx context.Context, key string) ([]models
 // Parameters:
 //
 //	ctx          - The context for controlling the command execution.
-//	key          -  The key of the string.
-//	subCommands  -  The subCommands to be performed on the binary value of the string at
+//	key          - The key of the string.
+//	subCommands  - The subCommands to be performed on the binary value of the string at
 //	                key, which could be any of the following:
 //	                  - [BitFieldGet].
 //	                  - [BitFieldSet].

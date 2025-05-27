@@ -4520,18 +4520,33 @@ func (b *BaseBatch[T]) XInfoGroups(key string) *T {
 	return b.addCmdAndTypeChecker(C.XInfoGroups, []string{key}, reflect.Slice, false)
 }
 
-// Reads or modifies the array of bits representing the string that is held at key.
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified sub commands.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key          - The key of the string.
-//	subCommands  - The subCommands to be performed on the binary value of the string at key.
+//	subCommands  - The subCommands to be performed on the binary value of the string at
+//	                key, which could be any of the following:
+//	                  - [BitFieldGet].
+//	                  - [BitFieldSet].
+//	                  - [BitFieldIncrby].
+//	                  - [BitFieldOverflow].
+//		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
+//		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
+//		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
+//		            Use `options.BitFieldOverflow()` to specify a BitField OVERFLOW command.
 //
 // Command Response:
 //
 //	Result from the executed subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
 //
 // [valkey.io]: https://valkey.io/commands/bitfield/
 func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCommands) *T {
@@ -4546,7 +4561,7 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 		args = append(args, cmdArgs...)
 	}
 
-	return b.addCmdAndTypeChecker(C.BitField, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.BitField, args, reflect.Slice, false)
 }
 
 // Reads the array of bits representing the string that is held at key.

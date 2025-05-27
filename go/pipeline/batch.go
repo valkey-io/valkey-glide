@@ -317,6 +317,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 		if reflect.TypeOf(res).Kind() == expectedType {
 			return converter(res)
 		}
+		// data lost even though it was incorrect
 		return &errors.RequestError{
 			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
 		}
