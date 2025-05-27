@@ -326,19 +326,121 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 }
 
 // Select changes the currently selected database.
-// This method is only available for StandaloneBatch.
 //
 // For details see [valkey.io].
 //
 // Parameters:
 //
-//	db - The index of the database to select.
+//	index - The index of the database to select.
 //
 // Command Response:
 //
 //	A simple "OK" response.
 //
 // [valkey.io]: https://valkey.io/commands/select/
-func (b *StandaloneBatch) Select(db int) *StandaloneBatch {
-	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(int64(db))}, reflect.String, false)
+func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
+}
+
+// Move key from the currently selected database to the database specified by `dbIndex`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex - The index of the database to move key to.
+//
+// Command Response:
+//
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
+}
+
+// Publish posts a message to the specified sharded channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Command Response:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish/
+func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.SPublish, []string{channel, message}, reflect.Int64, false)
+}
+
+// Returns a list of all sharded channels.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A list of shard channels.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
+func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{}, reflect.Slice, false)
+}
+
+// Returns a list of all sharded channels that match the given pattern.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - A glob-style pattern to match active shard channels.
+//
+// Command Response:
+//
+//	A list of shard channels that match the given pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
+func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{pattern}, reflect.Slice, false)
+}
+
+// Returns the number of subscribers for a sharded channel.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel to get the number of subscribers for.
+//
+// Command Response:
+//
+//	The number of subscribers for the sharded channel.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
+func (b *ClusterBatch) PubSubShardNumSub(channels ...string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardNumSub, channels, reflect.Map, false)
 }

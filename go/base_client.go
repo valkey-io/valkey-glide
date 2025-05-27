@@ -6516,7 +6516,7 @@ func (client *baseClient) Copy(ctx context.Context, source string, destination s
 }
 
 // Copies the value stored at the source to the destination key. When
-// replace is true, removes the destination key first if it already
+// `replace` in `options“ is `true`, removes the destination key first if it already
 // exists, otherwise performs no action.
 //
 // Note:

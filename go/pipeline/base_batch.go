@@ -3545,23 +3545,6 @@ func (b *BaseBatch[T]) ObjectEncoding(key string) *T {
 	return b.addCmdAndTypeChecker(C.ObjectEncoding, []string{key}, reflect.String, true)
 }
 
-// Returns the message that was sent to it.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	message - The message to echo.
-//
-// Command Response:
-//
-//	The message that was sent.
-//
-// [valkey.io]: https://valkey.io/commands/echo/
-func (b *BaseBatch[T]) Echo(message string) *T {
-	return b.addCmdAndTypeChecker(C.Echo, []string{message}, reflect.String, true)
-}
-
 // Destroys the consumer group for the stream stored at key.
 //
 // See [valkey.io] for details.
@@ -4315,14 +4298,16 @@ func (b *BaseBatch[T]) BitPosWithOptions(key string, bit int64, bitposOptions op
 //
 // Command Response:
 //
-//	true if source was copied, false if source was not copied.
+//	`true` if source was copied, `false` if source was not copied.
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (b *BaseBatch[T]) Copy(source string, destination string) *T {
 	return b.addCmdAndTypeChecker(C.Copy, []string{source, destination}, reflect.Bool, false)
 }
 
-// Copies the value stored at the source to the destination key with options.
+// Copies the value stored at the source to the destination key. When
+// `replace` in `options“ is `true`, removes the destination key first if it already
+// exists, otherwise performs no action.
 //
 // See [valkey.io] for details.
 //
@@ -4338,7 +4323,7 @@ func (b *BaseBatch[T]) Copy(source string, destination string) *T {
 //
 // Command Response:
 //
-//	true if source was copied, false if source was not copied.
+//	`true` if source was copied, `false` if source was not copied.
 //
 // [valkey.io]: https://valkey.io/commands/copy/
 func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, options options.CopyOptions) *T {
@@ -5627,7 +5612,7 @@ func (b *BaseBatch[T]) FunctionLoad(libraryCode string, replace bool) *T {
 	return b.addCmdAndTypeChecker(C.FunctionLoad, args, reflect.String, false)
 }
 
-// Deletes a library previously registered using the FUNCTION LOAD command.
+// Deletes a library and all its functions.
 //
 // Since:
 //
@@ -5637,15 +5622,15 @@ func (b *BaseBatch[T]) FunctionLoad(libraryCode string, replace bool) *T {
 //
 // Parameters:
 //
-//	libraryName - The name of the library to delete.
+//	libName - The library name to delete.
 //
 // Command Response:
 //
-//	OK if the library was deleted successfully.
+//	"OK" if the library exists, otherwise an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
-func (b *BaseBatch[T]) FunctionDelete(libraryName string) *T {
-	return b.addCmdAndTypeChecker(C.FunctionDelete, []string{libraryName}, reflect.String, false)
+func (b *BaseBatch[T]) FunctionDelete(libName string) *T {
+	return b.addCmdAndTypeChecker(C.FunctionDelete, []string{libName}, reflect.String, false)
 }
 
 // Deletes all the libraries.
@@ -5982,13 +5967,16 @@ func (b *BaseBatch[T]) FunctionKill() *T {
 	return b.addCmdAndTypeChecker(C.FunctionKill, []string{}, reflect.String, false)
 }
 
-// Posts a message to the given channel.
+// Publish posts a message to the specified channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	channel - The channel to publish to.
+//	channel - The channel to publish the message to.
 //	message - The message to publish.
 //
 // Command Response:
@@ -6081,4 +6069,371 @@ func (b *BaseBatch[T]) ScriptShow(sha1 string) *T {
 // [valkey.io]: https://valkey.io/commands/script-kill
 func (b *BaseBatch[T]) ScriptKill() *T {
 	return b.addCmdAndTypeChecker(C.ScriptKill, []string{}, reflect.String, false)
+}
+
+// Sets configuration parameters to the specified values.
+//
+// Note: Prior to Version 7.0.0, only one parameter can be send.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	parameters - A map consisting of configuration parameters and their respective values to set.
+//
+// Command Response:
+//
+//	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (b *BaseBatch[T]) ConfigSet(parameters map[string]string) *T {
+	return b.addCmdAndTypeChecker(C.ConfigSet, utils.MapToString(parameters), reflect.String, false)
+}
+
+// Gets the values of configuration parameters.
+//
+// Note: Prior to Version 7.0.0, only one parameter can be send.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	args - A slice of configuration parameter names to retrieve values for.
+//
+// Command Response:
+//
+//	A map of models.Result[string] corresponding to the configuration parameters.
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (b *BaseBatch[T]) ConfigGet(args []string) *T {
+	return b.addCmdAndTypeChecker(C.ConfigGet, args, reflect.Map, false)
+}
+
+// Select changes the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	index - The index of the database to select.
+//
+// Command Response:
+//
+//	A simple `"OK"` response.
+//
+// [valkey.io]: https://valkey.io/commands/select/
+func (b *BaseBatch[T]) Select(index int64) *T {
+	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
+}
+
+// Gets information and statistics about the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A string with the information for the default sections.
+//
+// [valkey.io]: https://valkey.io/commands/info/
+func (b *BaseBatch[T]) Info() *T {
+	return b.InfoWithOptions(options.InfoOptions{Sections: []constants.Section{}})
+}
+
+// Gets information and statistics about the server.
+//
+// Starting from server version 7, command supports multiple section arguments.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	options - Additional command parameters, see [InfoOptions] for more details.
+//
+// Command Response:
+//
+//	A string containing the information for the sections requested.
+//
+// [valkey.io]: https://valkey.io/commands/info/
+func (b *BaseBatch[T]) InfoWithOptions(options options.InfoOptions) *T {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return b.addError("InfoWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Info, optionArgs, reflect.String, false)
+}
+
+// Returns the number of keys in the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	The number of keys in the currently selected database.
+//
+// [valkey.io]: https://valkey.io/commands/dbsize/
+func (b *BaseBatch[T]) DBSize() *T {
+	return b.addCmdAndTypeChecker(C.DBSize, []string{}, reflect.Int64, false)
+}
+
+// Echoes the provided message back.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Command Response:
+//
+//	The provided message
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (b *BaseBatch[T]) Echo(message string) *T {
+	return b.addCmdAndTypeChecker(C.Echo, []string{message}, reflect.String, false)
+}
+
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	Returns "PONG".
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *BaseBatch[T]) Ping() *T {
+	return b.PingWithOptions(options.PingOptions{})
+}
+
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pingOptions - The PingOptions type.
+//
+// Command Response:
+//
+//	Returns the copy of message.
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *BaseBatch[T]) PingWithOptions(pingOptions options.PingOptions) *T {
+	optionArgs, err := pingOptions.ToArgs()
+	if err != nil {
+		return b.addError("PingWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Ping, optionArgs, reflect.String, false)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (b *BaseBatch[T]) FlushAll() *T {
+	return b.addCmdAndTypeChecker(C.FlushAll, []string{}, reflect.String, false)
+}
+
+// Deletes all the keys of all the existing databases.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushall/
+func (b *BaseBatch[T]) FlushAllWithOptions(mode options.FlushMode) *T {
+	return b.addCmdAndTypeChecker(C.FlushAll, []string{string(mode)}, reflect.String, false)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (b *BaseBatch[T]) FlushDB() *T {
+	return b.addCmdAndTypeChecker(C.FlushDB, []string{}, reflect.String, false)
+}
+
+// Deletes all the keys of the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	mode - The flushing mode, could be either [options.SYNC] or [options.ASYNC}.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/flushdb/
+func (b *BaseBatch[T]) FlushDBWithOptions(mode options.FlushMode) *T {
+	return b.addCmdAndTypeChecker(C.FlushDB, []string{string(mode)}, reflect.String, false)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (b *BaseBatch[T]) Lolwut() *T {
+	return b.addCmdAndTypeChecker(C.Lolwut, []string{}, reflect.String, false)
+}
+
+// Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	opts - The [LolwutOptions] type.
+//
+// Command Response:
+//
+// A piece of generative computer art of that specific valkey version along with the Valkey version.
+//
+// [valkey.io]: https://valkey.io/commands/lolwut/
+func (b *BaseBatch[T]) LolwutWithOptions(opts options.LolwutOptions) *T {
+	commandArgs, err := opts.ToArgs()
+	if err != nil {
+		return b.addError("LolwutWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Lolwut, commandArgs, reflect.String, false)
+}
+
+// Gets the current connection id.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	The id of the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-id/
+func (b *BaseBatch[T]) ClientId() *T {
+	return b.addCmdAndTypeChecker(C.ClientId, []string{}, reflect.Int64, false)
+}
+
+// Returns UNIX TIME of the last DB save timestamp or startup timestamp if no save was made since then.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	UNIX TIME of the last DB save executed with success.
+//
+// [valkey.io]: https://valkey.io/commands/lastsave/
+func (b *BaseBatch[T]) LastSave() *T {
+	return b.addCmdAndTypeChecker(C.LastSave, []string{}, reflect.Int64, false)
+}
+
+// Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	OK to confirm that the statistics were successfully reset.
+//
+// [valkey.io]: https://valkey.io/commands/config-resetstat/
+func (b *BaseBatch[T]) ConfigResetStat() *T {
+	return b.addCmdAndTypeChecker(C.ConfigResetStat, []string{}, reflect.String, false)
+}
+
+// Gets the name of the current connection.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//
+// [valkey.io]: https://valkey.io/commands/client-getname/
+func (b *BaseBatch[T]) ClientGetName() *T {
+	return b.addCmdAndTypeChecker(C.ClientGetName, []string{}, reflect.String, true)
+}
+
+// Set the name of the current connection.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	connectionName - Connection name of the current connection.
+//
+// Command Response:
+//
+//	OK - when connection name is set
+//
+// [valkey.io]: https://valkey.io/commands/client-setname/
+func (b *BaseBatch[T]) ClientSetName(connectionName string) *T {
+	return b.addCmdAndTypeChecker(C.ClientSetName, []string{connectionName}, reflect.String, false)
+}
+
+// Rewrites the configuration file with the current configuration.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//
+// [valkey.io]: https://valkey.io/commands/config-rewrite/
+func (b *BaseBatch[T]) ConfigRewrite() *T {
+	return b.addCmdAndTypeChecker(C.ConfigRewrite, []string{}, reflect.String, false)
+}
+
+// Returns a random existing key name from the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A random existing key name from the currently selected database.
+//
+// [valkey.io]: https://valkey.io/commands/randomkey/
+func (b *BaseBatch[T]) RandomKey() *T {
+	return b.addCmdAndTypeChecker(C.RandomKey, []string{}, reflect.String, true)
+}
+
+// Returns information about the function that's currently running and information about the
+// available execution engines.
+// `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
+// The response includes a mapping from node address to the command response for that node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A map of node addresses to their function statistics represented by
+//	[FunctionStatsResult] object containing the following information:
+//	running_script - Information about the running script.
+//	engines - Information about available engines and their stats.
+//
+// [valkey.io]: https://valkey.io/commands/function-stats/
+func (b *BaseBatch[T]) FunctionStats() *T {
+	return b.addCmdAndTypeChecker(C.FunctionStats, []string{}, reflect.Map, false)
 }
