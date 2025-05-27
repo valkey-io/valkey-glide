@@ -15,26 +15,29 @@ public class TestConfiguration : IDisposable
     public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
+    public static bool TLS = false;
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
-            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
+            .WithTls(TLS);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithTls(TLS);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
-    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).WithTls(TLS).Build()).GetAwaiter().GetResult();
 
     public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).WithTls(TLS).Build()).GetAwaiter().GetResult();
 
     public static GlideClient DefaultStandaloneClient()
-        => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
+        => GlideClient.CreateClient(DefaultClientConfig().WithTls(TLS).Build()).GetAwaiter().GetResult();
 
     public static GlideClusterClient DefaultClusterClient()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithTls(TLS).Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
@@ -74,22 +77,38 @@ public class TestConfiguration : IDisposable
 
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
-        // Stop all if weren't stopped on previous test run
-        StopServer(false);
+        TLS = Environment.GetEnvironmentVariable("tls") == "true";
 
-        // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
-        // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
-        string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
-        try
+        if (Environment.GetEnvironmentVariable("cluster-endpoints") is not null || Environment.GetEnvironmentVariable("standalone-endpoints") is not null)
         {
-            Directory.Delete(clusterLogsDir, true);
+            string? clusterEndpoints = Environment.GetEnvironmentVariable("cluster-endpoints");
+            CLUSTER_HOSTS = clusterEndpoints is null ? [] :
+                [.. clusterEndpoints.Split(',').Select(s => s.Split(':')).Select(s => (s[0], ushort.Parse(s[1])))];
+            string? standaloneEndpoints = Environment.GetEnvironmentVariable("standalone-endpoints");
+            STANDALONE_HOSTS = standaloneEndpoints is null ? [] :
+                [.. standaloneEndpoints.Split(',').Select(s => s.Split(':')).Select(s => (s[0], ushort.Parse(s[1])))];
+            _startedServer = false;
         }
-        catch (DirectoryNotFoundException) { }
+        else
+        {
+            // Stop all if weren't stopped on previous test run
+            StopServer(false);
 
-        // Start cluster
-        CLUSTER_HOSTS = StartServer(true);
-        // Start standalone
-        STANDALONE_HOSTS = StartServer(false);
+            // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+            // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
+            string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
+            try
+            {
+                Directory.Delete(clusterLogsDir, true);
+            }
+            catch (DirectoryNotFoundException) { }
+
+            // Start cluster
+            CLUSTER_HOSTS = StartServer(true, TLS);
+            // Start standalone
+            STANDALONE_HOSTS = StartServer(false, TLS);
+            _startedServer = true;
+        }
         // Get redis version
         SERVER_VERSION = GetServerVersion();
 
@@ -103,11 +122,15 @@ public class TestConfiguration : IDisposable
     public void Dispose()
     {
         ResetTestClients();
-        // Stop all
-        StopServer(true);
+        if (_startedServer)
+        {
+            // Stop all
+            StopServer(true);
+        }
     }
 
     private readonly string _scriptDir;
+    private readonly bool _startedServer;
 
     private static void TestConsoleWriteLine(string message) =>
         TestContext.Current.SendDiagnosticMessage(message);
