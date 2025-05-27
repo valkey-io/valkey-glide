@@ -62,6 +62,8 @@
         "black"
     ],
     "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.cargo.buildScripts.enable": true,
     "dotnet.defaultSolution": "csharp/csharp.sln",
     "java.compile.nullAnalysis.mode": "automatic",
     "java.configuration.updateBuildConfiguration": "interactive",
