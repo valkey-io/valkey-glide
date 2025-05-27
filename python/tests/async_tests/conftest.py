@@ -5,7 +5,6 @@ from typing import AsyncGenerator, List, Optional, Union
 import pytest
 
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.logger import Logger
 from glide.shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -18,7 +17,6 @@ from glide.shared.config import (
 from glide.shared.exceptions import ClosingError
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
-    DEFAULT_TEST_LOG_LEVEL,
     INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
@@ -27,8 +25,6 @@ from tests.utils.utils import (
     create_client_config,
     set_new_acl_username_with_password,
 )
-
-Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
 
 @pytest.fixture(scope="function")

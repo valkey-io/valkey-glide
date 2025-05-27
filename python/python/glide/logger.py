@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import traceback
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
-from glide.glide import Level as internalLevel
-from glide.glide import py_init, py_log
+ENCODING = "utf-8"
+CURR_DIR = Path(__file__).resolve().parent
+ROOT_DIR = CURR_DIR.parent.parent.parent
+FFI_DIR = ROOT_DIR / "ffi"
+LIB_FILE = FFI_DIR / "target" / "debug" / "libglide_ffi.so"
 
 
 class Level(Enum):
-    ERROR = internalLevel.Error
-    WARN = internalLevel.Warn
-    INFO = internalLevel.Info
-    DEBUG = internalLevel.Debug
-    TRACE = internalLevel.Trace
-    OFF = internalLevel.Off
+    ERROR = 0
+    WARN = 1
+    INFO = 2
+    DEBUG = 3
+    TRACE = 4
+    OFF = 5
 
 
 class Logger:
@@ -30,11 +34,40 @@ class Logger:
     """
 
     _instance = None
-    logger_level: internalLevel
+    logger_level: Level
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
-        level_value = level.value if level else None
-        Logger.logger_level = py_init(level_value, file_name)
+        try:
+            from .glide import py_init, py_log
+
+            Logger.is_ffi = False
+            Logger.log_function = py_log
+
+            pyo3_level = self._python_to_pyo3_level(level)
+            logger_level = py_init(pyo3_level, file_name)
+            Logger.logger_level = Level(level)
+
+        except Exception as e:
+            if isinstance(e, ImportError):
+                Logger.is_ffi = True
+                self._init_ffi()
+
+                if level is not None:
+                    ffi_level = self._ffi.new("Level*", level.value)
+
+                else:
+                    ffi_level = self._ffi.NULL
+
+                if file_name is not None:
+                    c_file_name = self._ffi.new("char[]", file_name.encode(ENCODING))
+                else:
+                    c_file_name = self._ffi.NULL
+
+                logger_level = self._lib.init(ffi_level, c_file_name)
+                Logger.logger_level = Level(logger_level)
+
+            else:
+                raise e
 
     @classmethod
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
@@ -74,11 +107,44 @@ class Logger:
         """
         if not cls._instance:
             cls._instance = cls(None)
-        if not log_level.value.is_lower(Logger.logger_level):
-            return
         if err:
             message = f"{message}: {traceback.format_exception(err)}"
-        py_log(log_level.value, log_identifier, message)
+
+        if not cls.is_ffi:
+            logger_level = cls._python_to_pyo3_level(Logger.logger_level)
+            log_level = cls._python_to_pyo3_level(log_level)
+            cls.log_function(log_level, logger_level, log_identifier, message)
+
+        else:
+            c_identifier = cls._ffi.new("char[]", log_identifier.encode(ENCODING))
+            c_message = cls._ffi.new("char[]", message.encode(ENCODING))
+
+            cls._lib.log(
+                log_level.value, Logger.logger_level.value, c_identifier, c_message
+            )
+
+    @classmethod
+    def _init_ffi(cls):
+        from cffi import FFI
+
+        cls._ffi = FFI()
+        cls._ffi.cdef(
+            """
+            typedef enum {
+                Error = 0,
+                Warn = 1,
+                Info = 2,
+                Debug = 3,
+                Trace = 4,
+                Off = 5
+            } Level;
+
+            Level init(const Level* level, const char* file_name);
+            void log(Level level, Level logger_level, const char* identifier, const char* message);
+        """
+        )
+        cls._lib = cls._ffi.dlopen(str(LIB_FILE.resolve()))
+        cls.log_function = cls._lib.log
 
     @classmethod
     def set_logger_config(
@@ -95,3 +161,22 @@ class Logger:
                 Otherwise, logs will be printed to the console.
         """
         Logger._instance = Logger(level, file_name)
+
+    @staticmethod
+    def _python_to_pyo3_level(level: int):
+        from .glide import Level as Pyo3Level
+
+        if level.value == 0:
+            return Pyo3Level.Error
+        elif level.value == 1:
+            return Pyo3Level.Warn
+        elif level.value == 2:
+            return Pyo3Level.Info
+        elif level.value == 3:
+            return Pyo3Level.Debug
+        elif level.value == 4:
+            return Pyo3Level.Trace
+        elif level.value == 5:
+            return Pyo3Level.Off
+        else:
+            raise TypeError(f"Invalid level: {level}")
