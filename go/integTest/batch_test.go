@@ -13,6 +13,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -173,4 +174,174 @@ func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []Comm
 	for i := range result {
 		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
+}
+
+func (suite *GlideTestSuite) TestBitmapBatch() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		key := "{bitmap}key0" + uuid.New().String()
+		bitopkey1 := "{bitmap}key1" + uuid.New().String()
+		bitopkey2 := "{bitmap}key2" + uuid.New().String()
+		bitfieldkey1 := "{bitmap}key3" + uuid.New().String()
+		bitfieldkey2 := "{bitmap}key4" + uuid.New().String()
+		destKey := "{bitmap}dest" + uuid.New().String()
+
+		testData := make([]CommandTestData, 0)
+
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic)
+
+			batch.SetBit(key, 7, 1)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "SetBit(key, 7, 1)"})
+
+			batch.GetBit(key, 7)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GetBit(key, 7)"})
+
+			for i := int64(0); i < 6; i++ {
+				batch.SetBit(key, i, 1)
+				testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: fmt.Sprintf("SetBit(key, %d, 1)", i)})
+			}
+
+			batch.BitCount(key)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCount(key)"})
+
+			batch.BitCountWithOptions(key, *options.NewBitCountOptions().SetStart(0).SetEnd(5))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCountWithOptions(key, 0, 5)"})
+
+			batch.BitPos(key, 1)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPos(key, 1)"})
+
+			batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(5).SetEnd(6))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "BitPosWithOptions(key, 1, 5, 6)"})
+
+			batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(0).SetEnd(6))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPosWithOptions(key, 1, 0, 6)"})
+
+			// TODO: FIND A BETTER WAY TO HANDLE BITFIELD RESULTS
+			var expectedBfInterfaces []interface{}
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(1)))
+			commands := []options.BitFieldSubCommands{
+				options.NewBitFieldGet(options.SignedInt, 8, 16),
+				options.NewBitFieldOverflow(options.SAT),
+				options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+				options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
+			}
+			batch.BitField(bitfieldkey1, commands)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces, TestName: "BitField(key, commands)"})
+
+			var expectedBfInterfaces2 []interface{}
+			var expectedBfInterfaces3 []interface{}
+			expectedBfInterfaces2 = append(expectedBfInterfaces2, interface{}(int64(0)))
+			expectedBfInterfaces3 = append(expectedBfInterfaces3, interface{}(int64(24)))
+			bfcommands := []options.BitFieldSubCommands{
+				options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
+			}
+			batch.BitField(bitfieldkey2, bfcommands)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces2, TestName: "BitField(key, bfcommands)"})
+			commands2 := []options.BitFieldROCommands{
+				options.NewBitFieldGet(options.UnsignedInt, 8, 0),
+			}
+			batch.BitFieldRO(bitfieldkey2, commands2)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces3, TestName: "BitFieldRO(key, commands2)"})
+
+			batch.Set(bitopkey1, "foobar")
+			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey1, foobar)"})
+			batch.Set(bitopkey2, "abcdef")
+			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey2, abcdef)"})
+
+			batch.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(AND, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(OR, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(XOR, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.NOT, destKey, []string{bitopkey1})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+			expectedResult := BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
+
+			suite.verifyBatchTestResult(res, expectedResult.CommandTestData)
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic)
+
+			batch.SetBit(key, 7, 1)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "SetBit(key, 7, 1)"})
+
+			batch.GetBit(key, 7)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GetBit(key, 7)"})
+
+			for i := int64(0); i < 6; i++ {
+				batch.SetBit(key, i, 1)
+				testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: fmt.Sprintf("SetBit(key, %d, 1)", i)})
+			}
+
+			batch.BitCount(key)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCount(key)"})
+
+			batch.BitCountWithOptions(key, *options.NewBitCountOptions().SetStart(0).SetEnd(5))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCountWithOptions(key, 0, 5)"})
+
+			batch.BitPos(key, 1)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPos(key, 1)"})
+
+			batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(5).SetEnd(6))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "BitPosWithOptions(key, 1, 5, 6)"})
+
+			batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(0).SetEnd(6))
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPosWithOptions(key, 1, 0, 6)"})
+
+			// TODO: FIND A BETTER WAY TO HANDLE BITFIELD RESULTS
+			var expectedBfInterfaces []interface{}
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(0)))
+			expectedBfInterfaces = append(expectedBfInterfaces, interface{}(int64(1)))
+			commands := []options.BitFieldSubCommands{
+				options.NewBitFieldGet(options.SignedInt, 8, 16),
+				options.NewBitFieldOverflow(options.SAT),
+				options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+				options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
+			}
+			batch.BitField(bitfieldkey1, commands)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces, TestName: "BitField(key, commands)"})
+
+			var expectedBfInterfaces2 []interface{}
+			var expectedBfInterfaces3 []interface{}
+			expectedBfInterfaces2 = append(expectedBfInterfaces2, interface{}(int64(0)))
+			expectedBfInterfaces3 = append(expectedBfInterfaces3, interface{}(int64(24)))
+			bfcommands := []options.BitFieldSubCommands{
+				options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
+			}
+			batch.BitField(bitfieldkey2, bfcommands)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces2, TestName: "BitField(key, bfcommands)"})
+			commands2 := []options.BitFieldROCommands{
+				options.NewBitFieldGet(options.UnsignedInt, 8, 0),
+			}
+			batch.BitFieldRO(bitfieldkey2, commands2)
+			testData = append(testData, CommandTestData{ExpectedResponse: expectedBfInterfaces3, TestName: "BitFieldRO(key, commands2)"})
+
+			batch.Set(bitopkey1, "foobar")
+			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey1, foobar)"})
+			batch.Set(bitopkey2, "abcdef")
+			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey2, abcdef)"})
+
+			batch.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(AND, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(OR, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(XOR, destKey, bitopkey1, bitopkey2)"})
+			batch.BitOp(options.NOT, destKey, []string{bitopkey1})
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+			expectedResult := BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
+
+			suite.verifyBatchTestResult(res, expectedResult.CommandTestData)
+		}
+	})
 }
