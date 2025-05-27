@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -2549,4 +2550,70 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
+	_, err := suite.defaultClusterClient().ExecWithOptions(
+		context.Background(),
+		*pipeline.NewClusterBatch(true),
+		true,
+		*pipeline.NewClusterBatchOptions().WithRetryStrategy(*pipeline.NewClusterBatchRetryStrategy()),
+	)
+	assert.Error(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
+	client := suite.defaultClusterClient()
+	opts := pipeline.NewClusterBatchOptions()
+
+	for _, isAtomic := range []bool{true, false} {
+		// TODO use info when implemented
+		batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"info", "replication"})
+
+		res, err := client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypePrimary, "abc")),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypeReplica, "abc")),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypeReplica, 42)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewByAddressRoute(suite.clusterHosts[0].Host, int32(suite.clusterHosts[0].Port))),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
+	}
 }

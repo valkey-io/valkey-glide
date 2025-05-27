@@ -15,6 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // Client interface compliance check.
@@ -65,6 +66,67 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	return &Client{client}, nil
 }
 
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//	options - A [StandaloneBatchOptions] object containing execution options.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.StandaloneBatch,
+	raiseOnError bool,
+	options pipeline.StandaloneBatchOptions,
+) ([]any, error) {
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
+}
+
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
@@ -90,7 +152,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 	if err != nil {
 		return nil, err
 	}
-	return HandleInterfaceResponse(res)
+	return handleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
