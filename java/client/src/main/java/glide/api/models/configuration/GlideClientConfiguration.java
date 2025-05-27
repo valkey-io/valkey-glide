@@ -32,8 +32,6 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @ToString
 public class GlideClientConfiguration extends BaseClientConfiguration {
-    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
-    private final BackoffStrategy reconnectStrategy;
 
     /** Index of the logical database to connect to. */
     private final Integer databaseId;

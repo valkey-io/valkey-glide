@@ -145,6 +145,19 @@ public class ConnectionManager {
             connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
         }
 
+        if (configuration.getReconnectStrategy() != null) {
+            var reconnectionStrategyBuilder =
+                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
+                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
+                            .setFactor(configuration.getReconnectStrategy().getFactor());
+            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
+                reconnectionStrategyBuilder.setJitterPercent(
+                        configuration.getReconnectStrategy().getJitterPercent());
+            }
+            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -158,14 +171,6 @@ public class ConnectionManager {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(false);
-        if (configuration.getReconnectStrategy() != null) {
-            connectionRequestBuilder.setConnectionRetryStrategy(
-                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
-                            .setFactor(configuration.getReconnectStrategy().getFactor())
-                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
-                            .build());
-        }
 
         if (configuration.getDatabaseId() != null) {
             connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());

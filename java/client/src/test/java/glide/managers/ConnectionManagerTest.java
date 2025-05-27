@@ -334,6 +334,96 @@ public class ConnectionManagerTest {
                 ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY);
     }
 
+    @SneakyThrows
+    @Test
+    public void test_reconnect_strategy_to_protobuf() {
+        // setup
+        GlideClientConfiguration glideClientConfiguration =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(HOST).port(PORT).build())
+                        .useTLS(true)
+                        .reconnectStrategy(
+                                BackoffStrategy.builder()
+                                        .numOfRetries(10)
+                                        .exponentBase(4)
+                                        .factor(16)
+                                        .jitterPercent(30)
+                                        .build())
+                        .build();
+        ConnectionRequest expectedProtobufConnectionRequest =
+                ConnectionRequest.newBuilder()
+                        .addAddresses(
+                                ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                                        .setHost(HOST)
+                                        .setPort(PORT)
+                                        .build())
+                        .setTlsMode(TlsMode.SecureTls)
+                        .setConnectionRetryStrategy(
+                                ConnectionRetryStrategy.newBuilder()
+                                        .setNumberOfRetries(10)
+                                        .setFactor(16)
+                                        .setExponentBase(4)
+                                        .setJitterPercent(30)
+                                        .build())
+                        .build();
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
+
+        // verify
+        assertNull(result.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_reconnect_strategy_to_protobuf_cluster_client() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(HOST).port(PORT).build())
+                        .useTLS(true)
+                        .reconnectStrategy(
+                                BackoffStrategy.builder()
+                                        .numOfRetries(10)
+                                        .exponentBase(4)
+                                        .factor(16)
+                                        .jitterPercent(30)
+                                        .build())
+                        .build();
+        ConnectionRequest expectedProtobufConnectionRequest =
+                ConnectionRequest.newBuilder()
+                        .addAddresses(
+                                ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                                        .setHost(HOST)
+                                        .setPort(PORT)
+                                        .build())
+                        .setTlsMode(TlsMode.SecureTls)
+                        .setClusterModeEnabled(true)
+                        .setConnectionRetryStrategy(
+                                ConnectionRetryStrategy.newBuilder()
+                                        .setNumberOfRetries(10)
+                                        .setFactor(16)
+                                        .setExponentBase(4)
+                                        .setJitterPercent(30)
+                                        .build())
+                        .build();
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
+        CompletableFuture<Void> result =
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
+
+        // verify
+        assertNull(result.get());
+    }
+
     private void testAzAffinityWithoutClientAzThrowsConfigurationError(ReadFrom readFrom) {
         // setup
         String az = "us-east-1a";
