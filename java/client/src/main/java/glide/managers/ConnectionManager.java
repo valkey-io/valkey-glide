@@ -218,7 +218,8 @@ public class ConnectionManager {
 
         if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
             if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {
-                throw new ConfigurationError("`insecureTlS` cannot be enabled when  `useTLS` is disabled.");
+                throw new ConfigurationError(
+                        "`useInsecureTlS` cannot be enabled when  `useTLS` is disabled.");
             } else {
                 connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
             }

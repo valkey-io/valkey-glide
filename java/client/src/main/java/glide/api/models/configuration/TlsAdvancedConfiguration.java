@@ -14,22 +14,20 @@ import lombok.experimental.SuperBuilder;
 public class TlsAdvancedConfiguration {
 
     /**
-     * True if communication with the cluster should check certificate validity.
+     * Whether to bypass TLS certificate verification.
      *
-     * <p>If the server/cluster's certificate does not validate, not setting this will cause the
-     * connection attempt to fail.
+     * <p>When set to True, the client skips certificate validation. This is useful when connecting to
+     * servers or clusters using self-signed certificates, or when DNS entries (e.g., CNAMEs) don't
+     * match certificate hostnames.
      *
-     * <p>If the server/cluster's certificate does not validate, setting this will cause the
-     * connection to ignore the certificate's validity and succeed.
+     * <p>This setting is typically used in development or testing environments. <b>It is strongly
+     * discouraged in production</b>, as it introduces security risks such as man-in-the-middle
+     * attacks.
      *
-     * <p>This is useful for when CNAMEs are used to point to a server/cluster.
+     * <p>Only valid if TLS is already enabled in the base client configuration. Enabling it without
+     * TLS will result in a `ConfigurationError`.
      *
-     * <p>`useInsecureTLS` cannot be enabled while `useTLS` is disabled inside the
-     * BaseClientConfiguration, and will throw an ConfigurationError exception
-     *
-     * <p>NOTE: While there may be cases where bypassing certificate validation is acceptable for
-     * testing purposes, this option is discouraged for production use to avoid potential security
-     * risks like man-in-the-middle attacks.
+     * <p>Default: False (verification is enforced).
      */
     @Builder.Default private final boolean useInsecureTLS = false;
 }

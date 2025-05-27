@@ -526,7 +526,7 @@ public class ConnectionManagerTest {
                 assertThrows(
                         ConfigurationError.class,
                         () -> connectionManager.connectToValkey(glideClusterClientConfiguration));
-        assertEquals("`insecureTlS` cannot be enabled when  `useTLS` is disabled.", ex.getMessage());
+        assertEquals("`useInsecureTlS` cannot be enabled when  `useTLS` is disabled.", ex.getMessage());
     }
 
     private ConnectionRequestOuterClass.ReadFrom mapReadFrom(ReadFrom readFrom) {
