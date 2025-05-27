@@ -575,6 +575,12 @@ export class GlideClusterClient extends BaseClient {
      *       console.log(`Received message: ${msg.payload}`);
      *     },
      *   },
+     *   connectionBackoff: {
+     *     numberOfRetries: 5,
+     *     factor: 1000,
+     *     exponentBase: 2,
+     *     jitter: 20,
+     *   },
      * });
      * ```
      *
