@@ -441,6 +441,7 @@ func (client *baseClient) executeBatch(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+        // TODO: Need to deal with cleaning up any allocated memory
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
