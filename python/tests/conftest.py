@@ -431,7 +431,7 @@ async def create_client(
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
-    tls_adv_conf = TlsAdvancedConfiguration(insecure=tls_insecure)
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster

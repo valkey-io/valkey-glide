@@ -152,7 +152,7 @@ class TlsAdvancedConfiguration:
     Represents advanced TLS configuration settings.
 
     Attributes:
-        insecure (Optional[bool]): Whether to bypass TLS certificate verification.
+        use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
 
             - When set to True, the client skips certificate validation.
               This is useful when connecting to servers or clusters using self-signed certificates,
@@ -167,8 +167,8 @@ class TlsAdvancedConfiguration:
             - Default: False (verification is enforced).
     """
 
-    def __init__(self, insecure: Optional[bool] = None):
-        self.insecure = insecure
+    def __init__(self, use_insecure_tls: Optional[bool] = None):
+        self.use_insecure_tls = use_insecure_tls
 
 
 class AdvancedBaseClientConfiguration:
@@ -199,12 +199,12 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config and self.tls_config.insecure:
+        if self.tls_config and self.tls_config.use_insecure_tls:
             if request.tls_mode == TlsMode.SecureTls:
                 request.tls_mode = TlsMode.InsecureTls
             elif request.tls_mode == TlsMode.NoTls:
                 raise ConfigurationError(
-                    "TLS is configured as insecure, but TLS isn't in use."
+                    "use_insecure_tls cannot be enabled when use_tls is disabled."
                 )
 
         return request
@@ -383,7 +383,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-                For advanced tls configuration, please use the AdvancedGlideClientConfiguration option.
+                please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
@@ -548,7 +548,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-                For advanced tls configuration, please use the AdvancedGlideClusterClientConfiguration option.
+                For advanced tls configuration, please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.

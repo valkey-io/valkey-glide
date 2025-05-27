@@ -159,7 +159,7 @@ def test_reconnect_strategy_in_protobuf_request():
 
 
 def test_tls_insecure_in_protobuf_request():
-    tls_conf = TlsAdvancedConfiguration(insecure=True)
+    tls_conf = TlsAdvancedConfiguration(use_insecure_tls=True)
 
     config = GlideClientConfiguration(
         [NodeAddress("127.0.0.1")],
