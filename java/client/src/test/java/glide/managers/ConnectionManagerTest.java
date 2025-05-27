@@ -6,10 +6,7 @@ import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
 import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT;
 import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -24,6 +21,8 @@ import connection_request.ConnectionRequestOuterClass.ConnectionRetryStrategy;
 import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
 import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -32,6 +31,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
@@ -155,6 +155,11 @@ public class ConnectionManagerTest {
                                         .subscription(PATTERN, gs("*chatRoom*"))
                                         .build())
                         .inflightRequestsLimit(INFLIGHT_REQUESTS_LIMIT)
+                        .advancedConfiguration(
+                                AdvancedGlideClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().useInsecureTLS(false).build())
+                                        .build())
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
@@ -436,6 +441,92 @@ public class ConnectionManagerTest {
 
         // verify
         assertThrows(ConfigurationError.class, () -> connectionManager.connectToValkey(config));
+    }
+
+    @SneakyThrows
+    @Test
+    public void connection_request_protobuf_generation_custom_connection_timeout() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                        .useTLS(true)
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
+                        .build();
+        ConnectionRequest expectedProtobufConnectionRequest =
+                ConnectionRequest.newBuilder()
+                        .setTlsMode(TlsMode.SecureTls)
+                        .setConnectionTimeout(500)
+                        .setClusterModeEnabled(true)
+                        .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
+                        .build();
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
+        CompletableFuture<Void> result =
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
+
+        // verify
+        assertNull(result.get());
+        verify(channel).connect(eq(expectedProtobufConnectionRequest));
+    }
+
+    @SneakyThrows
+    @Test
+    public void connection_request_protobuf_generation_use_insecure_tls() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                        .useTLS(true)
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
+                                        .build())
+                        .build();
+        ConnectionRequest expectedProtobufConnectionRequest =
+                ConnectionRequest.newBuilder()
+                        .setTlsMode(TlsMode.InsecureTls)
+                        .setClusterModeEnabled(true)
+                        .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
+                        .build();
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
+        CompletableFuture<Void> result =
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
+
+        // verify
+        assertNull(result.get());
+        verify(channel).connect(eq(expectedProtobufConnectionRequest));
+    }
+
+    @SneakyThrows
+    @Test
+    public void connection_request_use_insecure_tls_throws_when_no_tls() {
+        // setup
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder()
+                        .useTLS(false)
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
+                                        .build())
+                        .build();
+
+        // verify
+        Exception ex =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> connectionManager.connectToValkey(glideClusterClientConfiguration));
+        assertEquals("`useInsecureTlS` cannot be enabled when  `useTLS` is disabled.", ex.getMessage());
     }
 
     private ConnectionRequestOuterClass.ReadFrom mapReadFrom(ReadFrom readFrom) {
