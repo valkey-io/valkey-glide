@@ -12,6 +12,7 @@ import "C"
 import (
 	"crypto/rand"
 	"fmt"
+	"log"
 	"math/big"
 	"unsafe"
 )
@@ -133,8 +134,13 @@ func (o *OpenTelemetry) GetSamplePercentage() int32 {
 // Uses the configured sample percentage to randomly decide whether to create a span for this request.
 func (o *OpenTelemetry) ShouldSample() bool {
 	percentage := o.GetSamplePercentage()
+	if !o.IsInitialized() || percentage <= 0 {
+		return false
+	}
+
 	currentRandom, err := rand.Int(rand.Reader, big.NewInt(100))
 	if err != nil {
+		log.Printf("Not sampling otel span due to failure to generate random number: %v", err)
 		return false
 	}
 	return o.IsInitialized() && percentage > 0 && float32(currentRandom.Int64()) < float32(percentage)

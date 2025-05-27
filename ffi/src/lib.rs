@@ -1862,8 +1862,14 @@ pub struct OpenTelemetryMetricsConfig {
     pub endpoint: *const c_char,
 }
 
+/// Initializes OpenTelemetry with the given configuration.
+///
+/// # Safety
+/// * `open_telemetry_config` and its underlying traces and metrics pointers must be valid until the function returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> *const c_char {
+pub unsafe extern "C" fn init_open_telemetry(
+    open_telemetry_config: OpenTelemetryConfig,
+) -> *const c_char {
     // At least one of traces or metrics must be provided
     if !open_telemetry_config.has_traces && !open_telemetry_config.has_metrics {
         let error_msg =
@@ -1933,21 +1939,29 @@ pub extern "C" fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig
     config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
 
     // Initialize OpenTelemetry synchronously
-    match ensure_tokio_runtime().block_on(async { GlideOpenTelemetry::initialise(config.build()) })
-    {
-        Ok(_) => std::ptr::null(), // Success
-        Err(e) => {
-            let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
-            CString::new(error_msg)
-                .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
-                .into_raw()
+    match ensure_tokio_runtime() {
+        Ok(runtime) => {
+            match runtime.block_on(async { GlideOpenTelemetry::initialise(config.build()) }) {
+                Ok(_) => std::ptr::null(), // Success
+                Err(e) => {
+                    let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                    CString::new(error_msg)
+                        .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+                        .into_raw()
+                }
+            }
         }
+        Err(e) => CString::new(e)
+            .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+            .into_raw(),
     }
 }
 
-fn ensure_tokio_runtime() -> &'static Runtime {
+fn ensure_tokio_runtime() -> Result<&'static Runtime, String> {
     static TOKIO: OnceLock<Runtime> = OnceLock::new();
-    TOKIO.get_or_init(|| Runtime::new().expect("Failed to create Tokio runtime"))
+    Ok(TOKIO.get_or_init(|| {
+        Runtime::new().unwrap_or_else(|err| panic!("Failed to create Tokio runtime: {}", err))
+    }))
 }
 
 /// This function converts a raw pointer to a GlideSpan into a safe Rust reference.
