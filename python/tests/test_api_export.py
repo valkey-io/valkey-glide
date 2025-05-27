@@ -29,12 +29,13 @@ excluded_symbol_list = [
     "T",  # TypeVar
     "TRequest",  # Union
     # python/python/glide/glide_client.py
-    "get_request_error_class",  # FunctionDef
     "_CompatFuture",  # ClassDef
     "_get_new_future_instance",  # FunctionDef
     "BaseClient",  # ClassDef
     # python/python/glide/sync/glide_client.py
     "FFIClientTypeEnum",  # ClassDef
+    # python/python/glide/exceptions.py
+    "get_request_error_class",  # FunctionDef
     # python/python/glide/routes.py
     "to_protobuf_slot_type",  # FunctionDef
     "set_protobuf_route",  # FunctionDef

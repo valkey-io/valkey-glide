@@ -12,8 +12,7 @@ from glide.commands.sync_commands.core import CoreCommands
 from glide.commands.sync_commands.standalone_commands import StandaloneCommands
 from glide.config import BaseClientConfiguration, GlideClusterClientConfiguration
 from glide.constants import OK, TEncodable, TResult
-from glide.exceptions import ClosingError, RequestError
-from glide.glide_client import get_request_error_class
+from glide.exceptions import ClosingError, RequestError, get_request_error_class
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route, build_protobuf_route
 
@@ -41,14 +40,14 @@ class BaseClient(CoreCommands):
         """
         To create a new client, use the `create` classmethod
         """
-        self.config: BaseClientConfiguration = config
+        self._config: BaseClientConfiguration = config
         self._is_closed: bool = False
 
     @classmethod
     def create(cls, config: BaseClientConfiguration) -> Self:
         self = cls(config)
         self._init_ffi()
-        self.config = config
+        self._config = config
         self._is_closed = False
 
         os.register_at_fork(after_in_child=self._create_core_client)
@@ -62,42 +61,42 @@ class BaseClient(CoreCommands):
             cluster_mode=type(self.config) is GlideClusterClientConfiguration
         )
         conn_req_bytes = conn_req.SerializeToString()
-        client_type = self.ffi.new(
+        client_type = self._ffi.new(
             "ClientType*",
             {
-                "_type": self.ffi.cast("ClientTypeEnum", FFIClientTypeEnum.Sync),
+                "_type": self._ffi.cast("ClientTypeEnum", FFIClientTypeEnum.Sync),
             },
         )
-        client_response_ptr = self.lib.create_client(
+        client_response_ptr = self._lib.create_client(
             conn_req_bytes, len(conn_req_bytes), client_type
         )
         # Handle the connection response
-        if client_response_ptr != self.ffi.NULL:
+        if client_response_ptr != self._ffi.NULL:
             client_response = self._try_ffi_cast(
                 "ConnectionResponse*", client_response_ptr
             )
-            if client_response.conn_ptr != self.ffi.NULL:
-                self.core_client = client_response.conn_ptr
+            if client_response.conn_ptr != self._ffi.NULL:
+                self._core_client = client_response.conn_ptr
             else:
                 error_message = (
-                    self.ffi.string(client_response.connection_error_message).decode(
+                    self._ffi.string(client_response.connection_error_message).decode(
                         ENCODING
                     )
-                    if client_response.connection_error_message != self.ffi.NULL
+                    if client_response.connection_error_message != self._ffi.NULL
                     else "Unknown error"
                 )
                 raise ClosingError(error_message)
 
             # Free the connection response to avoid memory leaks
-            self.lib.free_connection_response(client_response_ptr)
+            self._lib.free_connection_response(client_response_ptr)
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
 
     def _init_ffi(self):
-        self.ffi = FFI()
+        self._ffi = FFI()
 
         # Define the CommandResponse struct and related types
-        self.ffi.cdef(
+        self._ffi.cdef(
             """
             struct CommandResponse {
                 int response_type;
@@ -188,16 +187,16 @@ class BaseClient(CoreCommands):
         )
 
         # Load the shared library (adjust the path to your compiled Rust library)
-        self.lib = self.ffi.dlopen(str(LIB_FILE.resolve()))
+        self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
 
     def _handle_response(self, message):
-        if message == self.ffi.NULL:
+        if message == self._ffi.NULL:
             raise RequestError("Received NULL message.")
 
-        message_type = self.ffi.typeof(message).cname
+        message_type = self._ffi.typeof(message).cname
         if message_type == "CommandResponse *":
             message = message[0]
-            message_type = self.ffi.typeof(message).cname
+            message_type = self._ffi.typeof(message).cname
 
         if message_type != "CommandResponse":
             raise RequestError(f"Unexpected message type = {message_type}")
@@ -238,7 +237,7 @@ class BaseClient(CoreCommands):
 
     def _handle_string_response(self, msg):
         try:
-            return self.ffi.buffer(msg.string_value, msg.string_value_len)[:]
+            return self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
         except Exception as e:
             raise RequestError(f"Error decoding string value: {e}")
 
@@ -273,7 +272,7 @@ class BaseClient(CoreCommands):
 
     def _try_ffi_cast(self, type, source):
         try:
-            return self.ffi.cast(type, source)
+            return self._ffi.cast(type, source)
         except Exception as e:
             raise ClosingError(f"FFI casting failed: {e}")
 
@@ -298,26 +297,26 @@ class BaseClient(CoreCommands):
             # Use ffi.from_buffer for zero-copy conversion
             buffers.append(arg_bytes)  # Keep the byte buffer alive
             c_strings.append(
-                self._try_ffi_cast("size_t", self.ffi.from_buffer(arg_bytes))
+                self._try_ffi_cast("size_t", self._ffi.from_buffer(arg_bytes))
             )
             string_lengths.append(len(arg_bytes))
         # Return C-compatible arrays and keep buffers alive
         return (
-            self.ffi.new("size_t[]", c_strings),
-            self.ffi.new("unsigned long[]", string_lengths),
+            self._ffi.new("size_t[]", c_strings),
+            self._ffi.new("unsigned long[]", string_lengths),
             buffers,  # Ensure buffers stay alive
         )
 
     def _handle_cmd_result(self, command_result):
         try:
-            if command_result == self.ffi.NULL:
+            if command_result == self._ffi.NULL:
                 raise ClosingError("Internal error: Received NULL as a command result")
-            if command_result.command_error != self.ffi.NULL:
+            if command_result.command_error != self._ffi.NULL:
                 # Handle the error case
                 error = self._try_ffi_cast(
                     "CommandError*", command_result.command_error
                 )
-                error_message = self.ffi.string(error.command_error_message).decode(
+                error_message = self._ffi.string(error.command_error_message).decode(
                     ENCODING
                 )
                 error_class = get_request_error_class(error.command_error_type)
@@ -327,7 +326,7 @@ class BaseClient(CoreCommands):
                 return self._handle_response(command_result.response)
                 # Free the error message to avoid memory leaks
         finally:
-            self.lib.free_command_result(command_result)
+            self._lib.free_command_result(command_result)
 
     def _execute_command(
         self,
@@ -339,8 +338,8 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        client_adapter_ptr = self.core_client
-        if client_adapter_ptr == self.ffi.NULL:
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
         # Convert the arguments to C-compatible pointers
@@ -349,12 +348,12 @@ class BaseClient(CoreCommands):
         proto_route = build_protobuf_route(route)
         if proto_route:
             route_bytes = proto_route.SerializeToString()
-            route_ptr = self.ffi.from_buffer(route_bytes)
+            route_ptr = self._ffi.from_buffer(route_bytes)
         else:
             route_bytes = b""
-            route_ptr = self.ffi.NULL
+            route_ptr = self._ffi.NULL
 
-        result = self.lib.command(
+        result = self._lib.command(
             client_adapter_ptr,  # Client pointer
             1,  # Example channel (adjust as needed)
             request_type,  # Request type (e.g., GET or SET)
@@ -368,8 +367,8 @@ class BaseClient(CoreCommands):
 
     def close(self):
         if not self._is_closed:
-            self.lib.close_client(self.core_client)
-            self.core_client = self.ffi.NULL
+            self._lib.close_client(self._core_client)
+            self._core_client = self._ffi.NULL
             self._is_closed = True
 
 

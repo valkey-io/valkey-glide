@@ -11,7 +11,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     Union,
     cast,
 )
@@ -31,15 +30,13 @@ from glide.exceptions import (
     ClosingError,
     ConfigurationError,
     ConnectionError,
-    ExecAbortError,
-    RequestError,
-    TimeoutError,
+    get_request_error_class,
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
 from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.response_pb2 import RequestErrorType, Response
+from glide.protobuf.response_pb2 import Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
 
@@ -65,20 +62,6 @@ if TYPE_CHECKING:
 
     TTask = Union[asyncio.Task[None], trio.lowlevel.Task]
     TFuture = Union[asyncio.Future[Any], "_CompatFuture"]
-
-
-def get_request_error_class(
-    error_type: Optional[RequestErrorType.ValueType],
-) -> Type[RequestError]:
-    if error_type == RequestErrorType.Disconnect:
-        return ConnectionError
-    if error_type == RequestErrorType.ExecAbort:
-        return ExecAbortError
-    if error_type == RequestErrorType.Timeout:
-        return TimeoutError
-    if error_type == RequestErrorType.Unspecified:
-        return RequestError
-    return RequestError
 
 
 class _CompatFuture:
