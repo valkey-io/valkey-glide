@@ -25,12 +25,14 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
@@ -400,6 +402,12 @@ func (client *baseClient) executeBatch(
 		return nil, ctx.Err()
 	default:
 		// Continue with execution
+	}
+	if len(batch.Errors) > 0 {
+		return nil, &errors.RequestError{
+			Msg: fmt.Sprintf("There were %d errors while preparing commands in this batch: %s",
+				len(batch.Errors), strings.Join(batch.Errors, ", ")),
+		}
 	}
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
@@ -1615,7 +1623,9 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
-//	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
@@ -1643,7 +1653,9 @@ func (client *baseClient) HScan(ctx context.Context, key string, cursor string) 
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
-//	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The [options.HashScanOptions].
 //
 // Return value:
@@ -2369,6 +2381,7 @@ func (client *baseClient) SPop(ctx context.Context, key string) (models.Result[s
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
+//	members - The members to check.
 //
 // Return value:
 //
@@ -2412,8 +2425,6 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 
 // Iterates incrementally over a set.
 //
-// Note: When in cluster mode, all keys must map to the same hash slot.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -2440,8 +2451,6 @@ func (client *baseClient) SScan(ctx context.Context, key string, cursor string) 
 }
 
 // Iterates incrementally over a set.
-//
-// Note: When in cluster mode, all keys must map to the same hash slot.
 //
 // See [valkey.io] for details.
 //
@@ -2816,7 +2825,7 @@ func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs 
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx      - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the tail of the list stored at key.
 //
@@ -2841,7 +2850,7 @@ func (client *baseClient) RPushX(ctx context.Context, key string, elements []str
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx      - The context for controlling the command execution.
 //	key      - The key of the list.
 //	elements - The elements to insert at the head of the list stored at key.
 //
@@ -2873,7 +2882,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //
@@ -2913,6 +2922,10 @@ func (client *baseClient) LMPop(
 
 // Pops one or more elements from the first non-empty list from the provided keys.
 //
+// Note:
+//
+//	When in cluster mode, `keys` must map to the same hash slot.
+//
 // Since:
 //
 //	Valkey 7.0 and above.
@@ -2921,7 +2934,7 @@ func (client *baseClient) LMPop(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
@@ -2976,7 +2989,7 @@ func (client *baseClient) LMPopCount(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
@@ -2984,7 +2997,7 @@ func (client *baseClient) LMPopCount(
 // Return value:
 //
 //	A map of key name mapped array of popped element.
-//	If no member could be popped and the timeout expired, returns nil.
+//	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3032,18 +3045,18 @@ func (client *baseClient) BLMPop(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
+//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
 //
 // indefinitely.
 //
 // Return value:
 //
 //	A map of key name mapped array of popped element.
-//	If no member could be popped and the timeout expired, returns nil.
+//	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3078,15 +3091,15 @@ func (client *baseClient) BLMPopCount(
 }
 
 // Sets the list element at index to element.
-// The index is zero-based, so 0 means the first element,1 the second element and so on. Negative indices can be used to
-// designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so
+// The index is zero-based, so `0` means the first element, `1` the second element and so on. Negative indices can be used to
+// designate elements starting at the tail of the list. Here, `-1` means the last element, `-2` means the penultimate and so
 // forth.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx     - The context for controlling the command execution.
 //	key     - The key of the list.
 //	index   - The index of the element in the list to be set.
 //	element - The element to be set.
@@ -3105,14 +3118,14 @@ func (client *baseClient) LSet(ctx context.Context, key string, index int64, ele
 	return handleOkResponse(result)
 }
 
-// Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
-// the element at the first/last element of the list stored at destination depending on whereTo.
+// Atomically pops and removes the left/right-most element to the list stored at source depending on `whereFrom`, and pushes
+// the element at the first/last element of the list stored at destination depending on `whereTo`.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
@@ -3150,7 +3163,7 @@ func (client *baseClient) LMove(
 // Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
 // depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
 // wherefrom.
-// BLMove is the blocking variant of [glide.LMove].
+// BLMove is the blocking variant of [LMove].
 //
 // Note:
 //   - When in cluster mode, all source and destination must map to the same hash slot.
@@ -3164,12 +3177,12 @@ func (client *baseClient) LMove(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
@@ -3217,6 +3230,8 @@ func (client *baseClient) BLMove(
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
@@ -3236,7 +3251,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 	return handleIntResponse(result)
 }
 
-// Exists returns the number of keys that exist in the database
+// Exists returns the number of keys that exist in the database.
 //
 // Note:
 //
@@ -3246,6 +3261,8 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 //	call will return the first encountered error, even though some requests may have succeeded
 //	while others did not. If this behavior impacts your application logic, consider splitting
 //	the request into sub-requests per slot to ensure atomicity.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3272,6 +3289,8 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 // If seconds is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
@@ -3293,11 +3312,13 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 	return handleBoolResponse(result)
 }
 
-// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
+// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
 // If seconds is a non-positive number, the key will be deleted rather than expired.
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3336,7 +3357,9 @@ func (client *baseClient) ExpireWithOptions(
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
 // If seconds is a non-positive number, the key will be deleted rather than expired.
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3366,7 +3389,9 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
 // If seconds is a non-positive number, the key will be deleted rather than expired.
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3403,9 +3428,11 @@ func (client *baseClient) ExpireAtWithOptions(
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired
+// If milliseconds is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
-
+//
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
@@ -3428,8 +3455,10 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired
+// If milliseconds is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3461,13 +3490,13 @@ func (client *baseClient) PExpireWithOptions(
 	return handleBoolResponse(result)
 }
 
-// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
-// January 1, 1970) instead of specifying the number of milliseconds.
-// A timestamp in the past will delete the key immediately. After the timeout has
-// expired, the key will automatically be deleted
-// If key already has an existing expire set, the time to live is
-// updated to the new value/
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of
+// specifying the number of milliseconds. A timestamp in the past will delete the key immediately.
+// After the timeout has expired, the key will automatically be deleted.
+// If key already has an existing expire set, the time to live is updated to the new value.
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3489,12 +3518,13 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 	return handleBoolResponse(result)
 }
 
-// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
-// January 1, 1970) instead of specifying the number of milliseconds.
-// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
-// deleted.
+// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of
+// specifying the number of milliseconds. A timestamp in the past will delete the key immediately.
+// After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// The timeout will only be cleared by commands that delete or overwrite the contents of key
+// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3531,6 +3561,8 @@ func (client *baseClient) PExpireAtWithOptions(
 
 // Expire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
 // will expire, in seconds.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3706,7 +3738,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
-// This command, similar to Del However, this command does not block the server
+// This command, similar to [Del], however, this command does not block the server.
 //
 // Note:
 //
@@ -3737,16 +3769,16 @@ func (client *baseClient) Unlink(ctx context.Context, keys []string) (int64, err
 }
 
 // Type returns the string representation of the type of the value stored at key.
-// The different types that can be returned are: string, list, set, zset, hash and stream.
+// The different types that can be returned are: `"string"`, `"list"`, `"set"`, `"zset"`, `"hash"` and `"stream"`.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	key - string
+//	key - The `key` to check its data type.
 //
 // Return value:
 //
-//	If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+//	If the `key` exists, the type of the stored value is returned. Otherwise, a `"none"` string is returned.
 //
 // [valkey.io]: https://valkey.io/commands/type/
 func (client *baseClient) Type(ctx context.Context, key string) (string, error) {
@@ -3953,7 +3985,7 @@ func (client *baseClient) XReadWithOptions(
 	keysAndIds map[string]string,
 	opts options.XReadOptions,
 ) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs(make([]string, 0, 5+2*len(keysAndIds)), keysAndIds, &opts)
+	args, err := internal.CreateStreamCommandArgs(make([]string, 0, 5+2*len(keysAndIds)), keysAndIds, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -4025,7 +4057,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	keysAndIds map[string]string,
 	opts options.XReadGroupOptions,
 ) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs([]string{constants.GroupKeyword, group, consumer}, keysAndIds, &opts)
+	args, err := internal.CreateStreamCommandArgs([]string{constants.GroupKeyword, group, consumer}, keysAndIds, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -4036,30 +4068,6 @@ func (client *baseClient) XReadGroupWithOptions(
 	}
 
 	return handleXReadGroupResponse(result)
-}
-
-// Combine `args` with `keysAndIds` and `options` into arguments for a stream command
-func createStreamCommandArgs(
-	args []string,
-	keysAndIds map[string]string,
-	opts interface{ ToArgs() ([]string, error) },
-) ([]string, error) {
-	optionArgs, err := opts.ToArgs()
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, optionArgs...)
-	// Note: this loop iterates in an indeterminate order, but it is OK for that case
-	keys := make([]string, 0, len(keysAndIds))
-	values := make([]string, 0, len(keysAndIds))
-	for key := range keysAndIds {
-		keys = append(keys, key)
-		values = append(values, keysAndIds[key])
-	}
-	args = append(args, constants.StreamsKeyword)
-	args = append(args, keys...)
-	args = append(args, values...)
-	return args, nil
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
@@ -4445,7 +4453,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
-// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
@@ -4461,7 +4469,7 @@ func (client *baseClient) BZPopMin(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [baseClient.ZMPop].
+// BZMPop is the blocking variant of [ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4475,7 +4483,7 @@ func (client *baseClient) BZPopMin(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
@@ -4523,7 +4531,7 @@ func (client *baseClient) BZMPop(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [baseClient.ZMPop].
+// BZMPop is the blocking variant of [ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -5210,6 +5218,8 @@ func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The options for the command. See [options.ZScanOptions] for details.
 //
 // Return value:
@@ -5724,7 +5734,7 @@ func (client *baseClient) ZRandMemberWithCountWithScores(
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx     - The context for controlling the command execution.
 //	key     - The key of the sorted set.
 //	members - A list of members in the sorted set.
 //
@@ -7511,7 +7521,7 @@ func (client *baseClient) ZMPopWithOptions(
 //
 // Return value:
 //
-//	 A `models.KeyWithArrayOfMembersAndScores` struct containing:
+//	A `models.KeyWithArrayOfMembersAndScores` struct containing:
 //	- The key from which the elements were popped.
 //	- An array of member-score pairs of the popped elements.
 //	  Returns `nil` if no member could be popped.
@@ -8942,6 +8952,12 @@ func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.
 
 // ScriptShow returns the original source code of a script in the script cache.
 //
+// Since:
+//
+//	Valkey 8.0.0
+//
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx  - The context for controlling the command execution.
@@ -8951,8 +8967,6 @@ func (client *baseClient) ScriptFlushWithMode(ctx context.Context, mode options.
 //
 //	The original source code of the script, if present in the cache.
 //	If the script is not found in the cache, an error is thrown.
-//
-// Since: Valkey 8.0.0
 //
 // [valkey.io]: https://valkey.io/commands/script-show
 func (client *baseClient) ScriptShow(ctx context.Context, sha1 string) (string, error) {

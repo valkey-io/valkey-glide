@@ -190,6 +190,7 @@ func (cbo ClusterBatchOptions) Convert() BatchOptions {
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
+	Errors   []string // errors processing command args, spotted while batch is filled
 }
 
 // BaseBatch is the base structure for both standalone and cluster batch implementations.
@@ -280,6 +281,12 @@ func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 	return b.self
 }
 
+func (b *BaseBatch[T]) addError(command string, err error) *T {
+	b.Errors = append(b.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
+		len(b.Commands)+len(b.Errors)+1, command, err))
+	return b.self
+}
+
 // Add a cmd to batch with type checker but without response type conversion
 func (b *BaseBatch[T]) addCmdAndTypeChecker(
 	request C.RequestType,
@@ -316,65 +323,6 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	}
 	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
 	return b.self
-}
-
-// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
-// including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed command.
-//
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
-//
-// This function should only be used for single-response commands. Commands that don't return complete response and awaits
-// (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
-// behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
-//
-// Parameters:
-//
-//	args - Arguments for the custom command.
-//
-// Command Response:
-//
-//	The returned value for the custom command.
-//
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (b *BaseBatch[T]) CustomCommand(args []string) *T {
-	return b.addCmd(C.CustomCommand, args)
-}
-
-// Get retrieves the value associated with the given key, or `nil` if no such key exists.
-//
-// For details see [valkey.io].
-//
-// Parameters:
-//
-//	key - The key to retrieve from the database.
-//
-// Command Response:
-//
-//	If key exists, returns the value of key.
-//	Otherwise, returns `nil`.
-//
-// [valkey.io]: https://valkey.io/commands/get/
-func (b *BaseBatch[T]) Get(key string) *T {
-	return b.addCmdAndTypeChecker(C.Get, []string{key}, reflect.String, true)
-}
-
-// Set sets the given key with the given value.
-//
-// For details see [valkey.io].
-//
-// Parameters:
-//
-//	key - The key to store.
-//	value - The value to store with the given key.
-//
-// Command Response:
-//
-//	If the value is successfully set, returns OK.
-//
-// [valkey.io]: https://valkey.io/commands/set/
-func (b *BaseBatch[T]) Set(key string, value string) *T {
-	return b.addCmdAndTypeChecker(C.Set, []string{key, value}, reflect.String, false)
 }
 
 // Select changes the currently selected database.
