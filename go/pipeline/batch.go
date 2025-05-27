@@ -492,3 +492,223 @@ func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBa
 func (b *ClusterBatch) PubSubShardNumSub(channels ...string) *ClusterBatch {
 	return b.addCmdAndTypeChecker(C.PubSubShardNumSub, channels, reflect.Map, false)
 }
+
+// ==========================
+// Bitmap Commands
+// ==========================
+
+// Sets or clears the bit at offset in the string value stored at key.
+// The offset is a zero-based index, with `0` being the first element of
+// the list, `1` being the next element, and so on. The offset must be
+// less than `2^32` and greater than or equal to `0` If a key is
+// non-existent then the bit at offset is set to value and the preceding
+// bits are set to `0`.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	offset - The index of the bit to be set.
+//	value - The bit value to set at offset The value must be `0` or `1`.
+//
+// Command Response:
+//
+//	The bit value that was previously stored at offset.
+//
+// [valkey.io]: https://valkey.io/commands/setbit/
+func (b *BaseBatch[T]) SetBit(key string, offset int64, value int64) *T {
+	return b.addCmdAndTypeChecker(
+		C.SetBit,
+		[]string{key, utils.IntToString(offset), utils.IntToString(value)},
+		reflect.Int64,
+		false,
+	)
+}
+
+// Returns the bit value at offset in the string value stored at key.
+//
+//	offset should be greater than or equal to zero.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	offset - The index of the bit to return.
+//
+// Command Response:
+//
+//	The bit at offset of the string. Returns zero if the key is empty or if the positive
+//	offset exceeds the length of the string.
+//
+// [valkey.io]: https://valkey.io/commands/getbit/
+func (b *BaseBatch[T]) GetBit(key string, offset int64) *T {
+	return b.addCmdAndTypeChecker(C.GetBit, []string{key, utils.IntToString(offset)}, reflect.Int64, false)
+}
+
+// Counts the number of set bits (population counting) in a string stored at key.
+//
+// Parameters:
+//
+//	key - The key for the string to count the set bits of.
+//
+// Command Response:
+//
+//	The number of set bits in the string. Returns zero if the key is missing as it is
+//	treated as an empty string.
+//
+// [valkey.io]: https://valkey.io/commands/bitcount/
+func (b *BaseBatch[T]) BitCount(key string) *T {
+	return b.addCmdAndTypeChecker(C.BitCount, []string{key}, reflect.Int64, false)
+}
+
+// Counts the number of set bits (population counting) in a string stored at key. The
+// offsets start and end are zero-based indexes, with `0` being the first element of the
+// list, `1` being the next element and so on. These offsets can also be negative numbers
+// indicating offsets starting at the end of the list, with `-1` being the last element
+// of the list, `-2` being the penultimate, and so on.
+//
+// Parameters:
+//
+//	key - The key for the string to count the set bits of.
+//	options - The offset options - see [options.BitOffsetOptions].
+//
+// Command Response:
+//
+//	The number of set bits in the string interval specified by start, end, and options.
+//	Returns zero if the key is missing as it is treated as an empty string.
+//
+// [valkey.io]: https://valkey.io/commands/bitcount/
+func (b *BaseBatch[T]) BitCountWithOptions(key string, options options.BitCountOptions) *T {
+	optArgs, _ := options.ToArgs()
+	return b.addCmdAndTypeChecker(C.BitCount, append([]string{key}, optArgs...), reflect.Int64, false)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//
+// Command Response:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (b *BaseBatch[T]) BitPos(key string, bit int64) *T {
+	return b.addCmdAndTypeChecker(C.BitPos, []string{key, utils.IntToString(bit)}, reflect.Int64, false)
+}
+
+// Returns the position of the first bit matching the given bit value.
+//
+// Parameters:
+//
+//	key - The key of the string.
+//	bit - The bit value to match. The value must be 0 or 1.
+//	bitposOptions  - The [BitPosOptions] type.
+//
+// Command Response:
+//
+//	The position of the first occurrence matching bit in the binary value of
+//	the string held at key. If bit is not found, a -1 is returned.
+//
+// [valkey.io]: https://valkey.io/commands/bitpos/
+func (b *BaseBatch[T]) BitPosWithOptions(key string, bit int64, options options.BitPosOptions) *T {
+	optArgs, _ := options.ToArgs()
+	return b.addCmdAndTypeChecker(C.BitPos, append([]string{key, utils.IntToString(bit)}, optArgs...), reflect.Int64, false)
+}
+
+// Reads or modifies the array of bits representing the string that is held at key
+// based on the specified sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The subCommands to be performed on the binary value of the string at
+//	                key, which could be any of the following:
+//	                  - [BitFieldGet].
+//	                  - [BitFieldSet].
+//	                  - [BitFieldIncrby].
+//	                  - [BitFieldOverflow].
+//		            Use `options.NewBitFieldGet()` to specify a  BitField GET command.
+//		            Use `options.NewBitFieldSet()` to specify a BitField SET command.
+//		            Use `options.NewBitFieldIncrby()` to specify a BitField INCRYBY command.
+//		            Use `options.BitFieldOverflow()` to specify a BitField OVERFLOW command.
+//
+// Command Response:
+//
+//	Result from the executed subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//	  - BitFieldSet returns the previous value before setting the new value in the binary representation.
+//	  - BitFieldIncrBy returns the updated value after increasing or decreasing the bits.
+//	  - BitFieldOverflow controls the behavior of subsequent operations and returns
+//	    a result based on the specified overflow type (WRAP, SAT, FAIL).
+//
+// [valkey.io]: https://valkey.io/commands/bitfield/
+func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCommands) *T {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range subCommands {
+		cmdArgs, _ := cmd.ToArgs()
+		args = append(args, cmdArgs...)
+	}
+	// TODO: fix to use an expected type?
+	return b.addCmd(C.BitField, args)
+}
+
+// Reads the array of bits representing the string that is held at key
+// based on the specified  sub commands.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key          -  The key of the string.
+//	subCommands  -  The read-only subCommands to be performed on the binary value
+//	                of the string at key, which could be:
+//	                  - [BitFieldGet].
+//		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
+//
+// Command Response:
+//
+//	Result from the executed GET subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
+//
+// [valkey.io]: https://valkey.io/commands/bitfield_ro/
+func (b *BaseBatch[T]) BitFieldRO(key string, commands []options.BitFieldROCommands) *T {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+
+	for _, cmd := range commands {
+		cmdArgs, _ := cmd.ToArgs()
+		args = append(args, cmdArgs...)
+	}
+
+	// TODO: fix to use an expected type?
+	return b.addCmd(C.BitFieldReadOnly, args)
+}
+
+// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+//
+// Note:
+//
+// When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+//
+// Parameters:
+//
+//	bitwiseOperation - The bitwise operation to perform.
+//	destination      - The key that will store the resulting string.
+//	keys             - The list of keys to perform the bitwise operation on.
+//
+// Command Response:
+//
+//	The size of the string stored in destination.
+//
+// [valkey.io]: https://valkey.io/commands/bitop/
+func (b *BaseBatch[T]) BitOp(bitwiseOperation options.BitOpType, destination string, keys []string) *T {
+	bitOp, _ := options.NewBitOp(bitwiseOperation, destination, keys)
+	args, _ := bitOp.ToArgs()
+	return b.addCmdAndTypeChecker(C.BitOp, args, reflect.Int64, false)
+}
