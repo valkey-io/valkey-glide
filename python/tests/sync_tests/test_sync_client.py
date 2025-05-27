@@ -384,12 +384,14 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_fork(self, glide_sync_client: TGlideClient):
+        parent_pid = os.getpid()
         try:
             pid = os.fork()
         except OSError as e:
             pytest.fail(f"Fork failed: {e}")
 
-        if pid == 0:
+        current_pid = os.getpid()
+        if current_pid != parent_pid:
             # Child process
             glide_sync_client.set("key", "value")
             assert glide_sync_client.get("key") == "value".encode()

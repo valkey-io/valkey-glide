@@ -51,16 +51,13 @@ class BaseClient(CoreCommands):
         self.config = config
         self._is_closed = False
 
-        os.register_at_fork(after_in_child=self._reset_client_connection)
+        os.register_at_fork(after_in_child=self._create_core_client)
 
-        self._create_new_core_client()
+        self._create_core_client()
 
         return self
 
-    def _reset_client_connection(self):
-        self._create_new_core_client()
-
-    def _create_new_core_client(self):
+    def _create_core_client(self):
         conn_req = self.config._create_a_protobuf_conn_request(
             cluster_mode=type(self.config) is GlideClusterClientConfiguration
         )
