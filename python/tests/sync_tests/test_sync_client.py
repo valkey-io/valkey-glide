@@ -184,14 +184,14 @@ class TestGlideClients:
                 create_sync_client(
                     request,
                     is_cluster,
-                    addresses=glide_sync_client.config.addresses,
+                    addresses=glide_sync_client._config.addresses,
                 )
 
             auth_client = create_sync_client(
                 request,
                 is_cluster,
                 credentials,
-                addresses=glide_sync_client.config.addresses,
+                addresses=glide_sync_client._config.addresses,
             )
             key = get_random_string(10)
             assert auth_client.set(key, key) == OK
@@ -204,7 +204,7 @@ class TestGlideClients:
                 request,
                 is_cluster,
                 credentials,
-                addresses=glide_sync_client.config.addresses,
+                addresses=glide_sync_client._config.addresses,
             )
             auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
             auth_client.close()
@@ -244,7 +244,7 @@ class TestGlideClients:
                 request,
                 is_cluster,
                 credentials,
-                addresses=glide_sync_client.config.addresses,
+                addresses=glide_sync_client._config.addresses,
             )
             assert testuser_client.get(key) == key.encode()
             with pytest.raises(RequestError) as e:

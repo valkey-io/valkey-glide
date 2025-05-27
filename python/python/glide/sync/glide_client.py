@@ -11,8 +11,7 @@ from glide.commands.sync_commands.core import CoreCommands
 from glide.commands.sync_commands.standalone_commands import StandaloneCommands
 from glide.config import BaseClientConfiguration, GlideClusterClientConfiguration
 from glide.constants import OK, TEncodable, TResult
-from glide.exceptions import ClosingError, RequestError
-from glide.glide_client import get_request_error_class
+from glide.exceptions import ClosingError, RequestError, get_request_error_class
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route, build_protobuf_route
 
