@@ -696,6 +696,7 @@ func (b *ClusterBatch) PingWithOptions(pingOptions options.ClusterPingOptions) *
 	optionArgs, _ := pingOptions.ToArgs()
 	return b.addCmdAndTypeChecker(C.Ping, optionArgs, reflect.String, false)
 }
+
 // Pings the server.
 //
 // See [valkey.io] for details.
