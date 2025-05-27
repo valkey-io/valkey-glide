@@ -724,7 +724,7 @@ impl TestClusterContext {
                 })
                 .expect("No matching node found for the given slot")
         } else {
-            let index_of_random_node = rand::thread_rng().gen_range(0..slot_distribution.len());
+            let index_of_random_node = rand::rng().random_range(0..slot_distribution.len());
             distribution_clone
                 .get(index_of_random_node)
                 .expect("Slot distribution is empty")

@@ -54,7 +54,6 @@
 //!
 //! * `acl`: enables acl support (enabled by default)
 //! * `aio`: enables async IO support (enabled by default)
-//! * `geospatial`: enables geospatial support (enabled by default)
 //! * `script`: enables script support (enabled by default)
 //! * `r2d2`: enables r2d2 connection pool support (optional)
 //! * `ahash`: enables ahash map/set support & uses ahash internally (+7-10% performance) (optional)
@@ -404,10 +403,6 @@ pub use crate::commands::JsonCommands;
 
 #[cfg(all(feature = "json", feature = "aio"))]
 pub use crate::commands::JsonAsyncCommands;
-
-#[cfg(feature = "geospatial")]
-#[cfg_attr(docsrs, doc(cfg(feature = "geospatial")))]
-pub mod geo;
 
 #[cfg(feature = "cluster")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
