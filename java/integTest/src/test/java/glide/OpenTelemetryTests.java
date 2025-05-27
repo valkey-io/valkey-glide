@@ -4,8 +4,6 @@ package glide;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
@@ -23,12 +21,11 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-//@Timeout(30) // seconds
+// @Timeout(30) // seconds
 public class OpenTelemetryTests {
 
     private static final String VALID_ENDPOINT_TRACES = "/tmp/spans.json";
@@ -36,63 +33,61 @@ public class OpenTelemetryTests {
     private static final String VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
     private static GlideClusterClient client;
 
-//    /**
-//     * Reads and parses a span file, extracting span data and names.
-//     *
-//     * @param path - The path to the span file
-//     * @return An object containing the raw span data, array of spans, and array of span names
-//     * @throws Exception if the file cannot be read or parsed
-//     */
-//    private static SpanFileData readAndParseSpanFile(String path) throws Exception {
-//        String spanData = "";
-//        List<String> spans = new ArrayList<>();
-//        List<String> spanNames = new ArrayList<>();
-//        try {
-//            System.out.println("path====" + path);
-//            if(!Files.exists(Paths.get(path))){
-//                System.out.println("path not ------");
-//            }
-//            spanData = new String(Files.readAllBytes(Paths.get(path)));
-//            System.out.println("span data="+spanData);
-//
-//            spans =
-//                    spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
-//            System.out.println(spans);
-//
-//            // Check that we have spans
-//            if (spans.isEmpty()) {
-//                throw new Exception("No spans found in the span file");
-//            }
-//
-//
-//            // Parse and extract span names
-//            spanNames =
-//                    spans.stream()
-//                            .map(
-//                                    line -> {
-//                                        try {
-//                                            // Simple extraction of the "name" field from JSON
-//                                            int nameIndex = line.indexOf("\"name\":");
-//                                            if (nameIndex != -1) {
-//                                                int startQuote = line.indexOf("\"", nameIndex + 7);
-//                                                int endQuote = line.indexOf("\"", startQuote + 1);
-//                                                if (startQuote != -1 && endQuote != -1) {
-//                                                    return line.substring(startQuote + 1, endQuote);
-//                                                }
-//                                            }
-//                                            return null;
-//                                        } catch (Exception e) {
-//                                            return null;
-//                                        }
-//                                    })
-//                            .filter(name -> name != null)
-//                            .collect(Collectors.toList());
-//        } catch (Exception e) {
-//            throw e;
-//        }
-//
-//        return new SpanFileData(spanData, spans, spanNames);
-//    }
+    /**
+     * Reads and parses a span file, extracting span data and names.
+     *
+     * @param path - The path to the span file
+     * @return An object containing the raw span data, array of spans, and array of span names
+     * @throws Exception if the file cannot be read or parsed
+     */
+    private static SpanFileData readAndParseSpanFile(String path) throws Exception {
+        String spanData = "";
+        List<String> spans = new ArrayList<>();
+        List<String> spanNames = new ArrayList<>();
+        try {
+            System.out.println("path====" + path);
+            if (!Files.exists(Paths.get(path))) {
+                System.out.println("path not ------");
+            }
+            spanData = new String(Files.readAllBytes(Paths.get(path)));
+            System.out.println("span data=" + spanData);
+
+            spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
+            System.out.println(spans);
+
+            // Check that we have spans
+            if (spans.isEmpty()) {
+                throw new Exception("No spans found in the span file");
+            }
+
+            // Parse and extract span names
+            spanNames =
+                    spans.stream()
+                            .map(
+                                    line -> {
+                                        try {
+                                            // Simple extraction of the "name" field from JSON
+                                            int nameIndex = line.indexOf("\"name\":");
+                                            if (nameIndex != -1) {
+                                                int startQuote = line.indexOf("\"", nameIndex + 7);
+                                                int endQuote = line.indexOf("\"", startQuote + 1);
+                                                if (startQuote != -1 && endQuote != -1) {
+                                                    return line.substring(startQuote + 1, endQuote);
+                                                }
+                                            }
+                                            return null;
+                                        } catch (Exception e) {
+                                            return null;
+                                        }
+                                    })
+                            .filter(name -> name != null)
+                            .collect(Collectors.toList());
+        } catch (Exception e) {
+            throw e;
+        }
+
+        return new SpanFileData(spanData, spans, spanNames);
+    }
 
     private static class SpanFileData {
         final String spanData;
@@ -114,7 +109,7 @@ public class OpenTelemetryTests {
     @SneakyThrows
     public static void setup() {
         // Check wrong OpenTelemetry configurations before initializing
-//        wrongOpenTelemetryConfig();
+        //        wrongOpenTelemetryConfig();
 
         // Test that spans are not exported before initializing OpenTelemetry
         testSpanNotExportedBeforeInitOtel();
@@ -135,104 +130,114 @@ public class OpenTelemetryTests {
         System.out.println("------before each");
     }
 
-//    @Test
-//    @SneakyThrows
-//    public void wrongOpenTelemetryConfig() {
-//        // Wrong traces endpoint
-//        OpenTelemetryConfig wrongTracesConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
-//                        .build();
-//
-//        Exception exception =
-//                assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
-//        assertTrue(exception.getMessage().contains("Parse error"));
-//
-//        // Wrong metrics endpoint
-//        OpenTelemetryConfig wrongMetricsConfig =
-//                OpenTelemetryConfig.builder()
-//                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
-//        assertTrue(exception.getMessage().contains("Parse error"));
-//
-//        // Negative flush interval
-//        OpenTelemetryConfig negativeFlushConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(
-//                                OpenTelemetry.TracesConfig.builder()
-//                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-//                                        .samplePercentage(1)
-//                                        .build())
-//                        .flushIntervalMs(-400L)
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeFlushConfig));
-//        assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive integer"));
-//
-//        // Negative sample percentage
-//        OpenTelemetryConfig negativeSampleConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(
-//                                OpenTelemetry.TracesConfig.builder()
-//                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-//                                        .samplePercentage(-400)
-//                                        .build())
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeSampleConfig));
-//        assertTrue(
-//                exception
-//                        .getMessage()
-//                        .contains(
-//                                "InvalidInput: traces_sample_percentage must be a positive integer (got: -400)"));
-//
-//        // Wrong traces file path
-//        OpenTelemetryConfig wrongTracesPathConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(
-//                                OpenTelemetry.TracesConfig.builder()
-//                                        .endpoint("file:invalid-path/v1/traces.json")
-//                                        .build())
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesPathConfig));
-//        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-//
-//        // Wrong metrics file path
-//        OpenTelemetryConfig wrongMetricsPathConfig =
-//                OpenTelemetryConfig.builder()
-//                        .metrics(
-//                                OpenTelemetry.MetricsConfig.builder()
-//                                        .endpoint("file:invalid-path/v1/metrics.json")
-//                                        .build())
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsPathConfig));
-//        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-//
-//        // Wrong directory path
-//        OpenTelemetryConfig wrongDirPathConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(
-//                                OpenTelemetry.TracesConfig.builder()
-//                                        .endpoint("file:///no-exits-path/v1/traces.json")
-//                                        .build())
-//                        .build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
-//        assertTrue(
-//                exception.getMessage().contains("The directory does not exist or is not a directory"));
-//
-//        // No traces or metrics provided
-//        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
-//
-//        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
-//        assertTrue(
-//                exception.getMessage().contains("At least one of traces or metrics must be provided"));
-//        System.out.println("-------------Wrong config test");
-//    }
+    //    @Test
+    //    @SneakyThrows
+    //    public void wrongOpenTelemetryConfig() {
+    //        // Wrong traces endpoint
+    //        OpenTelemetryConfig wrongTracesConfig =
+    //                OpenTelemetryConfig.builder()
+    //
+    // .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
+    //                        .build();
+    //
+    //        Exception exception =
+    //                assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
+    //        assertTrue(exception.getMessage().contains("Parse error"));
+    //
+    //        // Wrong metrics endpoint
+    //        OpenTelemetryConfig wrongMetricsConfig =
+    //                OpenTelemetryConfig.builder()
+    //
+    // .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
+    //        assertTrue(exception.getMessage().contains("Parse error"));
+    //
+    //        // Negative flush interval
+    //        OpenTelemetryConfig negativeFlushConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .traces(
+    //                                OpenTelemetry.TracesConfig.builder()
+    //                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+    //                                        .samplePercentage(1)
+    //                                        .build())
+    //                        .flushIntervalMs(-400L)
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () ->
+    // OpenTelemetry.init(negativeFlushConfig));
+    //        assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive
+    // integer"));
+    //
+    //        // Negative sample percentage
+    //        OpenTelemetryConfig negativeSampleConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .traces(
+    //                                OpenTelemetry.TracesConfig.builder()
+    //                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+    //                                        .samplePercentage(-400)
+    //                                        .build())
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () ->
+    // OpenTelemetry.init(negativeSampleConfig));
+    //        assertTrue(
+    //                exception
+    //                        .getMessage()
+    //                        .contains(
+    //                                "InvalidInput: traces_sample_percentage must be a positive
+    // integer (got: -400)"));
+    //
+    //        // Wrong traces file path
+    //        OpenTelemetryConfig wrongTracesPathConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .traces(
+    //                                OpenTelemetry.TracesConfig.builder()
+    //                                        .endpoint("file:invalid-path/v1/traces.json")
+    //                                        .build())
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () ->
+    // OpenTelemetry.init(wrongTracesPathConfig));
+    //        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
+    //
+    //        // Wrong metrics file path
+    //        OpenTelemetryConfig wrongMetricsPathConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .metrics(
+    //                                OpenTelemetry.MetricsConfig.builder()
+    //                                        .endpoint("file:invalid-path/v1/metrics.json")
+    //                                        .build())
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () ->
+    // OpenTelemetry.init(wrongMetricsPathConfig));
+    //        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
+    //
+    //        // Wrong directory path
+    //        OpenTelemetryConfig wrongDirPathConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .traces(
+    //                                OpenTelemetry.TracesConfig.builder()
+    //                                        .endpoint("file:///no-exits-path/v1/traces.json")
+    //                                        .build())
+    //                        .build();
+    //
+    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
+    //        assertTrue(
+    //                exception.getMessage().contains("The directory does not exist or is not a
+    // directory"));
+    //
+    //        // No traces or metrics provided
+    //        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
+    //
+    //        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
+    //        assertTrue(
+    //                exception.getMessage().contains("At least one of traces or metrics must be
+    // provided"));
+    //        System.out.println("-------------Wrong config test");
+    //    }
 
     @SneakyThrows
     private static void testSpanNotExportedBeforeInitOtel() {
@@ -240,9 +245,9 @@ public class OpenTelemetryTests {
         teardownOtelTest();
 
         // Create a client and execute a command
-        GlideClusterClient tempClient = GlideClusterClient.createClient(
-                    commonClusterClientConfig().requestTimeout(10000).build())
-                .get();
+        GlideClusterClient tempClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get();
 
         tempClient.get("testSpanNotExportedBeforeInitOtel").get();
 
@@ -282,297 +287,325 @@ public class OpenTelemetryTests {
         }
     }
 
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testSpanMemoryLeak(ProtocolVersion protocol) {
+    //        // Force garbage collection if available
+    //        System.gc();
+    //
+    //        long startMemory = Runtime.getRuntime().totalMemory() -
+    // Runtime.getRuntime().freeMemory();
+    //        System.out.println("hereeeeeeee");
+    //
+    //        client =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //        System.out.println("hereeeeeeee");
+    //
+    //        // Execute a series of commands sequentially
+    //        for (int i = 0; i < 100; i++) {
+    //            String key = "test_key_" + i;
+    //            client.set(key, "value_" + i).get();
+    //            client.get(key).get();
+    //            System.out.println("i="+i);
+    //        }
+    //
+    //        // Force GC and check memory
+    //        System.gc();
+    //        System.out.println("hereeeeeeee");
+    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    //
+    //        // Allow 10% growth
+    //        assertTrue(
+    //                endMemory < startMemory * 1.1,
+    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    //    }
+    //
+
+    // Works-------------------------
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testPercentageRequestsConfig(ProtocolVersion protocol) {
+    //        client =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                .get();
+    //
+    //        // Set sample percentage to 0%
+    //        OpenTelemetry.setSamplePercentage(0);
+    //        assertEquals(0, OpenTelemetry.getSamplePercentage());
+    //
+    //        // Wait for spans to be flushed and remove the file
+    //        Thread.sleep(500);
+    //        teardownOtelTest();
+    //
+    //        // Execute commands with 0% sampling
+    //        for (int i = 0; i < 100; i++) {
+    //            client.set("testPercentageRequestsConfig", "value").get();
+    //        }
+    //
+    //        Thread.sleep(500);
+    //        // Check that no spans were exported due to 0% sampling
+    //        assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
+    //    }
+
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
-    public void testSpanMemoryLeak(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
+    public void testPercentageRequestsConfig100Percent(ProtocolVersion protocol) {
 
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-        System.out.println("hereeeeeeee");
+        // Set sample percentage to 100%
+        OpenTelemetry.setSamplePercentage(100);
+        assertEquals(100, OpenTelemetry.getSamplePercentage());
 
-        client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get();
-        System.out.println("hereeeeeeee");
-
-        // Execute a series of commands sequentially
-        for (int i = 0; i < 100; i++) {
-            String key = "test_key_" + i;
-            client.set(key, "value_" + i).get();
+        // Execute a series of commands
+        for (int i = 0; i < 10; i++) {
+            System.out.println("set------" + i);
+            String key = "testPercentageRequestsConfig_" + i;
+            client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().requestTimeout(20000).protocol(protocol).build())
+                            .get();
             client.get(key).get();
-            System.out.println("i="+i);
         }
+        System.out.println("Before delay--------");
+        // Wait for spans to be flushed to file
+        Thread.sleep(5000);
 
-        // Force GC and check memory
-        System.gc();
-        System.out.println("hereeeeeeee");
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        // Read the span file and check span names
+        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
 
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+        assertTrue(spanData.spanNames.contains("Get"));
+        // Check that spans were exported exactly 10 times
+        assertEquals(10, spanData.spanNames.stream().filter(name -> name.equals("Get")).count());
     }
+    //
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
+    //        // Try to reinitialize with invalid config
+    //        OpenTelemetryConfig openTelemetryConfig =
+    //                OpenTelemetryConfig.builder()
+    //                        .traces(
+    //                                OpenTelemetry.TracesConfig.builder()
+    //                                        .endpoint("wrong.endpoint")
+    //                                        .samplePercentage(1)
+    //                                        .build())
+    //                        .build();
+    //
+    //        // This should not throw an error because init can only be called once per process
+    //        OpenTelemetry.init(openTelemetryConfig);
+    //
+    //        client =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //
+    //        client.set("testOtelGlobalConfig", "value").get();
+    //
+    //        Thread.sleep(500);
+    //
+    //        // Read the span file and check span name
+    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+    //
+    //        assertTrue(spanData.spanNames.contains("Set"));
+    //    }
+    //
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
+    //        // Force garbage collection if available
+    //        System.gc();
+    //
+    //        long startMemory = Runtime.getRuntime().totalMemory() -
+    // Runtime.getRuntime().freeMemory();
+    //
+    //        client =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //
+    //        ClusterBatch batch = new ClusterBatch(true);
+    //
+    //        batch.set("test_key", "foo");
+    //        batch.objectRefcount("test_key");
+    //
+    //        Object[] response = client.exec(batch, true).get();
+    //        assertNotNull(response);
+    //        assertEquals(2, response.length);
+    //        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
+    //        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
+    //
+    //        // Force GC and check memory
+    //        System.gc();
+    //
+    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    //
+    //        // Allow 10% growth
+    //        assertTrue(
+    //                endMemory < startMemory * 1.1,
+    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    //    }
+    //
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
+    //        GlideClusterClient client1 =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //
+    //        GlideClusterClient client2 =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //
+    //        client1.set("test_key", "value").get();
+    //        client2.get("test_key").get();
+    //
+    //        // Wait for spans to be flushed to file
+    //        Thread.sleep(5000);
+    //
+    //        // Read and check span names from the file
+    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+    //
+    //        // Check for expected span names
+    //        assertTrue(spanData.spanNames.contains("Get"));
+    //        assertTrue(spanData.spanNames.contains("Set"));
+    //
+    //        client1.close();
+    //        client2.close();
+    //    }
 
-//    @ParameterizedTest
-//    @MethodSource("getClients")
-//    @SneakyThrows
-//    public void testPercentageRequestsConfig(ProtocolVersion protocol) {
-//        client =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        // Set sample percentage to 0%
-//        OpenTelemetry.setSamplePercentage(0);
-//        assertEquals(0, OpenTelemetry.getSamplePercentage());
-//
-//        // Wait for spans to be flushed and remove the file
-//        Thread.sleep(500);
-//        teardownOtelTest();
-//
-//        // Execute commands with 0% sampling
-//        for (int i = 0; i < 100; i++) {
-//            client.set("testPercentageRequestsConfig", "value").get();
-//        }
-//
-//        Thread.sleep(500);
-//        // Check that no spans were exported due to 0% sampling
-//        assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
-//
-//        // Set sample percentage to 100%
-//        OpenTelemetry.setSamplePercentage(100);
-//
-//        // Execute a series of commands
-//        for (int i = 0; i < 10; i++) {
-//            String key = "testPercentageRequestsConfig_" + i;
-//            client.get(key).get();
-//        }
-//
-//        // Wait for spans to be flushed to file
-//        Thread.sleep(5000);
-//
-//        // Read the span file and check span names
-//        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-//
-//        assertTrue(spanData.spanNames.contains("Get"));
-//        // Check that spans were exported exactly 10 times
-//        assertEquals(10, spanData.spanNames.stream().filter(name -> name.equals("Get")).count());
-//    }
-//
-//    @ParameterizedTest
-//    @MethodSource("getClients")
-//    @SneakyThrows
-//    public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
-//        // Try to reinitialize with invalid config
-//        OpenTelemetryConfig openTelemetryConfig =
-//                OpenTelemetryConfig.builder()
-//                        .traces(
-//                                OpenTelemetry.TracesConfig.builder()
-//                                        .endpoint("wrong.endpoint")
-//                                        .samplePercentage(1)
-//                                        .build())
-//                        .build();
-//
-//        // This should not throw an error because init can only be called once per process
-//        OpenTelemetry.init(openTelemetryConfig);
-//
-//        client =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        client.set("testOtelGlobalConfig", "value").get();
-//
-//        Thread.sleep(500);
-//
-//        // Read the span file and check span name
-//        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-//
-//        assertTrue(spanData.spanNames.contains("Set"));
-//    }
-//
-//    @ParameterizedTest
-//    @MethodSource("getClients")
-//    @SneakyThrows
-//    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
-//        // Force garbage collection if available
-//        System.gc();
-//
-//        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        client =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        ClusterBatch batch = new ClusterBatch(true);
-//
-//        batch.set("test_key", "foo");
-//        batch.objectRefcount("test_key");
-//
-//        Object[] response = client.exec(batch, true).get();
-//        assertNotNull(response);
-//        assertEquals(2, response.length);
-//        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
-//        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
-//
-//        // Force GC and check memory
-//        System.gc();
-//
-//        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        // Allow 10% growth
-//        assertTrue(
-//                endMemory < startMemory * 1.1,
-//                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-//    }
-//
-//    @ParameterizedTest
-//    @MethodSource("getClients")
-//    @SneakyThrows
-//    public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
-//        GlideClusterClient client1 =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        GlideClusterClient client2 =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        client1.set("test_key", "value").get();
-//        client2.get("test_key").get();
-//
-//        // Wait for spans to be flushed to file
-//        Thread.sleep(5000);
-//
-//        // Read and check span names from the file
-//        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-//
-//        // Check for expected span names
-//        assertTrue(spanData.spanNames.contains("Get"));
-//        assertTrue(spanData.spanNames.contains("Set"));
-//
-//        client1.close();
-//        client2.close();
-//    }
-
-//    @ParameterizedTest
-//    @MethodSource("getClients")
-//    @SneakyThrows
-//    public void testSpanBatchFile(ProtocolVersion protocol) {
-//        // Force garbage collection if available
-//        System.gc();
-//
-//        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//        System.out.println("here====" + startMemory);
-//        client =
-//                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-//                        .get();
-//
-//        ClusterBatch batch = new ClusterBatch(true);
-//
-//        batch.set("test_key", "foo");
-//        batch.objectRefcount("test_key");
-////        System.out.println("here====2 " + startMemory);
-//        Object[] response = client.exec(batch, true).get();
-//        Thread.sleep(1000);
-//
-//        System.out.println("here====3");
-//        System.out.println(response[0].toString());
-//        System.out.println(response.length);
-//        assertNotNull(response);
-//        assertEquals(2, response.length);
-//        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
-//        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
-//        System.out.println("here====4 " + startMemory);
-//
-//        // Wait for spans to be flushed to file
-//        System.out.println("here====5 " + startMemory);
-//        // Read and check span names from the file
-//        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-//
-//        // Check for expected span names
-//        assertTrue(spanData.spanNames.contains("Batch"));
-//        assertTrue(spanData.spanNames.contains("send_batch"));
-//
-//        // Force GC and check memory
-//        System.gc();
-//
-//        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//        System.out.println("here====6 " + startMemory);
-//
-//        // Allow 10% growth
-//        assertTrue(
-//                endMemory < startMemory * 1.1,
-//                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-//    }
-//
-//    @Test
-//    @SneakyThrows
-//    public void testAutomaticSpanLifecycle() {
-//        // Force garbage collection if available
-//        System.gc();
-//
-//        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        client =
-//                GlideClusterClient.createClient(
-//                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-//                        .get();
-//
-//        // Execute multiple commands - each should automatically create and clean up its span
-//        client.set("test_key1", "value1").get();
-//        client.get("test_key1").get();
-//        client.set("test_key2", "value2").get();
-//        client.get("test_key2").get();
-//
-//        // Force GC again to clean up
-//        System.gc();
-//
-//        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        // Allow small fluctuations
-//        assertTrue(
-//                endMemory < startMemory * 1.1,
-//                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-//    }
-//
-//    @Test
-//    @SneakyThrows
-//    public void testConcurrentCommandsSpanLifecycle() {
-//        // Force garbage collection if available
-//        System.gc();
-//
-//        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        client =
-//                GlideClusterClient.createClient(
-//                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-//                        .get();
-//
-//        // Execute multiple concurrent commands
-//        List<java.util.concurrent.CompletableFuture<?>> commands =
-//                List.of(
-//                        client.set("test_key1", "value1"),
-//                        client.get("test_key1"),
-//                        client.set("test_key2", "value2"),
-//                        client.get("test_key2"),
-//                        client.set("test_key3", "value3"),
-//                        client.get("test_key3"));
-//
-//        // Wait for all commands to complete
-//        for (java.util.concurrent.CompletableFuture<?> command : commands) {
-//            command.get();
-//        }
-//
-//        // Force GC again to clean up
-//        System.gc();
-//
-//        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-//
-//        // Allow small fluctuations
-//        assertTrue(
-//                endMemory < startMemory * 1.1,
-//                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-//    }
+    //    @ParameterizedTest
+    //    @MethodSource("getClients")
+    //    @SneakyThrows
+    //    public void testSpanBatchFile(ProtocolVersion protocol) {
+    //        // Force garbage collection if available
+    //        System.gc();
+    //
+    //        long startMemory = Runtime.getRuntime().totalMemory() -
+    // Runtime.getRuntime().freeMemory();
+    //        System.out.println("here====" + startMemory);
+    //        client =
+    //
+    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+    //                        .get();
+    //
+    //        ClusterBatch batch = new ClusterBatch(true);
+    //
+    //        batch.set("test_key", "foo");
+    //        batch.objectRefcount("test_key");
+    ////        System.out.println("here====2 " + startMemory);
+    //        Object[] response = client.exec(batch, true).get();
+    //        Thread.sleep(1000);
+    //
+    //        System.out.println("here====3");
+    //        System.out.println(response[0].toString());
+    //        System.out.println(response.length);
+    //        assertNotNull(response);
+    //        assertEquals(2, response.length);
+    //        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
+    //        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
+    //        System.out.println("here====4 " + startMemory);
+    //
+    //        // Wait for spans to be flushed to file
+    //        System.out.println("here====5 " + startMemory);
+    //        // Read and check span names from the file
+    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+    //
+    //        // Check for expected span names
+    //        assertTrue(spanData.spanNames.contains("Batch"));
+    //        assertTrue(spanData.spanNames.contains("send_batch"));
+    //
+    //        // Force GC and check memory
+    //        System.gc();
+    //
+    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    //        System.out.println("here====6 " + startMemory);
+    //
+    //        // Allow 10% growth
+    //        assertTrue(
+    //                endMemory < startMemory * 1.1,
+    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    //    }
+    //
+    //    @Test
+    //    @SneakyThrows
+    //    public void testAutomaticSpanLifecycle() {
+    //        // Force garbage collection if available
+    //        System.gc();
+    //
+    //        long startMemory = Runtime.getRuntime().totalMemory() -
+    // Runtime.getRuntime().freeMemory();
+    //
+    //        client =
+    //                GlideClusterClient.createClient(
+    //
+    // commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
+    //                        .get();
+    //
+    //        // Execute multiple commands - each should automatically create and clean up its span
+    //        client.set("test_key1", "value1").get();
+    //        client.get("test_key1").get();
+    //        client.set("test_key2", "value2").get();
+    //        client.get("test_key2").get();
+    //
+    //        // Force GC again to clean up
+    //        System.gc();
+    //
+    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    //
+    //        // Allow small fluctuations
+    //        assertTrue(
+    //                endMemory < startMemory * 1.1,
+    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    //    }
+    //
+    //    @Test
+    //    @SneakyThrows
+    //    public void testConcurrentCommandsSpanLifecycle() {
+    //        // Force garbage collection if available
+    //        System.gc();
+    //
+    //        long startMemory = Runtime.getRuntime().totalMemory() -
+    // Runtime.getRuntime().freeMemory();
+    //
+    //        client =
+    //                GlideClusterClient.createClient(
+    //
+    // commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
+    //                        .get();
+    //
+    //        // Execute multiple concurrent commands
+    //        List<java.util.concurrent.CompletableFuture<?>> commands =
+    //                List.of(
+    //                        client.set("test_key1", "value1"),
+    //                        client.get("test_key1"),
+    //                        client.set("test_key2", "value2"),
+    //                        client.get("test_key2"),
+    //                        client.set("test_key3", "value3"),
+    //                        client.get("test_key3"));
+    //
+    //        // Wait for all commands to complete
+    //        for (java.util.concurrent.CompletableFuture<?> command : commands) {
+    //            command.get();
+    //        }
+    //
+    //        // Force GC again to clean up
+    //        System.gc();
+    //
+    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    //
+    //        // Allow small fluctuations
+    //        assertTrue(
+    //                endMemory < startMemory * 1.1,
+    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    //    }
 }

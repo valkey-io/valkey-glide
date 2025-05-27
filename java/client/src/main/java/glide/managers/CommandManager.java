@@ -595,7 +595,7 @@ public class CommandManager {
                 System.out.println("Open telemetry not initialized");
             }
         } catch (Exception e) {
-            System.out.println("exception in prepare command="+e.getMessage());
+            System.out.println("exception in prepare command=" + e.getMessage());
         }
 
         CommandRequest.Builder builder =
