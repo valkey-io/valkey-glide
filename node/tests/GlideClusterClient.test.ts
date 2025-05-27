@@ -2738,4 +2738,58 @@ describe("GlideClusterClient", () => {
             },
         );
     });
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should defer physical TCP connections until first command_%p",
+        async (protocol) => {
+            // PART 1: Demonstrate that lazy connections don't establish TCP connections on creation
+            const nonExistentHost = "non-existent-host-1234";
+            const lazyClientWithBadAddress =
+                await GlideClusterClient.createClient({
+                    addresses: [{ host: nonExistentHost, port: 12345 }],
+                    lazyConnect: true,
+                    requestTimeout: 1000,
+                    protocol,
+                });
+
+            // Client was created successfully despite invalid address, proving no connection attempt was made
+            expect(lazyClientWithBadAddress).toBeDefined();
+
+            // PART 2: Verify that eager connections DO establish TCP connections on creation
+            await expect(
+                GlideClusterClient.createClient({
+                    addresses: [{ host: nonExistentHost, port: 12345 }],
+                    lazyConnect: false,
+                    requestTimeout: 1000,
+                    protocol,
+                }),
+            ).rejects.toThrow(/connect|connection|resolve/i);
+
+            // PART 3: Verify that the lazy client establishes connections on first command
+            try {
+                await expect(lazyClientWithBadAddress.ping()).rejects.toThrow(
+                    /connect|connection|resolve/i,
+                );
+            } finally {
+                lazyClientWithBadAddress.close();
+            }
+
+            // PART 4: Verify real lazy connections work correctly with valid addresses
+            const validLazyClient = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    lazyConnect: true,
+                    requestTimeout: 1000,
+                }),
+            );
+
+            try {
+                // Execute ping command - should succeed and establish connections
+                const pingResponse = await validLazyClient.ping();
+                expect(pingResponse).toBeDefined();
+            } finally {
+                validLazyClient.close();
+            }
+        },
+        TIMEOUT,
+    );
 });

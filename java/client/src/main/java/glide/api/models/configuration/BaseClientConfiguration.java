@@ -39,6 +39,35 @@ public abstract class BaseClientConfiguration {
     @NonNull @Builder.Default private final ReadFrom readFrom = ReadFrom.PRIMARY;
 
     /**
+     * Enables lazy connection mode, where physical connections to the server(s) are deferred until
+     * the first command is sent. This can reduce startup latency and allow for client creation in
+     * disconnected environments.
+     *
+     * <p>Default: {@code false} – connections are established immediately during client creation.
+     *
+     * <p>When {@code lazyConnect} is set to {@code true}, the client will not attempt to connect to
+     * the specified nodes during initialization. Instead, connections will be established only when a
+     * command is actually executed.
+     *
+     * <p>This setting applies to both standalone and cluster modes. Note that if an operation is
+     * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+     *
+     * <p><b>Example:</b>
+     *
+     * <pre>{@code
+     * GlideClientConfiguration config = GlideClientConfiguration.builder()
+     *         .address(NodeAddress.builder().host("localhost").port(6379).build())
+     *         .lazyConnect(true)
+     *         .build();
+     *
+     * // No connection is made yet
+     * GlideClient client = GlideClient.createClient(config).get();
+     * client.ping().get(); // Now the client connects and sends the command
+     * }</pre>
+     */
+    @Builder.Default private final boolean lazyConnect = false;
+
+    /**
      * Credentials for authentication process. If none are set, the client will not authenticate
      * itself with the server.
      */

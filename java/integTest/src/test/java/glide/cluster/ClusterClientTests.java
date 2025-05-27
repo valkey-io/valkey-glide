@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -456,6 +458,95 @@ public class ClusterClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    @Timeout(50)
+    public void lazy_connection_defers_connections_until_first_command() {
+        // Test 1: Valid address with lazy connection should work
+        GlideClusterClient validLazyClient = null;
+        try {
+            validLazyClient =
+                    GlideClusterClient.createClient(commonClusterClientConfig().lazyConnect(true).build())
+                            .get();
+
+            // Execute command - should connect now
+            Object pingResponse = validLazyClient.ping().get();
+            assertTrue(pingResponse.toString().contains("PONG"));
+        } finally {
+            if (validLazyClient != null) {
+                validLazyClient.close();
+            }
+        }
+
+        // Test 2: Attempt with non-existent host fails at client creation with eager connection
+        String nonExistentHost = "non-existent-host";
+        GlideClusterClientConfiguration badConfig =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(nonExistentHost).port(6379).build())
+                        .requestTimeout(1000)
+                        .lazyConnect(false) // Eager connection
+                        .build();
+
+        ExecutionException eagerException =
+                assertThrows(
+                        ExecutionException.class, () -> GlideClusterClient.createClient(badConfig).get());
+
+        assertTrue(eagerException.getCause().getMessage().toLowerCase().contains("ioerror"));
+
+        // Test 3: Same non-existent host succeeds in client creation with lazy connection
+        GlideClusterClientConfiguration lazyConfig =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(nonExistentHost).port(6379).build())
+                        .requestTimeout(1000)
+                        .lazyConnect(true) // Lazy connection
+                        .build();
+
+        GlideClusterClient lazyClient = null;
+        try {
+            // Client creation should succeed despite invalid host
+            lazyClient = GlideClusterClient.createClient(lazyConfig).get();
+
+            // But command execution should fail
+            final GlideClusterClient finalLazyClient = lazyClient;
+            ExecutionException commandException =
+                    assertThrows(ExecutionException.class, () -> finalLazyClient.ping().get());
+
+            assertTrue(commandException.getCause().getMessage().toLowerCase().contains("ioerror"));
+        } finally {
+            if (lazyClient != null) {
+                lazyClient.close();
+            }
+        }
+
+        // Test 4: Connection to unreachable port (more reliable than server shutdown)
+        GlideClusterClient unreachablePortClient = null;
+        try {
+            // Use a very high port unlikely to have a server
+            int unusedPort = 65432;
+            GlideClusterClientConfiguration unreachableConfig =
+                    GlideClusterClientConfiguration.builder()
+                            .address(NodeAddress.builder().host("localhost").port(unusedPort).build())
+                            .requestTimeout(100)
+                            .lazyConnect(true)
+                            .build();
+
+            // Client creation should succeed (lazy connection)
+            unreachablePortClient = GlideClusterClient.createClient(unreachableConfig).get();
+
+            final GlideClusterClient finalClient = unreachablePortClient;
+
+            // Command should fail with connection errors
+            ExecutionException commandException =
+                    assertThrows(ExecutionException.class, () -> finalClient.ping().get());
+
+            assertTrue(commandException.getCause().getMessage().toLowerCase().contains("ioerror"));
+        } finally {
+            if (unreachablePortClient != null) {
+                unreachablePortClient.close();
+            }
         }
     }
 }

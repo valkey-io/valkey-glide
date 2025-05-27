@@ -25,6 +25,7 @@ pub struct ConnectionRequest {
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
+    pub lazy_connect: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
@@ -223,6 +224,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
 
+        let lazy_connect = value.lazy_connect;
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -238,6 +241,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             periodic_checks,
             pubsub_subscriptions,
             inflight_requests_limit,
+            lazy_connect,
         }
     }
 }

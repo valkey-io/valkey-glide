@@ -34,7 +34,53 @@ public class ConnectionManager {
     // GlideClient.
 
     /** UDS connection representation. */
-    private final ChannelHandler channel;
+    private ChannelHandler channel;
+
+    private BaseClientConfiguration lazyConfig = null;
+    private boolean isLazyConnection = false;
+    private final Object lazyConnectionLock = new Object();
+
+    /**
+     * Creates a new ConnectionManager with the specified channel handler.
+     *
+     * @param channelHandler The channel handler to use, may be null for lazy initialization
+     */
+    public ConnectionManager(ChannelHandler channelHandler) {
+        this.channel = channelHandler;
+    }
+
+    /**
+     * Store configuration for lazy connection to be used later when the first command is executed.
+     *
+     * @param config The configuration to store
+     */
+    public void storeConfigForLazyConnection(BaseClientConfiguration config) {
+        synchronized (lazyConnectionLock) {
+            this.lazyConfig = config;
+            this.isLazyConnection = true;
+        }
+    }
+
+    /**
+     * Ensure connection is established before executing commands. If this is a lazy connection and no
+     * connection has been established yet, establish it now.
+     *
+     * @return A future that completes when the connection is established
+     */
+    public CompletableFuture<Void> ensureConnected() {
+        synchronized (lazyConnectionLock) {
+            if (isLazyConnection && lazyConfig != null) {
+                // Mark as not lazy anymore since we're establishing connection
+                isLazyConnection = false;
+                BaseClientConfiguration config = lazyConfig;
+                lazyConfig = null;
+                // Connect using stored config
+                return connectToValkey(config);
+            }
+            // Already connected or not a lazy connection
+            return CompletableFuture.completedFuture(null);
+        }
+    }
 
     /**
      * Make a connection request to Valkey Rust-core client.
@@ -304,5 +350,15 @@ public class ConnectionManager {
      */
     public Future<Void> closeConnection() {
         return channel.close();
+    }
+
+    /**
+     * Sets the channel handler for this connection manager. Required for circular dependency between
+     * ConnectionManager and ChannelHandler.
+     *
+     * @param channelHandler The channel handler to set
+     */
+    public void setChannelHandler(ChannelHandler channelHandler) {
+        this.channel = channelHandler;
     }
 }
