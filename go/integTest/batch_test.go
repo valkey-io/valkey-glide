@@ -354,6 +354,34 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
+func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	connectionName := "test-connection-" + uuid.New().String()
+
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+
+	pingOptions := options.PingOptions{
+		Message: "hello",
+	}
+	batch.PingWithOptions(pingOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
+
+	batch.Echo("hello world")
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
+
+	batch.ClientId()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckType: true, TestName: "ClientId()"})
+
+	batch.ClientSetName(connectionName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
+
+	batch.ClientGetName()
+	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
+}
+
 func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
@@ -1541,6 +1569,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		// more command groups here
+		CreateConnectionManagementTests,
 		CreateBitmapTest,
 		CreateGenericCommandTests,
 		CreateGeospatialTests,
