@@ -81,7 +81,7 @@ from glide.routes import (
     SlotType,
 )
 from glide.sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from tests.conftest import create_sync_client
+from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
