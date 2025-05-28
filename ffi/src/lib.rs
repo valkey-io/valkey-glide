@@ -1590,6 +1590,7 @@ pub unsafe extern "C" fn batch(
     batch_ptr: *const BatchInfo,
     raise_on_error: bool,
     options_ptr: *const BatchOptionsInfo,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -1599,7 +1600,7 @@ pub unsafe extern "C" fn batch(
     let mut client = client_adapter.core.client.clone();
 
     // TODO handle panics
-    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+    let mut pipeline = match unsafe { create_pipeline(batch_ptr) } {
         Ok(pipeline) => pipeline,
         Err(err) => {
             return unsafe {
@@ -1611,9 +1612,13 @@ pub unsafe extern "C" fn batch(
             };
         }
     };
+    if span_ptr != 0 {
+        pipeline.set_pipeline_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
+    }
+    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
-    client_adapter.execute_request(callback_index, async move {
+    let result = client_adapter.execute_request(callback_index, async move {
         if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -1629,7 +1634,12 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         }
-    })
+    });
+
+    if let Ok(span) = child_span {
+        span.end();
+    }
+    result
 }
 
 /// Convert raw C string to a rust string.
@@ -1784,6 +1794,19 @@ pub unsafe extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
         Ok(name) => name,
         Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
     };
+
+    let span = GlideOpenTelemetry::new_span(command_name);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
+/// Creates an OpenTelemetry span with a fixed name "batch" and returns a pointer to the span as u64.
+///
+/// # Safety
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_batch_otel_span() -> u64 {
+    let command_name = "Batch";
 
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
@@ -1990,4 +2013,18 @@ unsafe fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpa
         Arc::increment_strong_count(command_span as *const GlideSpan);
         (*Arc::from_raw(command_span as *const GlideSpan)).clone()
     })
+}
+
+/// Creates a child span for telemetry if telemetry is enabled
+fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, String> {
+    // Early return if no parent span is provided
+    let parent_span = span.ok_or_else(|| "No parent span provided".to_string())?;
+
+    match parent_span.add_span(name) {
+        Ok(child_span) => Ok(child_span),
+        Err(error_msg) => Err(format!(
+            "Opentelemetry failed to create child span with name `{}`. Error: {:?}",
+            name, error_msg
+        )),
+    }
 }

@@ -165,6 +165,14 @@ func (o *OpenTelemetry) CreateSpan(requestType C.RequestType) uint64 {
 	return uint64(C.create_otel_span(uint32(requestType)))
 }
 
+// CreateBatchSpan creates a new OpenTelemetry span with the name "batch" and returns a pointer to the span.
+func (o *OpenTelemetry) CreateBatchSpan() uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+	return uint64(C.create_batch_otel_span())
+}
+
 // DropSpan drops an OpenTelemetry span given its pointer.
 func (o *OpenTelemetry) DropSpan(spanPtr uint64) {
 	if spanPtr == 0 {

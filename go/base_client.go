@@ -428,6 +428,15 @@ func (client *baseClient) executeBatch(
 				len(batch.Errors), strings.Join(batch.Errors, ", ")),
 		}
 	}
+
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	if otelInstance != nil && otelInstance.ShouldSample() {
+		// Pass the request type to determine the descriptive name of the command
+		// to use as the span name
+		spanPtr = otelInstance.CreateBatchSpan()
+	}
+
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -439,6 +448,9 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
+		if spanPtr != 0 {
+			otelInstance.DropSpan(spanPtr)
+		}
 		return nil, &errors.ClosingError{Msg: "ExecuteBatch failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
@@ -456,6 +468,7 @@ func (client *baseClient) executeBatch(
 		&batchInfo,
 		C._Bool(raiseOnError),
 		optionsPtr,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 
@@ -463,6 +476,9 @@ func (client *baseClient) executeBatch(
 	var payload payload
 	select {
 	case <-ctx.Done():
+		if spanPtr != 0 {
+			otelInstance.DropSpan(spanPtr)
+		}
 		client.mu.Lock()
 		if client.pending != nil {
 			delete(client.pending, resultChannelPtr)
@@ -477,6 +493,9 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.pending != nil {
 		delete(client.pending, resultChannelPtr)
+	}
+	if spanPtr != 0 {
+		otelInstance.DropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 

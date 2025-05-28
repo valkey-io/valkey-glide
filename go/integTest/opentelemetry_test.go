@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 const (
@@ -467,6 +468,101 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClie
 		assert.Contains(suite.T(), spans.SpanNames, "SET", "Should find SET span in exported spans")
 		assert.Contains(suite.T(), spans.SpanNames, "GET", "Should find GET span in exported spans")
 	})
+}
+
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
+		// Force garbage collection
+		runtime.GC()
+
+		// Get initial memory stats
+		var startMem runtime.MemStats
+		runtime.ReadMemStats(&startMem)
+
+		// Create a batch
+		batch := pipeline.NewClusterBatch(true)
+		batch.Set("test_key", "foo")
+		batch.CustomCommand([]string{"object", "refcount", "test_key"})
+
+		// Execute the batch
+		response, err := client.(*glide.ClusterClient).Exec(context.Background(), *batch, true)
+		require.NoError(suite.T(), err)
+		require.NotNil(suite.T(), response)
+		require.Len(suite.T(), response, 2)
+		assert.Equal(suite.T(), "OK", response[0])              // Set command response
+		assert.GreaterOrEqual(suite.T(), response[1], int64(1)) // ObjectRefCount response
+
+		// Wait for spans to be flushed
+		time.Sleep(5 * time.Second)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Verify batch span names
+		assert.Contains(suite.T(), spans.SpanNames, "Batch", "Should find Batch span in exported spans")
+		assert.Contains(suite.T(), spans.SpanNames, "send_batch", "Should find send_batch span in exported spans")
+
+		// Force garbage collection again
+		runtime.GC()
+
+		// Get final memory stats
+		var endMem runtime.MemStats
+		runtime.ReadMemStats(&endMem)
+
+		// Allow small fluctuations (10% increase)
+		maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+		assert.Less(suite.T(), float64(endMem.HeapAlloc), maxAllowedMemory,
+			"Memory usage should not increase significantly")
+	})
+}
+
+func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemoryLeak() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	protocols := []string{"RESP2", "RESP3"}
+	for _, protocol := range protocols {
+		suite.T().Run(fmt.Sprintf("Protocol_%s", protocol), func(t *testing.T) {
+			suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
+				// Force garbage collection
+				runtime.GC()
+
+				// Get initial memory stats
+				var startMem runtime.MemStats
+				runtime.ReadMemStats(&startMem)
+
+				// Create a batch
+				batch := pipeline.NewClusterBatch(true)
+				batch.Set("test_key", "foo")
+				batch.CustomCommand([]string{"object", "refcount", "test_key"})
+
+				// Execute the batch
+				response, err := client.(*glide.ClusterClient).Exec(context.Background(), *batch, true)
+				require.NoError(t, err)
+				require.NotNil(t, response)
+				require.Len(t, response, 2)
+				assert.Equal(t, "OK", response[0])              // Set command response
+				assert.GreaterOrEqual(t, response[1], int64(1)) // ObjectRefCount response
+
+				// Force garbage collection again
+				runtime.GC()
+
+				// Get final memory stats
+				var endMem runtime.MemStats
+				runtime.ReadMemStats(&endMem)
+
+				// Allow small fluctuations (10% increase)
+				maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+				assert.Less(t, float64(endMem.HeapAlloc), maxAllowedMemory,
+					"Memory usage should not increase significantly")
+			})
+		})
+	}
 }
 
 func TestOpenTelemetryTestSuite(t *testing.T) {
