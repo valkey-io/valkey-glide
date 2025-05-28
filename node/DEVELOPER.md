@@ -24,12 +24,6 @@ If your Nodejs version is below the supported version specified in the client's 
 - openssl
 - openssl-dev
 - rustup
-- ziglang and zigbuild (for GNU Linux only)
-- valkey (for testing)
-
-**Valkey installation**
-
-See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 **Dependencies installation for Ubuntu**
 
@@ -62,12 +56,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-**Install `ziglang` and `zigbuild`**
-
-```bash
-pip3 install ziglang
-cargo install --locked cargo-zigbuild
-```
+**Valkey Server and CLI**
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 #### Building and installation steps
 
@@ -113,24 +103,34 @@ Before starting this step, make sure you've installed all software requirments.
 4. Run tests:
 
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
-    2. Execute the following command from the node folder:
+    2. Execute the following commands from the node folder:
 
         ```bash
-        npm run build # make sure we have a debug build compiled first
-        npm test-local # For testing on local. For skipping exported symbols validation test on local.
+        # Build first (required before testing)
+        npm run build
+
+        # Run standard tests (excluding server modules)
         npm test
 
+        # Run tests with debugging options
+        npm run test:debug
+
+        # Run minimal tests (faster subset of tests)
+        npm run test:minimum
+
+        # Run only server module tests (requires valkey modules)
+        npm run test:modules
         ```
 
 5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 - For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
-- If your modifications are limited to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
-- If your modifications are limited to the Rust code, execute `npm run build-internal` to build the internal package and generate TypeScript code.
+- If your modifications are limited to the TypeScript code, run `npm run build:ts` to build only TypeScript code without rebuilding the Rust client.
+- If your modifications are limited to the Rust code, execute `npm run build:rust-client` to build only the Rust client.
 - To generate Node's protobuf files, execute `npm run build-protobuf`. Keep in mind that protobuf files are generated as part of full builds (e.g., `build`, `build:release`, etc.).
 
-> Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder.
+> Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder. The index.ts file re-exports all APIs for a cleaner module structure.
 
 ### Troubleshooting
 
@@ -177,6 +177,19 @@ npm run test-modules -- --cluster-endpoints=<address>:<port>
 
 Note: these tests don't run with standalone server as of now.
 
+### Package Manager and TypeScript Types Testing
+
+The project includes tests for TypeScript types and package manager compatibility:
+
+- Tests proper TypeScript declaration file generation for downstream packages
+- Verifies compatibility with Yarn package manager in addition to npm
+- Tests library use in both direct consumer packages and transitive dependencies
+
+The test structure in `node/pm-and-types-tests/` includes:
+
+- `depend-on-glide-package/`: A library that depends on valkey-glide
+- `depend-on-glide-dependent/`: An application that depends on depend-on-glide-package (transitive dependency)
+
 ### REPL (interactive shell)
 
 It is possible to run an interactive shell synced with the currect client code to test and debug it:
@@ -204,40 +217,62 @@ It has command history and bash-like search (`Ctrl+R`).
 
 Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
 
-### Linters
+### Developer Utility Scripts
+
+Development on the Node wrapper involves various scripts for linting, formatting, and managing the development environment.
+
+#### Development Environment Scripts
+
+```bash
+# Launch a TypeScript REPL for interactive testing
+npm run repl
+
+# Clean only build artifacts
+npm run clean:build
+
+# Complete cleanup including node_modules
+npm run clean
+```
+
+#### Linters and Formatters
 
 Development on the Node wrapper may involve changes in either the TypeScript or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
-#### Language-specific Linters
+##### TypeScript and general files
 
-**TypeScript:**
+```bash
+# Run from the node folder
+# Check code quality with ESLint
+npm run lint
 
-- ESLint
-- Prettier
+# Automatically fix linting issues
+npm run lint:fix
 
-**Rust:**
+# Check code formatting only
+npm run prettier:check
 
-- clippy
-- fmt
+# Format code automatically
+npm run prettier:format
+```
 
-#### Running the linters
+##### Rust code
 
-1. TypeScript
+```bash
+# Run from the `node/rust-client` folder
+# Format all files (Rust and others)
+npm run format
 
-    ```bash
-    # Run from the node folder
-    npm run lint
-    # To automatically apply ESLint and/or prettier recommendations
-    npm run lint:fix
-    ```
+# Format only Rust files
+npm run format:rs
 
-2. Rust
-    ```bash
-    # Run from the `node/rust-client` folder
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
+# Format only non-Rust files with Prettier
+npm run format:prettier
+
+# Alternatively, use Rust tools directly:
+rustup component add clippy rustfmt
+cargo clippy --all-features --all-targets -- -D warnings
+cargo fmt --manifest-path ./Cargo.toml --all
+```
 
 ### Recommended extensions for VS Code
 
