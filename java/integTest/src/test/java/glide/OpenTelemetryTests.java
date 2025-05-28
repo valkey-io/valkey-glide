@@ -41,16 +41,9 @@ public class OpenTelemetryTests {
         String spanData = "";
         List<String> spans = new ArrayList<>();
         List<String> spanNames = new ArrayList<>();
-        //        try {
-        // System.out.println("path====" + path);
-        //            if (!Files.exists(Paths.get(path))) {
-        //                System.out.println("path not ------");
-        //            }
         spanData = new String(Files.readAllBytes(Paths.get(path)));
-        System.out.println("span data=" + spanData);
 
         spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
-        System.out.println(spans);
 
         // Check that we have spans
         if (spans.isEmpty()) {
@@ -79,9 +72,6 @@ public class OpenTelemetryTests {
                                 })
                         .filter(name -> name != null)
                         .collect(Collectors.toList());
-        //        } catch (Exception e) {
-        //            throw e;
-        //        }
 
         return new SpanFileData(spanData, spans, spanNames);
     }
@@ -202,6 +192,7 @@ public class OpenTelemetryTests {
     @BeforeAll
     @SneakyThrows
     public static void setup() {
+        // Test wrong open telemetry configs
         wrongOpenTelemetryConfig();
 
         // Test that spans are not exported before initializing OpenTelemetry
