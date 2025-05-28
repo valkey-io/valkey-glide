@@ -158,14 +158,17 @@ export type SetOptions = (
     /**
      * Example usage:
      * ```javascript
+     *
+     *  import {TimeUnit} from "@valkey/valkey-glide";
+     *
      *  await client.set(key, JSON.stringify(key), {
      *   expiry: {
-     *       type: TimeUnit.Seconds, // Ensure TimeUnit is being imported from valkey-glide package
+     *       type: TimeUnit.Seconds,
      *       count: 60,
      *      },
      *  });
      * ```
-     * 
+     *
      * If not set, no expiry time will be set for the value.
      *
      * `keepExisting` - Retain the time to live associated with the key.
