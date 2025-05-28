@@ -2,7 +2,7 @@
 
 from typing import Optional, Type
 
-from glide.protobuf.response_pb2 import RequestErrorType
+from glide.shared.protobuf.response_pb2 import RequestErrorType
 
 
 class GlideError(Exception):

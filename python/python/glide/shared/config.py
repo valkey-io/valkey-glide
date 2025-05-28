@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
-from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
-from glide.protobuf.connection_request_pb2 import TlsMode
 from glide.shared.commands.core_options import PubSubMsg
 from glide.shared.exceptions import ConfigurationError
+from glide.shared.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.shared.protobuf.connection_request_pb2 import (
+    ProtocolVersion as SentProtocolVersion,
+)
+from glide.shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
+from glide.shared.protobuf.connection_request_pb2 import TlsMode
 
 
 class NodeAddress:

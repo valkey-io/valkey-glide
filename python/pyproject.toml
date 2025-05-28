@@ -31,14 +31,14 @@ classifiers = [
 
 [tool.isort]
 profile = "black"
-skip = [".env", "python/glide/protobuf"]
+skip = [".env", "python/glide/shared/protobuf"]
 known_first_party = ["glide", "tests"]
 
 [tool.black]
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 [tool.mypy]
-exclude = "^(.*\\/)?(\\.env|python/python/glide/protobuf|utils/release-candidate-testing|target|ort)(\\/|$)"
+exclude = "^(.*\\/)?(\\.env|python/python/glide/shared/protobuf|utils/release-candidate-testing|target|ort)(\\/|$)"
 
 [tool.maturin]
 python-source = "python"

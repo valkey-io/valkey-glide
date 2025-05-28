@@ -2,8 +2,8 @@
 
 import pytest
 
-from glide.protobuf.command_request_pb2 import CommandRequest, RequestType
-from glide.protobuf.response_pb2 import Response
+from glide.shared.protobuf.command_request_pb2 import CommandRequest, RequestType
+from glide.shared.protobuf.response_pb2 import Response
 from glide.shared.protobuf_codec import PartialMessageException, ProtobufCodec
 
 

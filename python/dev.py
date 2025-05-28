@@ -98,7 +98,7 @@ def get_venv_env() -> Dict[str, str]:
 
 def generate_protobuf_files() -> None:
     proto_src = GLIDE_ROOT / PROTO_REL_PATH
-    proto_dst = GLIDE_ROOT / PYTHON_CLIENT_PATH
+    proto_dst = GLIDE_ROOT / PYTHON_CLIENT_PATH / "shared"
     proto_files = list(proto_src.glob("*.proto"))
 
     if not proto_files:
@@ -128,7 +128,7 @@ def generate_protobuf_files() -> None:
         env=get_venv_env(),
     )
 
-    print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}")
+    print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}/protobuf")
 
 
 def build_async_client(

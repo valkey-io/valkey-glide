@@ -7,13 +7,13 @@ from typing import List, Optional, Union
 
 from cffi import FFI
 
-from glide.protobuf.command_request_pb2 import RequestType
 from glide.shared.commands.sync_commands.cluster_commands import ClusterCommands
 from glide.shared.commands.sync_commands.core import CoreCommands
 from glide.shared.commands.sync_commands.standalone_commands import StandaloneCommands
 from glide.shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
 from glide.shared.constants import OK, TEncodable, TResult
 from glide.shared.exceptions import ClosingError, RequestError, get_request_error_class
+from glide.shared.protobuf.command_request_pb2 import RequestType
 from glide.shared.routes import Route, build_protobuf_route
 
 if sys.version_info >= (3, 11):
