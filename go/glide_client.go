@@ -15,6 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // Client interface compliance check.
@@ -65,6 +66,67 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	return &Client{client}, nil
 }
 
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
+//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//	options - A [StandaloneBatchOptions] object containing execution options.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.StandaloneBatch,
+	raiseOnError bool,
+	options pipeline.StandaloneBatchOptions,
+) ([]any, error) {
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
+}
+
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
@@ -90,7 +152,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 	if err != nil {
 		return nil, err
 	}
-	return HandleInterfaceResponse(res)
+	return handleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
@@ -656,6 +718,37 @@ func (client *Client) RandomKey(ctx context.Context) (models.Result[string], err
 	return handleStringOrNilResponse(result)
 }
 
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// Note:
+//
+//	When in cluster mode, this command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *Client) FunctionKill(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns information about the function that's currently running and information about the
 // available execution engines.
 // `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
@@ -707,6 +800,114 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
 	result, err := client.executeCommand(ctx, C.FunctionDelete, []string{libName})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *Client) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
+	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
+}
+
+// Returns the serialized payload of all loaded libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *Client) FunctionDump(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *Client) FunctionRestore(ctx context.Context, payload string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *Client) FunctionRestoreWithPolicy(
+	ctx context.Context,
+	payload string,
+	policy constants.FunctionRestorePolicy,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

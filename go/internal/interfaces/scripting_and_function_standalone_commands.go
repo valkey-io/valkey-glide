@@ -5,6 +5,7 @@ package interfaces
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -18,4 +19,14 @@ type ScriptingAndFunctionStandaloneCommands interface {
 	FunctionStats(ctx context.Context) (map[string]models.FunctionStatsResult, error)
 
 	FunctionDelete(ctx context.Context, libName string) (string, error)
+
+	FunctionKill(ctx context.Context) (string, error)
+
+	FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error)
+
+	FunctionDump(ctx context.Context) (string, error)
+
+	FunctionRestore(ctx context.Context, payload string) (string, error)
+
+	FunctionRestoreWithPolicy(ctx context.Context, payload string, policy constants.FunctionRestorePolicy) (string, error)
 }

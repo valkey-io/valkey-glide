@@ -1670,107 +1670,15 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
-    fn test_async_cluster_refresh_topology_even_with_zero_retries() {
-        let name = "test_async_cluster_refresh_topology_even_with_zero_retries";
-
-        let should_refresh = atomic::AtomicBool::new(false);
-
-        let MockEnv {
-            runtime,
-            async_connection: mut connection,
-            handler: _handler,
-            ..
-        } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0)
-            // Disable the rate limiter to refresh slots immediately on the MOVED error.
-            .slots_refresh_rate_limit(Duration::from_secs(0), 0),
-            name,
-            move |cmd: &[u8], port| {
-                if !should_refresh.load(atomic::Ordering::SeqCst) {
-                    respond_startup(name, cmd)?;
-                }
-
-                if contains_slice(cmd, b"PING") || contains_slice(cmd, b"SETNAME") {
-                    return Err(Ok(Value::SimpleString("OK".into())));
-                }
-
-                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
-                    return Err(Ok(Value::Array(vec![
-                        Value::Array(vec![
-                            Value::Int(0),
-                            Value::Int(1),
-                            Value::Array(vec![
-                                Value::BulkString(name.as_bytes().to_vec()),
-                                Value::Int(6379),
-                            ]),
-                        ]),
-                        Value::Array(vec![
-                            Value::Int(2),
-                            Value::Int(16383),
-                            Value::Array(vec![
-                                Value::BulkString(name.as_bytes().to_vec()),
-                                Value::Int(6380),
-                            ]),
-                        ]),
-                    ])));
-                }
-
-                if contains_slice(cmd, b"GET") {
-                    let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
-                    match port {
-                        6380 => get_response,
-                        // Respond that the key exists on a node that does not yet have a connection:
-                        _ => {
-                            // Should not attempt to refresh slots more than once:
-                            assert!(!should_refresh.swap(true, Ordering::SeqCst));
-                            Err(parse_redis_value(
-                                format!("-MOVED 123 {name}:6380\r\n").as_bytes(),
-                            ))
-                        }
-                    }
-                } else {
-                    panic!("unexpected command {cmd:?}")
-                }
-            },
-        );
-
-        let value = runtime.block_on(
-            cmd("GET")
-                .arg("test")
-                .query_async::<_, Option<i32>>(&mut connection),
-        );
-
-        // The user should receive an initial error, because there are no retries and the first request failed.
-        assert_eq!(
-            value,
-            Err(RedisError::from((
-                ErrorKind::Moved,
-                "An error was signalled by the server",
-                "test_async_cluster_refresh_topology_even_with_zero_retries:6380".to_string()
-            )))
-        );
-
-        let value = runtime.block_on(
-            cmd("GET")
-                .arg("test")
-                .query_async::<_, Option<i32>>(&mut connection),
-        );
-
-        assert_eq!(value, Ok(Some(123)));
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_refresh_topology_is_blocking() {
-        // Test: Head-of-Line Blocking During Slot Refresh
+    fn test_async_cluster_refresh_topology_is_not_blocking() {
+        // Test: Non-Head-of-Line Blocking During Slot Refresh
         //
         // This test verifies that during cluster topology refresh operations triggered by
-        // MOVED errors, the implementation exhibits head-of-line blocking behavior.
-        // When a client receives a MOVED error (indicating topology changes), it needs to
-        // refresh its slot mapping. This process blocks all subsequent commands until the
-        // refresh completes.
+        // MOVED errors, the implementation does not exhibit head-of-line blocking behavior.
+        // When a client receives a MOVED error (indicating topology changes), it refreshes
+        // its slot mapping in the background, allowing other commands to proceed concurrently.
         //
-        // The test employs the following strategy to verify the blocking behavior:
+        // The test employs the following strategy to verify the non-blocking behavior:
         //
         // 1. Trigger Slot Refresh: Send a blocking BLPOP command that will receive a MOVED error when
         //    slot 0 is migrated, initiating a topology refresh operation.
@@ -1778,11 +1686,12 @@ mod cluster_async {
         // 2. Atomicly migrate slot and pause clients: Use SET SLOT and CLIENT PAUSE to artificially delay the node's
         //    response during the refresh operation.
         //
-        // 3. Verify Blocking Behavior: While the refresh is in progress, send a GET command
-        //    to a different node in the cluster and verify it times out due to being blocked.
+        // 3. Verify Non-Blocking Behavior: While the refresh is in progress, send a GET command
+        //    to a different node in the cluster. Unlike the blocking implementation, this command
+        //    should complete successfully without timing out.
         //
-        // This test intentionally demonstrates how topology refresh operations can block
-        // subsequent commands, even those directed to healthy nodes in the cluster.
+        // This test intentionally demonstrates how topology refresh operations is no longer blocking
+        // subsequent commands.
 
         // Create a cluster with 3 nodes
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -1839,16 +1748,14 @@ mod cluster_async {
                 // This GET should time out as it's blocked by the topology refresh
                 let get_result = tokio::time::timeout(
                     Duration::from_millis(1000),
-                    client1.get::<_, redis::Value>(other_shard_key),
+                    client1.get::<_, String>(other_shard_key),
                 )
                 .await;
 
-                // Assert that we got a timeout error due to head-of-line blocking
-                assert!(get_result.is_err());
-                assert!(matches!(
-                    get_result.unwrap_err(),
-                    tokio::time::error::Elapsed { .. }
-                ));
+                // Assert that the GET succeeded (no timeout or error)
+                assert!(get_result.is_ok());
+                let result = get_result.unwrap().unwrap();
+                assert_eq!(result, "value2");
 
                 true
             });
@@ -1889,7 +1796,7 @@ mod cluster_async {
 
             assert!(
                 result,
-                "The test should pass, demonstrating blocking behavior"
+                "The test should pass, demonstrating non blocking behavior"
             );
 
             Ok::<_, RedisError>(())

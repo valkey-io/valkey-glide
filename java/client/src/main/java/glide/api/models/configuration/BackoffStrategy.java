@@ -8,8 +8,11 @@ import lombok.ToString;
 
 /**
  * Represents the strategy used to determine how and when to reconnect, in case of connection
- * failures. The time between attempts grows exponentially, to the formula <code>rand(0 ... factor *
- * (exponentBase ^ N))</code>, where <code>N</code> is the number of failed attempts.
+ * failures. The time between attempts grows exponentially, following the formula <code>
+ * rand(0 ... factor *
+ * (exponentBase ^ N))</code>, where <code>N</code> is the number of failed attempts, and <code>
+ * rand(...)</code> applies a jitter of up to <code>jitterPercent</code>% to introduce randomness
+ * and reduce retry storms.
  *
  * <p>Once the maximum value is reached, that will remain the time between retry attempts until a
  * reconnect attempt is successful. The client will attempt to reconnect indefinitely.
@@ -20,6 +23,7 @@ import lombok.ToString;
  *     .numOfRetries(5)
  *     .exponentBase(2)
  *     .factor(3)
+ *     .jitterPercent(20)
  *     .build()
  * }</pre>
  */
@@ -39,4 +43,7 @@ public class BackoffStrategy {
 
     /** The exponent base configured for the strategy. */
     @NonNull private final Integer exponentBase;
+
+    /** The Jitter percent on the calculated duration. If not set, a default value will be used. */
+    private final Integer jitterPercent;
 }
