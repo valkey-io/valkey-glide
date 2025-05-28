@@ -139,7 +139,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+				suite.SkipIfServerVersionLowerThan("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
@@ -153,12 +153,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
 			}
 
 			// Allow subscription to establish
@@ -314,7 +314,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+				suite.SkipIfServerVersionLowerThan("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
@@ -332,13 +332,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, t)
 					subscribers[i] = receiver
 					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, t)
 					subscribers[i] = receiver
 				}
 			}
@@ -470,12 +470,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
 			}
 
 			// Allow subscription to establish
@@ -647,7 +647,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+				suite.SkipIfServerVersionLowerThan("7.0.0", t)
 			}
 			publisher := suite.createAnyClient(tt.clientType, nil)
 
@@ -666,12 +666,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
 			}
 
 			// Allow subscription to establish
@@ -805,12 +805,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
 			}
 
 			// Allow subscription to establish
@@ -970,12 +970,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
 			}
 
 			// Allow subscription to establish
@@ -1153,13 +1153,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, t)
 					subscribers[i] = receiver
 					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, t)
 					subscribers[i] = receiver
 				}
 			}
