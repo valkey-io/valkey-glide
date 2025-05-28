@@ -515,7 +515,6 @@ impl ClientAdapter {
         channel: usize,
     ) -> *mut CommandResult {
         //logger_core::log(logger_core::Level::Error, "ffi", &error_string);
->>>>>>> main
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback: _,
