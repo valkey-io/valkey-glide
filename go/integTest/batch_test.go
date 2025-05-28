@@ -105,6 +105,222 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBatchGeoSpatial() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		testData := make([]CommandTestData, 0)
+		key := "{GeoKey}-1-" + uuid.NewString()
+		destKey := "{GeoKey}-2-" + uuid.NewString()
+		membersToGeospatialData := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+		membersToGeospatialData2 := map[string]options.GeospatialData{
+			"Messina": {Longitude: 15.556349, Latitude: 38.194136},
+		}
+
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic)
+
+			batch.GeoAdd(key, membersToGeospatialData)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
+
+			geoAddOptions := options.GeoAddOptions{}
+			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+
+			batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
+			testData = append(testData, CommandTestData{
+				ExpectedResponse: []any{"sqc8b49rny0", "sqdtr74hyu0", nil},
+				TestName:         "GeoHash(key, [Palermo, Catania, NonExistingCity])",
+			})
+
+			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+			// We can't directly assert on the float values due to precision differences
+			testData = append(testData, CommandTestData{TestName: "GeoPos(key, [Palermo, NonExistingCity])"})
+
+			batch.GeoDist(key, "Palermo", "Catania")
+			testData = append(testData, CommandTestData{TestName: "GeoDist(key, Palermo, Catania)"})
+
+			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+			testData = append(testData, CommandTestData{TestName: "GeoDistWithUnit(key, Palermo, Catania, Kilometers)"})
+
+			searchFrom := &options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
+			}
+			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+			batch.GeoSearch(key, searchFrom, *searchByShape)
+			// Can't assert on exact order as it may vary
+			testData = append(testData, CommandTestData{TestName: "GeoSearch(key, searchFrom, searchByShape)"})
+
+			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+			batch.GeoSearchWithResultOptions(key, searchFrom, *searchByShape, *resultOptions)
+			testData = append(testData, CommandTestData{
+				ExpectedResponse: []any{"Catania"},
+				TestName:         "GeoSearchWithResultOptions(key, searchFrom, searchByShape, resultOptions)",
+			})
+
+			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+			testData = append(testData, CommandTestData{TestName: "GeoSearchWithInfoOptions(key, searchFrom, searchByShape, infoOptions)"})
+
+			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+			testData = append(testData, CommandTestData{TestName: "GeoSearchWithFullOptions(key, searchFrom, searchByShape, resultOptions, infoOptions)"})
+
+			batch.GeoSearchStore(destKey, key, searchFrom, *searchByShape)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"})
+
+			batch.GeoSearchStoreWithResultOptions(destKey+"1", key, searchFrom, *searchByShape, *resultOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)"})
+
+			storeInfoOptions := options.NewGeoSearchStoreInfoOptions().SetStoreDist(true)
+			batch.GeoSearchStoreWithInfoOptions(destKey+"2", key, searchFrom, *searchByShape, *storeInfoOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)"})
+
+			batch.GeoSearchStoreWithFullOptions(destKey+"3", key, searchFrom, *searchByShape, *resultOptions, *storeInfoOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)"})
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+
+			// Verify results that don't depend on floating point precision
+			for i, td := range testData {
+				if td.ExpectedResponse != nil {
+					assert.Equal(suite.T(), td.ExpectedResponse, res[i], td.TestName)
+				}
+			}
+
+			// Verify GeoPos results
+			geoPos := res[3].([]any)
+			assert.Len(suite.T(), geoPos, 2)
+			assert.NotNil(suite.T(), geoPos[0])
+			assert.Nil(suite.T(), geoPos[1])
+
+			// Verify distance results (approximately)
+			geoDist := res[4].(float64)
+			assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+
+			geoDistKm := res[5].(float64)
+			assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+
+			// Verify search results
+			geoSearch := res[6]
+			assert.Len(suite.T(), geoSearch, 3)
+			assert.Contains(suite.T(), geoSearch, "Palermo")
+			assert.Contains(suite.T(), geoSearch, "Catania")
+			assert.Contains(suite.T(), geoSearch, "Messina")
+
+			// Verify search with info results
+			geoSearchInfo := res[8].([]any)
+			assert.Len(suite.T(), geoSearchInfo, 3)
+
+			// Verify full search results
+			geoSearchFull := res[9].([]any)
+			assert.Len(suite.T(), geoSearchFull, 1)
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic)
+
+			batch.GeoAdd(key, membersToGeospatialData)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
+
+			geoAddOptions := options.GeoAddOptions{}
+			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+
+			batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
+			testData = append(testData, CommandTestData{
+				ExpectedResponse: []any{"sqc8b49rny0", "sqdtr74hyu0", nil},
+				TestName:         "GeoHash(key, [Palermo, Catania, NonExistingCity])",
+			})
+
+			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+			// We can't directly assert on the float values due to precision differences
+			testData = append(testData, CommandTestData{TestName: "GeoPos(key, [Palermo, NonExistingCity])"})
+
+			batch.GeoDist(key, "Palermo", "Catania")
+			testData = append(testData, CommandTestData{TestName: "GeoDist(key, Palermo, Catania)"})
+
+			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+			testData = append(testData, CommandTestData{TestName: "GeoDistWithUnit(key, Palermo, Catania, Kilometers)"})
+
+			searchFrom := &options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
+			}
+			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+			batch.GeoSearch(key, searchFrom, *searchByShape)
+			// Can't assert on exact order as it may vary
+			testData = append(testData, CommandTestData{TestName: "GeoSearch(key, searchFrom, searchByShape)"})
+
+			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+			batch.GeoSearchWithResultOptions(key, searchFrom, *searchByShape, *resultOptions)
+			testData = append(testData, CommandTestData{
+				ExpectedResponse: []any{"Catania"},
+				TestName:         "GeoSearchWithResultOptions(key, searchFrom, searchByShape, resultOptions)",
+			})
+
+			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+			testData = append(testData, CommandTestData{TestName: "GeoSearchWithInfoOptions(key, searchFrom, searchByShape, infoOptions)"})
+
+			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+			testData = append(testData, CommandTestData{TestName: "GeoSearchWithFullOptions(key, searchFrom, searchByShape, resultOptions, infoOptions)"})
+
+			batch.GeoSearchStore(destKey, key, searchFrom, *searchByShape)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"})
+
+			batch.GeoSearchStoreWithResultOptions(destKey+"1", key, searchFrom, *searchByShape, *resultOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)"})
+
+			storeInfoOptions := options.NewGeoSearchStoreInfoOptions().SetStoreDist(true)
+			batch.GeoSearchStoreWithInfoOptions(destKey+"2", key, searchFrom, *searchByShape, *storeInfoOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)"})
+
+			batch.GeoSearchStoreWithFullOptions(destKey+"3", key, searchFrom, *searchByShape, *resultOptions, *storeInfoOptions)
+			testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)"})
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+
+			// Verify results that don't depend on floating point precision
+			for i, td := range testData {
+				if td.ExpectedResponse != nil {
+					assert.Equal(suite.T(), td.ExpectedResponse, res[i], td.TestName)
+				}
+			}
+
+			// Verify GeoPos results
+			geoPos := res[3].([]any)
+			assert.Len(suite.T(), geoPos, 2)
+			assert.NotNil(suite.T(), geoPos[0])
+			assert.Nil(suite.T(), geoPos[1])
+
+			// Verify distance results (approximately)
+			geoDist := res[4].(float64)
+			assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+
+			geoDistKm := res[5].(float64)
+			assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+
+			// Verify search results
+			geoSearch := res[6]
+			assert.Len(suite.T(), geoSearch, 3)
+			assert.Contains(suite.T(), geoSearch, "Palermo")
+			assert.Contains(suite.T(), geoSearch, "Catania")
+			assert.Contains(suite.T(), geoSearch, "Messina")
+
+			// Verify search with info results
+			geoSearchInfo := res[8].([]any)
+			assert.Len(suite.T(), geoSearchInfo, 3)
+
+			// Verify full search results
+			geoSearchFull := res[9].([]any)
+			assert.Len(suite.T(), geoSearchFull, 1)
+		}
+	})
+}
+
 func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
