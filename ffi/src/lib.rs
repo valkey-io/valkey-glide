@@ -1980,6 +1980,20 @@ pub unsafe extern "C" fn init_open_telemetry(
     }
 }
 
+/// Frees a C string.
+///
+/// # Safety
+/// * `s` must be a valid pointer to a C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_c_string(s: *mut c_char) {
+    unsafe {
+        if s.is_null() {
+            return;
+        }
+        drop(CString::from_raw(s));
+    };
+}
+
 fn ensure_tokio_runtime() -> Result<&'static Runtime, String> {
     static TOKIO: OnceLock<Runtime> = OnceLock::new();
     Ok(TOKIO.get_or_init(|| {

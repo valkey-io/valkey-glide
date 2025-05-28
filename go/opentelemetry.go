@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"unsafe"
 )
 
 // OpenTelemetryConfig represents the configuration for OpenTelemetry integration.
@@ -108,7 +107,7 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	errMsg := C.init_open_telemetry(cConfig)
 	if errMsg != nil {
 		err := fmt.Errorf("failed to initialize OpenTelemetry: %s", C.GoString(errMsg))
-		C.free(unsafe.Pointer(errMsg))
+		C.free_c_string(errMsg)
 		return err
 	}
 	otelConfig = &openTelemetryConfig
