@@ -22,7 +22,6 @@ Examples:
 
 from typing import List, Optional, Union
 
-from glide.constants import TEncodable
 from glide.shared.commands.batch import TBatch
 from glide.shared.commands.core_options import ConditionalChange
 from glide.shared.commands.server_modules.glide_json import (
@@ -30,6 +29,7 @@ from glide.shared.commands.server_modules.glide_json import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
+from glide.shared.constants import TEncodable
 
 
 def set(

@@ -8,9 +8,6 @@ from typing import List, Mapping, Union, cast
 
 import pytest
 
-from glide.config import ProtocolVersion
-from glide.constants import OK, FtSearchResponse, TEncodable
-from glide.exceptions import RequestError
 from glide.glide_client import GlideClusterClient
 from glide.shared.commands.command_args import OrderBy
 from glide.shared.commands.server_modules import ft
@@ -44,6 +41,9 @@ from glide.shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
+from glide.shared.config import ProtocolVersion
+from glide.shared.constants import OK, FtSearchResponse, TEncodable
+from glide.shared.exceptions import RequestError
 
 
 @pytest.mark.anyio

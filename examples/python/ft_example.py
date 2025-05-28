@@ -25,7 +25,7 @@ from glide.shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
-from glide.constants import OK, FtSearchResponse, TEncodable
+from glide.shared.constants import OK, FtSearchResponse, TEncodable
 
 
 async def create_client(

@@ -8,15 +8,15 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 import anyio
 import pytest
 
-from glide.config import (
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.shared.commands.core_options import PubSubMsg
+from glide.shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
-from glide.constants import OK
-from glide.exceptions import ConfigurationError
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.shared.commands.core_options import PubSubMsg
+from glide.shared.constants import OK
+from glide.shared.exceptions import ConfigurationError
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 

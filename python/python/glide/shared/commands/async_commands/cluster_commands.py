@@ -4,18 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.constants import (
-    TOK,
-    TClusterResponse,
-    TEncodable,
-    TFunctionListResponse,
-    TFunctionStatsSingleNodeResponse,
-    TResult,
-    TSingleNodeRoute,
-)
 from glide.glide import ClusterScanCursor, Script
 from glide.protobuf.command_request_pb2 import RequestType
-from glide.routes import Route
 from glide.shared.commands.async_commands.core import CoreCommands
 from glide.shared.commands.batch import ClusterBatch
 from glide.shared.commands.command_args import ObjectType
@@ -24,6 +14,16 @@ from glide.shared.commands.core_options import (
     FunctionRestorePolicy,
     InfoSection,
 )
+from glide.shared.constants import (
+    TOK,
+    TClusterResponse,
+    TEncodable,
+    TFunctionListResponse,
+    TFunctionStatsSingleNodeResponse,
+    TResult,
+    TSingleNodeRoute,
+)
+from glide.shared.routes import Route
 
 
 class ClusterCommands(CoreCommands):

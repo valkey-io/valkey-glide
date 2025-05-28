@@ -12,19 +12,6 @@ from typing import Any, Dict, List, Mapping, Union, cast
 
 import pytest
 
-from glide import ClosingError, RequestError
-from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
-from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
-from glide.routes import (
-    AllNodes,
-    AllPrimaries,
-    ByAddressRoute,
-    RandomNode,
-    Route,
-    SlotIdRoute,
-    SlotKeyRoute,
-    SlotType,
-)
 from glide.shared.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -80,6 +67,24 @@ from glide.shared.commands.stream import (
     StreamReadOptions,
     TrimByMaxLen,
     TrimByMinId,
+)
+from glide.shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide.shared.constants import (
+    OK,
+    TEncodable,
+    TFunctionStatsSingleNodeResponse,
+    TResult,
+)
+from glide.shared.exceptions import ClosingError, RequestError
+from glide.shared.routes import (
+    AllNodes,
+    AllPrimaries,
+    ByAddressRoute,
+    RandomNode,
+    Route,
+    SlotIdRoute,
+    SlotKeyRoute,
+    SlotType,
 )
 from glide.sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.sync_tests.conftest import create_sync_client

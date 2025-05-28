@@ -3,10 +3,10 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional
 
-from glide.constants import TEncodable
 from glide.shared.commands.server_modules.ft_options.ft_constants import (
     FtCreateKeywords,
 )
+from glide.shared.constants import TEncodable
 
 
 class FieldType(Enum):

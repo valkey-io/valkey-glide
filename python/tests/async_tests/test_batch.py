@@ -8,10 +8,7 @@ from typing import List, Optional, Union, cast
 import pytest
 
 from glide import RequestError, TimeoutError
-from glide.config import ProtocolVersion
-from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 from glide.shared.commands.batch import (
     BaseBatch,
     Batch,
@@ -61,6 +58,9 @@ from glide.shared.commands.stream import (
     StreamReadGroupOptions,
     TrimByMinId,
 )
+from glide.shared.config import ProtocolVersion
+from glide.shared.constants import OK, TResult, TSingleNodeRoute
+from glide.shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
