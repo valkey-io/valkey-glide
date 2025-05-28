@@ -5,6 +5,9 @@ package integTest
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -603,6 +606,139 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
 }
 
+func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	// TODO: fix use more specific type than 'any' when converters are added
+	testData := make([]CommandTestData, 0)
+	prefix := "{listKey}-"
+	key := prefix + uuid.NewString()
+
+	batch.LPush(key, []string{"val1", "val2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LPush(key, [val1 val2])"})
+
+	batch.LPop(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "val2", TestName: "LPop(key)"})
+
+	batch.LPopCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"val1"}, TestName: "LPopCount(key, 1)"})
+
+	batch.RPush(key, []string{"elem1", "elem2", "elem3", "elem2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(key, [elem1, elem2, elem3, elem2])"})
+
+	batch.LPos(key, "elem2")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "LPos(key, elem2)"})
+
+	batch.LPosWithOptions(key, "elem2", *options.NewLPosOptions().SetRank(2))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPosWithOptions(key, elem2, {Rank: 2})"})
+
+	batch.LPosCount(key, "elem2", 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCount(key, elem2, 2)"})
+
+	batch.LPosCountWithOptions(key, "elem2", 2, *options.NewLPosOptions().SetMaxLen(4))
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCountWithOptions(key, elem2, 2, {MaxLen: 4})"})
+
+	batch.LRange(key, 0, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem1", "elem2", "elem3"}, TestName: "LRange(key, 0, 2)"})
+
+	batch.LIndex(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "LIndex(key, 1)"})
+
+	trimKey := prefix + "trim-" + uuid.NewString()
+	batch.RPush(trimKey, []string{"one", "two", "three", "four"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(trimKey, [one, two, three, four])"})
+	batch.LTrim(trimKey, 1, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "LTrim(trimKey, 1, 2)"})
+	batch.LRange(trimKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"two", "three"}, TestName: "LRange(trimKey, 0, -1) after trim"})
+
+	batch.LLen(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "LLen(key)"})
+
+	batch.LRem(key, 1, "elem2")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "LRem(key, 1, elem2)"})
+	batch.LRange(key, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem1", "elem3", "elem2"}, TestName: "LRange(key, 0, -1) after LRem"})
+
+	batch.RPop(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "RPop(key)"})
+
+	batch.RPopCount(key, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem3", "elem1"}, TestName: "RPopCount(key, 2)"})
+
+	batch.RPush(key, []string{"hello", "world"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
+	batch.LInsert(key, constants.Before, "world", "there")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LInsert(key, Before, world, there)"})
+	batch.LRange(key, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"hello", "there", "world"}, TestName: "LRange(key, 0, -1) after LInsert"})
+
+	batch.BLPop([]string{key}, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "hello"}, TestName: "BLPop([key], 1)"})
+
+	batch.BRPop([]string{key}, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "world"}, TestName: "BRPop([key], 1)"})
+
+	rpushxKey := prefix + "rpushx-" + uuid.NewString()
+	batch.RPush(rpushxKey, []string{"initial"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(rpushxKey, [initial])"})
+	batch.RPushX(rpushxKey, []string{"added"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPushX(rpushxKey, [added])"})
+	batch.LRange(rpushxKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"})
+
+	lpushxKey := prefix + "lpushx-" + uuid.NewString()
+	batch.RPush(lpushxKey, []string{"initial"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(lpushxKey, [initial])"})
+	batch.LPushX(lpushxKey, []string{"added"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LPushX(lpushxKey, [added])"})
+	batch.LRange(lpushxKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"})
+
+	batch.LMPop([]string{key}, constants.Left)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"})
+
+	batch.RPush(key, []string{"hello"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(key, [hello])"})
+	batch.LMPopCount([]string{key}, constants.Left, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"})
+
+	batch.RPush(key, []string{"hello", "world"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
+	batch.BLMPop([]string{key}, constants.Left, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"})
+
+	batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"})
+
+	lsetKey := prefix + "lset-" + uuid.NewString()
+	batch.RPush(lsetKey, []string{"one", "two", "three"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "RPush(lsetKey, [one, two, three])"})
+	batch.LSet(lsetKey, 1, "changed")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "LSet(lsetKey, 1, changed)"})
+	batch.LRange(lsetKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"})
+
+	destKey := prefix + "dest-" + uuid.NewString()
+	batch.RPush(key, []string{"first", "second"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [first, second])"})
+	batch.RPush(destKey, []string{"third", "fourth"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(destKey, [third, fourth])"})
+	batch.LMove(key, destKey, constants.Right, constants.Left)
+	testData = append(testData, CommandTestData{ExpectedResponse: "second", TestName: "LMove(key, destKey, Right, Left)"})
+	batch.LRange(key, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"first"}, TestName: "LRange(key, 0, -1) after LMove"})
+	batch.LRange(destKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after LMove"})
+
+	batch.BLMove(key, destKey, constants.Right, constants.Left, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "first", TestName: "BLMove(key, destKey, Right, Left, 1)"})
+	batch.LRange(key, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "LRange(key, 0, -1) after BLMove"})
+	batch.LRange(destKey, 0, -1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"first", "second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after BLMove"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "List commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
@@ -616,6 +752,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateGenericCommandTests,
 		CreateHashTest,
 		CreateHyperLogLogTest,
+		CreateListCommandsTest,
 	}
 }
 
@@ -635,6 +772,15 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 		clientType := fmt.Sprintf("%T", client)[7:]
 		for _, isAtomic := range []bool{true, false} {
 			for _, testProvider := range GetCommandGroupTestProviders() {
+				testToRunUntrimmed := runtime.FuncForPC(reflect.ValueOf(testProvider).Pointer()).Name()
+				testToRunTrimmed := strings.Replace(testToRunUntrimmed, "github.com/valkey-io/valkey-glide/go/v2/integTest.", "", 1)
+				switch testToRunTrimmed {
+				case "CreateListCommandsTest":
+					if suite.serverVersion < "7.0.0" {
+						continue
+					}
+				default:
+				}
 				batch := pipeline.NewClusterBatch(isAtomic)
 				testData := testProvider(batch, isAtomic, suite.serverVersion)
 
