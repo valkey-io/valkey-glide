@@ -47,10 +47,10 @@ public class OpenTelemetryTests {
         //                System.out.println("path not ------");
         //            }
         spanData = new String(Files.readAllBytes(Paths.get(path)));
-        //            System.out.println("span data=" + spanData);
+        System.out.println("span data=" + spanData);
 
         spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
-        //            System.out.println(spans);
+        System.out.println(spans);
 
         // Check that we have spans
         if (spans.isEmpty()) {
@@ -419,161 +419,147 @@ public class OpenTelemetryTests {
                 endMemory < startMemory * 1.1,
                 "Memory usage increased too much: " + startMemory + " -> " + endMemory);
     }
-    //
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
-    //        GlideClusterClient client1 =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //
-    //        GlideClusterClient client2 =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //
-    //        client1.set("test_key", "value").get();
-    //        client2.get("test_key").get();
-    //
-    //        // Wait for spans to be flushed to file
-    //        Thread.sleep(5000);
-    //
-    //        // Read and check span names from the file
-    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-    //
-    //        // Check for expected span names
-    //        assertTrue(spanData.spanNames.contains("Get"));
-    //        assertTrue(spanData.spanNames.contains("Set"));
-    //
-    //        client1.close();
-    //        client2.close();
-    //    }
 
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testSpanBatchFile(ProtocolVersion protocol) {
-    //        // Force garbage collection if available
-    //        System.gc();
-    //
-    //        long startMemory = Runtime.getRuntime().totalMemory() -
-    // Runtime.getRuntime().freeMemory();
-    //        System.out.println("here====" + startMemory);
-    //        client =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //
-    //        ClusterBatch batch = new ClusterBatch(true);
-    //
-    //        batch.set("test_key", "foo");
-    //        batch.objectRefcount("test_key");
-    ////        System.out.println("here====2 " + startMemory);
-    //        Object[] response = client.exec(batch, true).get();
-    //        Thread.sleep(1000);
-    //
-    //        System.out.println("here====3");
-    //        System.out.println(response[0].toString());
-    //        System.out.println(response.length);
-    //        assertNotNull(response);
-    //        assertEquals(2, response.length);
-    //        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
-    //        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
-    //        System.out.println("here====4 " + startMemory);
-    //
-    //        // Wait for spans to be flushed to file
-    //        System.out.println("here====5 " + startMemory);
-    //        // Read and check span names from the file
-    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-    //
-    //        // Check for expected span names
-    //        assertTrue(spanData.spanNames.contains("Batch"));
-    //        assertTrue(spanData.spanNames.contains("send_batch"));
-    //
-    //        // Force GC and check memory
-    //        System.gc();
-    //
-    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    //        System.out.println("here====6 " + startMemory);
-    //
-    //        // Allow 10% growth
-    //        assertTrue(
-    //                endMemory < startMemory * 1.1,
-    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    //    }
-    //
-    //    @Test
-    //    @SneakyThrows
-    //    public void testAutomaticSpanLifecycle() {
-    //        // Force garbage collection if available
-    //        System.gc();
-    //
-    //        long startMemory = Runtime.getRuntime().totalMemory() -
-    // Runtime.getRuntime().freeMemory();
-    //
-    //        client =
-    //                GlideClusterClient.createClient(
-    //
-    // commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-    //                        .get();
-    //
-    //        // Execute multiple commands - each should automatically create and clean up its span
-    //        client.set("test_key1", "value1").get();
-    //        client.get("test_key1").get();
-    //        client.set("test_key2", "value2").get();
-    //        client.get("test_key2").get();
-    //
-    //        // Force GC again to clean up
-    //        System.gc();
-    //
-    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    //
-    //        // Allow small fluctuations
-    //        assertTrue(
-    //                endMemory < startMemory * 1.1,
-    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    //    }
-    //
-    //    @Test
-    //    @SneakyThrows
-    //    public void testConcurrentCommandsSpanLifecycle() {
-    //        // Force garbage collection if available
-    //        System.gc();
-    //
-    //        long startMemory = Runtime.getRuntime().totalMemory() -
-    // Runtime.getRuntime().freeMemory();
-    //
-    //        client =
-    //                GlideClusterClient.createClient(
-    //
-    // commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-    //                        .get();
-    //
-    //        // Execute multiple concurrent commands
-    //        List<java.util.concurrent.CompletableFuture<?>> commands =
-    //                List.of(
-    //                        client.set("test_key1", "value1"),
-    //                        client.get("test_key1"),
-    //                        client.set("test_key2", "value2"),
-    //                        client.get("test_key2"),
-    //                        client.set("test_key3", "value3"),
-    //                        client.get("test_key3"));
-    //
-    //        // Wait for all commands to complete
-    //        for (java.util.concurrent.CompletableFuture<?> command : commands) {
-    //            command.get();
-    //        }
-    //
-    //        // Force GC again to clean up
-    //        System.gc();
-    //
-    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    //
-    //        // Allow small fluctuations
-    //        assertTrue(
-    //                endMemory < startMemory * 1.1,
-    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    //    }
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
+        GlideClusterClient client1 =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        GlideClusterClient client2 =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        client1.set("test_key", "value").get();
+        client2.get("test_key").get();
+
+        // Wait for spans to be flushed to file
+        Thread.sleep(5000);
+
+        // Read and check span names from the file
+        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+        // Check for expected span names
+        assertTrue(spanData.spanNames.contains("Get"));
+        assertTrue(spanData.spanNames.contains("Set"));
+
+        client1.close();
+        client2.close();
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testSpanBatchFile(ProtocolVersion protocol) {
+        // Force garbage collection if available
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        ClusterBatch batch = new ClusterBatch(true);
+
+        batch.set("test_key", "foo");
+        batch.objectRefcount("test_key");
+        Object[] response = client.exec(batch, true).get();
+        Thread.sleep(1000);
+        assertNotNull(response);
+        assertEquals(2, response.length);
+        assertEquals("OK", response[0]);
+        assertTrue((Long) response[1] >= 1);
+
+        // Wait for spans to be flushed to file
+        Thread.sleep(5000);
+
+        // Read and check span names from the file
+        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+        // Check for expected span names
+        System.out.println("spanNames===" + spanData.spanNames.toString());
+        assertTrue(spanData.spanNames.contains("Batch"));
+        assertTrue(spanData.spanNames.contains("send_batch"));
+
+        // Force GC and check memory
+        System.gc();
+
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        // Allow 10% growth
+        assertTrue(
+                endMemory < startMemory * 1.1,
+                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testAutomaticSpanLifecycle() {
+        // Force garbage collection if available
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
+                        .get();
+
+        // Execute multiple commands - each should automatically create and clean up its span
+        client.set("test_key1", "value1").get();
+        client.get("test_key1").get();
+        client.set("test_key2", "value2").get();
+        client.get("test_key2").get();
+
+        // Force GC again to clean up
+        System.gc();
+
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        // Allow small fluctuations
+        assertTrue(
+                endMemory < startMemory * 1.1,
+                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testConcurrentCommandsSpanLifecycle() {
+        // Force garbage collection if available
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
+                        .get();
+
+        // Execute multiple concurrent commands
+        List<java.util.concurrent.CompletableFuture<?>> commands =
+                List.of(
+                        client.set("test_key1", "value1"),
+                        client.get("test_key1"),
+                        client.set("test_key2", "value2"),
+                        client.get("test_key2"),
+                        client.set("test_key3", "value3"),
+                        client.get("test_key3"));
+
+        // Wait for all commands to complete
+        for (java.util.concurrent.CompletableFuture<?> command : commands) {
+            command.get();
+        }
+
+        // Force GC again to clean up
+        System.gc();
+
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        // Allow small fluctuations
+        assertTrue(
+                endMemory < startMemory * 1.1,
+                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    }
 }

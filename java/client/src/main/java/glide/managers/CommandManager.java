@@ -480,7 +480,7 @@ public class CommandManager {
         long spanPtr = 0;
         if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
             // Create OpenTelemetry span
-            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterBatch");
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
         }
 
         // Set the root span pointer if a span was created
