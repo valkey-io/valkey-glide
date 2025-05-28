@@ -813,7 +813,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
                 Ok(s as jlong)
             }
             let result = create_leaked_otel_span(&mut env, name);
-            handle_errors(&mut env, result);
+            handle_errors(&mut env, result)
         },
         "createLeakedOtelSpan",
     )
@@ -841,7 +841,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSp
                 Ok(())
             }
             let result = drop_otel_span(span_ptr);
-            handle_errors(&mut env, result);
+            handle_errors(&mut env, result)
         },
         "dropOtelSpan",
     )
