@@ -216,6 +216,35 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
+	// TODO: replace 'any' type after converters have been added
+
+	// Just test that the execution works
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic).
+				Publish("NonExistentChannel", "msg").
+				PubSubShardChannels().
+				PubSubShardChannelsWithPattern("").
+				PubSubShardNumSub()
+
+			res, err := c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res[0])
+			assert.Equal(suite.T(), ([]any)(nil), res[1])
+			assert.Equal(suite.T(), ([]any)(nil), res[2])
+			assert.Equal(suite.T(), map[string]any{}, res[3])
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				Publish("NonExistentChannel", "msg")
+			res, err := c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res[0])
+		}
+	})
+}
+
 func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
@@ -1003,6 +1032,27 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "List commands"}
 }
 
+func CreatePubSubTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	// TODO: replace 'any' type after converters have been added
+
+	// Just test that the execution works
+	testData := make([]CommandTestData, 0)
+
+	batch.PubSubChannels()
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannels()"})
+
+	batch.PubSubChannelsWithPattern("")
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannelsWithPattern()"})
+
+	batch.PubSubNumPat()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "PubSubNumPat()"})
+
+	batch.PubSubNumSub([]string{""})
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"": int64(0)}, TestName: "PubSubNumSub()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "PubSub commands"}
+}
+
 func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{set}-"
@@ -1159,6 +1209,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateHashTest,
 		CreateHyperLogLogTest,
 		CreateListCommandsTest,
+		CreatePubSubTests,
 		CreateSetCommandsTests,
 	}
 }
