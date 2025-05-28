@@ -168,7 +168,7 @@ long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule|Ope
 long-timeout-test: __it
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
-opentelemetry-test: export TEST_FILTER = -skip TestGlideTestSuite -otel-test -testify.m TestOpenTelemetry
+opentelemetry-test: export TEST_FILTER = -skip TestGlideTestSuite -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
 opentelemetry-test: __it
 
 __it:
