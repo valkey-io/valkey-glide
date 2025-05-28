@@ -12,8 +12,21 @@ import anyio
 import pytest
 
 from glide import ClosingError, RequestError, Script
-from glide.commands.batch import Batch, ClusterBatch
-from glide.commands.bitmap import (
+from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import (
+    AllNodes,
+    AllPrimaries,
+    ByAddressRoute,
+    RandomNode,
+    Route,
+    SlotIdRoute,
+    SlotKeyRoute,
+    SlotType,
+)
+from glide.shared.commands.batch import Batch, ClusterBatch
+from glide.shared.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -27,8 +40,8 @@ from glide.commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
-from glide.commands.command_args import Limit, ListDirection, OrderBy
-from glide.commands.core_options import (
+from glide.shared.commands.command_args import Limit, ListDirection, OrderBy
+from glide.shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -42,7 +55,7 @@ from glide.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
-from glide.commands.sorted_set import (
+from glide.shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
     GeoSearchByRadius,
@@ -57,7 +70,7 @@ from glide.commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.commands.stream import (
+from glide.shared.commands.stream import (
     ExclusiveIdBound,
     IdBound,
     MaxId,
@@ -70,19 +83,6 @@ from glide.commands.stream import (
     StreamReadOptions,
     TrimByMaxLen,
     TrimByMinId,
-)
-from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
-from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import (
-    AllNodes,
-    AllPrimaries,
-    ByAddressRoute,
-    RandomNode,
-    Route,
-    SlotIdRoute,
-    SlotKeyRoute,
-    SlotType,
 )
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (

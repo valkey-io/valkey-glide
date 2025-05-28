@@ -19,11 +19,6 @@ import anyio
 import sniffio
 from anyio import to_thread
 
-from glide.commands.async_commands.cluster_commands import ClusterCommands
-from glide.commands.async_commands.core import CoreCommands
-from glide.commands.async_commands.standalone_commands import StandaloneCommands
-from glide.commands.command_args import ObjectType
-from glide.commands.core_options import PubSubMsg
 from glide.config import BaseClientConfiguration, ServerCredentials
 from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TEncodable, TRequest, TResult
 from glide.exceptions import (
@@ -32,15 +27,7 @@ from glide.exceptions import (
     ConnectionError,
     get_request_error_class,
 )
-from glide.logger import Level as LogLevel
-from glide.logger import Logger as ClientLogger
-from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.response_pb2 import Response
-from glide.protobuf_codec import PartialMessageException, ProtobufCodec
-from glide.routes import Route, set_protobuf_route
-
-from .glide import (
+from glide.glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
@@ -49,6 +36,18 @@ from .glide import (
     start_socket_listener_external,
     value_from_pointer,
 )
+from glide.logger import Level as LogLevel
+from glide.logger import Logger as ClientLogger
+from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
+from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.protobuf.response_pb2 import Response
+from glide.protobuf_codec import PartialMessageException, ProtobufCodec
+from glide.routes import Route, set_protobuf_route
+from glide.shared.commands.async_commands.cluster_commands import ClusterCommands
+from glide.shared.commands.async_commands.core import CoreCommands
+from glide.shared.commands.async_commands.standalone_commands import StandaloneCommands
+from glide.shared.commands.command_args import ObjectType
+from glide.shared.commands.core_options import PubSubMsg
 
 if sys.version_info >= (3, 11):
     from typing import Self

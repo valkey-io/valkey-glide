@@ -6,8 +6,8 @@ import traceback
 from enum import Enum
 from typing import Optional
 
-from .glide import Level as internalLevel
-from .glide import py_init, py_log
+from glide.glide import Level as internalLevel
+from glide.glide import py_init, py_log
 
 
 class Level(Enum):

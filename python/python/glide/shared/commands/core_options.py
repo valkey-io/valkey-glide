@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Optional, Type, Union, get_args
 
-from glide.commands.command_args import Limit, OrderBy
 from glide.constants import TEncodable
+from glide.shared.commands.command_args import Limit, OrderBy
 
 
 @dataclass

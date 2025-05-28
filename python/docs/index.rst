@@ -13,5 +13,7 @@ Welcome to the documentation page for Valkey GLIDE!
    :caption: Contents:
 
    glide
-   glide.commands.async_commands
+   glide.sync
+   glide.shared
+   glide.shared.commands.async_commands
    modules

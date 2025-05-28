@@ -18,7 +18,6 @@ from typing import (
 import pytest
 from packaging import version
 
-from glide.commands.core_options import InfoSection
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -39,6 +38,7 @@ from glide.constants import (
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.routes import AllNodes
+from glide.shared.commands.core_options import InfoSection
 from glide.sync import GlideClient as SyncGlideClient
 from glide.sync import GlideClusterClient as SyncGlideClusterClient
 from glide.sync import TGlideClient as TSyncGlideClient

@@ -1,118 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.commands.batch import (
-    Batch,
-    ClusterBatch,
-    ClusterTransaction,
-    TBatch,
-    Transaction,
-)
-from glide.commands.bitmap import (
-    BitEncoding,
-    BitFieldGet,
-    BitFieldIncrBy,
-    BitFieldOffset,
-    BitFieldOverflow,
-    BitFieldSet,
-    BitFieldSubCommands,
-    BitmapIndexType,
-    BitOffset,
-    BitOffsetMultiplier,
-    BitOverflowControl,
-    BitwiseOperation,
-    OffsetOptions,
-    SignedEncoding,
-    UnsignedEncoding,
-)
-from glide.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
-from glide.commands.core_options import (
-    ConditionalChange,
-    ExpireOptions,
-    ExpiryGetEx,
-    ExpirySet,
-    ExpiryType,
-    ExpiryTypeGetEx,
-    FlushMode,
-    FunctionRestorePolicy,
-    InfoSection,
-    InsertPosition,
-    OnlyIfEqual,
-    PubSubMsg,
-    UpdateOptions,
-)
-from glide.commands.server_modules import ft, glide_json, json_batch
-from glide.commands.server_modules.ft_options.ft_aggregate_options import (
-    FtAggregateApply,
-    FtAggregateClause,
-    FtAggregateFilter,
-    FtAggregateGroupBy,
-    FtAggregateLimit,
-    FtAggregateOptions,
-    FtAggregateReducer,
-    FtAggregateSortBy,
-    FtAggregateSortProperty,
-)
-from glide.commands.server_modules.ft_options.ft_create_options import (
-    DataType,
-    DistanceMetricType,
-    Field,
-    FieldType,
-    FtCreateOptions,
-    NumericField,
-    TagField,
-    TextField,
-    VectorAlgorithm,
-    VectorField,
-    VectorFieldAttributes,
-    VectorFieldAttributesFlat,
-    VectorFieldAttributesHnsw,
-    VectorType,
-)
-from glide.commands.server_modules.ft_options.ft_profile_options import (
-    FtProfileOptions,
-    QueryType,
-)
-from glide.commands.server_modules.ft_options.ft_search_options import (
-    FtSearchLimit,
-    FtSearchOptions,
-    ReturnField,
-)
-from glide.commands.server_modules.glide_json import (
-    JsonArrIndexOptions,
-    JsonArrPopOptions,
-    JsonGetOptions,
-)
-from glide.commands.sorted_set import (
-    AggregationType,
-    GeoSearchByBox,
-    GeoSearchByRadius,
-    GeoSearchCount,
-    GeospatialData,
-    GeoUnit,
-    InfBound,
-    LexBoundary,
-    RangeByIndex,
-    RangeByLex,
-    RangeByScore,
-    ScoreBoundary,
-    ScoreFilter,
-)
-from glide.commands.stream import (
-    ExclusiveIdBound,
-    IdBound,
-    MaxId,
-    MinId,
-    StreamAddOptions,
-    StreamClaimOptions,
-    StreamGroupOptions,
-    StreamPendingOptions,
-    StreamRangeBound,
-    StreamReadGroupOptions,
-    StreamReadOptions,
-    StreamTrimOptions,
-    TrimByMaxLen,
-    TrimByMinId,
-)
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -154,6 +41,7 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
+from glide.glide import ClusterScanCursor, Script
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
@@ -167,8 +55,119 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
-
-from .glide import ClusterScanCursor, Script
+from glide.shared.commands.batch import (
+    Batch,
+    ClusterBatch,
+    ClusterTransaction,
+    TBatch,
+    Transaction,
+)
+from glide.shared.commands.bitmap import (
+    BitEncoding,
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOffset,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
+from glide.shared.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
+from glide.shared.commands.core_options import (
+    ConditionalChange,
+    ExpireOptions,
+    ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
+    ExpiryTypeGetEx,
+    FlushMode,
+    FunctionRestorePolicy,
+    InfoSection,
+    InsertPosition,
+    OnlyIfEqual,
+    PubSubMsg,
+    UpdateOptions,
+)
+from glide.shared.commands.server_modules import ft, glide_json, json_batch
+from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (
+    FtAggregateApply,
+    FtAggregateClause,
+    FtAggregateFilter,
+    FtAggregateGroupBy,
+    FtAggregateLimit,
+    FtAggregateOptions,
+    FtAggregateReducer,
+    FtAggregateSortBy,
+    FtAggregateSortProperty,
+)
+from glide.shared.commands.server_modules.ft_options.ft_create_options import (
+    DataType,
+    DistanceMetricType,
+    Field,
+    FieldType,
+    FtCreateOptions,
+    NumericField,
+    TagField,
+    TextField,
+    VectorAlgorithm,
+    VectorField,
+    VectorFieldAttributes,
+    VectorFieldAttributesFlat,
+    VectorFieldAttributesHnsw,
+    VectorType,
+)
+from glide.shared.commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+    QueryType,
+)
+from glide.shared.commands.server_modules.ft_options.ft_search_options import (
+    FtSearchLimit,
+    FtSearchOptions,
+    ReturnField,
+)
+from glide.shared.commands.server_modules.glide_json import (
+    JsonArrIndexOptions,
+    JsonArrPopOptions,
+    JsonGetOptions,
+)
+from glide.shared.commands.sorted_set import (
+    AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
+    GeospatialData,
+    GeoUnit,
+    InfBound,
+    LexBoundary,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
+    ScoreFilter,
+)
+from glide.shared.commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    StreamClaimOptions,
+    StreamGroupOptions,
+    StreamPendingOptions,
+    StreamRangeBound,
+    StreamReadGroupOptions,
+    StreamReadOptions,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
+)
 
 __all__ = [
     # Client

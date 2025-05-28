@@ -19,9 +19,9 @@ Examples:
 """
 from typing import List, Optional, Union, cast
 
-from glide.commands.core_options import ConditionalChange
 from glide.constants import TOK, TEncodable, TJsonResponse, TJsonUniversalResponse
 from glide.glide_client import TGlideClient
+from glide.shared.commands.core_options import ConditionalChange
 
 
 class JsonGetOptions:
