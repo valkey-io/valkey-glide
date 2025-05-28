@@ -135,7 +135,7 @@ jobs:
                   folder_path: "${{ github.workspace }}/glide-core"
 
               ### Rust FFI ###
-            - name: Run ORT tools for glide-core
+            - name: Run ORT tools for FFI
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/ffi"
