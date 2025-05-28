@@ -14,10 +14,26 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
+	"unsafe"
 )
 
 // OpenTelemetryConfig represents the configuration for OpenTelemetry integration.
 // It allows configuring how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+//
+// Example usage:
+//
+//	config := glide.OpenTelemetryConfig{
+//	    Traces: &glide.OpenTelemetryTracesConfig{
+//	        Endpoint:         "http://localhost:4318/v1/traces",
+//	        SamplePercentage: 10, // Sample 10% of commands
+//	    },
+//	    FlushIntervalMs: &interval, // interval := int64(1000)
+//	}
+//	err := glide.GetInstance().Init(config)
+//	if err != nil {
+//	    log.Fatalf("Failed to initialize OpenTelemetry: %v", err)
+//	}
 type OpenTelemetryConfig struct {
 	// Traces configuration for exporting trace data. If nil, trace data will not be exported.
 	Traces *OpenTelemetryTracesConfig
@@ -95,12 +111,14 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 
 	if openTelemetryConfig.Traces != nil {
 		cConfig.traces.endpoint = C.CString(openTelemetryConfig.Traces.Endpoint)
+		defer C.free(unsafe.Pointer(cConfig.traces.endpoint))
 		cConfig.traces.has_sample_percentage = true
 		cConfig.traces.sample_percentage = C.uint32_t(openTelemetryConfig.Traces.SamplePercentage)
 	}
 
 	if openTelemetryConfig.Metrics != nil {
 		cConfig.metrics.endpoint = C.CString(openTelemetryConfig.Metrics.Endpoint)
+		defer C.free(unsafe.Pointer(cConfig.metrics.endpoint))
 	}
 
 	// Initialize OpenTelemetry
@@ -120,15 +138,6 @@ func (o *OpenTelemetry) IsInitialized() bool {
 	return otelInitialized
 }
 
-// GetSamplePercentage returns the sample percentage for traces only if OpenTelemetry is initialized
-// and the traces config is set, otherwise returns 0.
-func (o *OpenTelemetry) GetSamplePercentage() int32 {
-	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
-		return 0
-	}
-	return otelConfig.Traces.SamplePercentage
-}
-
 // ShouldSample determines if the current request should be sampled for OpenTelemetry tracing.
 // Uses the configured sample percentage to randomly decide whether to create a span for this request.
 func (o *OpenTelemetry) ShouldSample() bool {
@@ -145,10 +154,25 @@ func (o *OpenTelemetry) ShouldSample() bool {
 	return o.IsInitialized() && percentage > 0 && float32(currentRandom.Int64()) < float32(percentage)
 }
 
+var configMutex sync.RWMutex
+
+// GetSamplePercentage returns the sample percentage for traces only if OpenTelemetry is initialized
+// and the traces config is set, otherwise returns 0.
+func (o *OpenTelemetry) GetSamplePercentage() int32 {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
+		return 0
+	}
+	return otelConfig.Traces.SamplePercentage
+}
+
 // SetSamplePercentage sets the percentage of requests to be sampled and traced.
 // Must be a value between 0 and 100.
 // This setting only affects traces, not metrics.
 func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
+	configMutex.Lock()
+	defer configMutex.Unlock()
 	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
 		return fmt.Errorf("OpenTelemetry config traces not initialized")
 	}
