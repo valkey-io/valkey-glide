@@ -474,6 +474,25 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
 }
 
+func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	key := "{key}-1-" + uuid.NewString()
+
+	// Start clean
+	batch.FlushAll()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "CustomCommand: FlushAll()"})
+
+	batch.CustomCommand([]string{"SET", key, "1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "CustomCommand: Set(key, 1)"})
+	batch.Get(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "1", TestName: "Get(key1)"})
+
+	batch.RandomKey()
+	testData = append(testData, CommandTestData{ExpectedResponse: key, TestName: "RandomKey()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Generic Cluster commands"}
+}
+
 func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	// TODO: After adding and fixing converters, remove 'any' typing in ExpectedResponse
 	testData := make([]CommandTestData, 0)
@@ -600,6 +619,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		// more command groups here
 		CreateBitmapTest,
 		CreateGenericBaseTests,
+		CreateGenericClusterCommandTests,
 		CreateHashTest,
 		CreateHyperLogLogTest,
 	}
