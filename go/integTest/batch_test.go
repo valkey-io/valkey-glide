@@ -490,6 +490,8 @@ func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic boo
 	batch.RandomKey()
 	testData = append(testData, CommandTestData{ExpectedResponse: key, TestName: "RandomKey()"})
 
+	// TODO: add Move in separate standalone batch tests
+
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Cluster commands"}
 }
 
