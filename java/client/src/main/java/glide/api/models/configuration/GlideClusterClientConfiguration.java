@@ -2,6 +2,7 @@
 package glide.api.models.configuration;
 
 import glide.api.GlideClusterClient;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
@@ -22,6 +23,7 @@ import lombok.experimental.SuperBuilder;
  *         .requestTimeout(2000)
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
+ *         .reconnectStrategy(reconnectionConfiguration)
  *         .inflightRequestsLimit(1000)
  *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
  *         .build();
@@ -35,5 +37,7 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
 
     /** Advanced configuration settings for the client. */
-    private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
+    @Builder.Default
+    private final AdvancedGlideClusterClientConfiguration advancedConfiguration =
+            AdvancedGlideClusterClientConfiguration.builder().build();
 }

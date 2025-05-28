@@ -9,6 +9,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     ClusterBatch,
     ConditionalChange,
@@ -29,8 +30,7 @@ import {
     RequestError,
     SortOrder,
     VectorField,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     CreateJsonBatchCommands,
     flushAndCloseClient,
