@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import glide.api.GlideClusterClient;
 import glide.api.OpenTelemetry;
 import glide.api.OpenTelemetry.OpenTelemetryConfig;
+import glide.api.models.ClusterBatch;
 import glide.api.models.configuration.ProtocolVersion;
 import java.io.File;
 import java.nio.file.Files;
@@ -268,42 +269,35 @@ public class OpenTelemetryTests {
         }
     }
 
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testSpanMemoryLeak(ProtocolVersion protocol) {
-    //        // Force garbage collection if available
-    //        System.gc();
-    //
-    //        long startMemory = Runtime.getRuntime().totalMemory() -
-    // Runtime.getRuntime().freeMemory();
-    //        System.out.println("hereeeeeeee");
-    //
-    //        client =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //        System.out.println("hereeeeeeee");
-    //
-    //        // Execute a series of commands sequentially
-    //        for (int i = 0; i < 100; i++) {
-    //            String key = "test_key_" + i;
-    //            client.set(key, "value_" + i).get();
-    //            client.get(key).get();
-    //            System.out.println("i="+i);
-    //        }
-    //
-    //        // Force GC and check memory
-    //        System.gc();
-    //        System.out.println("hereeeeeeee");
-    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    //
-    //        // Allow 10% growth
-    //        assertTrue(
-    //                endMemory < startMemory * 1.1,
-    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    //    }
-    //
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testSpanMemoryLeak(ProtocolVersion protocol) {
+        // Force garbage collection if available
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        // Execute a series of commands sequentially
+        for (int i = 0; i < 100; i++) {
+            String key = "test_key_" + i;
+            client.set(key, "value_" + i).get();
+            client.get(key).get();
+        }
+
+        // Force GC and check memory
+        System.gc();
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        // Allow 10% growth
+        assertTrue(
+                endMemory < startMemory * 1.1,
+                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    }
 
     @ParameterizedTest
     @MethodSource("getClients")
@@ -360,75 +354,71 @@ public class OpenTelemetryTests {
         assertEquals(10, spanData.spanNames.stream().filter(name -> name.equals("Get")).count());
     }
 
-    //
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
-    //        // Try to reinitialize with invalid config
-    //        OpenTelemetryConfig openTelemetryConfig =
-    //                OpenTelemetryConfig.builder()
-    //                        .traces(
-    //                                OpenTelemetry.TracesConfig.builder()
-    //                                        .endpoint("wrong.endpoint")
-    //                                        .samplePercentage(1)
-    //                                        .build())
-    //                        .build();
-    //
-    //        // This should not throw an error because init can only be called once per process
-    //        OpenTelemetry.init(openTelemetryConfig);
-    //
-    //        client =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //
-    //        client.set("testOtelGlobalConfig", "value").get();
-    //
-    //        Thread.sleep(500);
-    //
-    //        // Read the span file and check span name
-    //        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
-    //
-    //        assertTrue(spanData.spanNames.contains("Set"));
-    //    }
-    //
-    //    @ParameterizedTest
-    //    @MethodSource("getClients")
-    //    @SneakyThrows
-    //    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
-    //        // Force garbage collection if available
-    //        System.gc();
-    //
-    //        long startMemory = Runtime.getRuntime().totalMemory() -
-    // Runtime.getRuntime().freeMemory();
-    //
-    //        client =
-    //
-    // GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-    //                        .get();
-    //
-    //        ClusterBatch batch = new ClusterBatch(true);
-    //
-    //        batch.set("test_key", "foo");
-    //        batch.objectRefcount("test_key");
-    //
-    //        Object[] response = client.exec(batch, true).get();
-    //        assertNotNull(response);
-    //        assertEquals(2, response.length);
-    //        assertEquals("OK", response[0]); // batch.set("test_key", "foo");
-    //        assertTrue((Long) response[1] >= 1); // batch.objectRefcount("test_key");
-    //
-    //        // Force GC and check memory
-    //        System.gc();
-    //
-    //        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    //
-    //        // Allow 10% growth
-    //        assertTrue(
-    //                endMemory < startMemory * 1.1,
-    //                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    //    }
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
+        // Try to reinitialize with invalid config
+        OpenTelemetryConfig openTelemetryConfig =
+                OpenTelemetryConfig.builder()
+                        .traces(
+                                OpenTelemetry.TracesConfig.builder()
+                                        .endpoint("wrong.endpoint")
+                                        .samplePercentage(1)
+                                        .build())
+                        .build();
+
+        // This should not throw an error because init can only be called once per process
+        OpenTelemetry.init(openTelemetryConfig);
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        client.set("testOtelGlobalConfig", "value").get();
+
+        Thread.sleep(500);
+
+        // Read the span file and check span name
+        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+        assertTrue(spanData.spanNames.contains("Set"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
+        // Force garbage collection if available
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        ClusterBatch batch = new ClusterBatch(true);
+
+        batch.set("test_key", "foo");
+        batch.objectRefcount("test_key");
+
+        Object[] response = client.exec(batch, true).get();
+        assertNotNull(response);
+        assertEquals(2, response.length);
+        assertEquals("OK", response[0]);
+        assertTrue((Long) response[1] >= 1);
+
+        // Force GC and check memory
+        System.gc();
+
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+        // Allow 10% growth
+        assertTrue(
+                endMemory < startMemory * 1.1,
+                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
+    }
     //
     //    @ParameterizedTest
     //    @MethodSource("getClients")
