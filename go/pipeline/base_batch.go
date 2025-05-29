@@ -4287,7 +4287,7 @@ func (b *BaseBatch[T]) BitOp(bitwiseOperation options.BitOpType, destination str
 // Parameters:
 //
 //	key - The key for the string to count the set bits of.
-//	options - The offset options - see [options.BitOffsetOptions].
+//	options - The offset options - see [options.BitCountOptions].
 //
 // Command Response:
 //
