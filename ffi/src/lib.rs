@@ -1094,7 +1094,7 @@ pub unsafe extern "C-unwind" fn command(
     channel: usize,
     command_type: RequestType,
     arg_count: c_ulong,
-    args: *const *const u8,
+    args: *const usize,
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
@@ -1117,7 +1117,7 @@ pub unsafe extern "C-unwind" fn command(
         Some(cmd) => cmd,
         None => {
             let err = RedisError::from((ErrorKind::ClientError, "Couldn't fetch command type"));
-            return client_adapter.handle_error(err, channel);
+            return unsafe { client_adapter.handle_redis_error(err, channel) };
         }
     };
     for command_arg in arg_vec {
@@ -1134,7 +1134,7 @@ pub unsafe extern "C-unwind" fn command(
                     "Decoding route failed",
                     err.to_string(),
                 ));
-                return client_adapter.handle_error(err, channel);
+                return unsafe { client_adapter.handle_redis_error(err, channel) };
             }
         }
     } else {
@@ -1410,7 +1410,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
     let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
     let temp_str = match c_str.to_str() {
         Ok(temp_str) => temp_str,
-        Err(e) => return client_adapter.handle_error(RedisError::from(e), channel),
+        Err(e) => {
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+        }
     };
     let cursor_id = temp_str.to_string();
 
@@ -1433,7 +1435,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following MATCH.",
                         ));
-                        return client_adapter.handle_error(err, channel);
+                        return unsafe { client_adapter.handle_redis_error(err, channel) };
                     }
                 },
                 b"TYPE" => match iter.next() {
@@ -1443,7 +1445,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following TYPE.",
                         ));
-                        return client_adapter.handle_error(err, channel);
+                        return unsafe { client_adapter.handle_redis_error(err, channel) };
                     }
                 },
                 b"COUNT" => match iter.next() {
@@ -1453,7 +1455,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following COUNT.",
                         ));
-                        return client_adapter.handle_error(err, channel);
+                        return unsafe { client_adapter.handle_redis_error(err, channel) };
                     }
                 },
                 _ => {
@@ -1470,7 +1472,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                     match str::parse::<u32>(v) {
                         Ok(v) => v,
                         Err(e) => {
-                            return client_adapter.handle_error(RedisError::from(e), channel);
+                            return unsafe {
+                                client_adapter.handle_redis_error(RedisError::from(e), channel)
+                            };
                         }
                     }
                 } else {
@@ -1548,7 +1552,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
     let password = match unsafe { CStr::from_ptr(password).to_str() } {
         Ok(password) => password,
         Err(e) => {
-            return client_adapter.handle_error(RedisError::from(e), channel);
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
         }
     };
     let password_option = if password.is_empty() {
@@ -1622,7 +1626,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
     let hash_str = match unsafe { CStr::from_ptr(hash).to_str() } {
         Ok(hash) => hash,
         Err(e) => {
-            return client_adapter.handle_error(RedisError::from(e), channel);
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
         }
     };
 
@@ -1651,7 +1655,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
                     "Decoding route failed",
                     err.to_string(),
                 ));
-                return client_adapter.handle_error(err, channel);
+                return unsafe { client_adapter.handle_redis_error(err, channel) };
             }
         }
     } else {

@@ -5,6 +5,7 @@ package options
 import (
 	"sync"
 	"unsafe"
+	"errors"
 )
 
 // #include "../lib.h"
@@ -148,9 +149,9 @@ func storeScript(script []byte) string {
 	defer C.free_script_hash_buffer(cHash)
 
         buffer := (*C.uint8_t)(cHash.ptr)
-        len := C.uintptr_t(cHash.len)
+        len := C.int(cHash.len)
 
-        hash := string(C.GoBytes(buffer, len))
+        hash := string(C.GoBytes(unsafe.Pointer(buffer), len))
 
 	return hash
 }
@@ -159,18 +160,18 @@ func storeScript(script []byte) string {
 // This function interfaces with the Rust implementation through FFI
 func dropScript(hash string) error {
 	if hash == "" {
-		return
+		return nil
 	}
 
 	buffer := []byte(hash)
-        len := C.uintptr_t(buffer)
+        len := C.uintptr_t(len(buffer))
         cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
-	result := C.drop_script(cHash, len) == nil
-	if result == nil {
+	err := C.drop_script(cHash, len)
+	if err == nil {
 		return nil
         }
-	return C.GoString(result)
+	return errors.New(C.GoString(err))
 }
 
 // ScriptFlushOptions represents options for script flush operations
