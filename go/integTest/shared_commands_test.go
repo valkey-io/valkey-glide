@@ -2292,7 +2292,7 @@ func (suite *GlideTestSuite) TestSPopCount() {
 		assert.Len(suite.T(), popMembers, 3)
 
 		// Verify all popped members were in the original set
-		for member, _ := range popMembers {
+		for member := range popMembers {
 			assert.Contains(suite.T(), members, member)
 		}
 
@@ -2302,7 +2302,7 @@ func (suite *GlideTestSuite) TestSPopCount() {
 		assert.Len(suite.T(), remainingMembers, 2)
 
 		// Verify no duplicates between popped and remaining
-		for member, _ := range popMembers {
+		for member := range popMembers {
 			assert.NotContains(suite.T(), remainingMembers, member)
 		}
 	})
@@ -2323,7 +2323,7 @@ func (suite *GlideTestSuite) TestSPopCount_AllMembers() {
 		assert.Len(suite.T(), popMembers, 3)
 
 		// Verify all original members were popped
-		for member, _ := range members {
+		for member := range members {
 			assert.Contains(suite.T(), popMembers, member)
 		}
 
