@@ -1,4 +1,52 @@
 [project]
+dynamic = ["version", "dependencies"]
+name = "valkey-glide-sync"
+
+[build-system]
+requires = [
+    "setuptools>=61.0", 
+    "wheel", 
+    "cffi>=1.0.0"
+]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+packages = ["glide_sync"]
+
+[tool.cibuildwheel.environment]
+RELEASE_MODE = "1"
+
+[tool.cibuildwheel]
+build = "cp313-*"
+skip = "*-musllinux* *i686*"
+before-build = """
+# Install rust
+curl https://sh.rustup.rs -sSf | sh -s -- -y && export PATH=$HOME/.cargo/bin:$PATH
+# Install protobuf compiler
+if [[ $(`which apt`) != '' ]]
+then
+    echo "installing unzip and curl"
+    apt-get update
+    apt install unzip curl python3.13 pypy3 -y
+fi
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+ARCH=`uname -p`
+if [[ $ARCH == 'x86_64' ]]; then 
+PROTOC_ARCH="x86_64"
+elif [[ $ARCH == 'aarch64' ]]; then 
+    PROTOC_ARCH="aarch_64"
+    export CC_aarch64_unknown_linux_gnu=gcc
+    export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
+else 
+    echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+    exit 1 
+fi
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+unzip -o protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+"""
+
+[project]
 name = "valkey-glide-sync"
 dynamic = ["version"]
 description = "Valkey GLIDE Sync client. Supports Valkey and Redis OSS "
