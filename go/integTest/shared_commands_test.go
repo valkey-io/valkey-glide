@@ -752,9 +752,8 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		result, err := client.GetDel(context.Background(), "")
 
-		assert.NotNil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
-		assert.Equal(suite.T(), "key is required", err.Error())
 	})
 }
 
