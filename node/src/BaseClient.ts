@@ -522,26 +522,6 @@ export interface ServerCredentials {
     password: string;
 }
 
-/**  Represents advanced TLS configuration settings. */
-export interface TlsAdvancedConfiguration {
-    /**
-     * Whether to bypass TLS certificate verification.
-     *
-     * - When set to `true`, the client skips certificate validation.
-     *   This is useful when connecting to servers or clusters using self-signed certificates,
-     *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
-     *
-     * - This setting is typically used in development or testing environments.
-     *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
-     *
-     * - Only valid if TLS is already enabled in the base client configuration.
-     *   Enabling it without TLS will result in a `ConfigurationError`.
-     *
-     * - Default: false (verification is enforced).
-     */
-    insecure?: boolean;
-}
-
 /** Represents the client's read from strategy. */
 export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
@@ -786,7 +766,24 @@ export interface AdvancedBaseClientConfiguration {
      * The advanced TLS configuration settings. This allows for more granular control of TLS behavior,
      * such as enabling an insecure mode that bypasses certificate validation.
      */
-    tlsConfig?: TlsAdvancedConfiguration;
+    tlsAdvancedConfiguration?: {
+        /**
+         * Whether to bypass TLS certificate verification.
+         *
+         * - When set to `true`, the client skips certificate validation.
+         *   This is useful when connecting to servers or clusters using self-signed certificates,
+         *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+         *
+         * - This setting is typically used in development or testing environments.
+         *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+         *
+         * - Only valid if TLS is already enabled in the base client configuration.
+         *   Enabling it without TLS will result in a `ConfigurationError`.
+         *
+         * - Default: false (verification is enforced).
+         */
+        insecure: boolean;
+    };
 }
 
 /**
@@ -7909,7 +7906,7 @@ export class BaseClient {
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
         // Apply TLS configuration if present
-        if (options.tlsConfig?.insecure) {
+        if (options.tlsAdvancedConfiguration?.insecure) {
             if (request.tlsMode === connection_request.TlsMode.SecureTls) {
                 request.tlsMode = connection_request.TlsMode.InsecureTls;
             } else if (request.tlsMode === connection_request.TlsMode.NoTls) {

@@ -11,7 +11,7 @@
         "esModuleInterop": true,
         "moduleResolution": "node",
         "allowSyntheticDefaultImports": true,
-        "allowJs": true,
+        "allowJs": false,
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "strict": true,
@@ -29,5 +29,5 @@
         "esm": true
     },
     "include": ["src/**/*", "src/index.ts", "types/**/*.d.ts"],
-    "exclude": ["node_modules", "build-ts", "tests", "tests/**/*"]
+    "exclude": ["node_modules", "build-ts/**/*", "tests", "tests/**/*"]
 }
