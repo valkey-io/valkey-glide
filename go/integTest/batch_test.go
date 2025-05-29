@@ -243,18 +243,10 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.Expire(key2, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(key2, 1)"})
 
-	batch.ExpireWithOptions(key2, 1, constants.HasExistingExpiry)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(key2, 1, HasExistingExpiry)"})
-
 	batch.Set(key1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
 	batch.ExpireAt(key1, 0)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAt(key1, 0)"})
-
-	batch.Set(key1, "value")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
-	batch.ExpireAtWithOptions(key1, 0, constants.HasNoExpiry)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(key1, 0, HasNoExpiry)"})
 
 	batch.Set(key1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
@@ -263,18 +255,28 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 
 	batch.Set(key1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
-	batch.PExpireWithOptions(key1, int64(5*1000), constants.HasNoExpiry)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(key1, 5000, HasNoExpiry)"})
-
-	batch.Set(key1, "value")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
 	batch.PExpireAt(key1, 0)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(key1, 0)"})
 
-	batch.Set(key1, "value")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
-	batch.PExpireAtWithOptions(key1, 0, constants.HasNoExpiry)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(key1, 0, HasNoExpiry)"})
+	if serverVer < "9.0.0" {
+		batch.ExpireWithOptions(key2, 1, constants.HasExistingExpiry)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(key2, 1, HasExistingExpiry)"})
+
+		batch.Set(key1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
+		batch.ExpireAtWithOptions(key1, 0, constants.HasNoExpiry)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(key1, 0, HasNoExpiry)"})
+
+		batch.Set(key1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
+		batch.PExpireWithOptions(key1, int64(5*1000), constants.HasNoExpiry)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(key1, 5000, HasNoExpiry)"})
+
+		batch.Set(key1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
+		batch.PExpireAtWithOptions(key1, 0, constants.HasNoExpiry)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(key1, 0, HasNoExpiry)"})
+	}
 
 	batch.Set(key1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value)"})
