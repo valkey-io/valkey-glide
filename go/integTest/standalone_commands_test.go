@@ -1320,4 +1320,3 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
-

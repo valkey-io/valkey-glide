@@ -3,9 +3,9 @@
 package options
 
 import (
+	"errors"
 	"sync"
 	"unsafe"
-	"errors"
 )
 
 // #include "../lib.h"
@@ -148,10 +148,10 @@ func storeScript(script []byte) string {
 	))
 	defer C.free_script_hash_buffer(cHash)
 
-        buffer := (*C.uint8_t)(cHash.ptr)
-        len := C.int(cHash.len)
+	buffer := (*C.uint8_t)(cHash.ptr)
+	len := C.int(cHash.len)
 
-        hash := string(C.GoBytes(unsafe.Pointer(buffer), len))
+	hash := string(C.GoBytes(unsafe.Pointer(buffer), len))
 
 	return hash
 }
@@ -164,13 +164,13 @@ func dropScript(hash string) error {
 	}
 
 	buffer := []byte(hash)
-        len := C.uintptr_t(len(buffer))
-        cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
+	len := C.uintptr_t(len(buffer))
+	cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
 	err := C.drop_script(cHash, len)
 	if err == nil {
 		return nil
-        }
+	}
 	return errors.New(C.GoString(err))
 }
 

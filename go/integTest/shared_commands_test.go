@@ -10801,4 +10801,3 @@ func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
 		assert.Contains(suite.T(), infoStr, "lib-ver=unknown", "lib-ver not found or incorrect")
 	})
 }
-

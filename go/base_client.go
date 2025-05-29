@@ -8838,4 +8838,3 @@ func (client *baseClient) ScriptKill(ctx context.Context) (string, error) {
 	}
 	return handleOkResponse(result)
 }
-
