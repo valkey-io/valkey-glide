@@ -4247,10 +4247,6 @@ func (b *BaseBatch[T]) BitCount(key string) *T {
 
 // Performs a bitwise operation between multiple keys (containing string values) and store the result in the destination.
 //
-// Note:
-//
-//	When in cluster mode, `destination` and all `keys` must map to the same hash slot.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
