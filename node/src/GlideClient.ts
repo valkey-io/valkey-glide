@@ -150,7 +150,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
  * ```typescript
  * const config: AdvancedGlideClientConfiguration = {
  *   connectionTimeout: 500, // Set the connection timeout to 500ms
- *   tlsConfig: {
+ *   tlsAdvancedConfiguration: {
  *     insecure: true, // Skip TLS certificate verification (use only in development)
  *   },
  * };

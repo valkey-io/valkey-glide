@@ -522,26 +522,6 @@ export interface ServerCredentials {
     password: string;
 }
 
-/**  Represents advanced TLS configuration settings. */
-export interface TlsAdvancedConfiguration {
-    /**
-     * Whether to bypass TLS certificate verification.
-     *
-     * - When set to `true`, the client skips certificate validation.
-     *   This is useful when connecting to servers or clusters using self-signed certificates,
-     *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
-     *
-     * - This setting is typically used in development or testing environments.
-     *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
-     *
-     * - Only valid if TLS is already enabled in the base client configuration.
-     *   Enabling it without TLS will result in a `ConfigurationError`.
-     *
-     * - Default: false (verification is enforced).
-     */
-    insecure?: boolean;
-}
-
 /** Represents the client's read from strategy. */
 export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
@@ -786,7 +766,24 @@ export interface AdvancedBaseClientConfiguration {
      * The advanced TLS configuration settings. This allows for more granular control of TLS behavior,
      * such as enabling an insecure mode that bypasses certificate validation.
      */
-    tlsConfig?: TlsAdvancedConfiguration;
+    tlsAdvancedConfiguration?: {
+        /**
+         * Whether to bypass TLS certificate verification.
+         *
+         * - When set to `true`, the client skips certificate validation.
+         *   This is useful when connecting to servers or clusters using self-signed certificates,
+         *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+         *
+         * - This setting is typically used in development or testing environments.
+         *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+         *
+         * - Only valid if TLS is already enabled in the base client configuration.
+         *   Enabling it without TLS will result in a `ConfigurationError`.
+         *
+         * - Default: false (verification is enforced).
+         */
+        insecure: boolean;
+    };
 }
 
 /**
@@ -1010,7 +1007,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                            host,
+                        host,
                     );
                 }
 
@@ -1076,8 +1073,8 @@ export class BaseClient {
                     err instanceof ValkeyError
                         ? err
                         : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
+                            `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                        ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -6304,12 +6301,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-        AZAffinityReplicasAndPrimary:
-            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+            AZAffinityReplicasAndPrimary:
+                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7619,8 +7616,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7662,8 +7659,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7870,11 +7867,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

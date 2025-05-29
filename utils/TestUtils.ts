@@ -58,10 +58,15 @@ export class ValkeyCluster {
             addresses: [string, number][],
             clusterMode: boolean,
         ) => Promise<string>,
+        tls: boolean = false,
         loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
             let command = `start -r ${replicaCount} -n ${shardCount}`;
+
+            if (tls) {
+                command += " --tls";
+            }
 
             if (cluster_mode) {
                 command += " --cluster-mode";
