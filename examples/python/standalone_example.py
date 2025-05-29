@@ -39,6 +39,8 @@ async def create_client(
     # Check `GlideClientConfiguration` for additional options.
     config = GlideClientConfiguration(
         addresses,
+        # Set request timeout - recommended to configure based on your use case.
+        request_timeout=500,
         # Enable this field if the servers are configured with TLS.
         # use_tls=True
     )
