@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from shutil import copy2, rmtree, which
+from shutil import copy2, rmtree, which, copytree
 from typing import Any, Dict, List, Optional
 
 
@@ -146,9 +146,44 @@ def install_glide_shared(env: Dict[str, str]) -> None:
         label="install glide-shared",
     )
 
+def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
+        # 1. Copy shared module
+        dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
+        if dest_shared.exists():
+            rmtree(dest_shared)
+        dest_shared.parent.mkdir(parents=True, exist_ok=True)
+        origin_shared = GLIDE_SHARED_DIR / "glide_shared"
+        print(f"[INFO] Copying glide_shared from: {origin_shared} to: {dest_shared}")
+        copytree(origin_shared, dest_shared)
+
+        # 2. Build wheel using maturin
+        maturin_cmd = ["maturin", "build"]
+        if release:
+            cmd += ["--release", "--strip"]
+
+        run_command(
+            maturin_cmd,
+            cwd=GLIDE_ASYNC_DIR,
+            env=env,
+            label="maturin build async wheel",
+        )
+
+        # 3. Find and install wheel
+        wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
+        wheel_files = list(wheel_dir.glob("*.whl"))
+        if not wheel_files:
+            raise FileNotFoundError(f"No wheel found in {wheel_dir}")
+
+        wheel_path = wheel_files[0]
+        print(f"[INFO] Installing async client wheel: {wheel_path}")
+        run_command(
+            [str(PYTHON_EXE), "-m", "pip", "install", "--force-reinstall", str(wheel_path)],
+            env=env,
+            label="install async client wheel",
+        )
 
 def build_async_client(
-    glide_version: str, release: bool, no_cache: bool = False
+    glide_version: str, release: bool, no_cache: bool = False, wheel: bool = False
 ) -> None:
     print(
         f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
@@ -163,6 +198,9 @@ def build_async_client(
     install_glide_shared(env)
     generate_protobuf_files()
 
+    if wheel:
+        return build_async_client_wheel(env, release)
+    
     cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
@@ -175,35 +213,61 @@ def build_async_client(
     )
     print("[OK] Async client build completed")
 
+def build_sync_client_wheel(env: Dict[str, str]) -> None:
+    print("[INFO] Building sync client wheel with `python -m build`")
+    run_command(
+        [str(PYTHON_EXE), "-m", "build"],
+        cwd=GLIDE_SYNC_DIR,
+        env=env,
+        label="build sync wheel",
+    )
 
-def build_sync_client(glide_version: str, release: bool, no_cache: bool) -> None:
+    wheel_files = list((GLIDE_SYNC_DIR / "dist").glob("*.whl"))
+    if not wheel_files:
+        raise FileNotFoundError("No wheel found in 'dist/' after building sync client.")
+
+    wheel_path = wheel_files[0]
+    print(f"[INFO] Installing sync client wheel: {wheel_path}")
+    run_command(
+        [str(PYTHON_EXE), "-m", "pip", "install", "--force-reinstall", str(wheel_path)],
+        env=env,
+        label="install sync wheel",
+    )
+
+def build_sync_client(glide_version: str, release: bool, no_cache: bool, wheel: bool = False) -> None:
     print(
         f"[INFO] Building sync client with version={glide_version} in {'release' if release else 'debug'} mode..."
     )
     generate_protobuf_files()
     env = activate_venv(no_cache)
-    install_glide_shared(env)
-
-    # Optionally clean build artifacts
-    if no_cache:
-        for path in [GLIDE_SYNC_DIR / "build", GLIDE_SYNC_DIR / "dist"]:
-            if path.exists():
-                print(f"[INFO] Removing cache directory: {path}")
-                rmtree(path)
-
-    # Build the FFI library
-    cargo_args = ["cargo", "build"]
-    if release:
-        cargo_args.append("--release")
-    run_command(
-        cargo_args,
-        cwd=FFI_DIR,
-        label="cargo build ffi",
-        env={
+    env = {
             "GLIDE_NAME": GLIDE_SYNC_NAME,
             "GLIDE_VERSION": glide_version,
             **os.environ,
-        },
+    }
+    if release:
+        env["RELEASE_MODE"] = "1"
+    
+    # Optionally clean build artifacts
+    if no_cache:
+        run_command(
+            [str(PYTHON_EXE), "setup.py", "clean"],
+            cwd=GLIDE_SYNC_DIR,
+            label="Clean all build artifacts",
+            env=env,
+        )
+
+    if wheel:
+        return build_sync_client_wheel(env)
+
+    # Build the FFI library
+    build_args = ["pip", "install", "."]
+
+    run_command(
+        build_args,
+        cwd=GLIDE_SYNC_DIR,
+        label="build and install GLIDE Python Sync client",
+        env=env,
     )
 
     # Locate the output .so file
@@ -338,7 +402,12 @@ Examples:
         default="unknown",
         help="Specify the client version that will be used for server identification and displayed in CLIENT INFO output",
     )
-
+    build_parser.add_argument(
+        "--wheel",
+        action="store_true",
+        help="Build the client to wheel and install it from the built wheel.",
+    )
+    
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
     )
@@ -374,14 +443,16 @@ Examples:
         run_tests(args.args)
 
     elif args.command == "build":
+        version = args.glide_version
         release = args.mode == "release"
         no_cache = args.no_cache
+        wheel = args.wheel
         if args.client in ["async", "all"]:
             print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(args.glide_version, release, no_cache)
+            build_async_client(version, release, no_cache, wheel)
         if args.client in ["sync", "all"]:
             print("🛠 Building sync client ({args.mode} mode)...")
-            build_sync_client(args.glide_version, release, no_cache)
+            build_sync_client(version, release, no_cache, wheel)
 
     print("[✅ DONE] Task completed successfully.")
 
