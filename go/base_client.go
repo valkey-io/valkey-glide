@@ -4622,7 +4622,9 @@ func (client *baseClient) BZMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError("Length overflow for the provided keys")
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError(
+			"Length overflow for the provided keys",
+		)
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -4685,7 +4687,9 @@ func (client *baseClient) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError("Length overflow for the provided keys")
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError(
+			"Length overflow for the provided keys",
+		)
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
