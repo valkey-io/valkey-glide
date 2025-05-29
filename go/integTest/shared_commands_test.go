@@ -2278,6 +2278,114 @@ func (suite *GlideTestSuite) TestSPop_LastMember() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSPopCount() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		members := []string{"value1", "value2", "value3", "value4", "value5"}
+
+		res, err := client.SAdd(context.Background(), key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res)
+
+		// Pop multiple members at once
+		popMembers, err := client.SPopCount(context.Background(), key, 3)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), popMembers, 3)
+		
+		// Verify all popped members were in the original set
+		for _, member := range popMembers {
+			assert.Contains(suite.T(), members, member)
+		}
+
+		// Verify remaining members count
+		remainingMembers, err := client.SMembers(context.Background(), key)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), remainingMembers, 2)
+		
+		// Verify no duplicates between popped and remaining
+		for _, member := range popMembers {
+			assert.NotContains(suite.T(), remainingMembers, member)
+		}
+	})
+}
+
+func (suite *GlideTestSuite) TestSPopCount_AllMembers() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		members := []string{"value1", "value2", "value3"}
+
+		res, err := client.SAdd(context.Background(), key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res)
+
+		// Pop all members
+		popMembers, err := client.SPopCount(context.Background(), key, 3)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), popMembers, 3)
+		
+		// Verify all original members were popped
+		for _, member := range members {
+			assert.Contains(suite.T(), popMembers, member)
+		}
+
+		// Verify set is now empty
+		remainingMembers, err := client.SMembers(context.Background(), key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), remainingMembers)
+	})
+}
+
+func (suite *GlideTestSuite) TestSPopCount_MoreThanExist() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		members := []string{"value1", "value2"}
+
+		res, err := client.SAdd(context.Background(), key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res)
+
+		// Try to pop more members than exist
+		popMembers, err := client.SPopCount(context.Background(), key, 5)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), popMembers, 2) // Should only return existing members
+		
+		// Verify all original members were popped
+		for _, member := range members {
+			assert.Contains(suite.T(), popMembers, member)
+		}
+
+		// Verify set is now empty
+		remainingMembers, err := client.SMembers(context.Background(), key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), remainingMembers)
+	})
+}
+
+func (suite *GlideTestSuite) TestSPopCount_NonExistingKey() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+
+		// Try to pop from non-existing key
+		popMembers, err := client.SPopCount(context.Background(), key, 3)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), popMembers)
+	})
+}
+
+func (suite *GlideTestSuite) TestSPopCount_WrongType() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		
+		// Set key to a string value
+		suite.verifyOK(client.Set(context.Background(), key, "string-value"))
+		
+		// Try to pop from a key that's not a set
+		_, err := client.SPopCount(context.Background(), key, 3)
+		assert.NotNil(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "WRONGTYPE")
+	})
+}
+
 func (suite *GlideTestSuite) TestSMIsMember() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.NewString()
