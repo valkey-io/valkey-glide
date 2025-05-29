@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import traceback
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable, Optional
 
 from cffi import FFI
 
+from glide.shared.constants import LIB_FILE
+
 ENCODING = "utf-8"
-CURR_DIR = Path(__file__).resolve().parent
-ROOT_DIR = CURR_DIR.parent.parent.parent
-FFI_DIR = ROOT_DIR / "ffi"
-LIB_FILE = FFI_DIR / "target" / "debug" / "libglide_ffi.so"
 
 
 class Level(Enum):
