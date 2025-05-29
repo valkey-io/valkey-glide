@@ -12,19 +12,7 @@ import anyio
 import pytest
 
 from glide import ClosingError, RequestError, Script
-from glide.config import BackoffStrategy, ProtocolVersion, ServerCredentials
-from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import (
-    AllNodes,
-    AllPrimaries,
-    ByAddressRoute,
-    RandomNode,
-    Route,
-    SlotIdRoute,
-    SlotKeyRoute,
-    SlotType,
-)
 from glide.shared.commands.batch import Batch, ClusterBatch
 from glide.shared.commands.bitmap import (
     BitFieldGet,
@@ -83,6 +71,23 @@ from glide.shared.commands.stream import (
     StreamReadOptions,
     TrimByMaxLen,
     TrimByMinId,
+)
+from glide.shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide.shared.constants import (
+    OK,
+    TEncodable,
+    TFunctionStatsSingleNodeResponse,
+    TResult,
+)
+from glide.shared.routes import (
+    AllNodes,
+    AllPrimaries,
+    ByAddressRoute,
+    RandomNode,
+    Route,
+    SlotIdRoute,
+    SlotKeyRoute,
+    SlotType,
 )
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (

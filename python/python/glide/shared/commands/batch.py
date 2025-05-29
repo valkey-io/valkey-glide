@@ -4,8 +4,6 @@ import sys
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.constants import TEncodable
-from glide.exceptions import RequestError
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.shared.commands.bitmap import (
     BitFieldGet,
@@ -57,6 +55,8 @@ from glide.shared.commands.stream import (
     StreamTrimOptions,
     _create_xpending_range_args,
 )
+from glide.shared.constants import TEncodable
+from glide.shared.exceptions import RequestError
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated

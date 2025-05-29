@@ -2,7 +2,6 @@
 from enum import Enum
 from typing import List, Optional, Union, cast
 
-from glide.constants import TEncodable
 from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
@@ -12,6 +11,7 @@ from glide.shared.commands.server_modules.ft_options.ft_constants import (
 from glide.shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
 )
+from glide.shared.constants import TEncodable
 
 
 class QueryType(Enum):

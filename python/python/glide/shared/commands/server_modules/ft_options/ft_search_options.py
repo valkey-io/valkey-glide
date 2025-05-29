@@ -2,10 +2,10 @@
 
 from typing import List, Mapping, Optional
 
-from glide.constants import TEncodable
 from glide.shared.commands.server_modules.ft_options.ft_constants import (
     FtSearchKeywords,
 )
+from glide.shared.constants import TEncodable
 
 
 class FtSearchLimit:

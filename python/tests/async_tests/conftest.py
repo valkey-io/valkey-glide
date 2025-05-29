@@ -4,7 +4,9 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 
-from glide.config import (
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.logger import Logger
+from glide.shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -13,9 +15,7 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.exceptions import ClosingError
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.logger import Logger
+from glide.shared.exceptions import ClosingError
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     DEFAULT_TEST_LOG_LEVEL,

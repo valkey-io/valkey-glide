@@ -4,7 +4,7 @@ from typing import Generator, List, Optional
 
 import pytest
 
-from glide.config import (
+from glide.shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -13,7 +13,7 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.exceptions import ClosingError
+from glide.shared.exceptions import ClosingError
 from glide.sync import GlideClient as SyncGlideClient
 from glide.sync import GlideClusterClient as SyncGlideClusterClient
 from glide.sync import TGlideClient as TSyncGlideClient

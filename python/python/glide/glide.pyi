@@ -2,7 +2,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import List, Optional, Union
 
-from glide.constants import TResult
+from glide.shared.constants import TResult
 
 DEFAULT_TIMEOUT_IN_MILLISECONDS: int = ...
 MAX_REQUEST_ARGS_LEN: int = ...
