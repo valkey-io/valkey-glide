@@ -1898,7 +1898,7 @@ pub unsafe extern "C" fn init_open_telemetry(
         let error_msg =
             "At least one of traces or metrics must be provided for OpenTelemetry configuration";
         return CString::new(error_msg)
-            .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
             .into_raw();
     }
 
@@ -1920,7 +1920,9 @@ pub unsafe extern "C" fn init_open_telemetry(
             Err(e) => {
                 let error_msg = format!("Invalid traces exporter configuration: {}", e);
                 return CString::new(error_msg)
-                    .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
                     .into_raw();
             }
         }
@@ -1937,7 +1939,9 @@ pub unsafe extern "C" fn init_open_telemetry(
             Err(e) => {
                 let error_msg = format!("Invalid metrics exporter configuration: {}", e);
                 return CString::new(error_msg)
-                    .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
                     .into_raw();
             }
         }
@@ -1955,7 +1959,7 @@ pub unsafe extern "C" fn init_open_telemetry(
             flush_interval_ms
         );
         return CString::new(error_msg)
-            .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
             .into_raw();
     }
 
@@ -1969,13 +1973,15 @@ pub unsafe extern "C" fn init_open_telemetry(
                 Err(e) => {
                     let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
                     CString::new(error_msg)
-                        .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+                        .unwrap_or_else(|_| {
+                            CString::new("Couldn't convert error message to C string").unwrap()
+                        })
                         .into_raw()
                 }
             }
         }
         Err(e) => CString::new(e)
-            .unwrap_or_else(|_| CString::new("Unknown error occurred").unwrap())
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
             .into_raw(),
     }
 }
