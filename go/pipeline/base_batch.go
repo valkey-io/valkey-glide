@@ -107,6 +107,10 @@ func (b *BaseBatch[T]) SetWithOptions(key string, value string, options options.
 
 // Retrieves the value associated with the given key and optionally sets the expiration of the key.
 //
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -196,10 +200,10 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (b *BaseBatch[T]) MGet(keys []string) *T {
-	return b.addCmdAndTypeChecker(C.MGet, keys, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.MGet, keys, reflect.Slice, false)
 }
 
-// Incr increments the number stored at key by one.
+// Increments the number stored at key by one. If key does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -216,7 +220,7 @@ func (b *BaseBatch[T]) Incr(key string) *T {
 	return b.addCmdAndTypeChecker(C.Incr, []string{key}, reflect.Int64, false)
 }
 
-// Increments the number stored at key by amount.
+// Increments the number stored at key by amount. If key does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -234,7 +238,9 @@ func (b *BaseBatch[T]) IncrBy(key string, amount int64) *T {
 	return b.addCmdAndTypeChecker(C.IncrBy, []string{key, utils.IntToString(amount)}, reflect.Int64, false)
 }
 
-// Increments the string representing a floating point number stored at key by amount.
+// Increments the string representing a floating point number stored at key by amount. By using a negative increment value,
+// the result is that the value stored at key is decremented. If key does not exist, it is set to `0` before performing the
+// operation.
 //
 // See [valkey.io] for details.
 //
@@ -245,14 +251,14 @@ func (b *BaseBatch[T]) IncrBy(key string, amount int64) *T {
 //
 // Command Response:
 //
-//	The value of key after the increment.
+//	The value of `key` after the increment.
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (b *BaseBatch[T]) IncrByFloat(key string, amount float64) *T {
 	return b.addCmdAndTypeChecker(C.IncrByFloat, []string{key, utils.FloatToString(amount)}, reflect.Float64, false)
 }
 
-// Decr decrements the number stored at key by one.
+// Decrements the number stored at key by one. If key does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -269,7 +275,7 @@ func (b *BaseBatch[T]) Decr(key string) *T {
 	return b.addCmdAndTypeChecker(C.Decr, []string{key}, reflect.Int64, false)
 }
 
-// Decrements the number stored at key by amount.
+// Decrements the number stored at code by amount. If key does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -305,7 +311,10 @@ func (b *BaseBatch[T]) Strlen(key string) *T {
 	return b.addCmdAndTypeChecker(C.Strlen, []string{key}, reflect.Int64, false)
 }
 
-// Overwrites part of the string stored at key, starting at the specified byte's offset.
+// Overwrites part of the string stored at key, starting at the specified byte's offset, for the entire length of value.
+// If the offset is larger than the current length of the string at key, the string is padded with zero bytes to make
+// offset fit.
+// Creates the key if it doesn't exist.
 //
 // See [valkey.io] for details.
 //
@@ -324,7 +333,10 @@ func (b *BaseBatch[T]) SetRange(key string, offset int, value string) *T {
 	return b.addCmdAndTypeChecker(C.SetRange, []string{key, strconv.Itoa(offset), value}, reflect.Int64, false)
 }
 
-// Returns the substring of the string value stored at key.
+// Returns the substring of the string value stored at key, determined by the byte's offsets start and end (both are
+// inclusive).
+// Negative offsets can be used in order to provide an offset starting from the end of the string. So `-1` means the last
+// character, `-2` the penultimate and so forth.
 //
 // See [valkey.io] for details.
 //
@@ -336,15 +348,15 @@ func (b *BaseBatch[T]) SetRange(key string, offset int, value string) *T {
 //
 // Command Response:
 //
-//	A substring extracted from the value stored at key.
-//	Returns empty string if the offset is out of bounds.
+//	A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
 //
 // [valkey.io]: https://valkey.io/commands/getrange/
 func (b *BaseBatch[T]) GetRange(key string, start int, end int) *T {
 	return b.addCmdAndTypeChecker(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)}, reflect.String, false)
 }
 
-// Appends a value to a key.
+// Appends a value to a key. If key does not exist it is created and set as an empty string, so APPEND will be similar to
+// SET in this special case.
 //
 // See [valkey.io] for details.
 //
@@ -362,7 +374,7 @@ func (b *BaseBatch[T]) Append(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.Append, []string{key, value}, reflect.Int64, false)
 }
 
-// Returns the longest common subsequence between strings stored at key1 and key2.
+// Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
@@ -385,7 +397,7 @@ func (b *BaseBatch[T]) LCS(key1 string, key2 string) *T {
 	return b.addCmdAndTypeChecker(C.LCS, []string{key1, key2}, reflect.String, false)
 }
 
-// Returns the longest common subsequence length between strings stored at key1 and key2.
+// Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
 //
 // Since:
 //
@@ -407,7 +419,7 @@ func (b *BaseBatch[T]) LCSLen(key1 string, key2 string) *T {
 	return b.addCmdAndTypeChecker(C.LCS, []string{key1, key2, options.LCSLenCommand}, reflect.Int64, false)
 }
 
-// Returns the longest common subsequence between strings stored at key1 and key2.
+// Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:
 //
@@ -424,7 +436,12 @@ func (b *BaseBatch[T]) LCSLen(key1 string, key2 string) *T {
 // Command Response:
 //
 //	A Map containing the indices of the longest common subsequence between the 2 strings
-//	and the total length of all the longest common subsequences.
+//	and the total length of all the longest common subsequences. The resulting map contains
+//	two keys, "matches" and "len":
+//	  - "len" is mapped to the total length of the all longest common subsequences between
+//	     the 2 strings.
+//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
+//	     of the common subsequences in the strings held by key1 and key2.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (b *BaseBatch[T]) LCSWithOptions(key1 string, key2 string, opts options.LCSIdxOptions) *T {
@@ -450,9 +467,6 @@ func (b *BaseBatch[T]) LCSWithOptions(key1 string, key2 string, opts options.LCS
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (b *BaseBatch[T]) GetDel(key string) *T {
-	if key == "" {
-		return b.addError("GetDel", &errors.RequestError{Msg: "key is required"})
-	}
 	return b.addCmdAndTypeChecker(C.GetDel, []string{key}, reflect.String, true)
 }
 
@@ -508,10 +522,12 @@ func (b *BaseBatch[T]) HGetAll(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
 func (b *BaseBatch[T]) HMGet(key string, fields []string) *T {
-	return b.addCmdAndTypeChecker(C.HMGet, append([]string{key}, fields...), reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.HMGet, append([]string{key}, fields...), reflect.Slice, false)
 }
 
 // Sets the specified fields to their respective values in the hash stored at key.
+// This command overwrites the values of specified fields that exist in the hash.
+// If key doesn't exist, a new key holding a hash is created.
 //
 // See [valkey.io] for details.
 //
@@ -530,6 +546,8 @@ func (b *BaseBatch[T]) HSet(key string, values map[string]string) *T {
 }
 
 // Sets field in the hash stored at key to value, only if field does not yet exist.
+// If key does not exist, a new key holding a hash is created.
+// If field already exists, this operation has no effect.
 //
 // See [valkey.io] for details.
 //
@@ -541,8 +559,8 @@ func (b *BaseBatch[T]) HSet(key string, values map[string]string) *T {
 //
 // Command Response:
 //
-//	true if field is a new field in the hash and value was set.
-//	false if field already exists in the hash and no operation was performed.
+//	`true` if field is a new field in the hash and value was set.
+//	`false` if field already exists in the hash and no operation was performed.
 //
 // [valkey.io]: https://valkey.io/commands/hsetnx/
 func (b *BaseBatch[T]) HSetNX(key string, field string, value string) *T {
@@ -550,6 +568,8 @@ func (b *BaseBatch[T]) HSetNX(key string, field string, value string) *T {
 }
 
 // Removes the specified fields from the hash stored at key.
+// Specified fields that do not exist within this hash are ignored.
+// If key does not exist, it is treated as an empty hash and this command returns `0`.
 //
 // See [valkey.io] for details.
 //
@@ -612,8 +632,8 @@ func (b *BaseBatch[T]) HVals(key string) *T {
 //
 // Command Response:
 //
-//	true if the hash contains the specified field.
-//	false if the hash does not contain the field, or if the key does not exist.
+//	`true` if the hash contains the specified field.
+//	`false` if the hash does not contain the field, or if the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hexists/
 func (b *BaseBatch[T]) HExists(key string, field string) *T {
@@ -638,6 +658,7 @@ func (b *BaseBatch[T]) HKeys(key string) *T {
 }
 
 // Returns the string length of the value associated with field in the hash stored at key.
+// If the key or the field do not exist, `0` is returned.
 //
 // See [valkey.io] for details.
 //
@@ -655,7 +676,9 @@ func (b *BaseBatch[T]) HStrLen(key string, field string) *T {
 	return b.addCmdAndTypeChecker(C.HStrlen, []string{key, field}, reflect.Int64, false)
 }
 
-// Increments the number stored at field in the hash stored at key by increment.
+// Increments the number stored at `field` in the hash stored at `key` by increment.
+// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+// If `field` or `key` does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -667,14 +690,16 @@ func (b *BaseBatch[T]) HStrLen(key string, field string) *T {
 //
 // Command Response:
 //
-//	The value of field in the hash stored at key after the increment.
+//	The value of `field` in the hash stored at `key` after the increment.
 //
 // [valkey.io]: https://valkey.io/commands/hincrby/
 func (b *BaseBatch[T]) HIncrBy(key string, field string, increment int64) *T {
 	return b.addCmdAndTypeChecker(C.HIncrBy, []string{key, field, utils.IntToString(increment)}, reflect.Int64, false)
 }
 
-// Increments the string representing a floating point number stored at field in the hash stored at key.
+// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
+// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+// If `field` or `key` does not exist, it is set to `0` before performing the operation.
 //
 // See [valkey.io] for details.
 //
@@ -686,7 +711,7 @@ func (b *BaseBatch[T]) HIncrBy(key string, field string, increment int64) *T {
 //
 // Command Response:
 //
-//	The value of field in the hash stored at key after the increment.
+//	The value of `field` in the hash stored at `key` after the increment.
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 func (b *BaseBatch[T]) HIncrByFloat(key string, field string, increment float64) *T {
@@ -822,7 +847,9 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 	)
 }
 
-// Inserts all the specified values at the head of the list stored at key.
+// Inserts all the specified values at the head of the list stored at key. elements are inserted one after the other to the
+// head of the list, from the leftmost element to the rightmost element. If key does not exist, it is created as an empty
+// list before performing the push operation.
 //
 // See [valkey.io] for details.
 //
@@ -840,7 +867,8 @@ func (b *BaseBatch[T]) LPush(key string, elements []string) *T {
 	return b.addCmdAndTypeChecker(C.LPush, append([]string{key}, elements...), reflect.Int64, false)
 }
 
-// Removes and returns the first elements of the list stored at key.
+// Removes and returns the first elements of the list stored at key. The command pops a single element from the beginning
+// of the list.
 //
 // See [valkey.io] for details.
 //
@@ -857,7 +885,7 @@ func (b *BaseBatch[T]) LPop(key string) *T {
 	return b.addCmdAndTypeChecker(C.LPop, []string{key}, reflect.String, true)
 }
 
-// Removes and returns up to count elements of the list stored at key.
+// Removes and returns up to `count` elements of the list stored at key, depending on the list's length.
 //
 // See [valkey.io] for details.
 //
@@ -955,6 +983,7 @@ func (b *BaseBatch[T]) LPosCount(key string, element string, count int64) *T {
 // Command Response:
 //
 //	An array that holds the indices of the matching elements within the list.
+//	If no match is found, an empty array is returned.
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (b *BaseBatch[T]) LPosCountWithOptions(key string, element string, count int64, opts options.LPosOptions) *T {
@@ -971,6 +1000,8 @@ func (b *BaseBatch[T]) LPosCountWithOptions(key string, element string, count in
 }
 
 // Inserts all the specified values at the tail of the list stored at key.
+// elements are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
+// If key does not exist, it is created as an empty list before performing the push operation.
 //
 // See [valkey.io] for details.
 //
@@ -1057,7 +1088,7 @@ func (b *BaseBatch[T]) SUnionStore(destination string, keys []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/smembers/
 func (b *BaseBatch[T]) SMembers(key string) *T {
-	return b.addCmdAndTypeChecker(C.SMembers, []string{key}, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.SMembers, []string{key}, reflect.Map, false)
 }
 
 // Retrieves the set cardinality (number of elements) of the set stored at key.
@@ -1088,8 +1119,8 @@ func (b *BaseBatch[T]) SCard(key string) *T {
 //
 // Command Response:
 //
-//	true if the member exists in the set, false otherwise.
-//	If key doesn't exist, it is treated as an empty set and returns false.
+//	`true` if the member exists in the set, `false` otherwise.
+//	If key doesn't exist, it is treated as an empty set and returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/sismember/
 func (b *BaseBatch[T]) SIsMember(key string, member string) *T {
@@ -1111,10 +1142,11 @@ func (b *BaseBatch[T]) SIsMember(key string, member string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/sdiff/
 func (b *BaseBatch[T]) SDiff(keys []string) *T {
-	return b.addCmdAndTypeChecker(C.SDiff, keys, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.SDiff, keys, reflect.Map, false)
 }
 
-// Stores the difference between the first set and all the successive sets in keys into a new set.
+// Stores the difference between the first set and all the successive sets in `keys`
+// into a new set at `destination`.
 //
 // See [valkey.io] for details.
 //
@@ -1147,7 +1179,7 @@ func (b *BaseBatch[T]) SDiffStore(destination string, keys []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/sinter/
 func (b *BaseBatch[T]) SInter(keys []string) *T {
-	return b.addCmdAndTypeChecker(C.SInter, keys, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.SInter, keys, reflect.Map, false)
 }
 
 // Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
@@ -1282,12 +1314,12 @@ func (b *BaseBatch[T]) SMIsMember(key string, members []string) *T {
 //
 // Command Response:
 //
-//	A `map[string]struct{}` of members which are present in at least one of the given sets.
+//	A collection containing members which are present in at least one of the given sets.
 //	If none of the sets exist, an empty collection will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/sunion/
 func (b *BaseBatch[T]) SUnion(keys []string) *T {
-	return b.addCmdAndTypeChecker(C.SUnion, keys, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.SUnion, keys, reflect.Map, false)
 }
 
 // Iterates incrementally over a set.
@@ -1339,7 +1371,8 @@ func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options optio
 	return b.addCmdAndTypeChecker(C.SScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
 }
 
-// Moves member from the set at source to the set at destination.
+// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+// Creates a new destination set if needed. The operation is atomic.
 //
 // See [valkey.io] for details.
 //
@@ -1351,7 +1384,7 @@ func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options optio
 //
 // Command Response:
 //
-//	true on success, or false if the source set does not exist or the element is not a member of the source set.
+//	`true` on success, or `false` if the source set does not exist or the element is not a member of the source set.
 //
 // [valkey.io]: https://valkey.io/commands/smove/
 func (b *BaseBatch[T]) SMove(source string, destination string, member string) *T {
@@ -1359,6 +1392,9 @@ func (b *BaseBatch[T]) SMove(source string, destination string, member string) *
 }
 
 // Returns the specified elements of the list stored at key.
+// The offsets start and end are zero-based indexes, with `0` being the first element of the list, `1` being the next element
+// and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with `-1` being
+// the last element of the list, `-2` being the penultimate, and so on.
 //
 // See [valkey.io] for details.
 //
@@ -1370,7 +1406,9 @@ func (b *BaseBatch[T]) SMove(source string, destination string, member string) *
 //
 // Command Response:
 //
-//	Array of elements in the specified range.
+//	Array of strings in the specified range.
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty array will be returned.
+//	If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
 //	If key does not exist an empty array will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/lrange/
@@ -1384,6 +1422,9 @@ func (b *BaseBatch[T]) LRange(key string, start int64, end int64) *T {
 }
 
 // Returns the element at index from the list stored at key.
+// The index is zero-based, so `0` means the first element, `1` the second element and so on. Negative indices can be used to
+// designate elements starting at the tail of the list. Here, `-1` means the last element, `-2` means the penultimate and so
+// forth.
 //
 // See [valkey.io] for details.
 //
@@ -1403,6 +1444,9 @@ func (b *BaseBatch[T]) LIndex(key string, index int64) *T {
 }
 
 // Trims an existing list so that it will contain only the specified range of elements.
+// The offsets start and end are zero-based indexes, with `0` being the first element of the list, `1` being the next element
+// and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with `-1` being
+// the last element of the list, `-2` being the penultimate, and so on.
 //
 // See [valkey.io] for details.
 //
@@ -1415,6 +1459,10 @@ func (b *BaseBatch[T]) LIndex(key string, index int64) *T {
 // Command Response:
 //
 //	Always "OK".
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
+//	(which causes key to be removed).
+//	If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
+//	If key does not exist, `"OK"` will be returned without changes to the database.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
 func (b *BaseBatch[T]) LTrim(key string, start int64, end int64) *T {
@@ -1436,15 +1484,19 @@ func (b *BaseBatch[T]) LTrim(key string, start int64, end int64) *T {
 //
 // Command Response:
 //
-//	The length of the list at key.
-//	If key does not exist, it is interpreted as an empty list and `0` is returned.
+//	The length of the list at `key`.
+//	If `key` does not exist, it is interpreted as an empty list and `0` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/llen/
 func (b *BaseBatch[T]) LLen(key string) *T {
 	return b.addCmdAndTypeChecker(C.LLen, []string{key}, reflect.Int64, false)
 }
 
-// Removes the first count occurrences of elements equal to element from the list stored at key.
+// Removes the first `count` occurrences of elements equal to `element` from the list stored at key.
+// If `count` is positive: Removes elements equal to `element` moving from head to tail.
+// If `count` is negative: Removes elements equal to `element` moving from tail to head.
+// If `count` is `0` or `count` is greater than the occurrences of elements equal to element, it removes all elements equal to
+// `element`.
 //
 // See [valkey.io] for details.
 //
@@ -1465,6 +1517,7 @@ func (b *BaseBatch[T]) LRem(key string, count int64, element string) *T {
 }
 
 // Removes and returns the last elements of the list stored at key.
+// The command pops a single element from the end of the list.
 //
 // See [valkey.io] for details.
 //
@@ -1482,7 +1535,7 @@ func (b *BaseBatch[T]) RPop(key string) *T {
 	return b.addCmdAndTypeChecker(C.RPop, []string{key}, reflect.String, true)
 }
 
-// Removes and returns up to count elements from the list stored at key.
+// Removes and returns up to `count` elements from the list stored at key, depending on the list's length.
 //
 // See [valkey.io] for details.
 //
@@ -1527,7 +1580,13 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 	return b.addCmdAndTypeChecker(C.LInsert, []string{key, insertPositionStr, pivot, element}, reflect.Int64, false)
 }
 
-// Pops an element from the head of the first list that is non-empty.
+// Pops an element from the head of the first list that is non-empty, with the given keys being checked in the order that
+// they are given.
+// Blocks the connection when there are no elements to pop from any of the given lists.
+//
+// Note:
+//
+// BLPop is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -1538,15 +1597,23 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 //
 // Command Response:
 //
-//	A two-element array containing the key from which the element was popped and the value of the popped element.
+//	A two-element array containing the key from which the element was popped and the value of the popped
+//	element, formatted as `[key, value]`.
 //	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 	return b.addCmdAndTypeChecker(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
 }
 
-// Pops an element from the tail of the first list that is non-empty.
+// Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
+// they are given.
+// Blocks the connection when there are no elements to pop from any of the given lists.
+//
+// Note:
+//
+// BLPop is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -1557,15 +1624,18 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 //
 // Command Response:
 //
-//	A two-element array containing the key from which the element was popped and the value of the popped element.
+//	A two-element array containing the key from which the element was popped and the value of the popped
+//	element, formatted as `[key, value]``.
 //	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BRPop(keys []string, timeoutSecs float64) *T {
 	return b.addCmdAndTypeChecker(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
 }
 
-// Inserts all the specified values at the tail of the list stored at key, only if key exists and holds a list.
+// Inserts all the specified values at the tail of the list stored at `key`, only if key exists and holds a list. If key is
+// not a list, this performs no operation.
 //
 // See [valkey.io] for details.
 //
@@ -1583,7 +1653,8 @@ func (b *BaseBatch[T]) RPushX(key string, elements []string) *T {
 	return b.addCmdAndTypeChecker(C.RPushX, append([]string{key}, elements...), reflect.Int64, false)
 }
 
-// Inserts all the specified values at the head of the list stored at key, only if key exists and holds a list.
+// Inserts all the specified values at the head of the list stored at `key`, only if key exists and holds a list. If key is
+// not a list, this performs no operation.
 //
 // See [valkey.io] for details.
 //
@@ -1679,6 +1750,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
+// BLMPop is the blocking variant of [glide.LMPop].
 //
 // Note:
 //
@@ -1723,6 +1795,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list.
+// BLMPopCount is the blocking variant of [LMPopCount].
 //
 // Note:
 //
@@ -1924,7 +1997,7 @@ func (b *BaseBatch[T]) Exists(keys []string) *T {
 //
 // Command Response:
 //
-//	true if the timeout was set. false if the timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
@@ -1948,7 +2021,7 @@ func (b *BaseBatch[T]) Expire(key string, seconds int64) *T {
 //
 // Command Response:
 //
-//	true if the timeout was set. false if the timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
@@ -2124,7 +2197,7 @@ func (b *BaseBatch[T]) PExpireAt(key string, unixTimestampInMilliSeconds int64) 
 //
 // Command Response:
 //
-//	true if the timeout was set. false if the timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
@@ -2331,7 +2404,8 @@ func (b *BaseBatch[T]) Touch(keys []string) *T {
 	return b.addCmdAndTypeChecker(C.Touch, keys, reflect.Int64, false)
 }
 
-// Renames key to new key.
+// Renames a `key` to `newKey`.
+// If `newKey` already exists it is overwritten.
 //
 // See [valkey.io] for details.
 //
@@ -2349,7 +2423,7 @@ func (b *BaseBatch[T]) Rename(key string, newKey string) *T {
 	return b.addCmdAndTypeChecker(C.Rename, []string{key, newKey}, reflect.String, false)
 }
 
-// Renames key to newkey if newKey does not yet exist.
+// Renames `key` to `newkey` if `newKey` does not yet exist.
 //
 // See [valkey.io] for details.
 //
@@ -2360,14 +2434,14 @@ func (b *BaseBatch[T]) Rename(key string, newKey string) *T {
 //
 // Command Response:
 //
-//	true if key was renamed to newKey, false if newKey already exists.
+//	`true` if `key` was renamed to `newKey`, `false` if `newKey` already exists.
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
 func (b *BaseBatch[T]) RenameNX(key string, newKey string) *T {
 	return b.addCmdAndTypeChecker(C.RenameNX, []string{key, newKey}, reflect.Bool, false)
 }
 
-// Adds an entry to the specified stream stored at key.
+// Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 //
 // See [valkey.io] for details.
 //
@@ -2385,7 +2459,7 @@ func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
 	return b.XAddWithOptions(key, values, *options.NewXAddOptions())
 }
 
-// Adds an entry to the specified stream stored at key with options.
+// Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 //
 // See [valkey.io] for details.
 //
@@ -2397,8 +2471,8 @@ func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
 //
 // Command Response:
 //
-//	The id of the added entry, or `nil` if options.makeStream is set to false and no stream with the
-//	matching key exists.
+//	The id of the added entry, or `nil` if `options.makeStream` is set to `false` and no stream with the
+//	matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options options.XAddOptions) *T {
@@ -2431,7 +2505,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 //
 // Command Response:
 //
-//	A map of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
 //	a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
@@ -2450,7 +2524,7 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A map of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
 //	a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
@@ -2474,7 +2548,7 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 //
 // Command Response:
 //
-//	A map of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
 //	a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
@@ -2495,7 +2569,7 @@ func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[
 //
 // Command Response:
 //
-//	A map of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
 //	a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
@@ -2512,7 +2586,7 @@ func (b *BaseBatch[T]) XReadGroupWithOptions(
 	return b.addCmdAndTypeChecker(C.XReadGroup, args, reflect.Map, true)
 }
 
-// Adds one or more members to a sorted set, or updates their scores.
+// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
 //
 // See [valkey.io] for details.
 //
@@ -2535,7 +2609,7 @@ func (b *BaseBatch[T]) ZAdd(key string, membersScoreMap map[string]float64) *T {
 	)
 }
 
-// Adds one or more members to a sorted set with options, or updates their scores.
+// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
 //
 // See [valkey.io] for details.
 //
@@ -2547,7 +2621,7 @@ func (b *BaseBatch[T]) ZAdd(key string, membersScoreMap map[string]float64) *T {
 //
 // Command Response:
 //
-//	The number of members added to the set. If CHANGED is set, the number of members that were updated.
+//	The number of members added to the set. If `CHANGED` is set, the number of members that were updated.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (b *BaseBatch[T]) ZAddWithOptions(key string, membersScoreMap map[string]float64, opts options.ZAddOptions) *T {
@@ -2564,7 +2638,12 @@ func (b *BaseBatch[T]) ZAddWithOptions(key string, membersScoreMap map[string]fl
 	)
 }
 
-// Increments the score of member in the sorted set stored at key by increment.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
@@ -2587,7 +2666,12 @@ func (b *BaseBatch[T]) ZAddIncr(key string, member string, increment float64) *T
 	return b.zAddIncrBase(key, options)
 }
 
-// Increments the score of member in the sorted set stored at key by increment with options.
+// Increments the score of member in the sorted set stored at `key` by `increment`.
+//
+// If `member` does not exist in the sorted set, it is added with `increment` as its
+// score (as if its previous score was `0.0`).
+// If `key` does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
@@ -2620,7 +2704,10 @@ func (b *BaseBatch[T]) zAddIncrBase(key string, opts *options.ZAddOptions) *T {
 	return b.addCmdAndTypeChecker(C.ZAdd, append([]string{key}, optionArgs...), reflect.Float64, true)
 }
 
-// Increments the score of member in the sorted set stored at key by increment.
+// Increments the score of member in the sorted set stored at key by `increment`.
+// If member does not exist in the sorted set, it is added with `increment` as its score.
+// If key does not exist, a new sorted set with the specified member as its sole member
+// is created.
 //
 // See [valkey.io] for details.
 //
@@ -2639,7 +2726,8 @@ func (b *BaseBatch[T]) ZIncrBy(key string, increment float64, member string) *T 
 	return b.addCmdAndTypeChecker(C.ZIncrBy, []string{key, utils.FloatToString(increment), member}, reflect.Float64, false)
 }
 
-// Removes and returns the member with the lowest score from the sorted set.
+// Removes and returns the member with the lowest score from the sorted set
+// stored at the specified `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2650,14 +2738,15 @@ func (b *BaseBatch[T]) ZIncrBy(key string, increment float64, member string) *T 
 // Command Response:
 //
 //	A map containing the removed member and its corresponding score.
-//	If key doesn't exist, it will be treated as an empty sorted set and returns an empty map.
+//	If `key` doesn't exist, it will be treated as an empty sorted set and returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (b *BaseBatch[T]) ZPopMin(key string) *T {
 	return b.addCmdAndTypeChecker(C.ZPopMin, []string{key}, reflect.Map, false)
 }
 
-// Removes and returns multiple members with the lowest scores from the sorted set.
+// Removes and returns multiple members with the lowest scores from the sorted set
+// stored at the specified `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2669,7 +2758,7 @@ func (b *BaseBatch[T]) ZPopMin(key string) *T {
 // Command Response:
 //
 //	A map containing the removed members and their corresponding scores.
-//	If key doesn't exist, it will be treated as an empty sorted set and returns an empty map.
+//	If `key` doesn't exist, it will be treated as an empty sorted set and returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (b *BaseBatch[T]) ZPopMinWithOptions(key string, options options.ZPopOptions) *T {
@@ -2680,7 +2769,8 @@ func (b *BaseBatch[T]) ZPopMinWithOptions(key string, options options.ZPopOption
 	return b.addCmdAndTypeChecker(C.ZPopMin, append([]string{key}, optArgs...), reflect.Map, false)
 }
 
-// Removes and returns the member with the highest score from the sorted set.
+// Removes and returns the member with the highest score from the sorted set stored at the
+// specified `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2691,14 +2781,15 @@ func (b *BaseBatch[T]) ZPopMinWithOptions(key string, options options.ZPopOption
 // Command Response:
 //
 //	A map containing the removed member and its corresponding score.
-//	If key doesn't exist, it will be treated as an empty sorted set and returns an empty map.
+//	If `key` doesn't exist, it will be treated as an empty sorted set and returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmax/
 func (b *BaseBatch[T]) ZPopMax(key string) *T {
 	return b.addCmdAndTypeChecker(C.ZPopMax, []string{key}, reflect.Map, false)
 }
 
-// Removes and returns up to count members with the highest scores from the sorted set.
+// Removes and returns up to `count` members with the highest scores from the sorted set
+// stored at the specified `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2710,7 +2801,7 @@ func (b *BaseBatch[T]) ZPopMax(key string) *T {
 // Command Response:
 //
 //	A map containing the removed members and their corresponding scores.
-//	If key doesn't exist, it will be treated as an empty sorted set and returns an empty map.
+//	If `key` doesn't exist, it will be treated as an empty sorted set and returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zpopmax/
 func (b *BaseBatch[T]) ZPopMaxWithOptions(key string, options options.ZPopOptions) *T {
@@ -2721,7 +2812,8 @@ func (b *BaseBatch[T]) ZPopMaxWithOptions(key string, options options.ZPopOption
 	return b.addCmdAndTypeChecker(C.ZPopMax, append([]string{key}, optArgs...), reflect.Map, false)
 }
 
-// Removes the specified members from the sorted set stored at key.
+// Removes the specified members from the sorted set stored at `key`.
+// Specified members that are not a member of this set are ignored.
 //
 // See [valkey.io] for details.
 //
@@ -2733,14 +2825,14 @@ func (b *BaseBatch[T]) ZPopMaxWithOptions(key string, options options.ZPopOption
 // Command Response:
 //
 //	The number of members that were removed from the sorted set, not including non-existing members.
-//	If key does not exist, it is treated as an empty sorted set, and this command returns `0`.
+//	If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
 //
 // [valkey.io]: https://valkey.io/commands/zrem/
 func (b *BaseBatch[T]) ZRem(key string, members []string) *T {
 	return b.addCmdAndTypeChecker(C.ZRem, append([]string{key}, members...), reflect.Int64, false)
 }
 
-// Returns the cardinality (number of elements) of the sorted set stored at key.
+// Returns the cardinality (number of elements) of the sorted set stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2751,21 +2843,21 @@ func (b *BaseBatch[T]) ZRem(key string, members []string) *T {
 // Command Response:
 //
 //	The number of elements in the sorted set.
-//	If key does not exist, it is treated as an empty sorted set, and this command returns `0`.
+//	If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
 //
 // [valkey.io]: https://valkey.io/commands/zcard/
 func (b *BaseBatch[T]) ZCard(key string) *T {
 	return b.addCmdAndTypeChecker(C.ZCard, []string{key}, reflect.Int64, false)
 }
 
-// Blocks the connection until it removes and returns a member with the lowest score from the
-// first non-empty sorted set, with the given `keys` being checked in the order they
-// are provided.
-// `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+// Blocks the connection until it pops and returns a member-score pair
+// with the lowest score from the first non-empty sorted set.
+// The given `keys` being checked in the order they are provided.
+// BZPOPMIN is the blocking variant of [ZPOPMIN].
 //
 // Note:
 //
-// `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+// BZPopMin is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -2777,14 +2869,14 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 //
 // Command Response:
 //
-//	A KeyWithMemberAndScore struct containing the key where the member was popped out, the member
-//	itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
+//	An array containing the key where the member was popped out, the member itself, and the member score.
+//	If no member could be popped and the `timeout` expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
 // [Blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)), reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
 }
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
@@ -2793,7 +2885,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
 //
 // Note:
 //
-// BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+// `BZMPop` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -2811,8 +2903,9 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
 //
 // Command Response:
 //
-//	An object containing the key name of the set from which the element was popped and
-//	an array of member scores of the popped elements.
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
@@ -2835,7 +2928,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
-	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Slice, true)
 }
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
@@ -2844,7 +2937,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //
 // Note:
 //
-// BZMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+// `BZMPop` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -2862,8 +2955,9 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //
 // Command Response:
 //
-//	An object containing the key name of the set from which the element was popped and
-//	an array of member scores of the popped elements.
+//	An object containing the following elements:
+//	- The key name of the set from which the element was popped.
+//	- An array of member scores of the popped elements.
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
@@ -2896,10 +2990,13 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 		return b.addError("BZMPopWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Slice, true)
 }
 
-// Returns the specified range of elements in the sorted set stored at key.
+// Returns the specified range of elements in the sorted set stored at `key`.
+// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+//
+// To get the elements with their scores, see [ZRangeWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -2907,11 +3004,14 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 //
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
+//	  - For range queries by index (rank), use [RangeByIndex].
+//	  - For range queries by lexicographical order, use [RangeByLex].
+//	  - For range queries by score, use [RangeByScore].
 //
 // Command Response:
 //
 //	An array of elements within the specified range.
-//	If key does not exist, it is treated as an empty sorted set, and returns an empty array.
+//	If `key` does not exist, it is treated as an empty sorted set, and returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (b *BaseBatch[T]) ZRange(key string, rangeQuery options.ZRangeQuery) *T {
@@ -2925,19 +3025,22 @@ func (b *BaseBatch[T]) ZRange(key string, rangeQuery options.ZRangeQuery) *T {
 	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Slice, false)
 }
 
-// Returns the specified range of elements with their scores in the sorted set stored at key.
-//
+// Returns the specified range of elements with their scores in the sorted set stored at `key`.
+// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
+//	  - For range queries by index (rank), use [RangeByIndex].
+//	  - For range queries by score, use [RangeByScore].
 //
 // Command Response:
 //
 //	An array of elements and their scores within the specified range.
-//	If key does not exist, it is treated as an empty sorted set, and returns an empty array.
+//	If `key` does not exist, it is treated as an empty sorted set, and returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) *T {
@@ -2952,7 +3055,9 @@ func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQue
 	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Slice, false)
 }
 
-// Stores a specified range of elements from the sorted set at key, into a new sorted set at destination.
+// Stores a specified range of elements from the sorted set at `key`, into a new
+// sorted set at `destination`. If `destination` doesn't exist, a new sorted
+// set is created; if it exists, it's overwritten.
 //
 // See [valkey.io] for details.
 //
@@ -2961,6 +3066,9 @@ func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQue
 //	destination - The key for the destination sorted set.
 //	key - The key of the source sorted set.
 //	rangeQuery - The range query object representing the type of range query to perform.
+//	 - For range queries by index (rank), use [RangeByIndex].
+//	 - For range queries by lexicographical order, use [RangeByLex].
+//	 - For range queries by score, use [RangeByScore].
 //
 // Command Response:
 //
@@ -2979,7 +3087,8 @@ func (b *BaseBatch[T]) ZRangeStore(destination string, key string, rangeQuery op
 	return b.addCmdAndTypeChecker(C.ZRangeStore, args, reflect.Int64, false)
 }
 
-// Persist removes the existing timeout on key, turning the key from volatile to persistent.
+// Removes the existing timeout on key, turning the key from volatile
+// (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
 //
 // See [valkey.io] for details.
 //
@@ -2989,22 +3098,23 @@ func (b *BaseBatch[T]) ZRangeStore(destination string, key string, rangeQuery op
 //
 // Command Response:
 //
-//	false if key does not exist or does not have an associated timeout, true if the timeout has been removed.
+//	`false` if key does not exist or does not have an associated timeout, `true` if the timeout has been removed.
 //
 // [valkey.io]: https://valkey.io/commands/persist/
 func (b *BaseBatch[T]) Persist(key string) *T {
 	return b.addCmdAndTypeChecker(C.Persist, []string{key}, reflect.Bool, false)
 }
 
-// Returns the number of members in the sorted set stored at key with scores between min and max score.
+// Returns the number of members in the sorted set stored at `key` with scores between `min` and `max` score.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key - The key of the set.
-//	rangeOptions - Contains min and max score. min contains the minimum score to count from.
-//		max contains the maximum score to count up to.
+//	rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
+//		`max` contains the maximum score to count up to. Can be positive/negative infinity, or
+//		specific score and inclusivity.
 //
 // Command Response:
 //
@@ -3019,7 +3129,9 @@ func (b *BaseBatch[T]) ZCount(key string, rangeOptions options.ZCountRange) *T {
 	return b.addCmdAndTypeChecker(C.ZCount, append([]string{key}, zCountRangeArgs...), reflect.Int64, false)
 }
 
-// Returns the rank of member in the sorted set stored at key, with scores ordered from low to high.
+// Returns the rank of `member` in the sorted set stored at `key`, with
+// scores ordered from low to high, starting from `0`.
+// To get the rank of `member` with its score, see [ZRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -3038,7 +3150,8 @@ func (b *BaseBatch[T]) ZRank(key string, member string) *T {
 	return b.addCmdAndTypeChecker(C.ZRank, []string{key, member}, reflect.Int64, true)
 }
 
-// Returns the rank of member in the sorted set stored at key with its score.
+// Returns the rank of `member` in the sorted set stored at `key` with its
+// score, where scores are ordered from the lowest to highest, starting from `0`.
 //
 // See [valkey.io] for details.
 //
@@ -3057,7 +3170,9 @@ func (b *BaseBatch[T]) ZRankWithScore(key string, member string) *T {
 	return b.addCmdAndTypeChecker(C.ZRank, []string{key, member, constants.WithScoreKeyword}, reflect.Slice, true)
 }
 
-// Returns the rank of member in the sorted set stored at key, where scores are ordered from highest to lowest.
+// Returns the rank of `member` in the sorted set stored at `key`, where
+// scores are ordered from the highest to lowest, starting from `0`.
+// To get the rank of `member` with its score, see [ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -3068,15 +3183,17 @@ func (b *BaseBatch[T]) ZRankWithScore(key string, member string) *T {
 //
 // Command Response:
 //
-//	The rank of member in the sorted set, where ranks are ordered from high to low based on scores.
-//	If key doesn't exist, or if member is not present in the set, `nil` will be returned.
+//	The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+//	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 	return b.addCmdAndTypeChecker(C.ZRevRank, []string{key, member}, reflect.Int64, true)
 }
 
-// Returns the rank of member in the sorted set stored at key with its score.
+// Returns the rank of `member` in the sorted set stored at `key`, where
+// scores are ordered from the highest to lowest, starting from `0`.
+// To get the rank of `member` with its score, see [ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -3087,8 +3204,8 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 //
 // Command Response:
 //
-//	A tuple containing the rank of member and its score.
-//	If key doesn't exist, or if member is not present in the set, `nil` will be returned.
+//	A tuple containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (b *BaseBatch[T]) ZRevRankWithScore(key string, member string) *T {
@@ -3117,7 +3234,7 @@ func (b *BaseBatch[T]) XTrim(key string, options options.XTrimOptions) *T {
 	return b.addCmdAndTypeChecker(C.XTrim, append([]string{key}, xTrimArgs...), reflect.Int64, false)
 }
 
-// Returns the number of entries in the stream stored at key.
+// Returns the number of entries in the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3127,7 +3244,7 @@ func (b *BaseBatch[T]) XTrim(key string, options options.XTrimOptions) *T {
 //
 // Command Response:
 //
-//	The number of entries in the stream. If key does not exist, return `0`.
+//	The number of entries in the stream. If `key` does not exist, return `0`.
 //
 // [valkey.io]: https://valkey.io/commands/xlen/
 func (b *BaseBatch[T]) XLen(key string) *T {
@@ -3166,7 +3283,7 @@ func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, min
 	return b.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
-// Transfers ownership of pending stream entries with options.
+// Transfers ownership of pending stream entries that match the specified criteria.
 //
 // Since:
 //
@@ -3181,7 +3298,7 @@ func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, min
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	options - Options detailing how to read the stream.
+//	options - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Command Response:
 //
@@ -3244,7 +3361,7 @@ func (b *BaseBatch[T]) XAutoClaimJustId(key string, group string, consumer strin
 	return b.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
-// Transfers ownership of pending stream entries and returns just the IDs with options.
+// Transfers ownership of pending stream entries that match the specified criteria.
 //
 // Since:
 //
@@ -3259,7 +3376,7 @@ func (b *BaseBatch[T]) XAutoClaimJustId(key string, group string, consumer strin
 //	consumer - The group consumer.
 //	minIdleTime - The minimum idle time for the message to be claimed.
 //	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
-//	options - Options detailing how to read the stream.
+//	opts - Options detailing how to read the stream. Count has a default value of 100.
 //
 // Command Response:
 //
@@ -3291,7 +3408,7 @@ func (b *BaseBatch[T]) XAutoClaimJustIdWithOptions(
 	return b.addCmdAndTypeChecker(C.XAutoClaim, args, reflect.Slice, false)
 }
 
-// Removes the specified entries by id from a stream.
+// Removes the specified entries by id from a stream, and returns the number of entries deleted.
 //
 // See [valkey.io] for details.
 //
@@ -3302,14 +3419,15 @@ func (b *BaseBatch[T]) XAutoClaimJustIdWithOptions(
 //
 // Command Response:
 //
-//	The number of entries removed from the stream.
+//	The number of entries removed from the stream. This number may be less than the number
+//	of entries in `ids`, if the specified `ids` don't exist in the stream.
 //
 // [valkey.io]: https://valkey.io/commands/xdel/
 func (b *BaseBatch[T]) XDel(key string, ids []string) *T {
 	return b.addCmdAndTypeChecker(C.XDel, append([]string{key}, ids...), reflect.Int64, false)
 }
 
-// Returns the score of member in the sorted set stored at key.
+// Returns the score of `member` in the sorted set stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3420,7 +3538,7 @@ func (b *BaseBatch[T]) XPendingWithOptions(key string, group string, opts option
 	return b.addCmdAndTypeChecker(C.XPending, args, reflect.Slice, false)
 }
 
-// Creates a new consumer group uniquely identified by group for the stream stored at key.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3440,7 +3558,7 @@ func (b *BaseBatch[T]) XGroupCreate(key string, group string, id string) *T {
 	return b.XGroupCreateWithOptions(key, group, id, *options.NewXGroupCreateOptions())
 }
 
-// Creates a new consumer group with options.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3463,7 +3581,8 @@ func (b *BaseBatch[T]) XGroupCreateWithOptions(key string, group string, id stri
 	return b.addCmdAndTypeChecker(C.XGroupCreate, args, reflect.String, false)
 }
 
-// Restore creates a key associated with a value that is obtained by deserializing the provided serialized value.
+// Creates a key associated with a value that is obtained by
+// deserializing the provided serialized value (obtained via [Dump]).
 //
 // See [valkey.io] for details.
 //
@@ -3482,7 +3601,8 @@ func (b *BaseBatch[T]) Restore(key string, ttl int64, value string) *T {
 	return b.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
-// Creates a key associated with a value with options.
+// Creates a key associated with a value that is obtained by
+// deserializing the provided serialized value (obtained via [Dump]).
 //
 // See [valkey.io] for details.
 //
@@ -3509,7 +3629,7 @@ func (b *BaseBatch[T]) RestoreWithOptions(key string, ttl int64, value string, r
 	}, optionArgs...), reflect.String, false)
 }
 
-// Serializes the value stored at key in a Valkey-specific format.
+// Serializess the value stored at key in a Valkey-specific format.
 //
 // See [valkey.io] for details.
 //
@@ -3520,7 +3640,7 @@ func (b *BaseBatch[T]) RestoreWithOptions(key string, ttl int64, value string, r
 // Command Response:
 //
 //	The serialized value of the data stored at key.
-//	If key does not exist, null will be returned.
+//	If key does not exist, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/dump/
 func (b *BaseBatch[T]) Dump(key string) *T {
@@ -3545,7 +3665,7 @@ func (b *BaseBatch[T]) ObjectEncoding(key string) *T {
 	return b.addCmdAndTypeChecker(C.ObjectEncoding, []string{key}, reflect.String, true)
 }
 
-// Destroys the consumer group for the stream stored at key.
+// Destroys the consumer group for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3556,7 +3676,7 @@ func (b *BaseBatch[T]) ObjectEncoding(key string) *T {
 //
 // Command Response:
 //
-//	true if the consumer group is destroyed. Otherwise, false.
+//	`true` if the consumer group is destroyed. Otherwise, `false`.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-destroy/
 func (b *BaseBatch[T]) XGroupDestroy(key string, group string) *T {
@@ -3604,7 +3724,8 @@ func (b *BaseBatch[T]) XGroupSetIdWithOptions(key string, group string, id strin
 	return b.addCmdAndTypeChecker(C.XGroupSetId, args, reflect.String, false)
 }
 
-// Removes all elements in the sorted set stored at key with a lexicographical order between start and end.
+// Removes all elements in the sorted set stored at `key` with a lexicographical order
+// between `rangeQuery.Start` and `rangeQuery.End`.
 //
 // See [valkey.io] for details.
 //
@@ -3616,6 +3737,8 @@ func (b *BaseBatch[T]) XGroupSetIdWithOptions(key string, group string, id strin
 // Command Response:
 //
 //	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebylex/
 func (b *BaseBatch[T]) ZRemRangeByLex(key string, rangeQuery options.RangeByLex) *T {
@@ -3626,7 +3749,7 @@ func (b *BaseBatch[T]) ZRemRangeByLex(key string, rangeQuery options.RangeByLex)
 	return b.addCmdAndTypeChecker(C.ZRemRangeByLex, append([]string{key}, queryArgs...), reflect.Int64, false)
 }
 
-// Removes all elements in the sorted set stored at key with a rank between start and stop.
+// Removes all elements in the sorted set stored at `key` with a rank between `start` and `stop`.
 //
 // See [valkey.io] for details.
 //
@@ -3639,6 +3762,8 @@ func (b *BaseBatch[T]) ZRemRangeByLex(key string, rangeQuery options.RangeByLex)
 // Command Response:
 //
 //	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `start` is greater than `stop`, `0` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyrank/
 func (b *BaseBatch[T]) ZRemRangeByRank(key string, start int64, stop int64) *T {
@@ -3658,10 +3783,13 @@ func (b *BaseBatch[T]) ZRemRangeByRank(key string, start int64, stop int64) *T {
 //
 //	key - The key of the sorted set.
 //	rangeQuery - The range query object representing the minimum and maximum bound of the score range.
+//	  can be an implementation of [options.RangeByScore].
 //
 // Command Response:
 //
 //	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/zremrangebyscore/
 func (b *BaseBatch[T]) ZRemRangeByScore(key string, rangeQuery options.RangeByScore) *T {
@@ -3698,7 +3826,7 @@ func (b *BaseBatch[T]) ZRandMember(key string) *T {
 //
 //	key - The key of the sorted set.
 //	count - The number of field names to return.
-//	  If count is positive, returns unique elements. If negative, allows for duplicates.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
 //
 // Command Response:
 //
@@ -3718,7 +3846,7 @@ func (b *BaseBatch[T]) ZRandMemberWithCount(key string, count int64) *T {
 //
 //	key - The key of the sorted set.
 //	count - The number of field names to return.
-//	  If count is positive, returns unique elements. If negative, allows for duplicates.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
 //
 // Command Response:
 //
@@ -3726,7 +3854,7 @@ func (b *BaseBatch[T]) ZRandMemberWithCount(key string, count int64) *T {
 //	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
-func (b *BaseBatch[T]) ZRandMemberWithCountAndScores(key string, count int64) *T {
+func (b *BaseBatch[T]) ZRandMemberWithCountWithScores(key string, count int64) *T {
 	return b.addCmdAndTypeChecker(
 		C.ZRandMember,
 		[]string{key, utils.IntToString(count), constants.WithScoresKeyword},
@@ -3735,7 +3863,7 @@ func (b *BaseBatch[T]) ZRandMemberWithCountAndScores(key string, count int64) *T
 	)
 }
 
-// Returns the scores associated with the specified members in the sorted set stored at `key`.
+// Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 //
 // Since:
 //
@@ -3755,7 +3883,7 @@ func (b *BaseBatch[T]) ZRandMemberWithCountAndScores(key string, count int64) *T
 //
 // [valkey.io]: https://valkey.io/commands/zmscore/
 func (b *BaseBatch[T]) ZMScore(key string, members []string) *T {
-	return b.addCmdAndTypeChecker(C.ZMScore, append([]string{key}, members...), reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.ZMScore, append([]string{key}, members...), reflect.Slice, false)
 }
 
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
@@ -3812,6 +3940,9 @@ func (b *BaseBatch[T]) ObjectRefCount(key string) *T {
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
+// The sort command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
+// To store the result into a new key, see the sortStore function.
 //
 // See [valkey.io] for details.
 //
@@ -3825,10 +3956,18 @@ func (b *BaseBatch[T]) ObjectRefCount(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (b *BaseBatch[T]) Sort(key string) *T {
-	return b.addCmdAndTypeChecker(C.Sort, []string{key}, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.Sort, []string{key}, reflect.Slice, false)
 }
 
-// Sorts the elements in the list, set, or sorted set at key with options.
+// Sorts the elements in the list, set, or sorted set at key and returns the result.
+// The sort command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
+// To store the result into a new key, see the [SortStore] function.
+//
+// Note:
+//
+// The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
+// supported since Valkey version 8.0.
 //
 // See [valkey.io] for details.
 //
@@ -3847,10 +3986,12 @@ func (b *BaseBatch[T]) SortWithOptions(key string, options options.SortOptions) 
 	if err != nil {
 		return b.addError("SortWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.Sort, append([]string{key}, optionArgs...), reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.Sort, append([]string{key}, optionArgs...), reflect.Slice, false)
 }
 
-// Sorts the elements in the list, set, or sorted set at key in read-only mode.
+// Sorts the elements in the list, set, or sorted set at key and returns the result.
+// The SortReadOnly command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
 //
 // See [valkey.io] for details.
 //
@@ -3867,7 +4008,14 @@ func (b *BaseBatch[T]) SortReadOnly(key string) *T {
 	return b.addCmdAndTypeChecker(C.SortReadOnly, []string{key}, reflect.Slice, true)
 }
 
-// Sorts the elements in the list, set, or sorted set at key in read-only mode with options.
+// Sorts the elements in the list, set, or sorted set at key and returns the result.
+// The SortReadOnly command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
+//
+// Note:
+//
+// The use of [SortOptions.byPattern] and [SortOptions.getPatterns] in cluster mode is
+// supported since Valkey version 8.0.
 //
 // See [valkey.io] for details.
 //
@@ -3889,7 +4037,12 @@ func (b *BaseBatch[T]) SortReadOnlyWithOptions(key string, options options.SortO
 	return b.addCmdAndTypeChecker(C.SortReadOnly, append([]string{key}, optionArgs...), reflect.Slice, true)
 }
 
-// Sorts the elements in the list, set, or sorted set at key and stores the result in destination.
+// Sorts the elements in the list, set, or sorted set at key and stores the result in
+// destination. The sort command can be used to sort elements based on
+// different criteria, apply transformations on sorted elements, and store the result in a new key.
+// The SortStore command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
+// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
 //
 // See [valkey.io] for details.
 //
@@ -3907,7 +4060,12 @@ func (b *BaseBatch[T]) SortStore(key string, destination string) *T {
 	return b.addCmdAndTypeChecker(C.Sort, []string{key, constants.StoreKeyword, destination}, reflect.Int64, false)
 }
 
-// Sorts the elements with options and stores the result in destination.
+// Sorts the elements in the list, set, or sorted set at key and stores the result in
+// destination. The sort command can be used to sort elements based on
+// different criteria, apply transformations on sorted elements, and store the result in a new key.
+// The SortStore command can be used to sort elements based on different criteria and apply
+// transformations on sorted elements.
+// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
 //
 // See [valkey.io] for details.
 //
@@ -3935,7 +4093,8 @@ func (b *BaseBatch[T]) SortStoreWithOptions(key string, destination string, opti
 	)
 }
 
-// Creates a consumer named consumer in the consumer group group for the stream.
+// Creates a consumer named `consumer` in the consumer group `group` for the
+// stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -3947,14 +4106,14 @@ func (b *BaseBatch[T]) SortStoreWithOptions(key string, destination string, opti
 //
 // Command Response:
 //
-//	Returns true if the consumer is created. Otherwise, returns false.
+//	Returns `true` if the consumer is created. Otherwise, returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-createconsumer/
 func (b *BaseBatch[T]) XGroupCreateConsumer(key string, group string, consumer string) *T {
 	return b.addCmdAndTypeChecker(C.XGroupCreateConsumer, []string{key, group, consumer}, reflect.Bool, false)
 }
 
-// Deletes a consumer named consumer in the consumer group group.
+// Deletes a consumer named consumer in the `consumer` group `group`.
 //
 // See [valkey.io] for details.
 //
@@ -3966,14 +4125,16 @@ func (b *BaseBatch[T]) XGroupCreateConsumer(key string, group string, consumer s
 //
 // Command Response:
 //
-//	The number of pending messages the consumer had before it was deleted.
+//	The number of pending messages the `consumer` had before it was deleted.
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-delconsumer/
 func (b *BaseBatch[T]) XGroupDelConsumer(key string, group string, consumer string) *T {
 	return b.addCmdAndTypeChecker(C.XGroupDelConsumer, []string{key, group, consumer}, reflect.Int64, false)
 }
 
-// Acknowledges the processing of messages in a consumer group.
+// Returns the number of messages that were successfully acknowledged by the consumer group member
+// of a stream. This command should be called on a pending message so that such message does not
+// get processed again.
 //
 // See [valkey.io] for details.
 //
@@ -3993,6 +4154,11 @@ func (b *BaseBatch[T]) XAck(key string, group string, ids []string) *T {
 }
 
 // Sets or clears the bit at offset in the string value stored at key.
+// The offset is a zero-based index, with `0` being the first element of
+// the list, `1` being the next element, and so on. The offset must be
+// less than `2^32` and greater than or equal to `0` If a key is
+// non-existent then the bit at offset is set to value and the preceding
+// bits are set to `0`.
 //
 // See [valkey.io] for details.
 //
@@ -4023,7 +4189,7 @@ func (b *BaseBatch[T]) SetBit(key string, offset int64, value int64) *T {
 // Parameters:
 //
 //	key - The key of the string.
-//	offset - The index of the bit to return.
+//	offset - The index of the bit to return. Should be greater than or equal to zero.
 //
 // Command Response:
 //
@@ -4035,7 +4201,9 @@ func (b *BaseBatch[T]) GetBit(key string, offset int64) *T {
 	return b.addCmdAndTypeChecker(C.GetBit, []string{key, utils.IntToString(offset)}, reflect.Int64, false)
 }
 
-// Blocks the current client until all the previous write commands are successfully transferred.
+// Blocks the current client until all the previous write commands are successfully
+// transferred and acknowledged by at least the specified number of replicas or if the timeout is reached,
+// whichever is earlier.
 //
 // See [valkey.io] for details.
 //
@@ -4068,7 +4236,8 @@ func (b *BaseBatch[T]) Wait(numberOfReplicas int64, timeout int64) *T {
 //
 // Command Response:
 //
-//	The number of set bits in the string. Returns zero if the key is missing.
+//	The number of set bits in the string. Returns `0` if the key is missing as it is
+//	treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
 func (b *BaseBatch[T]) BitCount(key string) *T {
@@ -4102,7 +4271,11 @@ func (b *BaseBatch[T]) BitOp(bitwiseOperation options.BitOpType, destination str
 	return b.addCmdAndTypeChecker(C.BitOp, args, reflect.Int64, false)
 }
 
-// Counts the number of set bits in a string stored at key with options.
+// Counts the number of set bits (population counting) in a string stored at key. The
+// offsets start and end are zero-based indexes, with `0` being the first element of the
+// list, `1` being the next element and so on. These offsets can also be negative numbers
+// indicating offsets starting at the end of the list, with `-1` being the last element
+// of the list, `-2` being the penultimate, and so on.
 //
 // See [valkey.io] for details.
 //
@@ -4113,7 +4286,7 @@ func (b *BaseBatch[T]) BitOp(bitwiseOperation options.BitOpType, destination str
 //
 // Command Response:
 //
-//	The number of set bits in the string interval specified by options.
+//	The number of set bits in the string interval specified by start, end, and options.
 //	Returns zero if the key is missing as it is treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
@@ -4140,7 +4313,8 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //
 // Command Response:
 //
-//	A map of message entries that were claimed by the consumer.
+//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime int64, ids []string) *T {
@@ -4182,7 +4356,8 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 	return b.addCmdAndTypeChecker(C.XClaim, args, reflect.Map, false)
 }
 
-// Changes the ownership of a pending message and returns only the message IDs.
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
 //
 // See [valkey.io] for details.
 //
@@ -4196,14 +4371,16 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 //
 // Command Response:
 //
-//	An array of the ids of the entries that were claimed by the consumer.
+//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
+//	the consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaimJustId(key string, group string, consumer string, minIdleTime int64, ids []string) *T {
 	return b.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
-// Changes the ownership of a pending message and returns only the message IDs with options.
+// Changes the ownership of a pending message. This function returns an `array` with
+// only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
 //
 // See [valkey.io] for details.
 //
@@ -4258,7 +4435,7 @@ func (b *BaseBatch[T]) BitPos(key string, bit int64) *T {
 	return b.addCmdAndTypeChecker(C.BitPos, []string{key, utils.IntToString(bit)}, reflect.Int64, false)
 }
 
-// Returns the position of the first bit matching the given bit value with options.
+// Returns the position of the first bit matching the given bit value.
 //
 // See [valkey.io] for details.
 //
@@ -4266,7 +4443,7 @@ func (b *BaseBatch[T]) BitPos(key string, bit int64) *T {
 //
 //	key - The key of the string.
 //	bit - The bit value to match. The value must be `0` or `1`.
-//	bitposOptions  - The [options.BitPosOptions] type.
+//	bitposOptions - The [options.BitPosOptions] type.
 //
 // Command Response:
 //
@@ -4283,13 +4460,14 @@ func (b *BaseBatch[T]) BitPosWithOptions(key string, bit int64, bitposOptions op
 	return b.addCmdAndTypeChecker(C.BitPos, commandArgs, reflect.Int64, false)
 }
 
-// Copies the value stored at the source to the destination key if the destination key does not yet exist.
-//
-// See [valkey.io] for details.
+// Copies the value stored at the source to the destination key if the
+// destination key does not yet exist.
 //
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -4306,14 +4484,14 @@ func (b *BaseBatch[T]) Copy(source string, destination string) *T {
 }
 
 // Copies the value stored at the source to the destination key. When
-// `replace` in `options“ is `true`, removes the destination key first if it already
+// `replace` in `options` is `true`, removes the destination key first if it already
 // exists, otherwise performs no action.
-//
-// See [valkey.io] for details.
 //
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -4344,15 +4522,16 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 //	key   - The key of the stream.
 //	start - The start position.
-//	        Use options.NewStreamBoundary() to specify a stream entry ID and its inclusive/exclusive status.
-//	        Use options.NewInfiniteStreamBoundary() to specify an infinite stream boundary.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //	end   - The end position.
-//	        Use options.NewStreamBoundary() to specify a stream entry ID and its inclusive/exclusive status.
-//	        Use options.NewInfiniteStreamBoundary() to specify an infinite stream boundary.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of pairings.
+//	An array of stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end options.StreamBoundary) *T {
@@ -4367,13 +4546,18 @@ func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end opti
 //
 //	key   - The key of the stream.
 //	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //	opts  - Stream range options.
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of pairings.
-//	Returns `nil` if count is non-positive.
+//	An array of stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (b *BaseBatch[T]) XRangeWithOptions(
@@ -4388,7 +4572,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Slice, true)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4399,11 +4583,16 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 //
 //	key   - The key of the stream.
 //	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of pairings.
+//	An array of stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) *T {
@@ -4418,13 +4607,18 @@ func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end o
 //
 //	key   - The key of the stream.
 //	start - The start position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary.
 //	end   - The end position.
+//	        Use `options.NewStreamBoundary()` to specify a stream entry ID and its inclusive/exclusive status.
+//	        Use `options.NewInfiniteStreamBoundary()` to specify an infinite stream boundary..
 //	opts  - Stream range options.
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of pairings.
-//	Returns `nil` if count is non-positive.
+//	An array of stream entry data, where entry data is an array of
+//	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRangeWithOptions(
@@ -4439,10 +4633,10 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Slice, true)
 }
 
-// Returns information about the stream stored at key.
+// Returns information about the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -4452,14 +4646,14 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 //
 // Command Response:
 //
-//	A stream information for the given key.
+//	A stream information for the given `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStream(key string) *T {
 	return b.addCmdAndTypeChecker(C.XInfoStream, []string{key}, reflect.Map, false)
 }
 
-// Returns detailed information about the stream stored at key.
+// Returns detailed information about the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -4470,7 +4664,7 @@ func (b *BaseBatch[T]) XInfoStream(key string) *T {
 //
 // Command Response:
 //
-//	A detailed stream information for the given key.
+//	A detailed stream information for the given `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInfoStreamOptions) *T {
@@ -4485,7 +4679,8 @@ func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInf
 	return b.addCmdAndTypeChecker(C.XInfoStream, args, reflect.Map, false)
 }
 
-// Returns the list of all consumers and their attributes for the given consumer group.
+// Returns the list of all consumers and their attributes for the given consumer group of the
+// stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -4503,7 +4698,7 @@ func (b *BaseBatch[T]) XInfoConsumers(key string, group string) *T {
 	return b.addCmdAndTypeChecker(C.XInfoConsumers, []string{key, group}, reflect.Slice, false)
 }
 
-// Returns the list of all consumer groups and their attributes for the stream stored at key.
+// Returns the list of all consumer groups and their attributes for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -4513,7 +4708,7 @@ func (b *BaseBatch[T]) XInfoConsumers(key string, group string) *T {
 //
 // Command Response:
 //
-//	An array where each element represents the attributes of a consumer group for the stream at key.
+//	An array where each element represents the attributes of a consumer group for the stream at `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-groups/
 func (b *BaseBatch[T]) XInfoGroups(key string) *T {
@@ -4570,19 +4765,23 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 //
 // Parameters:
 //
-//	key      - The key of the string.
-//	commands - The read-only subCommands to be performed on the binary value of the string at key.
+//	key         - The key of the string.
+//	subCommands  - The read-only subCommands to be performed on the binary value
+//	               of the string at key, which could be:
+//	                 - [BitFieldGet].
+//		           Use `options.NewBitFieldGet()` to specify a BitField GET command.
 //
 // Command Response:
 //
 //	Result from the executed GET subcommands.
+//	  - BitFieldGet returns the value in the binary representation of the string.
 //
 // [valkey.io]: https://valkey.io/commands/bitfield_ro/
-func (b *BaseBatch[T]) BitFieldRO(key string, commands []options.BitFieldROCommands) *T {
+func (b *BaseBatch[T]) BitFieldRO(key string, subCommands []options.BitFieldROCommands) *T {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 
-	for _, cmd := range commands {
+	for _, cmd := range subCommands {
 		cmdArgs, err := cmd.ToArgs()
 		if err != nil {
 			return b.addError("BitFieldRO", err)
@@ -4590,7 +4789,7 @@ func (b *BaseBatch[T]) BitFieldRO(key string, commands []options.BitFieldROComma
 		args = append(args, cmdArgs...)
 	}
 
-	return b.addCmdAndTypeChecker(C.BitFieldReadOnly, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.BitFieldReadOnly, args, reflect.Slice, false)
 }
 
 // Returns the server time.
@@ -4599,14 +4798,17 @@ func (b *BaseBatch[T]) BitFieldRO(key string, commands []options.BitFieldROComma
 //
 // Command Response:
 //
-//	An array of two elements: the first is the Unix timestamp in seconds, and the second is microseconds.
+//	The current server time as a String array with two elements:
+//	A UNIX TIME and the amount of microseconds already elapsed in the current second.
+//	The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (b *BaseBatch[T]) Time() *T {
 	return b.addCmdAndTypeChecker(C.Time, []string{}, reflect.Slice, false)
 }
 
-// Returns the intersection of members from sorted sets specified by the given keys.
+// Returns the intersection of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see [ZInterWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -4627,20 +4829,24 @@ func (b *BaseBatch[T]) ZInter(keys options.KeyArray) *T {
 	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Slice, false)
 }
 
-// Returns the intersection of members and their scores from sorted sets.
+// Returns the intersection of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
-//	                     - Use options.NewKeyArray() for keys only.
-//	                     - Use options.NewWeightedKeys() for weighted keys with score multipliers.
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
 //	options - The options for the ZInter command, see - [options.ZInterOptions].
+//	           Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	           elements.
 //
 // Command Response:
 //
-//	An array of members to their scores.
+//	An array of member and score pairs from the sorted set.
+//	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zinter/
 func (b *BaseBatch[T]) ZInterWithScores(
@@ -4660,22 +4866,53 @@ func (b *BaseBatch[T]) ZInterWithScores(
 	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Slice, false)
 }
 
-// Computes the intersection of sorted sets and stores the result in destination.
+// Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
+// and stores the result in `destination`. If `destination` already exists, it is overwritten.
+// Otherwise, a new sorted set will be created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	destination - The key where the resulting sorted set will be stored.
-//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets.
-//	options - The options for the ZInterStore command.
+//	destination - The destination key for the result.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
 //
 // Command Response:
 //
-//	The number of elements in the resulting sorted set at destination.
+//	The number of elements in the resulting sorted set at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zinterstore/
 func (b *BaseBatch[T]) ZInterStore(
+	destination string,
+	keysOrWeightedKeys options.KeysOrWeightedKeys,
+) *T {
+	return b.ZInterStoreWithOptions(destination, keysOrWeightedKeys, *options.NewZInterOptions())
+}
+
+// Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
+// and stores the result in `destination`. If `destination` already exists, it is overwritten.
+// Otherwise, a new sorted set will be created.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	destination - The destination key for the result.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//	options - The options for the ZInterStore command, see - [options.ZInterOptions].
+//	          Optional `aggregate` option specifies the aggregation strategy to apply when combining the scores of
+//	          elements.
+//
+// Command Response:
+//
+//	The number of elements in the resulting sorted set at `destination`.
+//
+// [valkey.io]: https://valkey.io/commands/zinterstore/
+func (b *BaseBatch[T]) ZInterStoreWithOptions(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 	zInterOptions options.ZInterOptions,
@@ -4694,6 +4931,7 @@ func (b *BaseBatch[T]) ZInterStore(
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
+// To get the elements with their scores, see [ZDiffWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -4708,6 +4946,8 @@ func (b *BaseBatch[T]) ZInterStore(
 // Command Response:
 //
 //	An array of elements representing the difference between the sorted sets.
+//	If the first `key` does not exist, it is treated as an empty sorted set, and the
+//	command returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (b *BaseBatch[T]) ZDiff(keys []string) *T {
@@ -4716,7 +4956,7 @@ func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Slice, false)
 }
 
-// Returns the difference between the first sorted set and all the successive sorted sets with scores.
+// Returns the difference between the first sorted set and all the successive sorted sets.
 //
 // See [valkey.io] for details.
 //
@@ -4730,7 +4970,9 @@ func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 //
 // Command Response:
 //
-//	An array of elements with their scores representing the difference between the sorted sets.
+//	An array of elements and their scores representing the difference between the sorted sets.
+//	If the first `key` does not exist, it is treated as an empty sorted set, and the
+//	command returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
@@ -4740,7 +4982,9 @@ func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Slice, false)
 }
 
-// Computes the difference between the first sorted set and all the successive sorted sets and stores it.
+// Calculates the difference between the first sorted set and all the successive sorted sets at
+// `keys` and stores the difference as a sorted set to `destination`,
+// overwriting it if it already exists. Non-existent keys are treated as empty sets.
 //
 // See [valkey.io] for details.
 //
@@ -4766,7 +5010,8 @@ func (b *BaseBatch[T]) ZDiffStore(destination string, keys []string) *T {
 	)
 }
 
-// Returns the union of members from sorted sets specified by the given keys.
+// Returns the union of members from sorted sets specified by the given `keys`.
+// To get the elements with their scores, see [ZUnionWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -4791,18 +5036,27 @@ func (b *BaseBatch[T]) ZUnion(keys options.KeyArray) *T {
 	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Slice, false)
 }
 
-// Returns the union of members and their scores from sorted sets.
+// Returns the union of members and their scores from sorted sets specified by the given
+// `keysOrWeightedKeys`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets.
-//	options - The options for the ZUnion command.
+//	keysOrWeightedKeys - The keys of the sorted sets with possible formats:
+//	                     - Use `KeyArray` for keys only.
+//	                     - Use `WeightedKeys` for weighted keys with score multipliers.
+//	zUnionOptions - The options for the ZUnionStore command, see - [options.ZUnionOptions].
+//	                Optional `aggregate` option specifies the aggregation strategy to apply when
+//	                combining the scores of elements.
 //
 // Command Response:
 //
-//	An array of members to their scores.
+//	The resulting sorted set from the union
 //
 // [valkey.io]: https://valkey.io/commands/zunion/
 func (b *BaseBatch[T]) ZUnionWithScores(
@@ -4822,56 +5076,69 @@ func (b *BaseBatch[T]) ZUnionWithScores(
 	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Slice, false)
 }
 
-// Computes the union of sorted sets and stores the result in destination.
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	destination - The key where the resulting sorted set will be stored.
-//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets.
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                   - Use `options.NewKeyArray()` for keys only.
+//	                   - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
 //
 // Command Response:
 //
-//	The number of elements in the resulting sorted set at destination.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (b *BaseBatch[T]) ZUnionStore(destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) *T {
-	return b.ZUnionStoreWithOptions(destination, keysOrWeightedKeys, nil)
+	args, err := keysOrWeightedKeys.ToArgs()
+	if err != nil {
+		return b.addError("ZUnionStoreWithOptions", err)
+	}
+	args = append([]string{destination}, args...)
+	return b.addCmdAndTypeChecker(C.ZUnionStore, args, reflect.Int64, false)
 }
 
-// Computes the union of sorted sets with options and stores the result in destination.
+// Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
+// stores the result in `destination`. If `destination` already exists, it
+// is overwritten. Otherwise, a new sorted set will be created.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	destination - The key where the resulting sorted set will be stored.
-//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets.
-//	options - The options for the ZUnionStore command.
+//	destination - The key of the destination sorted set.
+//	keysOrWeightedKeys - The keys or weighted keys of the sorted sets, see - [options.KeysOrWeightedKeys].
+//	                     - Use `options.NewKeyArray()` for keys only.
+//	                     - Use `options.NewWeightedKeys()` for weighted keys with score multipliers.
+//	zUnionOptions - The options for the ZUnionStore command, see - [options.ZUnionOptions].
+//	                Optional `aggregate` option specifies the aggregation strategy to apply when
+//	                combining the scores of elements.
 //
 // Command Response:
 //
-//	The number of elements in the resulting sorted set at destination.
+//	The number of elements in the resulting sorted set stored at `destination`.
 //
 // [valkey.io]: https://valkey.io/commands/zunionstore/
 func (b *BaseBatch[T]) ZUnionStoreWithOptions(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) *T {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return b.addError("ZUnionStoreWithOptions", err)
 	}
 	args = append([]string{destination}, args...)
-	if zUnionOptions != nil {
-		optionsArgs, err := zUnionOptions.ToArgs()
-		if err != nil {
-			return b.addError("ZUnionStoreWithOptions", err)
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return b.addError("ZUnionStoreWithOptions", err)
 	}
+	args = append(args, optionsArgs...)
 	return b.addCmdAndTypeChecker(C.ZUnionStore, args, reflect.Int64, false)
 }
 
@@ -4883,16 +5150,14 @@ func (b *BaseBatch[T]) ZUnionStoreWithOptions(
 // Parameters:
 //
 //	keys - An array of keys to sorted sets.
-//	scoreFilter - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
-//
-// scores.
+//	scoreFilter - Pop criteria - either [constants.MIN] or [constants.MAX] to pop members with the lowest/highest scores.
 //
 // Command Response:
 //
-//	A `models.KeyWithArrayOfMembersAndScores` struct containing:
+//	A array containing:
 //	- The key from which the elements were popped.
 //	- An array of member-score pairs of the popped elements.
-//	  Returns `nil` if no member could be popped.
+//	Returns `nil` if no member could be popped.
 //
 // [valkey.io]: https://valkey.io/commands/zmpop/
 func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *T {
@@ -4913,7 +5178,7 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
-	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Slice, true)
 }
 
 // Removes and returns up to `count` members from the first non-empty sorted set
@@ -4923,21 +5188,19 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 //
 // Parameters:
 //
-//	keys - An array of keys to sorted sets.
-//	scoreFilter - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
-//
-// scores.
-//
-//	options - Pop options, see [options.ZMPopOptions].
+//	keys - A list of keys representing sorted sets to check for elements.
+//	scoreFilter - Pop criteria - either [constants.MIN] or [constants.MAX] to pop members with the lowest/highest scores.
+//	opts - Additional options, such as specifying the maximum number of elements to pop.
 //
 // Command Response:
 //
-//	An object containing the key name of the set from which the element was popped and
-//	an array of member scores of the popped elements.
+//	A array containing:
+//	- The key from which the elements were popped.
+//	- An array of member-score pairs of the popped elements.
 //	Returns `nil` if no member could be popped.
 //
 // [valkey.io]: https://valkey.io/commands/zmpop/
-func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.ScoreFilter, options options.ZMPopOptions) *T {
+func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.ScoreFilter, opts options.ZMPopOptions) *T {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
 		return b.addError("ZMPopWithOptions", err)
@@ -4955,15 +5218,15 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
-	optionArgs, err := options.ToArgs()
+	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return b.addError("ZMPopWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Slice, true)
 }
 
-// Returns the cardinality of the intersection of the sorted sets specified by keys.
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
 //
 // Since:
 //
@@ -4981,10 +5244,13 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (b *BaseBatch[T]) ZInterCard(keys []string) *T {
-	return b.ZInterCardWithOptions(keys, nil)
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	return b.addCmdAndTypeChecker(C.ZInterCard, args, reflect.Int64, false)
 }
 
-// Returns the cardinality of the intersection of the sorted sets with options.
+// Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+// If the intersection cardinality reaches `options.limit` partway through the computation, the
+// algorithm will exit early and yield `options.limit` as the cardinality.
 //
 // Since:
 //
@@ -5002,15 +5268,13 @@ func (b *BaseBatch[T]) ZInterCard(keys []string) *T {
 //	The cardinality of the intersection of the sorted sets.
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
-func (b *BaseBatch[T]) ZInterCardWithOptions(keys []string, options *options.ZInterCardOptions) *T {
+func (b *BaseBatch[T]) ZInterCardWithOptions(keys []string, options options.ZInterCardOptions) *T {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
-	if options != nil {
-		optionsArgs, err := options.ToArgs()
-		if err != nil {
-			return b.addError("ZInterCardWithOptions", err)
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return b.addError("ZInterCardWithOptions", err)
 	}
+	args = append(args, optionsArgs...)
 	return b.addCmdAndTypeChecker(C.ZInterCard, args, reflect.Int64, false)
 }
 
@@ -5028,30 +5292,38 @@ func (b *BaseBatch[T]) ZInterCardWithOptions(keys []string, options *options.ZIn
 //	The number of elements in the sorted set at key with a value between min and max.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
-func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery *options.RangeByLex) *T {
+func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	return b.addCmdAndTypeChecker(C.ZLexCount, args, reflect.Int64, false)
 }
 
-// Blocks the connection until it pops and returns a member-score pair with the highest score.
+// Blocks the connection until it pops and returns a member-score pair
+// with the highest score from the first non-empty sorted set.
+// The given `keys` being checked in the order they are provided.
+// BZPOPMAX is the blocking variant of [ZPOPMAX].
+//
+// Note:
+//
+// BZPopMax is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	keys - An array of keys to check for elements.
-//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//	timeoutSecs - The maximum number of seconds to block (`0` blocks indefinitely).
 //
 // Command Response:
 //
-//	A struct containing the key from which the member was popped, the popped member, and its score.
-//	If no element could be popped and the timeout expired, returns `nil`.
+//	An array containing the key where the member was popped out, the member itself, and the member score.
+//	If no member could be popped and the `timeout` expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmax/
+// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BZPopMax(keys []string, timeoutSecs float64) *T {
 	args := append(keys, utils.FloatToString(timeoutSecs))
-	return b.addCmdAndTypeChecker(C.BZPopMax, args, reflect.Map, true)
+	return b.addCmdAndTypeChecker(C.BZPopMax, args, reflect.Slice, true)
 }
 
 // Adds geospatial members with their positions to the specified sorted set stored at `key`.
@@ -5170,8 +5442,8 @@ func (b *BaseBatch[T]) GeoPos(key string, members []string) *T {
 //
 // Command Response:
 //
-//	The distance between member1 and member2. If one or both members do not exist,
-//	or if the key does not exist, returns `nil`. The default unit is meters.
+//	The distance between `member1` and `member2`. If one or both members do not exist,
+//	or if the key does not exist, returns `nil`. The default unit is meters, see - [options.Meters]
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (b *BaseBatch[T]) GeoDist(key string, member1 string, member2 string) *T {
@@ -5211,18 +5483,17 @@ func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 strin
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
-//		- `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
+//		- `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
@@ -5232,11 +5503,10 @@ func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 strin
 //
 // Command Response:
 //
-//	An array of [options.Location] containing the following information:
-//	 - The coordinates as a [options.GeospatialData] object.
+//	An array of arrays containing the following information:
+//	 - The coordinates.
 //	 - The member (location) name.
-//	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchByShape`.
+//	 - The distance from the center as a `float64`, in the same unit specified for `searchByShape`.
 //	 - The geohash of the location as a `int64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
@@ -5274,11 +5544,11 @@ func (b *BaseBatch[T]) GeoSearchWithFullOptions(
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -5307,18 +5577,17 @@ func (b *BaseBatch[T]) GeoSearch(
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
-//		- `MemberOrigin` to use the position of the given existing member in the sorted
-//	         set.
+//		- `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
@@ -5359,18 +5628,17 @@ func (b *BaseBatch[T]) GeoSearchWithResultOptions(
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	key - The key of the sorted set.
 //	searchFrom - The query's center point options, could be one of:
-//		- `MemberOrigin` to use the position of the given existing member in the sorted
-//	         set.
+//		- `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		- `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		- `BYRADIUS` to search inside circular area according to given radius.
@@ -5379,11 +5647,10 @@ func (b *BaseBatch[T]) GeoSearchWithResultOptions(
 //
 // Command Response:
 //
-//	An array of [options.Location] containing the following information:
-//	 - The coordinates as a [options.GeospatialData] object.
+//	An array of arrays containing the following information:
+//	 - The coordinates.
 //	 - The member (location) name.
-//	 - The distance from the center as a `float64`, in the same unit specified for
-//	   `searchByShape`.
+//	 - The distance from the center as a `float64`, in the same unit specified for `searchByShape`.
 //	 - The geohash of the location as a `int64`.
 //
 // [valkey.io]: https://valkey.io/commands/geosearch/
@@ -5407,19 +5674,18 @@ func (b *BaseBatch[T]) GeoSearchWithInfoOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [GeoSearchWithFullOptions].
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
@@ -5469,19 +5735,18 @@ func (b *BaseBatch[T]) GeoSearchStoreWithFullOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [GeoSearchWithFullOptions].
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
@@ -5513,19 +5778,18 @@ func (b *BaseBatch[T]) GeoSearchStore(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [GeoSearchWithFullOptions].
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
@@ -5559,19 +5823,18 @@ func (b *BaseBatch[T]) GeoSearchStoreWithResultOptions(
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
 // created. To get the result directly, see [GeoSearchWithFullOptions].
 //
-// See [valkey.io] for details.
-//
 // Since:
 //
 //	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
 //	destinationKey - The key of the sorted set to store the result.
 //	sourceKey - The key of the sorted set to search.
 //	searchFrom - The query's center point options, could be one of:
-//		 - `MemberOrigin` to use the position of the given existing member in the sorted
-//	          set.
+//		 - `MemberOrigin` to use the position of the given existing member in the sorted set.
 //		 - `CoordOrigin` to use the given longitude and latitude coordinates.
 //	searchByShape - The query's shape options:
 //		 - `BYRADIUS` to search inside circular area according to given radius.
@@ -5648,7 +5911,7 @@ func (b *BaseBatch[T]) FunctionDelete(libName string) *T {
 	return b.addCmdAndTypeChecker(C.FunctionDelete, []string{libName}, reflect.String, false)
 }
 
-// Deletes all the libraries.
+// Deletes all function libraries.
 //
 // Since:
 //
@@ -5656,23 +5919,13 @@ func (b *BaseBatch[T]) FunctionDelete(libName string) *T {
 //
 // See [valkey.io] for details.
 //
-// Parameters:
-//
-//	async - Whether the libraries should be deleted asynchronously.
-//
 // Command Response:
 //
 //	OK if the libraries were deleted successfully.
 //
 // [valkey.io]: https://valkey.io/commands/function-flush/
-func (b *BaseBatch[T]) FunctionFlush(async bool) *T {
-	args := []string{}
-	if async {
-		args = append(args, string(options.ASYNC))
-	} else {
-		args = append(args, string(options.SYNC))
-	}
-	return b.addCmdAndTypeChecker(C.FunctionFlush, args, reflect.String, false)
+func (b *BaseBatch[T]) FunctionFlush() *T {
+	return b.addCmdAndTypeChecker(C.FunctionFlush, []string{}, reflect.String, false)
 }
 
 // Deletes all function libraries in synchronous mode.
@@ -5832,7 +6085,7 @@ func (b *BaseBatch[T]) FunctionList(query models.FunctionListQuery) *T {
 	return b.addCmdAndTypeChecker(C.FunctionList, query.ToArgs(), reflect.Slice, false)
 }
 
-// Returns the serialized payload of all libraries.
+// Returns the serialized payload of all loaded libraries.
 //
 // Since:
 //
@@ -5842,14 +6095,14 @@ func (b *BaseBatch[T]) FunctionList(query models.FunctionListQuery) *T {
 //
 // Command Response:
 //
-//	The serialized payload of all libraries.
+//	The serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
 func (b *BaseBatch[T]) FunctionDump() *T {
 	return b.addCmdAndTypeChecker(C.FunctionDump, []string{}, reflect.Slice, false)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [FunctionDump].
 //
 // Since:
 //
@@ -5859,18 +6112,18 @@ func (b *BaseBatch[T]) FunctionDump() *T {
 //
 // Parameters:
 //
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //
 // Command Response:
 //
-//	OK if the libraries were restored successfully.
+//	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
 func (b *BaseBatch[T]) FunctionRestore(payload string) *T {
 	return b.addCmdAndTypeChecker(C.FunctionRestore, []string{payload}, reflect.String, false)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [FunctionDump].
 //
 // Since:
 //
@@ -5880,12 +6133,12 @@ func (b *BaseBatch[T]) FunctionRestore(payload string) *T {
 //
 // Parameters:
 //
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //	policy - A policy for handling existing libraries.
 //
 // Command Response:
 //
-//	OK if the libraries were restored successfully.
+//	`OK`
 //
 // [valkey.io]: https://valkey.io/commands/function-restore/
 func (b *BaseBatch[T]) FunctionRestoreWithPolicy(payload string, policy constants.FunctionRestorePolicy) *T {
@@ -5975,7 +6228,7 @@ func (b *BaseBatch[T]) PubSubNumSub(channels []string) *T {
 //
 // Command Response:
 //
-//	OK if function is terminated. Otherwise, throws an error.
+//	`OK` if function is terminated. Otherwise, throws an error.
 //
 // [valkey.io]: https://valkey.io/commands/function-kill/
 func (b *BaseBatch[T]) FunctionKill() *T {
@@ -6066,20 +6319,20 @@ func (b *BaseBatch[T]) ScriptFlushWithMode(mode options.FlushMode) *T {
 // Command Response:
 //
 //	The original source code of the script, if present in the cache.
+//	If the script is not found in the cache, an error is thrown.
 //
 // [valkey.io]: https://valkey.io/commands/script-show
 func (b *BaseBatch[T]) ScriptShow(sha1 string) *T {
 	return b.addCmdAndTypeChecker(C.ScriptShow, []string{sha1}, reflect.String, false)
 }
 
-// Kills the currently executing Lua script, assuming no write operation was yet performed by the
-// script.
+// Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
 //
 // See [valkey.io] for details.
 //
 // Command Response:
 //
-//	OK if script is terminated. Otherwise, throws an error.
+//	`OK` if script is terminated. Otherwise, throws an error.
 //
 // [valkey.io]: https://valkey.io/commands/script-kill
 func (b *BaseBatch[T]) ScriptKill() *T {
@@ -6088,7 +6341,9 @@ func (b *BaseBatch[T]) ScriptKill() *T {
 
 // Sets configuration parameters to the specified values.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -6107,7 +6362,9 @@ func (b *BaseBatch[T]) ConfigSet(parameters map[string]string) *T {
 
 // Gets the values of configuration parameters.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -6117,28 +6374,11 @@ func (b *BaseBatch[T]) ConfigSet(parameters map[string]string) *T {
 //
 // Command Response:
 //
-//	A map of models.Result[string] corresponding to the configuration parameters.
+//	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (b *BaseBatch[T]) ConfigGet(args []string) *T {
 	return b.addCmdAndTypeChecker(C.ConfigGet, args, reflect.Map, false)
-}
-
-// Select changes the currently selected database.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	index - The index of the database to select.
-//
-// Command Response:
-//
-//	A simple `"OK"` response.
-//
-// [valkey.io]: https://valkey.io/commands/select/
-func (b *BaseBatch[T]) Select(index int64) *T {
-	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
 }
 
 // Gets information and statistics about the server.
@@ -6155,6 +6395,8 @@ func (b *BaseBatch[T]) Info() *T {
 }
 
 // Gets information and statistics about the server.
+//
+// Note:
 //
 // Starting from server version 7, command supports multiple section arguments.
 //
@@ -6380,14 +6622,14 @@ func (b *BaseBatch[T]) ConfigResetStat() *T {
 //
 // Command Response:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	The name of the client connection as a string if a name is set, or `nil` if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (b *BaseBatch[T]) ClientGetName() *T {
 	return b.addCmdAndTypeChecker(C.ClientGetName, []string{}, reflect.String, true)
 }
 
-// Set the name of the current connection.
+// Sets the name of the current connection.
 //
 // See [valkey.io] for details.
 //
@@ -6432,8 +6674,6 @@ func (b *BaseBatch[T]) RandomKey() *T {
 
 // Returns information about the function that's currently running and information about the
 // available execution engines.
-// `FUNCTION STATS` runs on all nodes of the server, including primary and replicas.
-// The response includes a mapping from node address to the command response for that node.
 //
 // Since:
 //
@@ -6443,8 +6683,7 @@ func (b *BaseBatch[T]) RandomKey() *T {
 //
 // Command Response:
 //
-//	A map of node addresses to their function statistics represented by
-//	[FunctionStatsResult] object containing the following information:
+//	A map of function statistics containing the following information:
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
 //

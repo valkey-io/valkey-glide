@@ -157,7 +157,9 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 
 // Sets configuration parameters to the specified values.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -181,7 +183,9 @@ func (client *Client) ConfigSet(ctx context.Context, parameters map[string]strin
 
 // Gets the values of configuration parameters.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -192,7 +196,7 @@ func (client *Client) ConfigSet(ctx context.Context, parameters map[string]strin
 //
 // Return value:
 //
-//	A map of models.Result[string] corresponding to the configuration parameters.
+//	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]string, error) {
@@ -244,6 +248,8 @@ func (client *Client) Info(ctx context.Context) (string, error) {
 }
 
 // Gets information and statistics about the server.
+//
+// Note:
 //
 // Starting from server version 7, command supports multiple section arguments.
 //
@@ -650,9 +656,9 @@ func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string,
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	 cursor - The cursor that points to the next iteration of results. A value of 0
-//				 indicates the start of the search.
-//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//	scanOptions - Additional command parameters, see [ScanOptions] for more details.
 //
 // Return value:
 //
@@ -858,7 +864,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 	return handleStringResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [FunctionDump].
 //
 // Since:
 //
@@ -869,7 +875,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //
 // Return value:
 //
@@ -884,7 +890,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 	return handleOkResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [FunctionDump].
 //
 // Since:
 //
@@ -895,7 +901,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //	policy - A policy for handling existing libraries.
 //
 // Return value:

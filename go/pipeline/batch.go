@@ -12,6 +12,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // TODO - move to internals
@@ -318,6 +319,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 			return converter(res)
 		}
 		// data lost even though it was incorrect
+		// TODO maybe still return the data?
 		return &errors.RequestError{
 			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
 		}
@@ -360,6 +362,51 @@ func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
 // [valkey.io]: https://valkey.io/commands/move/
 func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
 	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Command Response:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (b *StandaloneBatch) Scan(cursor int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Scan, []string{utils.IntToString(cursor)}, reflect.Slice, false)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//	scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//
+// Command Response:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) *StandaloneBatch {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return b.addError("ScanWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...), reflect.Slice, false)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.
