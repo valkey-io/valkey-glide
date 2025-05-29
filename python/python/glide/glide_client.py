@@ -30,9 +30,6 @@ from glide.glide import (
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
-from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.response_pb2 import Response
 from glide.shared.commands.async_commands.cluster_commands import ClusterCommands
 from glide.shared.commands.async_commands.core import CoreCommands
 from glide.shared.commands.async_commands.standalone_commands import StandaloneCommands
@@ -52,6 +49,13 @@ from glide.shared.exceptions import (
     ConnectionError,
     get_request_error_class,
 )
+from glide.shared.protobuf.command_request_pb2 import (
+    Command,
+    CommandRequest,
+    RequestType,
+)
+from glide.shared.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.shared.protobuf.response_pb2 import Response
 from glide.shared.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.shared.routes import Route, set_protobuf_route
 

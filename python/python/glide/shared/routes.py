@@ -3,9 +3,13 @@
 from enum import Enum
 from typing import Optional
 
-from glide.protobuf.command_request_pb2 import CommandRequest, Routes, SimpleRoutes
-from glide.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 from glide.shared.exceptions import RequestError
+from glide.shared.protobuf.command_request_pb2 import (
+    CommandRequest,
+    Routes,
+    SimpleRoutes,
+)
+from glide.shared.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 
 
 class SlotType(Enum):

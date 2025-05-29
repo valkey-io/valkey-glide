@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
-from glide.protobuf.command_request_pb2 import RequestType
 from glide.shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
@@ -18,6 +17,7 @@ from glide.shared.constants import (
     TFunctionStatsFullResponse,
     TResult,
 )
+from glide.shared.protobuf.command_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):

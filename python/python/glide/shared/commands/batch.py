@@ -4,7 +4,6 @@ import sys
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.protobuf.command_request_pb2 import RequestType
 from glide.shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -57,6 +56,7 @@ from glide.shared.commands.stream import (
 )
 from glide.shared.constants import TEncodable
 from glide.shared.exceptions import RequestError
+from glide.shared.protobuf.command_request_pb2 import RequestType
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated

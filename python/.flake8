@@ -7,4 +7,4 @@ statistics = true
 exclude =
     .env
     .env_main
-    python/glide/protobuf
+    python/glide/shared/protobuf

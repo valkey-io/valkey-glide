@@ -2,8 +2,8 @@
 
 from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
-from glide.protobuf.command_request_pb2 import CommandRequest
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.shared.protobuf.command_request_pb2 import CommandRequest
+from glide.shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.shared.routes import ByAddressRoute, RandomNode, SlotIdRoute, SlotKeyRoute
 
 OK: str = "OK"

@@ -2,7 +2,6 @@
 from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
 
 from glide.glide import ClusterScanCursor
-from glide.protobuf.command_request_pb2 import RequestType
 from glide.shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -60,6 +59,7 @@ from glide.shared.constants import (
     TXInfoStreamResponse,
 )
 from glide.shared.exceptions import RequestError
+from glide.shared.protobuf.command_request_pb2 import RequestType
 from glide.shared.routes import Route
 
 
