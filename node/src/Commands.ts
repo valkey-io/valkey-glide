@@ -156,7 +156,7 @@ export type SetOptions = (
      */
     returnOldValue?: boolean;
     /**
-     * Example usage:
+     * @example
      * ```javascript
      *
      *  import {TimeUnit} from "@valkey/valkey-glide";
