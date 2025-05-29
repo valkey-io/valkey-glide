@@ -40,7 +40,7 @@ MacOS Apple Silicon/aarch_64 and x86_64/amd64.
 
 ### Alpine
 
-All alpine versions that are using *musl libc* 1.2.3 (All Alpine non deprecated alpine versions) or higher should be supported.
+All alpine versions that are using _musl libc_ 1.2.3 (All Alpine non deprecated alpine versions) or higher should be supported.
 Tests are running on:
 
 - node:alpine (x86_64/amd64 and arm64/aarch64)
