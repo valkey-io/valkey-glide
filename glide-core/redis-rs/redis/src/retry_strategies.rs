@@ -124,12 +124,12 @@ mod tests {
         let strategy = RetryStrategy::new(base, factor, retries, jitter_percent);
         let intervals = strategy.get_bounded_backoff_dur_iterator();
 
-        let jitter = jitter_percent.unwrap() as f64 / 100.0;
+        let jitter = 20_f64 / 100.0;
 
         let mut counter = 0;
         for duration in intervals {
             counter += 1;
-            let expected = factor as u64 * base.pow(counter as u32) as u64;
+            let expected = factor as u64 * base.pow(counter) as u64;
             let lower_limit = (expected as f64 * (1.0 - jitter)) as u128;
             let upper_limit = (expected as f64 * (1.0 + jitter)) as u128;
             assert!(
