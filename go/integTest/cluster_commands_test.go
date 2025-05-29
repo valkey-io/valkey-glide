@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -782,7 +782,7 @@ func (suite *GlideTestSuite) TestFlushDB_Failure() {
 	result, err := client.FlushDB(context.Background())
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAll_Success() {
@@ -808,7 +808,7 @@ func (suite *GlideTestSuite) TestFlushAll_Failure() {
 	result, err := client.FlushAll(context.Background())
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &errors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
@@ -1053,7 +1053,7 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_InvalidParamete
 	// Test empty password
 	_, err := testClient.UpdateConnectionPassword(context.Background(), "", true)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() {
@@ -1069,7 +1069,7 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() 
 	pwd := uuid.NewString()
 	_, err = testClient.UpdateConnectionPassword(context.Background(), pwd, true)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_LongPassword() {
@@ -1116,7 +1116,7 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 	// Test that re-authentication fails when using wrong password
 	_, err = testClient.UpdateConnectionPassword(context.Background(), pwd, true)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 
 	// But using correct password returns OK
 	_, err = testClient.UpdateConnectionPassword(context.Background(), notThePwd, true)
@@ -1545,7 +1545,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDeleteWithRoute(context.Background(), "anotherLib", route)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 
 	// Test with all primaries route
 	libName = "mylib1c_all"
@@ -1620,7 +1620,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDeleteWithRoute(context.Background(), "anotherLib", route)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
@@ -1681,7 +1681,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDelete(context.Background(), "anotherLib")
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {

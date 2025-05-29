@@ -31,7 +31,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -73,7 +73,7 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	// MessageHandler is only configured when a subscription is defined
 	if client.getMessageHandler() == nil {
-		return nil, &errors.RequestError{Msg: "No subscriptions configured for this client"}
+		return nil, glideErrors.NewRequestError("No subscriptions configured for this client")
 	}
 	return client.getMessageHandler().GetQueue(), nil
 }
@@ -149,7 +149,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
 	)
 	if err != nil {
-		return nil, &errors.ClosingError{Msg: err.Error()}
+		return nil, glideErrors.NewClosingError(err.Error())
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
@@ -165,7 +165,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
-		return nil, &errors.ConnectionError{Msg: message}
+		return nil, glideErrors.NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
@@ -194,7 +194,7 @@ func (client *baseClient) Close() {
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
 	for channelPtr := range client.pending {
 		resultChannel := *(*chan payload)(channelPtr)
-		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
+		resultChannel <- payload{value: nil, error: glideErrors.NewClosingError("ExecuteCommand failed. The client is closed.")}
 	}
 	client.pending = nil
 }
@@ -214,7 +214,7 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 	case config.SlotTypeReplica:
 		return protobuf.SlotTypes_Replica, nil
 	default:
-		return protobuf.SlotTypes_Primary, &errors.RequestError{Msg: "Invalid slot type"}
+		return protobuf.SlotTypes_Primary, glideErrors.NewRequestError("Invalid slot type")
 	}
 }
 
@@ -231,7 +231,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			case config.RandomRoute:
 				simpleRoute = protobuf.SimpleRoutes_Random
 			default:
-				return nil, &errors.RequestError{Msg: "Invalid simple node route"}
+				return nil, glideErrors.NewRequestError("Invalid simple node route")
 			}
 			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
 		}
@@ -277,7 +277,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			}, nil
 		}
 	default:
-		return nil, &errors.RequestError{Msg: "Invalid route type"}
+		return nil, glideErrors.NewRequestError("Invalid route type")
 	}
 }
 
@@ -308,7 +308,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
+			return nil, glideErrors.NewRequestError("ExecuteCommand failed due to invalid route")
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -330,7 +330,7 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+		return nil, glideErrors.NewClosingError("ExecuteCommand failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
@@ -411,7 +411,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return models.DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return models.DefaultStringResponse, glideErrors.NewClosingError("UpdatePassword failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -1093,7 +1093,7 @@ func (client *baseClient) LCSWithOptions(
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(ctx context.Context, key string) (models.Result[string], error) {
 	if key == "" {
-		return models.CreateNilStringResult(), &errors.RequestError{Msg: "key is required"}
+		return models.CreateNilStringResult(), glideErrors.NewRequestError("key is required")
 	}
 
 	result, err := client.executeCommand(ctx, C.GetDel, []string{key})
@@ -2727,7 +2727,7 @@ func (client *baseClient) LMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -2777,7 +2777,7 @@ func (client *baseClient) LMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -2833,7 +2833,7 @@ func (client *baseClient) BLMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -2893,7 +2893,7 @@ func (client *baseClient) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -4336,9 +4336,7 @@ func (client *baseClient) BZMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		}
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -4401,9 +4399,7 @@ func (client *baseClient) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		}
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), glideErrors.NewRequestError("Length overflow for the provided keys")
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -6074,7 +6070,7 @@ func (client *baseClient) BitOp(
 	}
 	result, err := client.executeCommand(ctx, C.BitOp, args)
 	if err != nil {
-		return models.DefaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+		return models.DefaultIntResponse, glideErrors.NewRequestError("Bitop command execution failed")
 	}
 	return handleIntResponse(result)
 }
@@ -8488,7 +8484,7 @@ func (client *baseClient) executeScriptWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, &errors.RequestError{Msg: "ExecuteScript failed due to invalid route"}
+			return nil, glideErrors.NewRequestError("ExecuteScript failed due to invalid route")
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -8510,7 +8506,7 @@ func (client *baseClient) executeScriptWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
+		return nil, glideErrors.NewClosingError("ExecuteScript failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.invoke_script(
