@@ -190,7 +190,7 @@ fn is_master_valid(master_info: &HashMap<String, String>, service_name: &str) ->
     master_info.get("name").map(|s| s.as_str()) == Some(service_name)
         && master_info.contains_key("ip")
         && master_info.contains_key("port")
-        && master_info.get("flags").map_or(false, |flags| {
+        && master_info.get("flags").is_some_and(|flags| {
             flags.contains("master") && !flags.contains("s_down") && !flags.contains("o_down")
         })
         && master_info["port"].parse::<u16>().is_ok()
@@ -199,9 +199,9 @@ fn is_master_valid(master_info: &HashMap<String, String>, service_name: &str) ->
 fn is_replica_valid(replica_info: &HashMap<String, String>) -> bool {
     replica_info.contains_key("ip")
         && replica_info.contains_key("port")
-        && replica_info.get("flags").map_or(false, |flags| {
-            !flags.contains("s_down") && !flags.contains("o_down")
-        })
+        && replica_info
+            .get("flags")
+            .is_some_and(|flags| !flags.contains("s_down") && !flags.contains("o_down"))
         && replica_info["port"].parse::<u16>().is_ok()
 }
 

@@ -6,13 +6,13 @@ use glide_core::{
     client::{Client, StandaloneClient},
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
-use once_cell::sync::Lazy;
 use rand::{Rng, distributions::Alphanumeric};
 use redis::{
     ConnectionAddr, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisResult, Value,
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
 };
 use socket2::{Domain, Socket, Type};
+use std::sync::LazyLock;
 use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
     sync::Mutex, time::Duration,
@@ -34,14 +34,14 @@ pub enum ServerType {
     Unix,
 }
 
-type SharedServer = Lazy<Mutex<Option<RedisServer>>>;
+type SharedServer = LazyLock<Mutex<Option<RedisServer>>>;
 static SHARED_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
+    LazyLock::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
 
 static SHARED_TLS_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
+    LazyLock::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
 
-static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
+static SHARED_SERVER_ADDRESS: LazyLock<ConnectionAddr> = LazyLock::new(|| {
     SHARED_SERVER
         .lock()
         .unwrap()
@@ -50,7 +50,7 @@ static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
         .get_client_addr()
 });
 
-static SHARED_TLS_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
+static SHARED_TLS_SERVER_ADDRESS: LazyLock<ConnectionAddr> = LazyLock::new(|| {
     SHARED_TLS_SERVER
         .lock()
         .unwrap()
@@ -69,12 +69,8 @@ pub fn get_shared_server_address(use_tls: bool) -> ConnectionAddr {
 
 #[ctor::dtor]
 fn clean_shared_clusters() {
-    if let Some(mutex) = SharedServer::get(&SHARED_SERVER) {
-        drop(mutex.lock().unwrap().take());
-    }
-    if let Some(mutex) = SharedServer::get(&SHARED_TLS_SERVER) {
-        drop(mutex.lock().unwrap().take());
-    }
+    drop(SHARED_SERVER.lock().unwrap().take());
+    drop(SHARED_TLS_SERVER.lock().unwrap().take());
 }
 
 pub struct RedisServer {

@@ -1,4 +1,4 @@
-use std::io::{BufRead, Error, ErrorKind as IOErrorKind};
+use std::io::{BufRead, Error};
 
 use rustls::RootCertStore;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -75,12 +75,7 @@ pub(crate) fn retrieve_tls_certificates(
 
         let client_key =
             rustls_pemfile::private_key(&mut client_key.as_slice() as &mut dyn BufRead)?
-                .ok_or_else(|| {
-                    Error::new(
-                        IOErrorKind::Other,
-                        "Unable to extract private key from PEM file",
-                    )
-                })?;
+                .ok_or_else(|| Error::other("Unable to extract private key from PEM file"))?;
 
         Some(ClientTlsParams {
             client_cert_chain,
@@ -96,9 +91,7 @@ pub(crate) fn retrieve_tls_certificates(
         let mut root_cert_store = RootCertStore::empty();
         for result in certs {
             if root_cert_store.add(result?.to_owned()).is_err() {
-                return Err(
-                    Error::new(IOErrorKind::Other, "Unable to parse TLS trust anchors").into(),
-                );
+                return Err(Error::other("Unable to parse TLS trust anchors").into());
             }
         }
 

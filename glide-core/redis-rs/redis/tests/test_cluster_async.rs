@@ -17,9 +17,7 @@ mod cluster_async {
 
     use futures::prelude::*;
     use futures_time::{future::FutureExt, task::sleep};
-    use once_cell::sync::Lazy;
-    use std::ops::Add;
-    use std::str::FromStr;
+    use std::{ops::Add, str::FromStr, sync::LazyLock};
     use telemetrylib::*;
 
     use redis::{
@@ -135,7 +133,7 @@ mod cluster_async {
                 GlideOpenTelemetrySignalsExporter::from_str("http://valid-url.com").unwrap(),
             )
             .build();
-        let result = GlideOpenTelemetry::initialise(glide_ot_config.clone());
+        let result = GlideOpenTelemetry::initialize(glide_ot_config.clone());
         assert!(result.is_ok(), "Expected Ok(()), but got Err: {:?}", result);
     }
 
@@ -918,7 +916,7 @@ mod cluster_async {
         );
     }
 
-    static ERROR: Lazy<AtomicBool> = Lazy::new(Default::default);
+    static ERROR: LazyLock<AtomicBool> = LazyLock::new(Default::default);
 
     #[derive(Clone)]
     struct ErrorConnection {
@@ -1724,7 +1722,7 @@ mod cluster_async {
             // Get node IDs for migration
             let shards_info = client1
                 .route_command(
-                    &cmd("CLUSTER").arg("SHARDS"),
+                    cmd("CLUSTER").arg("SHARDS"),
                     RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
                         0,
                         SlotAddr::Master,

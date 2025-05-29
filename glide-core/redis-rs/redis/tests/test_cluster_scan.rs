@@ -582,7 +582,7 @@ mod test_cluster_scan_async {
             let host = host_and_port.clone().next().unwrap().to_string();
             let port = host_and_port
                 .clone()
-                .last()
+                .next_back()
                 .unwrap()
                 .parse::<u16>()
                 .unwrap();

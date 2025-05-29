@@ -253,7 +253,7 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
     };
 
     glide_rt.runtime.block_on(async {
-        if let Err(e) = GlideOpenTelemetry::initialise(config.build()) {
+        if let Err(e) = GlideOpenTelemetry::initialize(config.build()) {
             log(
                 Level::Error,
                 "OpenTelemetry".to_string(),

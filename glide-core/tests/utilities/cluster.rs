@@ -4,10 +4,10 @@ use super::{ClusterMode, TestConfiguration, create_connection_request};
 use futures::FutureExt;
 use futures::future::{BoxFuture, join_all};
 use glide_core::client::Client;
-use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};
 use serde::Deserialize;
 use std::process::Command;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use which::which;
@@ -74,14 +74,14 @@ impl Drop for RedisCluster {
     }
 }
 
-type SharedCluster = Lazy<Mutex<Option<RedisCluster>>>;
+type SharedCluster = LazyLock<Mutex<Option<RedisCluster>>>;
 static SHARED_CLUSTER: SharedCluster =
-    Lazy::new(|| Mutex::new(Some(RedisCluster::new(false, &None, None, None))));
+    LazyLock::new(|| Mutex::new(Some(RedisCluster::new(false, &None, None, None))));
 
 static SHARED_TLS_CLUSTER: SharedCluster =
-    Lazy::new(|| Mutex::new(Some(RedisCluster::new(true, &None, None, None))));
+    LazyLock::new(|| Mutex::new(Some(RedisCluster::new(true, &None, None, None))));
 
-static SHARED_CLUSTER_ADDRESSES: Lazy<Vec<ConnectionAddr>> = Lazy::new(|| {
+static SHARED_CLUSTER_ADDRESSES: LazyLock<Vec<ConnectionAddr>> = LazyLock::new(|| {
     SHARED_CLUSTER
         .lock()
         .unwrap()
@@ -90,7 +90,7 @@ static SHARED_CLUSTER_ADDRESSES: Lazy<Vec<ConnectionAddr>> = Lazy::new(|| {
         .get_server_addresses()
 });
 
-static SHARED_TLS_CLUSTER_ADDRESSES: Lazy<Vec<ConnectionAddr>> = Lazy::new(|| {
+static SHARED_TLS_CLUSTER_ADDRESSES: LazyLock<Vec<ConnectionAddr>> = LazyLock::new(|| {
     SHARED_TLS_CLUSTER
         .lock()
         .unwrap()
@@ -109,12 +109,8 @@ pub fn get_shared_cluster_addresses(use_tls: bool) -> Vec<ConnectionAddr> {
 
 #[ctor::dtor]
 fn clean_shared_clusters() {
-    if let Some(mutex) = SharedCluster::get(&SHARED_CLUSTER) {
-        drop(mutex.lock().unwrap().take());
-    }
-    if let Some(mutex) = SharedCluster::get(&SHARED_TLS_CLUSTER) {
-        drop(mutex.lock().unwrap().take());
-    }
+    drop(SHARED_CLUSTER.lock().unwrap().take());
+    drop(SHARED_TLS_CLUSTER.lock().unwrap().take());
 }
 
 impl RedisCluster {

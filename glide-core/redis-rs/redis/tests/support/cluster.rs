@@ -222,7 +222,7 @@ impl RedisCluster {
         let cli_command = ["valkey-cli", "redis-cli"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
-            .map(|&cmd| cmd)
+            .copied()
             .unwrap_or_else(|| panic!("Neither valkey-cli nor redis-cli exists in the system."));
 
         let mut cmd = process::Command::new(cli_command);
@@ -909,7 +909,7 @@ impl TestClusterContext {
                 let host = host_and_port.clone().next().unwrap();
                 let port = host_and_port
                     .clone()
-                    .last()
+                    .next_back()
                     .unwrap()
                     .split('@')
                     .next()
@@ -933,7 +933,7 @@ impl TestClusterContext {
                 let host = host_and_port.clone().next().unwrap();
                 let port = host_and_port
                     .clone()
-                    .last()
+                    .next_back()
                     .unwrap()
                     .split('@')
                     .next()

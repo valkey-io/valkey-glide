@@ -6,7 +6,6 @@ use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
-use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -20,6 +19,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
@@ -63,7 +63,7 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// A static Glide runtime instance
-static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
+static RUNTIME: OnceLock<Result<GlideRt, String>> = OnceLock::new();
 
 pub struct GlideRt {
     pub runtime: Handle,
@@ -76,43 +76,50 @@ pub struct GlideRt {
 /// The runtime remains active indefinitely until a shutdown is triggered via the notifier, allowing tasks to be spawned
 /// throughout the lifetime of the application.
 pub fn get_or_init_runtime() -> Result<&'static GlideRt, String> {
-    RUNTIME.get_or_try_init(|| {
-        let notify = Arc::new(Notify::new());
-        let notify_thread = notify.clone();
+    RUNTIME
+        .get_or_init(|| {
+            let notify = Arc::new(Notify::new());
+            let notify_thread = notify.clone();
 
-        let (tx, rx) = oneshot::channel();
+            let (tx, rx) = oneshot::channel();
 
-        let thread_handle = thread::Builder::new()
-            .name("glide-runtime-thread".into())
-            .spawn(move || {
-                match Builder::new_current_thread().enable_all().build() {
-                    Ok(runtime) => {
-                        let _ = tx.send(Ok(runtime.handle().clone()));
-                        // Keep runtime alive until shutdown is signaled
-                        runtime.block_on(notify_thread.notified());
+            let thread_handle = match thread::Builder::new()
+                .name("glide-runtime-thread".into())
+                .spawn(move || {
+                    match Builder::new_current_thread().enable_all().build() {
+                        Ok(runtime) => {
+                            let _ = tx.send(Ok(runtime.handle().clone()));
+                            // Keep runtime alive until shutdown is signaled
+                            runtime.block_on(notify_thread.notified());
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(format!("Failed to create runtime: {err}")));
+                        }
                     }
-                    Err(err) => {
-                        let _ = tx.send(Err(format!("Failed to create runtime: {err}")));
-                    }
-                }
+                }) {
+                Ok(handle) => handle,
+                Err(_) => return Err("Failed to spawn runtime thread".to_string()),
+            };
+
+            let runtime_handle = match rx.blocking_recv() {
+                Ok(Ok(handle)) => handle,
+                Ok(Err(err)) => return Err(err),
+                Err(err) => return Err(format!("Failed to receive runtime handle: {err:?}")),
+            };
+
+            Ok(GlideRt {
+                runtime: runtime_handle,
+                thread: Some(thread_handle),
+                shutdown_notifier: notify,
             })
-            .map_err(|_| "Failed to spawn runtime thread".to_string())?;
-
-        let runtime_handle = rx
-            .blocking_recv()
-            .map_err(|err| format!("Failed to receive runtime handle: {err:?}"))??;
-
-        Ok(GlideRt {
-            runtime: runtime_handle,
-            thread: Some(thread_handle),
-            shutdown_notifier: notify,
         })
-    })
+        .as_ref()
+        .map_err(|e| e.clone())
 }
 
 impl Drop for GlideRt {
     fn drop(&mut self) {
-        if let Some(rt) = RUNTIME.get() {
+        if let Some(Ok(rt)) = RUNTIME.get() {
             rt.shutdown_notifier.notify_one();
         }
 
