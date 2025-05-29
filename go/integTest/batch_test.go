@@ -1201,6 +1201,316 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Set commands"}
 }
 
+func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{zset}-"
+	// if isAtomic {
+	// 	prefix = ""
+	// }
+
+	key := prefix + "key-" + uuid.NewString()
+
+	membersScoreMap := map[string]float64{"member1": 1.0, "member2": 2.0}
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+
+	zAddOpts, _ := options.NewZAddOptions().SetChanged(true)
+	batch.ZAddWithOptions(key, map[string]float64{"member3": 3.0}, *zAddOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "ZAddWithOptions(key, {member3:3.0}, opts)"},
+	)
+
+	batch.ZAddIncr(key, "member1", 1.5)
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(2.5), TestName: "ZAddIncr(key, member1, 1.5)"})
+
+	zAddIncrOpts := options.NewZAddOptions()
+	batch.ZAddIncrWithOptions(key, "member2", 2.0, *zAddIncrOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: float64(4.0), TestName: "ZAddIncrWithOptions(key, member2, 2.0, opts)"},
+	)
+
+	batch.ZIncrBy(key, 1.0, "member3")
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(4.0), TestName: "ZIncrBy(key, 1.0, member3)"})
+
+	batch.ZPopMin(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(2.5)}, TestName: "ZPopMin(key)"},
+	)
+
+	zPopOpts := options.NewZPopOptions().SetCount(2)
+	batch.ZPopMinWithOptions(key, *zPopOpts)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]any{"member2": float64(4.0), "member3": float64(4.0)},
+			TestName:         "ZPopMinWithOptions(key, opts)",
+		},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.ZPopMax(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member2": float64(2.0)}, TestName: "ZPopMax(key)"},
+	)
+
+	zPopOpts.SetCount(1)
+	batch.ZPopMaxWithOptions(key, *zPopOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZPopMaxWithOptions(key, opts)"},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.ZRem(key, []string{"member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRem(key, [member2])"})
+
+	batch.ZCard(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZCard(key)"})
+
+	batch.BZPopMin([]string{key}, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, "member1", float64(1)}, TestName: "BZPopMin([key])"},
+	)
+
+	batch.ZAdd(key, map[string]float64{"member1": float64(1.0)})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
+	batch.BZMPop([]string{key}, constants.MIN, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}}, TestName: "BZMPop(key, MIN, 1)"},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.BZMPopWithOptions([]string{key}, constants.MIN, 1, *options.NewZMPopOptions().SetCount(1))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
+			TestName:         "BZMPopWithOptions(key, MIN, 1, opts",
+		},
+	)
+
+	rangeQuery := options.NewRangeByIndexQuery(0, -1)
+	batch.ZRange(key, rangeQuery)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member2"}, TestName: "ZRange(key, 0, -1)"})
+
+	batch.BZPopMax([]string{key}, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, "member2", float64(2.0)}, TestName: "BZPopMax(key, 1)"},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.ZMPop([]string{key}, constants.MIN)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
+	)
+
+	batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{key, map[string]any{"member2": float64(2.0)}},
+			TestName:         "ZMPopWithOptions([key], min, opts)",
+		},
+	)
+
+	batch.ZAdd(key, map[string]float64{"member1": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
+	batch.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0}, TestName: "ZRangeWithScores(key, 0, -1)"},
+	)
+
+	dest := prefix + "dest-" + uuid.NewString()
+	batch.ZRangeStore(dest, key, options.NewRangeByIndexQuery(0, -1))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRangeStore(dest, key, 0, -1)"})
+
+	batch.ZRank(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRank(key, member1)"})
+
+	batch.ZRankWithScore(key, "member1")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
+	)
+
+	batch.ZRevRank(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRevRank(key, member1)"})
+
+	batch.ZRevRankWithScore(key, "member1")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
+	)
+
+	batch.ZScore(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(1.0), TestName: "ZScore(key, member1)"})
+
+	zCountRange := options.NewZCountRange(
+		options.NewInclusiveScoreBoundary(0.0),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
+	)
+	batch.ZCount(key, *zCountRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZCount(key, 2.0, inf)"})
+
+	batch.ZScan(key, "0")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScan(key, 0)"},
+	)
+
+	zScanOpts := options.NewZScanOptions().SetCount(1)
+	batch.ZScanWithOptions(key, "0", *zScanOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScanWithOptions(key, 0, opts)"},
+	)
+
+	key2 := prefix + "key2-" + uuid.NewString()
+	batch.ZAdd(key2, map[string]float64{"member1": 1.0, "member2": 2.0, "member3": 3.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "ZAdd(key2, members)"})
+	batch.ZRemRangeByRank(key2, 0, 0)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRemRangeByRank(key2, 0, 0)"})
+
+	scoreRange := options.NewRangeByScoreQuery(
+		options.NewInclusiveScoreBoundary(3),
+		options.NewInclusiveScoreBoundary(3),
+	)
+	batch.ZRemRangeByScore(key2, *scoreRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRemRangeByScore(key2, 2, 3)"})
+
+	batch.ZAdd(key2, map[string]float64{"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "ZAdd(key2, members)"})
+	lexRange := options.NewRangeByLexQuery(
+		options.NewLexBoundary("a", true),
+		options.NewLexBoundary("b", true),
+	)
+	batch.ZRemRangeByLex(key2, *lexRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZRemRangeByLex(key2, [a, [b)"})
+
+	batch.ZRandMember(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "ZRandMember(key)"})
+
+	batch.ZRandMemberWithCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"})
+
+	batch.ZRandMemberWithCountWithScores(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{[]any{"member1", float64(1.0)}},
+			TestName:         "ZRandMemberWithCountWithScores(key, 1)",
+		},
+	)
+
+	batch.ZMScore(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{float64(1.0)}, TestName: "ZMScore(key, [member1])"})
+
+	batch.ZDiff([]string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([key, key2])"})
+
+	batch.ZDiffWithScores([]string{key, key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZDiffWithScores([key, key2])"},
+	)
+
+	batch.ZDiffStore(dest, []string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [key, key2])"})
+
+	batch.ZInter(options.KeyArray{
+		Keys: []string{key, key2},
+	})
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "ZInter([key, key2])"})
+
+	batch.ZInterWithScores(
+		options.KeyArray{
+			Keys: []string{key, key2},
+		},
+		*options.NewZInterOptions().SetAggregate(options.AggregateSum),
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{}, TestName: "ZInterWithScores(keys, opts)"})
+
+	batch.ZInterStore(
+		dest,
+		options.KeyArray{
+			Keys: []string{key, key2},
+		},
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterStore(dest, keys)"})
+
+	batch.ZInterStoreWithOptions(
+		dest,
+		options.KeyArray{
+			Keys: []string{key, key2},
+		},
+		*options.NewZInterOptions().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterStoreWithOptions(dest, keys, opts)"},
+	)
+
+	key3 := prefix + "key3-" + uuid.NewString()
+	batch.ZAdd(key3, map[string]float64{"b": 2.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key3, members)"})
+	batch.ZUnion(
+		options.KeyArray{
+			Keys: []string{key, key3},
+		},
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1", "b"}, TestName: "ZUnion([key, key2])"})
+
+	batch.ZUnionWithScores(
+		options.KeyArray{Keys: []string{key, key3}},
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0, "b": 2.0}, TestName: "ZUnionWithScores(keys, opts)"},
+	)
+
+	batch.ZUnionStore(dest, options.KeyArray{Keys: []string{key, key3}})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStore(dest, keys)"})
+
+	batch.ZUnionStoreWithOptions(
+		dest,
+		options.KeyArray{Keys: []string{key, key3}},
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStoreWithOptions(dest, keys, opts)"},
+	)
+
+	batch.ZInterCard([]string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCard([key, key2])"})
+
+	zInterCardOpts := options.NewZInterCardOptions().SetLimit(10)
+	batch.ZInterCardWithOptions([]string{key, key2}, *zInterCardOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCardWithOptions([key, key2], opts)"},
+	)
+
+	batch.ZLexCount(key2, *options.NewRangeByLexQuery(options.NewLexBoundary("a", true), options.NewLexBoundary("c", true)))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZLexCount(key2, [a, [c)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Sorted Set commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
@@ -1218,6 +1528,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateListCommandsTest,
 		CreatePubSubTests,
 		CreateSetCommandsTests,
+		CreateSortedSetTests,
 	}
 }
 
