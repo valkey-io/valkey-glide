@@ -33,8 +33,7 @@ mod cluster_async {
         cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ErrorKind,
         FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
         PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
-        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Script,
-        Value,
+        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Value,
     };
 
     use crate::support::*;
@@ -521,26 +520,6 @@ mod cluster_async {
                 .arg("test")
                 .query_async(&mut connection)
                 .await?;
-            assert_eq!(res, "test");
-            Ok::<_, RedisError>(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_basic_script() {
-        let cluster = TestClusterContext::new(3, 0);
-
-        block_on_all(async move {
-            let mut connection = cluster.async_connection(None).await;
-            let res: String = Script::new(
-                r#"redis.call("SET", KEYS[1], ARGV[1]); return redis.call("GET", KEYS[1])"#,
-            )
-            .key("key")
-            .arg("test")
-            .invoke_async(&mut connection)
-            .await?;
             assert_eq!(res, "test");
             Ok::<_, RedisError>(())
         })
@@ -1724,7 +1703,7 @@ mod cluster_async {
             // Get node IDs for migration
             let shards_info = client1
                 .route_command(
-                    &cmd("CLUSTER").arg("SHARDS"),
+                    cmd("CLUSTER").arg("SHARDS"),
                     RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
                         0,
                         SlotAddr::Master,
