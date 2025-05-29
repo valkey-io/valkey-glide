@@ -583,20 +583,10 @@ public class CommandManager {
         populateCommandWithArgs(arguments, commandBuilder);
 
         long spanPtr = 0;
-        //        try {
-        //            System.out.println("IsInitialized=" + OpenTelemetry.isInitialized());
-        //            System.out.println("should sample=" + OpenTelemetry.shouldSample());
         if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
             // Create OpenTelemetry span
-            //                System.out.println("Open telemetry already initialized");
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
-        //            else {
-        //                System.out.println("Open telemetry not initialized");
-        //            }
-        //        } catch (Exception e) {
-        //            System.out.println("exception in prepare command=" + e.getMessage());
-        //        }
 
         CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
@@ -606,7 +596,6 @@ public class CommandManager {
         if (spanPtr != 0) {
             builder.setRootSpanPtr(spanPtr);
         }
-
         return builder;
     }
 
