@@ -2322,9 +2322,14 @@ func (suite *GlideTestSuite) TestSPopCount_AllMembers() {
 		assert.Nil(suite.T(), err)
 		assert.Len(suite.T(), popMembers, 3)
 
+		popMembersArray := []string{}
+		for popMember := range popMembers {
+			popMembersArray = append(popMembersArray, popMember)
+		}
+
 		// Verify all original members were popped
-		for member := range members {
-			assert.Contains(suite.T(), popMembers, member)
+		for _, member := range members {
+			assert.Contains(suite.T(), popMembersArray, member)
 		}
 
 		// Verify set is now empty
@@ -2348,9 +2353,14 @@ func (suite *GlideTestSuite) TestSPopCount_MoreThanExist() {
 		assert.Nil(suite.T(), err)
 		assert.Len(suite.T(), popMembers, 2) // Should only return existing members
 
+		popMembersArray := []string{}
+		for popMember := range popMembers {
+			popMembersArray = append(popMembersArray, popMember)
+		}
+
 		// Verify all original members were popped
 		for _, member := range members {
-			assert.Contains(suite.T(), popMembers, member)
+			assert.Contains(suite.T(), popMembersArray, member)
 		}
 
 		// Verify set is now empty
