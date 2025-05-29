@@ -2362,6 +2362,33 @@ func (client *baseClient) SPop(ctx context.Context, key string) (models.Result[s
 	return handleStringOrNilResponse(result)
 }
 
+// SpopCount removes and returns up to count random members from the set stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	key - The key of the set.
+//	count - The number of members to return.
+//		If count is positive, returns unique elements.
+//		If count is larger than the set's cardinality, returns the entire set.
+//
+// Return value:
+//
+//	An array of the popped elements.
+//	If key does not exist, returns an empty array.
+//
+// [valkey.io]: https://valkey.io/commands/spop/
+func (client *baseClient) SpopCount(ctx context.Context, key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.SPop, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNilResponse(result)
+}
+
 // SMIsMember returns whether each member is a member of the set stored at key.
 //
 // See [valkey.io] for details.
