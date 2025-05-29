@@ -421,23 +421,4 @@ public class OpenTelemetry {
 
         openTelemetryConfig.getTraces().setSamplePercentage(percentage);
     }
-
-    /**
-     * Creates a new OpenTelemetry span with the given name.
-     *
-     * @param name The name of the span
-     * @return A pointer to the span
-     */
-    public static long createSpan(String name) {
-        return OpenTelemetryResolver.createLeakedOtelSpan(name);
-    }
-
-    /**
-     * Drops an OpenTelemetry span.
-     *
-     * @param spanPtr The pointer to the span
-     */
-    public static void dropSpan(long spanPtr) {
-        OpenTelemetryResolver.dropOtelSpan(spanPtr);
-    }
 }
