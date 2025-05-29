@@ -12,6 +12,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // TODO - move to internals
@@ -190,6 +191,7 @@ func (cbo ClusterBatchOptions) Convert() BatchOptions {
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
+	Errors   []string // errors processing command args, spotted while batch is filled
 }
 
 // BaseBatch is the base structure for both standalone and cluster batch implementations.
@@ -280,6 +282,12 @@ func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 	return b.self
 }
 
+func (b *BaseBatch[T]) addError(command string, err error) *T {
+	b.Errors = append(b.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
+		len(b.Commands)+len(b.Errors)+1, command, err))
+	return b.self
+}
+
 // Add a cmd to batch with type checker but without response type conversion
 func (b *BaseBatch[T]) addCmdAndTypeChecker(
 	request C.RequestType,
@@ -310,6 +318,8 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 		if reflect.TypeOf(res).Kind() == expectedType {
 			return converter(res)
 		}
+		// data lost even though it was incorrect
+		// TODO maybe still return the data?
 		return &errors.RequestError{
 			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
 		}
@@ -318,79 +328,167 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	return b.self
 }
 
-// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
-// including the command name and subcommands, should be added as a separate value in args. The returning value depends on
-// the executed command.
-//
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
-//
-// This function should only be used for single-response commands. Commands that don't return complete response and awaits
-// (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
-// behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
-//
-// Parameters:
-//
-//	args - Arguments for the custom command.
-//
-// Command Response:
-//
-//	The returned value for the custom command.
-//
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (b *BaseBatch[T]) CustomCommand(args []string) *T {
-	return b.addCmd(C.CustomCommand, args)
-}
-
-// Get retrieves the value associated with the given key, or `nil` if no such key exists.
+// Changes the currently selected database.
 //
 // For details see [valkey.io].
 //
 // Parameters:
 //
-//	key - The key to retrieve from the database.
-//
-// Command Response:
-//
-//	If key exists, returns the value of key.
-//	Otherwise, returns `nil`.
-//
-// [valkey.io]: https://valkey.io/commands/get/
-func (b *BaseBatch[T]) Get(key string) *T {
-	return b.addCmdAndTypeChecker(C.Get, []string{key}, reflect.String, true)
-}
-
-// Set sets the given key with the given value.
-//
-// For details see [valkey.io].
-//
-// Parameters:
-//
-//	key - The key to store.
-//	value - The value to store with the given key.
-//
-// Command Response:
-//
-//	If the value is successfully set, returns OK.
-//
-// [valkey.io]: https://valkey.io/commands/set/
-func (b *BaseBatch[T]) Set(key string, value string) *T {
-	return b.addCmdAndTypeChecker(C.Set, []string{key, value}, reflect.String, false)
-}
-
-// Select changes the currently selected database.
-// This method is only available for StandaloneBatch.
-//
-// For details see [valkey.io].
-//
-// Parameters:
-//
-//	db - The index of the database to select.
+//	index - The index of the database to select.
 //
 // Command Response:
 //
 //	A simple "OK" response.
 //
 // [valkey.io]: https://valkey.io/commands/select/
-func (b *StandaloneBatch) Select(db int) *StandaloneBatch {
-	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(int64(db))}, reflect.String, false)
+func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
+}
+
+// Moves key from the currently selected database to the database specified by `dbIndex`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex - The index of the database to move key to.
+//
+// Command Response:
+//
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//
+// Command Response:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (b *StandaloneBatch) Scan(cursor int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Scan, []string{utils.IntToString(cursor)}, reflect.Slice, false)
+}
+
+// Iterates incrementally over a database for matching keys.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	cursor - The cursor that points to the next iteration of results. A value of 0
+//			 indicates the start of the search.
+//	scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//
+// Command Response:
+//
+//	An Array of Objects. The first element is always the cursor for the next
+//	iteration of results. "0" will be the cursor returned on the last iteration
+//	of the scan. The second element is always an Array of matched keys from the database.
+//
+// [valkey.io]: https://valkey.io/commands/scan/
+func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) *StandaloneBatch {
+	optionArgs, err := scanOptions.ToArgs()
+	if err != nil {
+		return b.addError("ScanWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...), reflect.Slice, false)
+}
+
+// Posts a message to the specified sharded channel. Returns the number of clients that received the message.
+//
+// Channel can be any string, but common patterns include using "." to create namespaces like
+// "news.sports" or "news.weather".
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channel - The channel to publish the message to.
+//	message - The message to publish.
+//
+// Command Response:
+//
+//	The number of clients that received the message.
+//
+// [valkey.io]: https://valkey.io/commands/publish/
+func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.SPublish, []string{channel, message}, reflect.Int64, false)
+}
+
+// Returns a list of all sharded channels.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A list of shard channels.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
+func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{}, reflect.Slice, false)
+}
+
+// Returns a list of all sharded channels that match the given pattern.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pattern - A glob-style pattern to match active shard channels.
+//
+// Command Response:
+//
+//	A list of shard channels that match the given pattern.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
+func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{pattern}, reflect.Slice, false)
+}
+
+// Returns the number of subscribers for a sharded channel.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	channels - The channel to get the number of subscribers for.
+//
+// Command Response:
+//
+//	The number of subscribers for the sharded channel.
+//
+// [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
+func (b *ClusterBatch) PubSubShardNumSub(channels ...string) *ClusterBatch {
+	return b.addCmdAndTypeChecker(C.PubSubShardNumSub, channels, reflect.Map, false)
 }
