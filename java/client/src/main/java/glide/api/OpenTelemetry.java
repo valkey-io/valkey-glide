@@ -6,7 +6,72 @@ import glide.api.models.exceptions.ConfigurationException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Random;
 
-/** OpenTelemetry integration for Valkey GLIDE. */
+/**
+ * OpenTelemetry integration for Valkey GLIDE.
+ *
+ * <p>⚠️ OpenTelemetry can only be initialized once per process. Calling `OpenTelemetry.init()` more
+ * than once will be ignored. If you need to change configuration, restart the process with new
+ * settings.
+ *
+ * <p>### OpenTelemetry
+ *
+ * <ul>
+ *   <li><b>openTelemetryConfig</b>: Use this object to configure OpenTelemetry exporters and
+ *       options.
+ *       <ul>
+ *         <li><b>traces</b>: (optional) Configure trace exporting.
+ *             <ul>
+ *               <li><b>endpoint</b>: The collector endpoint for traces. Supported protocols:
+ *                   <ul>
+ *                     <li><code>http://</code> or <code>https://</code> for HTTP/HTTPS
+ *                     <li><code>grpc://</code> for gRPC
+ *                     <li><code>file://</code> for local file export (see below)
+ *                   </ul>
+ *               <li><b>samplePercentage</b>: (optional) The percentage of requests to sample and
+ *                   create a span for, used to measure command duration. Must be between 0 and 100.
+ *                   Defaults to 1 if not specified. Note: There is a tradeoff between sampling
+ *                   percentage and performance. Higher sampling percentages will provide more
+ *                   detailed telemetry data but will impact performance. It is recommended to keep
+ *                   this number low (1-5%) in production environments unless you have specific
+ *                   needs for higher sampling rates.
+ *             </ul>
+ *         <li><b>metrics</b>: (optional) Configure metrics exporting.
+ *             <ul>
+ *               <li><b>endpoint</b>: The collector endpoint for metrics. Same protocol rules as
+ *                   above.
+ *             </ul>
+ *         <li><b>flushIntervalMs</b>: (optional) Interval in milliseconds for flushing data to the
+ *             collector. Must be a positive integer. Defaults to 5000ms if not specified.
+ *       </ul>
+ * </ul>
+ *
+ * #### File Exporter Details
+ *
+ * <ul>
+ *   <li>For <code>file://</code> endpoints:
+ *       <ul>
+ *         <li>The path must start with <code>file://</code> (e.g., <code>file:///tmp/otel</code> or
+ *             <code>file:///tmp/otel/traces.json</code>).
+ *         <li>If the path is a directory or lacks a file extension, data is written to <code>
+ *             signals.json</code> in that directory.
+ *         <li>If the path includes a filename with an extension, that file is used as-is.
+ *         <li>The parent directory must already exist; otherwise, initialization will fail with an
+ *             InvalidInput error.
+ *         <li>If the target file exists, new data is appended (not overwritten).
+ *       </ul>
+ * </ul>
+ *
+ * #### Validation Rules
+ *
+ * <ul>
+ *   <li><code>flushIntervalMs</code> must be a positive integer.
+ *   <li><code>samplePercentage</code> must be between 0 and 100.
+ *   <li>File exporter paths must start with <code>file://</code> and have an existing parent
+ *       directory.
+ *   <li>Invalid configuration will throw an error synchronously when calling <code>
+ *       OpenTelemetry.init()</code>.
+ * </ul>
+ */
 public class OpenTelemetry {
     private static OpenTelemetry instance = null;
     private static OpenTelemetryConfig openTelemetryConfig = null;
