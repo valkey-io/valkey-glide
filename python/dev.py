@@ -25,6 +25,8 @@ PYTHON_DIR = GLIDE_ROOT / "python"
 VENV_DIR = PYTHON_DIR / VENV_NAME
 VENV_BIN_DIR = VENV_DIR / "bin"
 PYTHON_EXE = VENV_BIN_DIR / "python"
+SYNC_DIR = GLIDE_ROOT / PYTHON_CLIENT_PATH / "sync"
+LIB_FILE_DST = SYNC_DIR / "libglide_ffi.so"
 FFI_DIR = GLIDE_ROOT / "ffi"
 GLIDE_SYNC_NAME = "GlidePySync"
 GLIDE_ASYNC_NAME = "GlidePy"
@@ -159,20 +161,29 @@ def build_async_client(
     print("[OK] Async client build completed")
 
 
-def build_sync_client(glide_version: str) -> None:
+def build_sync_client(glide_version: str, release: bool) -> None:
     print(f"[INFO] Building sync client with version={glide_version}...")
     generate_protobuf_files()
 
+    build_cmd = ["cargo", "build"]
+    if release:
+        build_cmd.append("--release")
+
     run_command(
-        ["cargo", "build"],
+        build_cmd,
         cwd=FFI_DIR,
-        label="cargo build ffi",
+        label=" ".join(build_cmd),
         env={
             "GLIDE_NAME": GLIDE_SYNC_NAME,
             "GLIDE_VERSION": glide_version,
             **os.environ,
         },
     )
+
+    TARGET_DIR = "release" if release else "debug"
+    LIB_FILE = FFI_DIR / "target" / TARGET_DIR / "libglide_ffi.so"
+    print(f"[INFO] Moving {LIB_FILE} to {LIB_FILE_DST}")
+    LIB_FILE.replace(LIB_FILE_DST)
 
     print("[OK] Sync client build completed")
 
@@ -328,7 +339,7 @@ Examples:
             build_async_client(args.glide_version, release, no_cache)
         if args.client in ["sync", "all"]:
             print("🛠 Building sync client...")
-            build_sync_client(glide_version=args.glide_version)
+            build_sync_client(glide_version=args.glide_version, release=release)
 
     print("[✅ DONE] Task completed successfully.")
 

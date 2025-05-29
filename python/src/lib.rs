@@ -126,8 +126,8 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
 
     #[pyfunction]
-    fn py_log(log_level: Level, log_identifier: String, message: String) {
-        log(log_level, log_identifier, message);
+    fn py_log(log_level: Level, logger_level: Level, log_identifier: String, message: String) {
+        log(log_level, logger_level, log_identifier, message);
     }
 
     #[pyfunction]
@@ -384,8 +384,10 @@ impl From<Level> for logger_core::Level {
 }
 
 #[pyfunction]
-pub fn log(log_level: Level, log_identifier: String, message: String) {
-    logger_core::log(log_level.into(), log_identifier, message);
+pub fn log(log_level: Level, logger_level: Level, log_identifier: String, message: String) {
+    if log_level.is_lower(&logger_level) {
+        logger_core::log(log_level.into(), log_identifier, message);
+    }
 }
 
 #[pyfunction]

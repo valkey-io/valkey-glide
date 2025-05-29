@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
 from glide.shared.protobuf.command_request_pb2 import CommandRequest
@@ -122,3 +123,8 @@ FtAggregateResponse = List[Mapping[TEncodable, Any]]
 FtProfileResponse = List[
     Union[FtSearchResponse, FtAggregateResponse, Mapping[str, int]]
 ]
+
+# FFI LIB paths
+CURR_DIR = Path(__file__).resolve().parent
+GLIDE_DIR = CURR_DIR.parent
+LIB_FILE = GLIDE_DIR / "sync" / "libglide_ffi.so"
