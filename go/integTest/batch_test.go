@@ -140,7 +140,7 @@ func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool
 	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
 
 	batch.ClientId()
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckType: true, TestName: "ClientId()"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
 
 	batch.ClientSetName(connectionName)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
@@ -163,7 +163,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 
 type CommandTestData struct {
 	ExpectedResponse any
-	CheckType        bool
+	CheckTypeOnly    bool
 	TestName         string
 }
 
@@ -202,7 +202,8 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
 	assert.Equal(suite.T(), len(testData), len(result))
 	for i := range result {
-		if testData[i].CheckType {
+		if testData[i].CheckTypeOnly {
+			// If we can't check equality, we should just test that it's the same type
 			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
 		} else {
 			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
