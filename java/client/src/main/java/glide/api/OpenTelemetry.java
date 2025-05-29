@@ -241,7 +241,7 @@ public class OpenTelemetry {
     }
 
     /**
-     * Example usage: ```java import glide.api.OpenTelemetry;
+     * Example usage: java import glide.api.OpenTelemetry;
      *
      * <p>OpenTelemetry.init( OpenTelemetry.OpenTelemetryConfig.builder() .traces(
      * OpenTelemetry.TracesConfig.builder() .endpoint("http://localhost:4318/v1/traces")
@@ -268,6 +268,9 @@ public class OpenTelemetry {
 
         String tracesEndpoint = null;
         int tracesSamplePercentage = -1;
+        if(config.getTraces() == null && config.getMetrics() == null) {
+            Logger.log(Logger.Level.INFO, "GlideOpenTelemetry", "OpenTelemetry config error");
+        }
         if (config.getTraces() != null) {
             tracesEndpoint = config.getTraces().getEndpoint();
             if (config.getTraces().getSamplePercentage() != null) {
