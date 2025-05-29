@@ -33,6 +33,8 @@ object ClusterExample {
         val config = GlideClusterClientConfiguration.builder()
             .addresses(nodesList.map({ (host: String, port: Int) -> NodeAddress.builder().host(host).port(port).build() }))
             .clientName("test_cluster_client")
+            // Set request timeout - recommended to configure based on your use case.
+            .requestTimeout(500)
             // Enable this field if the servers are configured with TLS.
             //.useTLS(true)
             .build()

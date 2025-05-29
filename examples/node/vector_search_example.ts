@@ -3,11 +3,11 @@
  */
 import {
     Decoder,
+    FtSearchOptions,
+    FtSearchReturnType,
     GlideClient,
     GlideClusterClient,
     GlideFt,
-    FtSearchOptions,
-    FtSearchReturnType,
     Logger,
     VectorField,
 } from "@valkey/valkey-glide";
@@ -28,6 +28,8 @@ async function executeVssCommands() {
     // Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
     const client = await GlideClient.createClient({
         addresses: addresses,
+        // Set request timeout - recommended to configure based on your use case.
+        requestTimeout: 500,
         // if the server uses TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
         // useTLS: true,
         clientName: "test_standalone_client",

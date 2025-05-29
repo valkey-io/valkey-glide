@@ -31,6 +31,8 @@ object StandaloneExample {
         // Check `GlideClientConfiguration` for additional options.
         val config = GlideClientConfiguration.builder()
             .addresses(nodesList.map((host, port) => NodeAddress.builder().host(host).port(port).build()).asJava)
+            // Set request timeout - recommended to configure based on your use case.
+            .requestTimeout(500)
             // Enable this field if the servers are configured with TLS.
             //.useTLS(true)
             .build()

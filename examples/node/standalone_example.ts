@@ -29,6 +29,8 @@ async function createClient(nodesList = [{ host: "localhost", port: 6379 }]) {
     // Check `GlideClientConfiguration` for additional options.
     return await GlideClient.createClient({
         addresses: addresses,
+        // Set request timeout - recommended to configure based on your use case.
+        requestTimeout: 500,
         // if the server uses TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
         // useTLS: true,
     });
