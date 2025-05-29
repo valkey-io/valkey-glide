@@ -41,7 +41,7 @@ type SetCommands interface {
 
 	SPop(ctx context.Context, key string) (models.Result[string], error)
 
-	SPopCount(ctx context.Context, key string, count int64) ([]string, error)
+	SPopCount(ctx context.Context, key string, count int64) (map[string]struct{}, error)
 
 	SMIsMember(ctx context.Context, key string, members []string) ([]bool, error)
 
