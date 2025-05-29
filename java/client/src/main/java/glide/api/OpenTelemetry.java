@@ -241,17 +241,32 @@ public class OpenTelemetry {
     }
 
     /**
-     * Example usage: java import glide.api.OpenTelemetry;
+     * Initializes the OpenTelemetry integration with the provided configuration. This method should
+     * be called before any Valkey GLIDE client operations to enable OpenTelemetry tracing and metrics
+     * collection. If OpenTelemetry is already initialized, this method will log a warning and take no
+     * action.
      *
-     * <p>OpenTelemetry.init( OpenTelemetry.OpenTelemetryConfig.builder() .traces(
-     * OpenTelemetry.TracesConfig.builder() .endpoint("http://localhost:4318/v1/traces")
-     * .samplePercentage(10) // Optional, defaults to 1 .build() ) .metrics(
-     * OpenTelemetry.MetricsConfig.builder() .endpoint("http://localhost:4318/v1/metrics") .build() )
-     * .flushIntervalMs(5000L) // Optional, defaults to 5000 .build() );
-     *
-     * <p>Initialize the OpenTelemetry instance
-     *
-     * @param config The OpenTelemetry configuration
+     * @param config The OpenTelemetry configuration containing settings for traces and metrics
+     * @example
+     *     <pre>{@code
+     * import glide.api.OpenTelemetry;
+     * OpenTelemetry.init(
+     *      OpenTelemetry.OpenTelemetryConfig.builder()
+     *         .traces(
+     *             OpenTelemetry.TracesConfig.builder()
+     *                 .endpoint("http://localhost:4318/v1/traces")
+     *                 .samplePercentage(10) // Optional, defaults to 1. Can also be changed at runtime via setSamplePercentage().
+     *                 .build()
+     *          )
+     *          .metrics(
+     *             OpenTelemetry.MetricsConfig.builder()
+     *                 .endpoint("http://localhost:4318/v1/metrics")
+     *                 .build()
+     *          )
+     *         .flushIntervalMs(5000L) // Optional, defaults to 5000
+     *         .build()
+     * );
+     * }</pre>
      */
     public static void init(OpenTelemetryConfig config) {
         if (instance == null) {
@@ -268,7 +283,7 @@ public class OpenTelemetry {
 
         String tracesEndpoint = null;
         int tracesSamplePercentage = -1;
-        if(config.getTraces() == null && config.getMetrics() == null) {
+        if (config.getTraces() == null && config.getMetrics() == null) {
             Logger.log(Logger.Level.INFO, "GlideOpenTelemetry", "OpenTelemetry config error");
         }
         if (config.getTraces() != null) {
