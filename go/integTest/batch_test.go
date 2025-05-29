@@ -5,9 +5,6 @@ package integTest
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -108,7 +105,7 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 	})
 }
 
-func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
 	if isAtomic {
@@ -221,7 +218,7 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
 }
 
-func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	key1 := "{key}-1-" + uuid.NewString()
 	key2 := "{key}-2-" + uuid.NewString()
@@ -440,7 +437,7 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTes
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
 }
 
-type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
+type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
@@ -468,17 +465,8 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 		clientType := fmt.Sprintf("%T", client)[7:]
 		for _, isAtomic := range []bool{true, false} {
 			for _, testProvider := range GetCommandGroupTestProviders() {
-				testToRunUntrimmed := runtime.FuncForPC(reflect.ValueOf(testProvider).Pointer()).Name()
-				testToRunTrimmed := strings.Replace(testToRunUntrimmed, "github.com/valkey-io/valkey-glide/go/v2/integTest.", "", 1)
-				switch testToRunTrimmed {
-				case "CreateGenericBaseTests":
-					if suite.serverVersion < "7.0.0" {
-						continue
-					}
-				default:
-				}
 				batch := pipeline.NewClusterBatch(isAtomic)
-				testData := testProvider(batch, isAtomic)
+				testData := testProvider(batch, isAtomic, suite.serverVersion)
 
 				suite.T().Run(fmt.Sprintf("%s %s isAtomic = %v", testData.TestName, clientType, isAtomic), func(t *testing.T) {
 					var res []any
