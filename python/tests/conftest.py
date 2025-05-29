@@ -5,12 +5,15 @@ from typing import List
 
 import pytest
 
+from glide.logger import Logger
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.cluster import ValkeyCluster
-from tests.utils.utils import sync_check_if_server_version_lt
+from tests.utils.utils import DEFAULT_TEST_LOG_LEVEL, sync_check_if_server_version_lt
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
+
+Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
 
 def pytest_addoption(parser):

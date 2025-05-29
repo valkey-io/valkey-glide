@@ -7,6 +7,8 @@ from typing import List, Optional, Union
 
 from cffi import FFI
 
+from glide.logger import Level
+from glide.logger import Logger as ClientLogger
 from glide.shared.commands.sync_commands.cluster_commands import ClusterCommands
 from glide.shared.commands.sync_commands.core import CoreCommands
 from glide.shared.commands.sync_commands.standalone_commands import StandaloneCommands
@@ -70,6 +72,8 @@ class BaseClient(CoreCommands):
         client_response_ptr = self._lib.create_client(
             conn_req_bytes, len(conn_req_bytes), client_type
         )
+        ClientLogger.log(Level.INFO, "connection info", "new connection established")
+
         # Handle the connection response
         if client_response_ptr != self._ffi.NULL:
             client_response = self._try_ffi_cast(
