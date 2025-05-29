@@ -955,6 +955,13 @@ impl<C> Future for Request<C> {
                     return next;
                 }
                 request.retry = request.retry.saturating_add(1);
+                // Record retry attempts metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
+                    log_error(
+                        "OpenTelemetry:retry_error",
+                        format!("Failed to record retry attempt: {}", e),
+                    );
+                }
 
                 if err.kind() == ErrorKind::AllConnectionsUnavailable {
                     return Next::ReconnectToInitialNodes {
@@ -2901,13 +2908,6 @@ where
             match result {
                 Next::Done => {}
                 Next::Retry { request } => {
-                    // Record retries error metric if telemetry is initialized
-                    if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
-                        log_error(
-                            "OpenTelemetry:retry_error",
-                            format!("Failed to record retry attempt: {}", e),
-                        );
-                    }
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
                     self.in_flight_requests.push(Box::pin(Request {
                         retry_params: retry_params.clone(),
@@ -2918,13 +2918,6 @@ where
                     }));
                 }
                 Next::RetryBusyLoadingError { request, address } => {
-                    // Record retry attempt metric if telemetry is initialized
-                    if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
-                        log_error(
-                            "OpenTelemetry:retry_error",
-                            format!("Failed to record retry attempt: {}", e),
-                        );
-                    }
                     // TODO - do we also want to try and reconnect to replica if it is loading?
                     let future = Self::handle_loading_error_and_retry(
                         self.inner.clone(),
@@ -2951,13 +2944,6 @@ where
                     let future: Option<
                         RequestState<Pin<Box<dyn Future<Output = OperationResult> + Send>>>,
                     > = if let Some(moved_redirect) = moved_redirect {
-                        // record moved error metric if telemetry is initialized
-                        if let Err(e) = GlideOpenTelemetry::record_moved_error() {
-                            log_error(
-                                "OpenTelemetry:moved_error",
-                                format!("Failed to record moved error: {}", e),
-                            );
-                        }
                         Some(RequestState::UpdateMoved {
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),

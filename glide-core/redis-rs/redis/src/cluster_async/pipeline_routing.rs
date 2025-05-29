@@ -1058,13 +1058,6 @@ where
 
         // Handle MOVED redirect by updating the topology
         if matches!(retry_method, RetryMethod::MovedRedirect) {
-            // record moved error metric if telemetry is initialized
-            if let Err(e) = GlideOpenTelemetry::record_moved_error() {
-                log_error(
-                    "OpenTelemetry:moved_error",
-                    format!("Failed to record moved error: {}", e),
-                );
-            }
             if let Err(server_error) =
                 pipeline_handle_moved_redirect(core.clone(), &redis_error).await
             {
