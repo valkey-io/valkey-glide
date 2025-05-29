@@ -141,7 +141,10 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 
 	for i := int64(0); i < 6; i++ {
 		batch.SetBit(key, i, 1)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: fmt.Sprintf("SetBit(key, %d, 1)", i)})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: fmt.Sprintf("SetBit(key, %d, 1)", i)},
+		)
 	}
 
 	batch.BitCount(key)
@@ -166,7 +169,10 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 		options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
 	}
 	batch.BitField(bitfieldkey1, commands)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(0), int64(0), int64(1)}, TestName: "BitField(key, commands)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{int64(0), int64(0), int64(1)}, TestName: "BitField(key, commands)"},
+	)
 
 	bfcommands := []options.BitFieldSubCommands{
 		options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
@@ -185,11 +191,20 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey2, abcdef)"})
 
 	batch.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(AND, destKey, bitopkey1, bitopkey2)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(AND, destKey, bitopkey1, bitopkey2)"},
+	)
 	batch.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(OR, destKey, bitopkey1, bitopkey2)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(OR, destKey, bitopkey1, bitopkey2)"},
+	)
 	batch.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(XOR, destKey, bitopkey1, bitopkey2)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(XOR, destKey, bitopkey1, bitopkey2)"},
+	)
 	batch.BitOp(options.NOT, destKey, []string{bitopkey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
 

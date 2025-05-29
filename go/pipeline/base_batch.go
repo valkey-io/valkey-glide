@@ -4185,6 +4185,8 @@ func (b *BaseBatch[T]) SetBit(key string, offset int64, value int64) *T {
 // Returns the bit value at offset in the string value stored at key.
 // offset should be greater than or equal to zero.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	key - The key of the string.
@@ -4235,7 +4237,7 @@ func (b *BaseBatch[T]) Wait(numberOfReplicas int64, timeout int64) *T {
 //
 // Command Response:
 //
-//	The number of set bits in the string. Returns zero if the key is missing as it is
+//	The number of set bits in the string. Returns `0` if the key is missing as it is
 //	treated as an empty string.
 //
 // [valkey.io]: https://valkey.io/commands/bitcount/
@@ -4243,7 +4245,7 @@ func (b *BaseBatch[T]) BitCount(key string) *T {
 	return b.addCmdAndTypeChecker(C.BitCount, []string{key}, reflect.Int64, false)
 }
 
-// Perform a bitwise operation between multiple keys (containing string values) and store the result in the destination.
+// Performs a bitwise operation between multiple keys (containing string values) and store the result in the destination.
 //
 // Note:
 //
@@ -4426,12 +4428,12 @@ func (b *BaseBatch[T]) XClaimJustIdWithOptions(
 // Parameters:
 //
 //	key - The key of the string.
-//	bit - The bit value to match. The value must be 0 or 1.
+//	bit - The bit value to match. The value must be `0` or `1`.
 //
 // Command Response:
 //
 //	The position of the first occurrence matching bit in the binary value of
-//	the string held at key. If bit is not found, a -1 is returned.
+//	the string held at key. If bit is not found, a `-1` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
 func (b *BaseBatch[T]) BitPos(key string, bit int64) *T {
@@ -4445,13 +4447,13 @@ func (b *BaseBatch[T]) BitPos(key string, bit int64) *T {
 // Parameters:
 //
 //	key - The key of the string.
-//	bit - The bit value to match. The value must be 0 or 1.
-//	bitposOptions  - The [BitPosOptions] type.
+//	bit - The bit value to match. The value must be `0` or `1`.
+//	bitposOptions - The [options.BitPosOptions] type.
 //
 // Command Response:
 //
 //	The position of the first occurrence matching bit in the binary value of
-//	the string held at key. If bit is not found, a -1 is returned.
+//	the string held at key. If bit is not found, a `-1` is returned.
 //
 // [valkey.io]: https://valkey.io/commands/bitpos/
 func (b *BaseBatch[T]) BitPosWithOptions(key string, bit int64, bitposOptions options.BitPosOptions) *T {
@@ -4763,17 +4765,17 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 }
 
 // Reads the array of bits representing the string that is held at key
-// based on the specified  sub commands.
+// based on the specified sub commands.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key          -  The key of the string.
-//	subCommands  -  The read-only subCommands to be performed on the binary value
-//	                of the string at key, which could be:
-//	                  - [BitFieldGet].
-//		            Use `options.NewBitFieldGet()` to specify a BitField GET command.
+//	key          - The key of the string.
+//	subCommands  - The read-only subCommands to be performed on the binary value
+//	               of the string at key, which could be:
+//	                 - [BitFieldGet].
+//		           Use `options.NewBitFieldGet()` to specify a BitField GET command.
 //
 // Command Response:
 //
