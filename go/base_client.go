@@ -2380,13 +2380,15 @@ func (client *baseClient) SPop(ctx context.Context, key string) (models.Result[s
 //	If key does not exist, returns an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/spop/
-func (client *baseClient) SPopCount(ctx context.Context, key string, count int64) (map[string]struct{}, error) {
+func (client *baseClient) SPopCount(ctx context.Context, key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(ctx, C.SPop, []string{key, utils.IntToString(count)})
+	fmt.Println("result type=====")
+	fmt.Println(result.response_type)
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringSetResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 // SMIsMember returns whether each member is a member of the set stored at key.
