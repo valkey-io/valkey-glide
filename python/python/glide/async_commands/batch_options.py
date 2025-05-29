@@ -98,7 +98,6 @@ class ClusterBatchOptions:
 
     Args:
         retry_strategy (Optional[BatchRetryStrategy]): ⚠️ **Please see `BatchRetryStrategy`for more information about the retry strategy.**
-
             Defines the retry strategy for handling cluster batch request failures. See `BatchRetryStrategy`
             for detailed configuration options, warnings, and behavior information.
 
