@@ -243,19 +243,9 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         var builder = UpdateConnectionPassword.newBuilder().setImmediateAuth(immediateAuth);
         password.ifPresent(builder::setPassword);
-        long spanPtr = 0;
-        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-            // Create OpenTelemetry span
-            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("UpdateConnectionPassword");
-        }
 
         CommandRequest.Builder command =
                 CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
-
-        // Set the root span pointer if a span was created
-        if (spanPtr != 0) {
-            command.setRootSpanPtr(spanPtr);
-        }
 
         return submitCommandToChannel(command, responseHandler);
     }
