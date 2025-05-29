@@ -5,7 +5,9 @@ from __future__ import annotations
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
+
+from cffi import FFI
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
@@ -35,12 +37,16 @@ class Logger:
 
     _instance = None
     logger_level: Level
+    _is_ffi: bool
+    log_function: Optional[Callable]
+    _ffi: FFI
+    _lib: Any
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
         try:
             from .glide import py_init, py_log
 
-            Logger.is_ffi = False
+            Logger._is_ffi = False
             Logger.log_function = py_log
 
             pyo3_level = self._python_to_pyo3_level(level)
@@ -49,14 +55,19 @@ class Logger:
 
         except Exception as e:
             if isinstance(e, ImportError):
-                Logger.is_ffi = True
+                Logger._is_ffi = True
                 self._init_ffi()
 
-                if level is not None:
-                    ffi_level = self._ffi.new("Level*", level.value)
-
-                else:
-                    ffi_level = self._ffi.NULL
+                ffi_level = (
+                    self._ffi.new("Level*", level.value)
+                    if level is not None
+                    else self._ffi.NULL
+                )
+                c_file_name = (
+                    self._ffi.new("char[]", file_name.encode(ENCODING))
+                    if file_name
+                    else self._ffi.NULL
+                )
 
                 if file_name is not None:
                     c_file_name = self._ffi.new("char[]", file_name.encode(ENCODING))
@@ -110,10 +121,11 @@ class Logger:
         if err:
             message = f"{message}: {traceback.format_exception(err)}"
 
-        if not cls.is_ffi:
+        if not cls._is_ffi:
             logger_level = cls._python_to_pyo3_level(Logger.logger_level)
             log_level = cls._python_to_pyo3_level(log_level)
-            cls.log_function(log_level, logger_level, log_identifier, message)
+            if cls.log_function:
+                cls.log_function(log_level, logger_level, log_identifier, message)
 
         else:
             c_identifier = cls._ffi.new("char[]", log_identifier.encode(ENCODING))
@@ -125,8 +137,6 @@ class Logger:
 
     @classmethod
     def _init_ffi(cls):
-        from cffi import FFI
-
         cls._ffi = FFI()
         cls._ffi.cdef(
             """
@@ -163,10 +173,12 @@ class Logger:
         Logger._instance = Logger(level, file_name)
 
     @staticmethod
-    def _python_to_pyo3_level(level: int):
+    def _python_to_pyo3_level(level: Optional[Level]):
         from .glide import Level as Pyo3Level
 
-        if level.value == 0:
+        if level is None:
+            return None
+        elif level.value == 0:
             return Pyo3Level.Error
         elif level.value == 1:
             return Pyo3Level.Warn
@@ -179,4 +191,4 @@ class Logger:
         elif level.value == 5:
             return Pyo3Level.Off
         else:
-            raise TypeError(f"Invalid level: {level}")
+            raise TypeError(f"Invalid ltevel: {level}")
