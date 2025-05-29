@@ -790,6 +790,7 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]str
 		}
 		slice[res.Value()] = struct{}{}
 	}
+
 	return slice, nil
 }
 
