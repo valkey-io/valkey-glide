@@ -105,6 +105,7 @@ class ClusterBatchOptions:
             will send the batch to the specified node defined by `route`.
 
             If a redirection error occurs:
+
             - For Atomic Batches (Transactions), the entire transaction will be redirected.
             - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
               will be redirected.
