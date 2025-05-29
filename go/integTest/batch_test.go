@@ -207,6 +207,99 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
+func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{set}-"
+	// if isAtomic {
+	// 	prefix = ""
+	// }
+
+	key := prefix + "key-" + uuid.NewString()
+
+	batch.SAdd(key, []string{"member1", "member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key, [member1, member2])"})
+
+	batch.SRem(key, []string{"member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SRem(key, [member2])"})
+
+	batch.SMembers(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SMembers(key)"},
+	)
+
+	batch.SCard(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SCard(key)"})
+
+	batch.SIsMember(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
+
+	key2 := prefix + "key2-" + uuid.NewString()
+	batch.SAdd(key2, []string{"member1", "member3"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
+	batch.SDiff([]string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]struct{}{}, TestName: "SDiff([key, key2])"})
+
+	dest := prefix + "key3-" + uuid.NewString()
+	batch.SDiffStore(dest, []string{key2, key})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SDiffStore(dest, [key2, key])"})
+
+	batch.SInter([]string{key, key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SInter([key, key2])"},
+	)
+
+	batch.SInterStore(dest, []string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [key, key2])"})
+
+	batch.SInterCard([]string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([key, key2])"})
+
+	batch.SInterCardLimit([]string{key, key2}, 10)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([key, key2], 10)"})
+
+	batch.SRandMember(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
+
+	batch.SPop(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SPop(key)"})
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SMIsMember(key, []string{"member1", "nonexistent"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
+	)
+
+	batch.SUnionStore(dest, []string{key, key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SUnionStore(dest, [key, key2])"})
+
+	batch.SUnion([]string{key, key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}, "member3": {}}, TestName: "SUnion([key, key2])"},
+	)
+
+	batch.SScan(key, "0")
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScan(key, 0)"})
+
+	scanOptions := options.NewBaseScanOptions().SetMatch("mem*")
+	batch.SScanWithOptions(key, "0", *scanOptions)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
+	)
+
+	batch.SAdd(key2, []string{"newmember"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key2, [newmember])"})
+	batch.SMove(key2, key, "newmember")
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SMove(key2, key, newmember)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Set commands"}
+}
+
 func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
@@ -841,6 +934,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateHashTest,
 		CreateHyperLogLogTest,
 		CreateListCommandsTest,
+		CreateSetCommandsTests,
 	}
 }
 
