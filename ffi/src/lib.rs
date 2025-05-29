@@ -1006,7 +1006,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         Value::Array(array) => {
             let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(|v| valkey_value_to_command_response(v))
+                .map(valkey_value_to_command_response)
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.array_value = vec_ptr;
@@ -1045,7 +1045,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         Value::Set(array) => {
             let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(|v| valkey_value_to_command_response(v))
+                .map(valkey_value_to_command_response)
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.sets_value = vec_ptr;
