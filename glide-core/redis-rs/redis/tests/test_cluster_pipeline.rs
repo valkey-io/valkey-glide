@@ -41,8 +41,8 @@ mod test_cluster_pipeline {
         for _ in 0..1000 {
             let key = generate_random_string(10);
             let key2 = generate_random_string(10);
-            let slot = get_slot(key.as_str().as_bytes());
-            let slot2 = get_slot(key2.as_str().as_bytes());
+            let slot = get_slot(key.as_bytes());
+            let slot2 = get_slot(key2.as_bytes());
 
             if is_in_same_node(slot, slot2, nodes_and_slots.clone()) {
                 return (key, key2);
@@ -57,8 +57,8 @@ mod test_cluster_pipeline {
         for _ in 0..1000 {
             let key = generate_random_string(10);
             let key2 = generate_random_string(10);
-            let slot = get_slot(key.as_str().as_bytes());
-            let slot2 = get_slot(key2.as_str().as_bytes());
+            let slot = get_slot(key.as_bytes());
+            let slot2 = get_slot(key2.as_bytes());
 
             if !is_in_same_node(slot, slot2, nodes_and_slots.clone()) {
                 return (key, key2);
@@ -71,8 +71,8 @@ mod test_cluster_pipeline {
         for _ in 0..1000 {
             let key = generate_random_string(10);
             let key2 = generate_random_string(10);
-            let slot = get_slot(key.as_str().as_bytes());
-            let slot2 = get_slot(key2.as_str().as_bytes());
+            let slot = get_slot(key.as_bytes());
+            let slot2 = get_slot(key2.as_bytes());
 
             if slot != slot2 {
                 return (key, key2);
@@ -168,7 +168,7 @@ mod test_cluster_pipeline {
 
         // Pick a random "bad" key and compute its slot.
         let bad_key = generate_random_string(10);
-        let bad_slot = get_slot(&bad_key.as_str().as_bytes());
+        let bad_slot = get_slot(bad_key.as_bytes());
 
         // Kill the node that handles the bad_key's slot.
         let killed_node_routing = cluster
@@ -197,7 +197,7 @@ mod test_cluster_pipeline {
         let good_key_finder = || -> String {
             for _ in 0..1000 {
                 let candidate = generate_random_string(10);
-                let candidate_slot = get_slot(candidate.as_str().as_bytes());
+                let candidate_slot = get_slot(candidate.as_bytes());
                 if is_slot_in_ranges(candidate_slot, slots.clone()) {
                     return candidate;
                 }
@@ -282,7 +282,7 @@ mod test_cluster_pipeline {
                 .collect::<Vec<_>>();
 
             let (moved_key, key2) = generate_2_keys_in_the_same_node(nodes_and_slots);
-            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let key_slot = get_slot(moved_key.as_bytes());
 
             cluster
                 .move_specific_slot(key_slot, slot_distribution)
@@ -366,7 +366,7 @@ mod test_cluster_pipeline {
             let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
             let moved_key = generate_random_string(10);
-            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let key_slot = get_slot(moved_key.as_bytes());
             let route = SingleNodeRoutingInfo::SpecificNode(Route::new(key_slot, SlotAddr::Master));
 
             cluster
@@ -585,7 +585,7 @@ mod test_cluster_pipeline {
             let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
             let (moved_key, key2) = generate_2_keys_in_different_slots();
-            let moved_slot = get_slot(moved_key.as_str().as_bytes());
+            let moved_slot = get_slot(moved_key.as_bytes());
 
             // Move the slot for the first key to simulate a MOVED error.
             cluster
@@ -694,7 +694,7 @@ mod test_cluster_pipeline {
             let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
             let migrated_key = generate_random_string(10);
-            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key_slot = get_slot(migrated_key.as_bytes());
             let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
             let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
 
@@ -722,7 +722,8 @@ mod test_cluster_pipeline {
                     .mget(&[&migrated_key, &key]);
 
                 // Execute the pipeline.
-                let result = connection
+
+                connection
                     .route_pipeline(
                         &pipeline,
                         0,
@@ -734,8 +735,7 @@ mod test_cluster_pipeline {
                         }),
                     )
                     .await
-                    .expect("Pipeline execution failed");
-                result
+                    .expect("Pipeline execution failed")
             };
 
             let ((), result) = tokio::join!(stable_future, future);
@@ -856,7 +856,8 @@ mod test_cluster_pipeline {
                 pipeline.incr(&key, 1).blpop(&key2, 2.0).set(key3, "value");
 
                 // Execute the pipeline.
-                let result = connection
+
+                connection
                     .route_pipeline(
                         &pipeline,
                         0,
@@ -868,8 +869,7 @@ mod test_cluster_pipeline {
                         }),
                     )
                     .await
-                    .expect("Pipeline execution failed");
-                result
+                    .expect("Pipeline execution failed")
             };
 
             let ((), result) = tokio::join!(kill_conn_future, future);
@@ -1129,7 +1129,7 @@ mod test_cluster_pipeline {
         let mut connection = cluster.async_connection(None).await;
 
         let key = generate_random_string(10);
-        let key_slot = get_slot(key.as_str().as_bytes());
+        let key_slot = get_slot(key.as_bytes());
 
         let az: String = "us-east-1a".to_string();
         let mut config_cmd = cmd("CONFIG");

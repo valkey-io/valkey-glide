@@ -268,7 +268,7 @@ where
 {
     if matches!(routing, InternalSingleNodeRouting::Random) && !pipeline_map.is_empty() {
         // Adds the command to a random existing node pipeline in the pipeline map
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         if let Some(node_context) = pipeline_map.values_mut().choose(&mut rng) {
             node_context.add_command(cmd, index, None, false);
             return Ok(());
