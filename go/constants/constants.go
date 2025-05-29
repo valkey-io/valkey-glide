@@ -2,7 +2,7 @@
 
 package constants
 
-import "github.com/valkey-io/valkey-glide/go/v2/errors"
+import "github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 
 const (
 	CountKeyword      string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
@@ -93,7 +93,7 @@ func (expireCondition ExpireCondition) ToString() (string, error) {
 	case NewExpiryLessThanCurrent:
 		return string(NewExpiryLessThanCurrent), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid expire condition"}
+		return "", glideErrors.NewRequestError("Invalid expire condition")
 	}
 }
 
@@ -136,7 +136,7 @@ func (insertPosition InsertPosition) ToString() (string, error) {
 	case After:
 		return string(After), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid insert position"}
+		return "", glideErrors.NewRequestError("Invalid insert position")
 	}
 }
 
@@ -157,7 +157,7 @@ func (listDirection ListDirection) ToString() (string, error) {
 	case Right:
 		return string(Right), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid list direction"}
+		return "", glideErrors.NewRequestError("Invalid list direction")
 	}
 }
 
@@ -179,7 +179,7 @@ func (scoreFilter ScoreFilter) ToString() (string, error) {
 	case MIN:
 		return string(MIN), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid score filter"}
+		return "", glideErrors.NewRequestError("Invalid score filter")
 	}
 }
 
