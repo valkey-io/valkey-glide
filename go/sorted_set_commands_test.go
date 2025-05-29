@@ -1812,7 +1812,7 @@ func ExampleClient_ZMPopWithOptions() {
 
 	client.ZAdd(context.Background(), "mySortedSet", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
-	opts := *options.NewZPopOptions().SetCount(2)
+	opts := *options.NewZMPopOptions().SetCount(2)
 	res, err := client.ZMPopWithOptions(context.Background(), []string{"mySortedSet"}, constants.MAX, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -1842,7 +1842,7 @@ func ExampleClusterClient_ZMPopWithOptions() {
 
 	client.ZAdd(context.Background(), "{key}SortedSet", map[string]float64{"p": 10.0, "q": 20.0, "r": 30.0})
 
-	opts := *options.NewZPopOptions().SetCount(2)
+	opts := *options.NewZMPopOptions().SetCount(2)
 	res, err := client.ZMPopWithOptions(context.Background(), []string{"{key}SortedSet"}, constants.MAX, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
