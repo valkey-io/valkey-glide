@@ -34,6 +34,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/opentelemetry"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -299,10 +300,11 @@ func (client *baseClient) executeCommandWithRoute(
 	}
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
+	otelInstance := opentelemetry.GetInstance()
 	if otelInstance != nil && otelInstance.ShouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
-		spanPtr = otelInstance.CreateSpan(requestType)
+		spanPtr = otelInstance.CreateSpan(opentelemetry.RequestType(requestType))
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
@@ -431,6 +433,7 @@ func (client *baseClient) executeBatch(
 
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
+	otelInstance := opentelemetry.GetInstance()
 	if otelInstance != nil && otelInstance.ShouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name

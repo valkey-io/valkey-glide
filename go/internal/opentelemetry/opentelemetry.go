@@ -1,10 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+// Package glide provides functionality for OpenTelemetry integration.
+// ⚠️ OpenTelemetry can only be initialized once per process. Calling Init() more than once will be ignored.
+// If you need to change configuration, restart the process with new settings.
 
-package glide
+package opentelemetry
 
 /*
 #cgo LDFLAGS: -lglide_ffi
-#include "lib.h"
+#include "../../lib.h"
 #include <stdlib.h>
 */
 import "C"
@@ -17,6 +20,9 @@ import (
 	"sync"
 	"unsafe"
 )
+
+// RequestType is an alias for C.RequestType to ensure type compatibility across packages
+type RequestType C.RequestType
 
 // OpenTelemetryConfig represents the configuration for OpenTelemetry integration.
 // It allows configuring how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
@@ -181,7 +187,7 @@ func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 }
 
 // CreateSpan creates a new OpenTelemetry span with the given name and returns a pointer to the span.
-func (o *OpenTelemetry) CreateSpan(requestType C.RequestType) uint64 {
+func (o *OpenTelemetry) CreateSpan(requestType RequestType) uint64 {
 	if !o.IsInitialized() {
 		return 0
 	}
