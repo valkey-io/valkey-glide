@@ -247,7 +247,7 @@ public class OpenTelemetry {
      * OpenTelemetry.TracesConfig.builder() .endpoint("http://localhost:4318/v1/traces")
      * .samplePercentage(10) // Optional, defaults to 1 .build() ) .metrics(
      * OpenTelemetry.MetricsConfig.builder() .endpoint("http://localhost:4318/v1/metrics") .build() )
-     * .flushIntervalMs(5000L) // Optional, defaults to 5000 .build() ); ```
+     * .flushIntervalMs(5000L) // Optional, defaults to 5000 .build() );
      *
      * <p>Initialize the OpenTelemetry instance
      *
