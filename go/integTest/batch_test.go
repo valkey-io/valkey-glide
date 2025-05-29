@@ -492,7 +492,7 @@ func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic boo
 
 	// TODO: add Move in separate standalone batch tests
 
-	return BatchTestData{CommandTestData: testData, TestName: "Generic Cluster commands"}
+	return BatchTestData{CommandTestData: testData, TestName: "Generic commands"}
 }
 
 func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
