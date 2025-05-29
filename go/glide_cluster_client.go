@@ -217,7 +217,6 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 }
 
 // Gets information and statistics about the server.
-//
 // The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
@@ -241,8 +240,9 @@ func (client *ClusterClient) Info(ctx context.Context) (map[string]string, error
 }
 
 // Gets information and statistics about the server.
-//
 // The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+//
+// Note:
 //
 // Starting from server version 7, command supports multiple section arguments.
 //
@@ -1064,8 +1064,11 @@ func (client *ClusterClient) ConfigSetWithOptions(ctx context.Context,
 }
 
 // Get the values of configuration parameters.
-// Starting from server version 7, command supports multiple parameters.
 // The command will be sent to a random node.
+//
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // Parameters:
 //
@@ -1092,7 +1095,10 @@ func (client *ClusterClient) ConfigGet(ctx context.Context,
 }
 
 // Get the values of configuration parameters.
-// Starting from server version 7, command supports multiple parameters.
+//
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // Parameters:
 //

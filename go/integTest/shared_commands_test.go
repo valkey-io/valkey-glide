@@ -752,9 +752,8 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		result, err := client.GetDel(context.Background(), "")
 
-		assert.NotNil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
-		assert.Equal(suite.T(), "key is required", err.Error())
 	})
 }
 
@@ -10592,7 +10591,7 @@ func (suite *GlideTestSuite) TestZMPopWithOptions() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		opts := *options.NewZPopOptions().SetCount(2)
+		opts := *options.NewZMPopOptions().SetCount(2)
 
 		res1, err := client.ZMPopWithOptions(context.Background(), []string{key1}, constants.MIN, opts)
 		assert.Nil(suite.T(), err)
@@ -10627,7 +10626,7 @@ func (suite *GlideTestSuite) TestZMPopWithOptions() {
 			res4.Value().MembersAndScores,
 		)
 
-		opts10 := *options.NewZPopOptions().SetCount(10)
+		opts10 := *options.NewZMPopOptions().SetCount(10)
 		res5, err := client.ZMPopWithOptions(context.Background(), []string{key1}, constants.MIN, opts10)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), key1, res5.Value().Key)
@@ -10640,7 +10639,7 @@ func (suite *GlideTestSuite) TestZMPopWithOptions() {
 			res5.Value().MembersAndScores,
 		)
 
-		opts1 := *options.NewZPopOptions().SetCount(1)
+		opts1 := *options.NewZMPopOptions().SetCount(1)
 		res6, err := client.ZMPopWithOptions(context.Background(), []string{key2}, constants.MAX, opts1)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), key2, res6.Value().Key)

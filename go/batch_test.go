@@ -143,7 +143,7 @@ func ExampleClusterClient_ExecWithOptions_pipeline() {
 
 func ExampleClusterClient_ExecWithOptions_route() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
-	// Example 2: Non-Atomic Batch (Pipeline)
+	// Example 3: A transaction with a route
 	batch := pipeline.NewClusterBatch(true)
 	batch.CustomCommand([]string{"info", "server"})
 	// Set batch route
