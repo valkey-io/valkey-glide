@@ -7348,9 +7348,6 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 		}
 
 		assert.Equal(suite.T(), resultList, sortResult)
-
-		// Cleanup
-		client.Del(context.Background(), []string{key, "{key}weight_item1", "{key}weight_item2", "{key}weight_item3"})
 	})
 }
 
@@ -7381,9 +7378,6 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 		}
 
 		assert.Equal(suite.T(), resultList, sortResult)
-
-		// Cleanup
-		client.Del(context.Background(), []string{key, "{key}object_item1", "{key}object_item2", "{key}object_item3"})
 	})
 }
 
@@ -7438,20 +7432,6 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 		assert.Equal(suite.T(), "item2", sortResult[1].Value())
 		assert.Equal(suite.T(), "item1", sortResult[3].Value())
 		assert.Equal(suite.T(), "item3", sortResult[5].Value())
-
-		// Cleanup
-		client.Del(
-			context.Background(),
-			[]string{
-				key,
-				"{key}weight_item1",
-				"{key}weight_item2",
-				"{key}weight_item3",
-				"{key}object_item1",
-				"{key}object_item2",
-				"{key}object_item3",
-			},
-		)
 	})
 }
 
