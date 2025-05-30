@@ -3,11 +3,11 @@
 // ⚠️ OpenTelemetry can only be initialized once per process. Calling Init() more than once will be ignored.
 // If you need to change configuration, restart the process with new settings.
 
-package opentelemetry
+package glide
 
 /*
 #cgo LDFLAGS: -lglide_ffi
-#include "../../lib.h"
+#include "lib.h"
 #include <stdlib.h>
 */
 import "C"
@@ -20,9 +20,6 @@ import (
 	"sync"
 	"unsafe"
 )
-
-// RequestType is an alias for C.RequestType to ensure type compatibility across packages
-type RequestType C.RequestType
 
 // OpenTelemetryConfig represents the configuration for OpenTelemetry integration.
 // It allows configuring how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
@@ -128,7 +125,7 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	}
 
 	// Initialize OpenTelemetry
-	errMsg := C.init_open_telemetry(cConfig)
+	errMsg := C.init_open_telemetry(&cConfig)
 	if errMsg != nil {
 		err := fmt.Errorf("failed to initialize OpenTelemetry: %s", C.GoString(errMsg))
 		C.free_c_string(errMsg)
@@ -146,7 +143,7 @@ func (o *OpenTelemetry) IsInitialized() bool {
 
 // ShouldSample determines if the current request should be sampled for OpenTelemetry tracing.
 // Uses the configured sample percentage to randomly decide whether to create a span for this request.
-func (o *OpenTelemetry) ShouldSample() bool {
+func (o *OpenTelemetry) shouldSample() bool {
 	percentage := o.GetSamplePercentage()
 	if !o.IsInitialized() || percentage <= 0 {
 		return false
@@ -187,7 +184,7 @@ func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 }
 
 // CreateSpan creates a new OpenTelemetry span with the given name and returns a pointer to the span.
-func (o *OpenTelemetry) CreateSpan(requestType RequestType) uint64 {
+func (o *OpenTelemetry) createSpan(requestType C.RequestType) uint64 {
 	if !o.IsInitialized() {
 		return 0
 	}
@@ -195,7 +192,7 @@ func (o *OpenTelemetry) CreateSpan(requestType RequestType) uint64 {
 }
 
 // CreateBatchSpan creates a new OpenTelemetry span with the name "batch" and returns a pointer to the span.
-func (o *OpenTelemetry) CreateBatchSpan() uint64 {
+func (o *OpenTelemetry) createBatchSpan() uint64 {
 	if !o.IsInitialized() {
 		return 0
 	}
@@ -203,7 +200,7 @@ func (o *OpenTelemetry) CreateBatchSpan() uint64 {
 }
 
 // DropSpan drops an OpenTelemetry span given its pointer.
-func (o *OpenTelemetry) DropSpan(spanPtr uint64) {
+func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	if spanPtr == 0 {
 		return
 	}
