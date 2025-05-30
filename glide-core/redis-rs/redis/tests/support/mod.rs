@@ -229,7 +229,7 @@ impl RedisServer {
         let server_command = ["valkey-server", "redis-server"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
-            .map(|&cmd| cmd)
+            .copied()
             .unwrap_or_else(|| {
                 panic!("Neither valkey-server nor redis-server exists in the system.")
             });
