@@ -474,7 +474,7 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
 }
 
-func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{hyperloglog}-"
 	atomicPrefix := prefix
