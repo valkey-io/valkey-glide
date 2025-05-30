@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -244,11 +245,13 @@ func (suite *GlideTestSuite) TearDownSuite() {
 
 func (suite *GlideTestSuite) TearDownTest() {
 	for _, client := range suite.clients {
+		client.FlushDB(context.Background())
 		client.Close()
 	}
 	suite.clients = nil // Clear the slice
 
 	for _, client := range suite.clusterClients {
+		client.FlushDB(context.Background())
 		client.Close()
 	}
 	suite.clusterClients = nil // Clear the slice
@@ -331,17 +334,22 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
 	config := suite.defaultClientConfig()
-	return suite.client(config)
+	client, err := suite.client(config)
+	require.NoError(suite.T(), err)
+	return client
 }
 
-func (suite *GlideTestSuite) client(config *config.ClientConfiguration) *glide.Client {
+func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.Client, error) {
 	client, err := glide.NewClient(config)
-
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), client)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("client is nil")
+	}
 
 	suite.clients = append(suite.clients, client)
-	return client
+	return client, nil
 }
 
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
@@ -353,17 +361,22 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientC
 
 func (suite *GlideTestSuite) defaultClusterClient() *glide.ClusterClient {
 	config := suite.defaultClusterClientConfig()
-	return suite.clusterClient(config)
+	client, err := suite.clusterClient(config)
+	require.NoError(suite.T(), err)
+	return client
 }
 
-func (suite *GlideTestSuite) clusterClient(config *config.ClusterClientConfiguration) *glide.ClusterClient {
+func (suite *GlideTestSuite) clusterClient(config *config.ClusterClientConfiguration) (*glide.ClusterClient, error) {
 	client, err := glide.NewClusterClient(config)
-
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), client)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("cluster client is nil")
+	}
 
 	suite.clusterClients = append(suite.clusterClients, client)
-	return client
+	return client, nil
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClient(
@@ -374,7 +387,7 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
-			config.NewAdvancedGlideClientConfiguration().WithConnectionTimeout(connectTimeout))
+			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout))
 	return glide.NewClient(clientConfig)
 }
 
@@ -435,7 +448,7 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 	assert.Equal(suite.T(), glide.OK, result)
 }
 
-func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string, t *testing.T) {
+func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *testing.T) {
 	if suite.serverVersion < version {
 		t.Skipf("This feature is added in version %s", version)
 	}
@@ -483,18 +496,47 @@ func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription
 	}
 }
 
+func (suite *GlideTestSuite) createAnyClientWithTesting(clientType ClientType, subscription any) (interfaces.BaseClientCommands, error) {
+	switch clientType {
+	case StandaloneClient:
+		if sub, ok := subscription.(*config.StandaloneSubscriptionConfig); ok {
+			clientConfig := suite.defaultClientConfig().WithSubscriptionConfig(sub)
+			return suite.client(clientConfig)
+		} else {
+			return suite.client(suite.defaultClientConfig())
+		}
+	case ClusterClient:
+		if sub, ok := subscription.(*config.ClusterSubscriptionConfig); ok {
+			clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(sub)
+			return suite.clusterClient(clientConfig)
+		} else {
+			return suite.clusterClient(suite.defaultClusterClientConfig())
+		}
+	default:
+		return nil, fmt.Errorf("unsupported client type")
+	}
+}
+
 func (suite *GlideTestSuite) createStandaloneClientWithSubscriptions(
 	config *config.StandaloneSubscriptionConfig,
 ) *glide.Client {
 	clientConfig := suite.defaultClientConfig().WithSubscriptionConfig(config)
-	return suite.client(clientConfig)
+	client, err := suite.client(clientConfig)
+	if err != nil {
+		suite.T().Fatalf("Failed to create standalone client with subscriptions: %v", err)
+	}
+	return client
 }
 
 func (suite *GlideTestSuite) createClusterClientWithSubscriptions(
 	config *config.ClusterSubscriptionConfig,
 ) *glide.ClusterClient {
 	clientConfig := suite.defaultClusterClientConfig().WithSubscriptionConfig(config)
-	return suite.clusterClient(clientConfig)
+	client, err := suite.clusterClient(clientConfig)
+	if err != nil {
+		suite.T().Fatalf("Failed to create cluster client with subscriptions: %v", err)
+	}
+	return client
 }
 
 type TestChannelMode int
@@ -658,6 +700,7 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 //   - channels: A slice of ChannelDefn objects defining the channels to subscribe to
 //   - clientId: A unique identifier for this subscriber
 //   - withCallback: Whether to use callback-based message handling
+//   - t: The testing.T instance for proper error handling in subtests
 //
 // Returns:
 //   - The created client with the specified subscription configuration
@@ -666,6 +709,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	channels []ChannelDefn,
 	clientId int,
 	withCallback bool,
+	t *testing.T,
 ) interfaces.BaseClientCommands {
 	callback := func(message *models.PubSubMessage, context any) {
 		callbackCtx.Store(fmt.Sprintf("%d-%s", clientId, message.Channel), message)
@@ -673,7 +717,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 	switch clientType {
 	case StandaloneClient:
 		if channels[0].Mode == ShardedMode {
-			assert.Fail(suite.T(), "Sharded mode is not supported for standalone client")
+			t.Fatalf("Sharded mode is not supported for standalone client")
 			return nil
 		}
 
@@ -685,7 +729,9 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 		if withCallback {
 			sConfig = sConfig.WithCallback(callback, &callbackCtx)
 		}
-		return suite.createAnyClient(StandaloneClient, sConfig)
+		client, err := suite.createAnyClientWithTesting(StandaloneClient, sConfig)
+		require.NoError(t, err)
+		return client
 	case ClusterClient:
 		cConfig := config.NewClusterSubscriptionConfig()
 		for _, channel := range channels {
@@ -695,9 +741,11 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 		if withCallback {
 			cConfig = cConfig.WithCallback(callback, &callbackCtx)
 		}
-		return suite.createAnyClient(ClusterClient, cConfig)
+		client, err := suite.createAnyClientWithTesting(ClusterClient, cConfig)
+		require.NoError(t, err)
+		return client
 	default:
-		assert.Fail(suite.T(), "Unsupported client type")
+		t.Fatalf("Unsupported client type")
 		return nil
 	}
 }

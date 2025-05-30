@@ -120,9 +120,9 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 			var timeoutClient interfaces.BaseClientCommands
 			var err error
 			if clusterMode {
-				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)
+				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10*time.Second, 250*time.Millisecond)
 			} else {
-				timeoutClient, err = suite.createConnectionTimeoutClient(10000, 250, backoffStrategy)
+				timeoutClient, err = suite.createConnectionTimeoutClient(10*time.Second, 250*time.Millisecond, backoffStrategy)
 			}
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {
