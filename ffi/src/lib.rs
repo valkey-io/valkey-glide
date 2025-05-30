@@ -1813,7 +1813,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
 /// Drops an OpenTelemetry span given its pointer as u64.
 ///
 /// # Safety
-/// * `span_ptr` must be a valid pointer to a [Arc<GlideSpan>] span created by [`create_otel_span`] or `0`.
+/// * `span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`] or `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     if span_ptr == 0 {
