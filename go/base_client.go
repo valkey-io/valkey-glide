@@ -351,7 +351,7 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
-		spanPtr,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 	// Wait for result or context cancellation
