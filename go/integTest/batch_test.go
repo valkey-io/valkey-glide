@@ -126,11 +126,15 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
-	key := prefix + "key0" + uuid.New().String()
-	bitopkey1 := prefix + "key1" + uuid.New().String()
-	bitopkey2 := prefix + "key2" + uuid.New().String()
-	bitfieldkey1 := prefix + "key3" + uuid.New().String()
-	bitfieldkey2 := prefix + "key4" + uuid.New().String()
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key := atomicPrefix + "key0" + uuid.New().String()
+	bitopkey1 := atomicPrefix + "key1" + uuid.New().String()
+	bitopkey2 := atomicPrefix + "key2" + uuid.New().String()
+	bitfieldkey1 := atomicPrefix + "key3" + uuid.New().String()
+	bitfieldkey2 := atomicPrefix + "key4" + uuid.New().String()
 	destKey := prefix + "dest" + uuid.New().String()
 
 	batch.SetBit(key, 7, 1)
@@ -185,6 +189,8 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	batch.BitFieldRO(bitfieldkey2, commands2)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(24)}, TestName: "BitFieldRO(key, commands2)"})
 
+	bitopkey1 = prefix + bitopkey1
+	bitopkey2 = prefix + bitopkey2
 	batch.Set(bitopkey1, "foobar")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey1, foobar)"})
 	batch.Set(bitopkey2, "abcdef")
