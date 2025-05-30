@@ -15,7 +15,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
@@ -29,51 +28,7 @@ const (
 	validEndpointMetrics    = "https://valid-endpoint/v1/metrics"
 )
 
-type OpenTelemetryTestSuite struct {
-	GlideTestSuite
-}
-
-// OpenTelemetry standalone tests
-
-// SetupSuite runs once before all tests
-func (suite *OpenTelemetryTestSuite) SetupSuite() {
-	// One-time setup for all tests
-	suite.GlideTestSuite.SetupSuite()
-	WrongOpenTelemetryConfig(suite)
-	intervalMs := int64(otelSpanFlushIntervalMs)
-	openTelemetryConfig := glide.OpenTelemetryConfig{
-		Traces: &glide.OpenTelemetryTracesConfig{
-			Endpoint:         validFileEndpointTraces,
-			SamplePercentage: 100,
-		},
-		Metrics: &glide.OpenTelemetryMetricsConfig{
-			Endpoint: validEndpointMetrics,
-		},
-		FlushIntervalMs: &intervalMs,
-	}
-	err := glide.GetInstance().Init(openTelemetryConfig)
-	assert.NoError(suite.T(), err)
-}
-
-// TearDownSuite runs once after all tests
-func (suite *OpenTelemetryTestSuite) TearDownSuite() {
-	// One-time cleanup for all tests
-	suite.GlideTestSuite.TearDownSuite()
-}
-
-func (suite *OpenTelemetryTestSuite) TearDownTest() {
-	time.Sleep(100 * time.Millisecond)
-	// Remove the span file if it exists
-	if _, err := os.Stat(validEndpointTraces); err == nil {
-		if err := os.Remove(validEndpointTraces); err != nil {
-			suite.T().Logf("Failed to remove span file: %v", err)
-		}
-	}
-
-	suite.GlideTestSuite.TearDownTest()
-}
-
-func WrongOpenTelemetryConfig(suite *OpenTelemetryTestSuite) {
+func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 	// Test wrong traces endpoint
 	cfg := glide.OpenTelemetryConfig{
 		Traces: &glide.OpenTelemetryTracesConfig{
@@ -188,7 +143,7 @@ func readAndParseSpanFile(path string) (SpanFileData, error) {
 	}, nil
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
+func (suite *GlideTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -219,7 +174,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() 
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
+func (suite *GlideTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -250,7 +205,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_GlobalConfigNotReinitiali
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLifecycle() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -313,7 +268,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ConcurrentCommandsSpanLif
 }
 
 // cluster tests
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -348,7 +303,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMemoryLeak()
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -411,7 +366,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSamplingPerc
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReinitialize() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReinitialize() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -442,7 +397,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientGlobalConfig
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -470,7 +425,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientMultipleClie
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -520,7 +475,7 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() 
 	})
 }
 
-func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemoryLeak() {
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemoryLeak() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
 	}
@@ -563,8 +518,4 @@ func (suite *OpenTelemetryTestSuite) TestOpenTelemetry_ClusterClientSpanTransact
 			})
 		})
 	}
-}
-
-func TestOpenTelemetryTestSuite(t *testing.T) {
-	suite.Run(t, new(OpenTelemetryTestSuite))
 }
