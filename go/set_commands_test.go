@@ -405,6 +405,34 @@ func ExampleClusterClient_SPop() {
 	// Output: false
 }
 
+func ExampleClient_SPopCount() {
+	var client *Client = getExampleClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4"})
+
+	result, err := client.SPopCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result))
+	// Output: 2
+}
+
+func ExampleClusterClient_SPopCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4"})
+
+	result, err := client.SPopCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result))
+	// Output: 2
+}
+
 func ExampleClient_SMIsMember() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
