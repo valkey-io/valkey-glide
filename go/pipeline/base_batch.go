@@ -4183,6 +4183,7 @@ func (b *BaseBatch[T]) SetBit(key string, offset int64, value int64) *T {
 }
 
 // Returns the bit value at offset in the string value stored at key.
+// offset should be greater than or equal to zero.
 //
 // See [valkey.io] for details.
 //
@@ -4244,7 +4245,7 @@ func (b *BaseBatch[T]) BitCount(key string) *T {
 	return b.addCmdAndTypeChecker(C.BitCount, []string{key}, reflect.Int64, false)
 }
 
-// Performs a bitwise operation between multiple keys and stores the result in the destination.
+// Performs a bitwise operation between multiple keys (containing string values) and store the result in the destination.
 //
 // See [valkey.io] for details.
 //
@@ -4759,13 +4760,14 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 	return b.addCmdAndTypeChecker(C.BitField, args, reflect.Slice, false)
 }
 
-// Reads the array of bits representing the string that is held at key.
+// Reads the array of bits representing the string that is held at key
+// based on the specified sub commands.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
-//	key         - The key of the string.
+//	key          - The key of the string.
 //	subCommands  - The read-only subCommands to be performed on the binary value
 //	               of the string at key, which could be:
 //	                 - [BitFieldGet].
