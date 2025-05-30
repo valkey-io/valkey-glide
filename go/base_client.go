@@ -2359,6 +2359,36 @@ func (client *baseClient) SRandMember(ctx context.Context, key string) (models.R
 	return handleStringOrNilResponse(result)
 }
 
+// SRandMemberCount returns multiple random members from the set value stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	key   - The key from which to retrieve the set members.
+//	count - The number of members to return.
+//	       If count is positive, returns unique elements (no repetition) up to count or the set size, whichever is smaller.
+//	       If count is negative, returns elements with possible repetition (the same element may be returned multiple times),
+//	       and the number of returned elements is the absolute value of count.
+//
+// Return value:
+//
+//	An array of random elements from the set.
+//	When count is positive, the returned elements are unique (no repetitions).
+//	When count is negative, the returned elements may contain duplicates.
+//	If the set does not exist or is empty, an empty array is returned.
+//
+// [valkey.io]: https://valkey.io/commands/srandmember/
+func (client *baseClient) SRandMemberCount(ctx context.Context, key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.SRandMember, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
 // SPop removes and returns one random member from the set stored at key.
 //
 // See [valkey.io] for details.
@@ -2381,6 +2411,33 @@ func (client *baseClient) SPop(ctx context.Context, key string) (models.Result[s
 	}
 
 	return handleStringOrNilResponse(result)
+}
+
+// SpopCount removes and returns up to count random members from the set stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	key - The key of the set.
+//	count - The number of members to return.
+//		If count is positive, returns unique elements.
+//		If count is larger than the set's cardinality, returns the entire set.
+//
+// Return value:
+//
+//	A `map[string]struct{}` of popped elements.
+//	If key does not exist, an empty collection will be returned.
+//
+// [valkey.io]: https://valkey.io/commands/spop/
+func (client *baseClient) SPopCount(ctx context.Context, key string, count int64) (map[string]struct{}, error) {
+	result, err := client.executeCommand(ctx, C.SPop, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
 }
 
 // SMIsMember returns whether each member is a member of the set stored at key.

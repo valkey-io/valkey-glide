@@ -14,7 +14,7 @@ import {
     RouteOption,
 } from "..";
 
-export type ReturnTypeJson<T> = T | (T | null)[];
+export type ReturnTypeJson<T> = T | null | (T | null)[];
 export type UniversalReturnTypeJson<T> = T | T[];
 
 /**
@@ -238,7 +238,7 @@ export class GlideJson {
         keys: GlideString[],
         path: GlideString,
         options?: DecoderOption,
-    ): Promise<GlideString[]> {
+    ): Promise<ReturnTypeJson<GlideString[]>> {
         const args = ["JSON.MGET", ...keys, path];
         return _executeCommand(client, args, options);
     }
