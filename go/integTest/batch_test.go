@@ -476,7 +476,11 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 
 func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	testData := make([]CommandTestData, 0)
-	key := "{key}-1-" + uuid.NewString()
+	prefix := "{key}-"
+	if !isAtomic {
+		prefix = ""
+	}
+	key := prefix + "1-" + uuid.NewString()
 
 	// Start clean
 	batch.FlushAll()
