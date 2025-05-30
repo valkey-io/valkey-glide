@@ -13,7 +13,9 @@ import java.util.Random;
  * OpenTelemetry#init(OpenTelemetryConfig)} more than once will be ignored. If you need to change
  * configuration, restart the process with new settings.
  *
- * <p><h4> OpenTelemetry </h4>
+ * <p>
+ *
+ * <h4>OpenTelemetry </h4>
  *
  * <ul>
  *   <li><b>openTelemetryConfig</b>: Use this object to configure OpenTelemetry exporters and

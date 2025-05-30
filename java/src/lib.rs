@@ -821,8 +821,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
 }
 
 /// Drops an OpenTelemetry span given its pointer
+/// # Safety
+/// * `span_ptr` must not be `null`.
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<'local>(
+pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<
+    'local,
+>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     span_ptr: jlong,
