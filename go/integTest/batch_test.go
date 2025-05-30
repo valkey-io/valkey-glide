@@ -502,7 +502,12 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	// TODO: After adding and fixing converters, remove 'any' typing in ExpectedResponse
 	testData := make([]CommandTestData, 0)
-	key := "{hashKey}-1-" + uuid.NewString()
+	prefix := "{HashKey}-"
+	if !isAtomic {
+		prefix = ""
+	}
+	key := prefix + "1-" + uuid.NewString()
+
 	simpleMap := map[string]string{"k1": "value"}
 
 	batch.HSet(key, simpleMap)
