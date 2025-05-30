@@ -3810,7 +3810,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: core-foundation:0.9.4
+Package: core-foundation:0.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16938,7 +16938,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: lock_api:0.4.12
+Package: lock_api:0.4.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21563,7 +21563,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: parking_lot:0.12.3
+Package: parking_lot:0.12.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21792,7 +21792,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: parking_lot_core:0.9.10
+Package: parking_lot_core:0.9.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27478,7 +27478,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls:0.22.4
+Package: rustls:0.23.27
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27721,7 +27721,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-native-certs:0.7.3
+Package: rustls-native-certs:0.8.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28436,7 +28436,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-webpki:0.102.8
+Package: rustls-webpki:0.103.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29171,7 +29171,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework:2.11.1
+Package: security-framework:3.2.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31313,7 +31313,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: strum:0.26.3
+Package: strum:0.27.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31338,7 +31338,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: strum_macros:0.26.4
+Package: strum_macros:0.27.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34009,7 +34009,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-rustls:0.25.0
+Package: tokio-rustls:0.26.2
 
 The following copyrights and licenses were found in the source code of this package:
 
