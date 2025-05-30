@@ -124,7 +124,7 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
-func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
 	atomicPrefix := prefix
