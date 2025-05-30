@@ -377,6 +377,38 @@ func ExampleClusterClient_SRandMember() {
 	// Output: false
 }
 
+func ExampleClient_SRandMemberCount() {
+	var client *Client = getExampleClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3"})
+
+	// Get 2 unique random members
+	result, err := client.SRandMemberCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result)) // Cannot test exact values as they are random
+
+	// Output: 2
+}
+
+func ExampleClusterClient_SRandMemberCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3"})
+
+	// Get 2 unique random members
+	result, err := client.SRandMemberCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result)) // Cannot test exact values as they are random
+
+	// Output: 2
+}
+
 func ExampleClient_SPop() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
