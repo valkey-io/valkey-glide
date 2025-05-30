@@ -219,9 +219,14 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 
 func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	testData := make([]CommandTestData, 0)
-	key1 := "{hyperloglog}-key-1-" + uuid.NewString()
-	key2 := "{hyperloglog}-key-2-" + uuid.NewString()
-	dest := "{hyperloglog}-dest-" + uuid.NewString()
+	prefix := "{hyperloglog}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key1 := atomicPrefix + "key-1-" + uuid.NewString()
+	key2 := atomicPrefix + "key-2-" + uuid.NewString()
+	dest := atomicPrefix + "dest-" + uuid.NewString()
 
 	batch.PfAdd(key1, []string{"val"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
@@ -231,7 +236,7 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTes
 
 	batch.PfAdd(key1, []string{"val2"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
-	batch.PfMerge(dest, []string{key1, key2})
+	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
