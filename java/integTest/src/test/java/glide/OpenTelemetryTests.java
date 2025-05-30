@@ -29,6 +29,9 @@ public class OpenTelemetryTests {
     private static final String VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
     private static final String VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
     private static GlideClusterClient client;
+    private static final int DELAY_500 = 500;
+    private static final int DELAY_5000 = 5000;
+    private static final int DELAY_1000 = 1000;
 
     /**
      * Reads and parses a span file, extracting span data and names.
@@ -303,7 +306,7 @@ public class OpenTelemetryTests {
         assertEquals(0, OpenTelemetry.getSamplePercentage());
 
         // Wait for spans to be flushed and remove the file
-        Thread.sleep(500);
+        Thread.sleep(DELAY_500);
         teardownOtelTest();
 
         // Execute commands with 0% sampling
@@ -311,7 +314,7 @@ public class OpenTelemetryTests {
             client.set("testPercentageRequestsConfig", "value").get();
         }
 
-        Thread.sleep(500);
+        Thread.sleep(DELAY_500);
         // Check that no spans were exported due to 0% sampling
         assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
     }
@@ -335,7 +338,7 @@ public class OpenTelemetryTests {
             client.get(key).get();
         }
         // Wait for spans to be flushed to file
-        Thread.sleep(5000);
+        Thread.sleep(DELAY_5000);
 
         // Read the span file and check span names
         SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -368,7 +371,7 @@ public class OpenTelemetryTests {
 
         client.set("testOtelGlobalConfig", "value").get();
 
-        Thread.sleep(500);
+        Thread.sleep(DELAY_500);
 
         // Read the span file and check span name
         SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -427,7 +430,7 @@ public class OpenTelemetryTests {
         client2.get("test_key").get();
 
         // Wait for spans to be flushed to file
-        Thread.sleep(5000);
+        Thread.sleep(DELAY_5000);
 
         // Read and check span names from the file
         SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -457,14 +460,14 @@ public class OpenTelemetryTests {
         batch.set("test_key", "foo");
         batch.objectRefcount("test_key");
         Object[] response = client.exec(batch, true).get();
-        Thread.sleep(1000);
+        Thread.sleep(DELAY_1000);
         assertNotNull(response);
         assertEquals(2, response.length);
         assertEquals("OK", response[0]);
         assertTrue((Long) response[1] >= 1);
 
         // Wait for spans to be flushed to file
-        Thread.sleep(5000);
+        Thread.sleep(DELAY_5000);
 
         // Read and check span names from the file
         SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
