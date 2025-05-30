@@ -409,24 +409,30 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
 	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
-	batch.SortReadOnly(slotHashedKey1)
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "SortReadOnly(slotHashedKey1)"},
-	)
+
+	if serverVer >= "7.0.0" {
+		batch.SortReadOnly(slotHashedKey1)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "SortReadOnly(slotHashedKey1)"},
+		)
+	}
 
 	batch.Del([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
 	batch.LPush(slotHashedKey1, []string{"c", "b", "a"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [c, b, a])"})
-	batch.SortReadOnlyWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
-	testData = append(
-		testData,
-		CommandTestData{
-			ExpectedResponse: []any{"a", "b", "c"},
-			TestName:         "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
-		},
-	)
+
+	if serverVer >= "7.0.0" {
+		batch.SortReadOnlyWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{"a", "b", "c"},
+				TestName:         "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
+			},
+		)
+	}
 
 	batch.Wait(0, 0)
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckType: true, TestName: "Wait(0, 0)"})
