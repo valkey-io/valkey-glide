@@ -217,6 +217,31 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
 }
 
+func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{hyperloglog}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key1 := atomicPrefix + "key-1-" + uuid.NewString()
+	key2 := atomicPrefix + "key-2-" + uuid.NewString()
+	dest := atomicPrefix + "dest-" + uuid.NewString()
+
+	batch.PfAdd(key1, []string{"val"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
+
+	batch.PfCount([]string{key1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfCount([key1])"})
+
+	batch.PfAdd(key1, []string{"val2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
+	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
+}
+
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
@@ -224,6 +249,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateStringTest,
 		// more command groups here
 		CreateBitmapTest,
+		CreateHyperLogLogTest,
 	}
 }
 
