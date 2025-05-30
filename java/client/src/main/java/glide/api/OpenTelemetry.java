@@ -9,9 +9,9 @@ import java.util.Random;
 /**
  * OpenTelemetry integration for Valkey GLIDE.
  *
- * <p>⚠️ OpenTelemetry can only be initialized once per process. Calling
- * {@link OpenTelemetry#init(OpenTelemetryConfig)} more than once will be ignored.
- * If you need to change configuration, restart the process with new settings.
+ * <p>⚠️ OpenTelemetry can only be initialized once per process. Calling {@link
+ * OpenTelemetry#init(OpenTelemetryConfig)} more than once will be ignored. If you need to change
+ * configuration, restart the process with new settings.
  *
  * <p>### OpenTelemetry
  *
@@ -68,8 +68,8 @@ import java.util.Random;
  *   <li><code>samplePercentage</code> must be between 0 and 100.
  *   <li>File exporter paths must start with <code>file://</code> and have an existing parent
  *       directory.
- *   <li>Invalid configuration will throw an error synchronously when calling
- *   {@link OpenTelemetry#init(OpenTelemetryConfig)}
+ *   <li>Invalid configuration will throw an error synchronously when calling {@link
+ *       OpenTelemetry#init(OpenTelemetryConfig)}
  * </ul>
  */
 public class OpenTelemetry {
@@ -350,11 +350,9 @@ public class OpenTelemetry {
         int tracesSamplePercentage = -1;
         if (config.getTraces() == null && config.getMetrics() == null) {
             Logger.log(
-                    Logger.Level.INFO,
-                    "GlideOpenTelemetry",
-                    "Error: Both traces and metrics are null"
-            );
-            throw new ConfigurationError("Both traces and metrics cannot be null. Provide either one of them.");
+                    Logger.Level.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");
+            throw new ConfigurationError(
+                    "Both traces and metrics cannot be null. Provide either one of them.");
         }
         if (config.getTraces() != null) {
             tracesEndpoint = config.getTraces().getEndpoint();

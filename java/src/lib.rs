@@ -44,7 +44,7 @@ pub use ffi_test::*;
 /// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
 ///
 /// At least one of traces or metrics must be provided.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
     pub traces: Option<OpenTelemetryTracesConfig>,
