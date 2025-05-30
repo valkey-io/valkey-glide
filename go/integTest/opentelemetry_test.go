@@ -403,11 +403,12 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientMultipleClients() {
 	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client1 interfaces.BaseClientCommands) {
 		// Create a second client with the same configuration
-		client2 := suite.clusterClient(suite.defaultClusterClientConfig())
+		client2, err := suite.clusterClient(suite.defaultClusterClientConfig())
+		require.NoError(suite.T(), err)
 		defer client2.Close()
 
 		// Execute commands with both clients
-		_, err := client1.Set(context.Background(), "test_key", "value")
+		_, err = client1.Set(context.Background(), "test_key", "value")
 		require.NoError(suite.T(), err)
 		_, err = client2.Get(context.Background(), "test_key")
 		require.NoError(suite.T(), err)
