@@ -234,7 +234,7 @@ jobs:
                     echo "No unapproved packages found."
                   fi
 
-              ### Check for attributions diff ###
+              ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
                   cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
@@ -242,8 +242,8 @@ jobs:
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
                   cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTIONS
-                  cp ffi/ort_results/NOTICE_DEFAULT $FFI_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS $FFI_ATTRIBUTIONS`
+                  cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
+                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
@@ -259,7 +259,7 @@ jobs:
                   git config --global user.email "valkey-glide@lists.valkey.io"
                   git config --global user.name "ort-bot"
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS $FFI_ATTRIBUTIONS
+                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
                   git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f
 
@@ -291,7 +291,6 @@ jobs:
                     "${{ env.RUST_ATTRIBUTIONS }}"
                     "${{ env.JAVA_ATTRIBUTIONS }}"
                     "${{ env.GO_ATTRIBUTIONS }}"
-                    "${{ env.FFI_ATTRIBUTIONS }}"
                   )
 
                   MESSAGE="WARNING! The attribution files differ in this PR. Please ensure an updating PR is issued using a scheduled or manual run of this workflow!"
