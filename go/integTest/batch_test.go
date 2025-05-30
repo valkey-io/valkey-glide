@@ -1795,25 +1795,25 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 		TestName: "XRead(streamKey1, 0-2)",
 	})
 
-	// // XRANGE commands with options
-	// xrangeOpts := options.NewXRangeOptions().SetCount(1)
-	// batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
-	// testData = append(testData, CommandTestData{
-	// 	ExpectedResponse: []models.XRangeResponse{
-	// 		{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
-	// 	},
-	// 	TestName: "XRange(streamKey1, 0-1, 0-1)", // TODO
-	// })
+	// XRANGE commands with options
+	xrangeOpts := options.NewXRangeOptions().SetCount(1)
+	batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: map[string]interface{}{
+			"0-1": []interface{}{[]interface{}{"field1", "value1"}},
+		},
+		TestName: "XRange(streamKey1, 0-1, 0-1)",
+	})
 
-	// // XREVRANGE commands with options
-	// xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
-	// batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
-	// testData = append(testData, CommandTestData{
-	// 	ExpectedResponse: []models.XRangeResponse{
-	// 		{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
-	// 	},
-	// 	TestName: "XRevRange(streamKey1, 0-1, 0-1)", // TODO
-	// })
+	// XREVRANGE commands with options
+	xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
+	batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: map[string]interface{}{
+			"0-1": []interface{}{[]interface{}{"field1", "value1"}},
+		},
+		TestName: "XRevRange(streamKey1, 0-1, 0-1)",
+	})
 
 	// XTRIM command with options
 	xtrimOpts := options.NewXTrimOptionsWithMinId("0-2").SetExactTrimming()
