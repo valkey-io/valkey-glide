@@ -304,12 +304,12 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	}
 
 	batch.TTL(slotHashedKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), CheckType: true, TestName: "TTL(slotHashedKey1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "TTL(slotHashedKey1)"})
 
 	batch.PTTL(slotHashedKey1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: int64(-1), CheckType: true, TestName: "PTTL(slotHashedKey1)"},
+		CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "PTTL(slotHashedKey1)"},
 	)
 
 	batch.Set(slotHashedKey1, "value")
@@ -438,7 +438,7 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	}
 
 	batch.Wait(0, 0)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckType: true, TestName: "Wait(0, 0)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "Wait(0, 0)"})
 
 	batch.Del([]string{slotHashedKey1, slotHashedKey2})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "Del(slotHashedKey1, slotHashedKey2)"})
@@ -497,6 +497,9 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTes
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
 }
 
+// ClusterBatch - The Batch object
+// bool - isAtomic flag. True for transactions, false for pipeline
+// string - The server version we are running on
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
@@ -511,7 +514,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 
 type CommandTestData struct {
 	ExpectedResponse any
-	CheckType        bool
+	CheckTypeOnly    bool
 	TestName         string
 }
 
@@ -550,7 +553,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
 	assert.Equal(suite.T(), len(testData), len(result))
 	for i := range result {
-		if testData[i].CheckType {
+		if testData[i].CheckTypeOnly {
 			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
 		} else {
 			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
