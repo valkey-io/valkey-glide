@@ -244,11 +244,13 @@ func (suite *GlideTestSuite) TearDownSuite() {
 
 func (suite *GlideTestSuite) TearDownTest() {
 	for _, client := range suite.clients {
+		client.FlushDB(context.Background())
 		client.Close()
 	}
 	suite.clients = nil // Clear the slice
 
 	for _, client := range suite.clusterClients {
+		client.FlushDB(context.Background())
 		client.Close()
 	}
 	suite.clusterClients = nil // Clear the slice

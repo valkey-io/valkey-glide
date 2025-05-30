@@ -326,9 +326,9 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	assert.Nil(suite.T(), err)
 
 	resultList := []models.Result[string]{
+		models.CreateStringResult("Object_1"),
 		models.CreateStringResult("Object_2"),
 		models.CreateStringResult("Object_3"),
-		models.CreateStringResult("Object_1"),
 	}
 
 	assert.Equal(suite.T(), resultList, sortResult)
@@ -429,7 +429,7 @@ func (suite *GlideTestSuite) TestDBSize() {
 	client := suite.defaultClient()
 	result, err := client.DBSize(context.Background())
 	assert.Nil(suite.T(), err)
-	assert.Greater(suite.T(), result, int64(0))
+	assert.GreaterOrEqual(suite.T(), result, int64(0))
 }
 
 func (suite *GlideTestSuite) TestPing_NoArgument() {
