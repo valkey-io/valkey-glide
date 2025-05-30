@@ -39,6 +39,8 @@ type SetCommands interface {
 
 	SRandMember(ctx context.Context, key string) (models.Result[string], error)
 
+	SRandMemberCount(ctx context.Context, key string, count int64) ([]string, error)
+
 	SPop(ctx context.Context, key string) (models.Result[string], error)
 
 	SMIsMember(ctx context.Context, key string, members []string) ([]bool, error)
