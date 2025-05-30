@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -104,7 +105,7 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 	})
 }
 
-func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
 	if isAtomic {
@@ -123,7 +124,7 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
-func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
 	atomicPrefix := prefix
@@ -217,7 +218,263 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
 }
 
-func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{baseKey}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+
+	slotHashedKey1 := prefix + "1-" + uuid.NewString()
+	slotHashedKey2 := prefix + "2-" + uuid.NewString()
+	singleNodeKey1 := atomicPrefix + "3-" + uuid.NewString()
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.Set(singleNodeKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(singleNodeKey1, value)"})
+	batch.Get(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "value", TestName: "Get(slotHashedKey1)"})
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del([slotHashedKey1])"})
+
+	batch.Exists([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "Exists([slotHashedKey1])"})
+
+	batch.Expire(slotHashedKey1, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "Expire(slotHashedKey1, 1)"})
+	batch.Expire(singleNodeKey1, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(singleNodeKey1, 1)"})
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.ExpireAt(slotHashedKey1, 0)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAt(slotHashedKey1, 0)"})
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.PExpire(slotHashedKey1, int64(5*1000))
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpire(slotHashedKey1, 5000)"})
+	batch.PExpire(prefix+"nonExistentKey", int64(5*1000))
+	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "PExpire(badkey, 5000)"})
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.PExpireAt(slotHashedKey1, 0)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(slotHashedKey1, 0)"})
+
+	if serverVer >= "7.0.0" {
+		batch.ExpireWithOptions(singleNodeKey1, 1, constants.HasExistingExpiry)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(singleNodeKey1, 1, HasExistingExpiry)"},
+		)
+
+		batch.Set(slotHashedKey1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+		batch.ExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
+		)
+
+		batch.Set(slotHashedKey1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+		batch.PExpireWithOptions(slotHashedKey1, int64(5*1000), constants.HasNoExpiry)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(slotHashedKey1, 5000, HasNoExpiry)"},
+		)
+
+		batch.Set(slotHashedKey1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+		batch.PExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
+		)
+
+		batch.Set(slotHashedKey1, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+		batch.ExpireTime(slotHashedKey1)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "ExpireTime(slotHashedKey1)"})
+
+		batch.PExpireTime(slotHashedKey1)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "PExpireTime(slotHashedKey1)"})
+	}
+
+	batch.TTL(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "TTL(slotHashedKey1)"})
+
+	batch.PTTL(slotHashedKey1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "PTTL(slotHashedKey1)"},
+	)
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.Set(slotHashedKey2, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey2, value)"})
+	batch.Unlink([]string{slotHashedKey1, slotHashedKey2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "Unlink(slotHashedKey1, slotHashedKey2)"},
+	)
+
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.Set(slotHashedKey2, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey2, value)"})
+	batch.Touch([]string{slotHashedKey1, slotHashedKey2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "Touch(slotHashedKey1, slotHashedKey2)"})
+
+	batch.Set(slotHashedKey1, "value1")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
+	batch.Type(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "string", TestName: "Type(slotHashedKey1)"})
+
+	batch.Rename(slotHashedKey1, slotHashedKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Rename(slotHashedKey1, slotHashedKey2)"})
+	batch.Get(slotHashedKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: "value1", TestName: "Get(slotHashedKey2)"})
+
+	batch.Set(slotHashedKey1, "value1")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
+	batch.RenameNX(slotHashedKey1, slotHashedKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "RenameNX(slotHashedKey1, slotHashedKey2)"})
+
+	batch.Set(slotHashedKey1, "value1")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
+	batch.Expire(slotHashedKey1, 100)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(slotHashedKey1, 100)"})
+	batch.Persist(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Persist(slotHashedKey1)"})
+	batch.TTL(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "TTL(slotHashedKey1)"})
+
+	// TODO: TEST DUMP AND RESTORE
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.ObjectEncoding(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: nil, TestName: "ObjectEncoding(slotHashedKey1)"})
+
+	batch.ObjectFreq(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: nil, TestName: "ObjectFreq(slotHashedKey1)"})
+
+	batch.ObjectIdleTime(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: nil, TestName: "ObjectIdleTime(slotHashedKey1)"})
+
+	batch.ObjectRefCount(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: nil, TestName: "ObjectRefCount(slotHashedKey1)"})
+
+	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
+	batch.Sort(slotHashedKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "Sort(slotHashedKey1)"})
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.LPush(slotHashedKey1, []string{"c", "b", "a"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [c, b, a])"})
+	batch.SortWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"a", "b", "c"}, TestName: "SortWithOptions(slotHashedKey1, {Alpha: true})"},
+	)
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
+	sortDestKey := prefix + "sortDest-" + uuid.NewString()
+	batch.SortStore(slotHashedKey1, sortDestKey)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(3), TestName: "SortStore(slotHashedKey1, sortDestKey)"},
+	)
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.LPush(slotHashedKey1, []string{"c", "b", "a"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [c, b, a])"})
+	batch.SortStoreWithOptions(slotHashedKey1, sortDestKey, *options.NewSortOptions().SetIsAlpha(true))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(3),
+			TestName:         "SortStoreWithOptions(slotHashedKey1, sortDestKey, {Alpha: true})",
+		},
+	)
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
+
+	if serverVer >= "7.0.0" {
+		batch.SortReadOnly(slotHashedKey1)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "SortReadOnly(slotHashedKey1)"},
+		)
+	}
+
+	batch.Del([]string{slotHashedKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
+	batch.LPush(slotHashedKey1, []string{"c", "b", "a"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [c, b, a])"})
+
+	if serverVer >= "7.0.0" {
+		batch.SortReadOnlyWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{"a", "b", "c"},
+				TestName:         "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
+			},
+		)
+	}
+
+	batch.Wait(0, 0)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "Wait(0, 0)"})
+
+	batch.Del([]string{slotHashedKey1, slotHashedKey2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "Del(slotHashedKey1, slotHashedKey2)"})
+	batch.Set(slotHashedKey1, "value")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
+	batch.Copy(slotHashedKey1, slotHashedKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Copy(slotHashedKey1, slotHashedKey2)"})
+	batch.Get(slotHashedKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: "value", TestName: "Get(slotHashedKey2) after Copy"})
+
+	batch.Del([]string{slotHashedKey1, slotHashedKey2})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "Del(slotHashedKey1, slotHashedKey2)"})
+	batch.Set(slotHashedKey1, "value1")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
+	batch.Set(slotHashedKey2, "value2")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key2, value2)"})
+	batch.CopyWithOptions(slotHashedKey1, slotHashedKey2, *options.NewCopyOptions().SetReplace())
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: true,
+			TestName:         "CopyWithOptions(slotHashedKey1, slotHashedKey2, ReplaceDestination)",
+		},
+	)
+	batch.Get(slotHashedKey2)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: "value1", TestName: "Get(slotHashedKey2) after CopyWithOptions"},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
+}
+
+func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{hyperloglog}-"
 	atomicPrefix := prefix
@@ -242,19 +499,24 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTes
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
 }
 
-type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
+// ClusterBatch - The Batch object
+// bool - isAtomic flag. True for transactions, false for pipeline
+// string - The server version we are running on
+type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		// more command groups here
 		CreateBitmapTest,
+		CreateGenericBaseTests,
 		CreateHyperLogLogTest,
 	}
 }
 
 type CommandTestData struct {
 	ExpectedResponse any
+	CheckTypeOnly    bool
 	TestName         string
 }
 
@@ -269,7 +531,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 		for _, isAtomic := range []bool{true, false} {
 			for _, testProvider := range GetCommandGroupTestProviders() {
 				batch := pipeline.NewClusterBatch(isAtomic)
-				testData := testProvider(batch, isAtomic)
+				testData := testProvider(batch, isAtomic, suite.serverVersion)
 
 				suite.T().Run(fmt.Sprintf("%s %s isAtomic = %v", testData.TestName, clientType, isAtomic), func(t *testing.T) {
 					var res []any
@@ -293,6 +555,10 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
 	assert.Equal(suite.T(), len(testData), len(result))
 	for i := range result {
-		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		if testData[i].CheckTypeOnly {
+			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		} else {
+			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		}
 	}
 }
