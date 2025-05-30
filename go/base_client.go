@@ -34,7 +34,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/opentelemetry"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -300,11 +299,11 @@ func (client *baseClient) executeCommandWithRoute(
 	}
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
-	otelInstance := opentelemetry.GetInstance()
-	if otelInstance != nil && otelInstance.ShouldSample() {
+	otelInstance := GetInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
-		spanPtr = otelInstance.CreateSpan(opentelemetry.RequestType(requestType))
+		spanPtr = otelInstance.createSpan(requestType)
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
@@ -319,14 +318,14 @@ func (client *baseClient) executeCommandWithRoute(
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
 			if spanPtr != 0 {
-				otelInstance.DropSpan(spanPtr)
+				otelInstance.dropSpan(spanPtr)
 			}
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
 			if spanPtr != 0 {
-				otelInstance.DropSpan(spanPtr)
+				otelInstance.dropSpan(spanPtr)
 			}
 			return nil, err
 		}
@@ -346,7 +345,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		if spanPtr != 0 {
-			otelInstance.DropSpan(spanPtr)
+			otelInstance.dropSpan(spanPtr)
 		}
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
@@ -368,7 +367,7 @@ func (client *baseClient) executeCommandWithRoute(
 	select {
 	case <-ctx.Done():
 		if spanPtr != 0 {
-			otelInstance.DropSpan(spanPtr)
+			otelInstance.dropSpan(spanPtr)
 		}
 		client.mu.Lock()
 		if client.pending != nil {
@@ -385,7 +384,7 @@ func (client *baseClient) executeCommandWithRoute(
 		delete(client.pending, resultChannelPtr)
 	}
 	if spanPtr != 0 {
-		otelInstance.DropSpan(spanPtr)
+		otelInstance.dropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 
@@ -433,11 +432,11 @@ func (client *baseClient) executeBatch(
 
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
-	otelInstance := opentelemetry.GetInstance()
-	if otelInstance != nil && otelInstance.ShouldSample() {
+	otelInstance := GetInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
-		spanPtr = otelInstance.CreateBatchSpan()
+		spanPtr = otelInstance.createBatchSpan()
 	}
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
@@ -452,7 +451,7 @@ func (client *baseClient) executeBatch(
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		if spanPtr != 0 {
-			otelInstance.DropSpan(spanPtr)
+			otelInstance.dropSpan(spanPtr)
 		}
 		return nil, &errors.ClosingError{Msg: "ExecuteBatch failed. The client is closed."}
 	}
@@ -480,7 +479,7 @@ func (client *baseClient) executeBatch(
 	select {
 	case <-ctx.Done():
 		if spanPtr != 0 {
-			otelInstance.DropSpan(spanPtr)
+			otelInstance.dropSpan(spanPtr)
 		}
 		client.mu.Lock()
 		if client.pending != nil {
@@ -498,7 +497,7 @@ func (client *baseClient) executeBatch(
 		delete(client.pending, resultChannelPtr)
 	}
 	if spanPtr != 0 {
-		otelInstance.DropSpan(spanPtr)
+		otelInstance.dropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 
