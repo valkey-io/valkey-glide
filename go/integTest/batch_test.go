@@ -210,11 +210,12 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{set}-"
-	// if isAtomic {
-	// 	prefix = ""
-	// }
+	atomicKey := prefix
+	if !isAtomic {
+		atomicKey = ""
+	}
 
-	key := prefix + "key-" + uuid.NewString()
+	key := atomicKey + "key-" + uuid.NewString()
 
 	batch.SAdd(key, []string{"member1", "member2"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key, [member1, member2])"})
@@ -234,30 +235,55 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.SIsMember(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
 
-	key2 := prefix + "key2-" + uuid.NewString()
+	key2 := atomicKey + "key2-" + uuid.NewString()
 	batch.SAdd(key2, []string{"member1", "member3"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
-	batch.SDiff([]string{key, key2})
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]struct{}{}, TestName: "SDiff([key, key2])"})
-
-	dest := prefix + "key3-" + uuid.NewString()
-	batch.SDiffStore(dest, []string{key2, key})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SDiffStore(dest, [key2, key])"})
-
-	batch.SInter([]string{key, key2})
+	batch.SDiff([]string{prefix + key, prefix + key2})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SInter([key, key2])"},
+		CommandTestData{ExpectedResponse: map[string]struct{}{}, TestName: "SDiff([prefix + key, prefix + key2])"},
 	)
 
-	batch.SInterStore(dest, []string{key, key2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [key, key2])"})
+	batch.SAdd(prefix+key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(prefix + key, [member1])"})
+	batch.SAdd(prefix+key2, []string{"member1", "member3"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(prefix + key2, [member1, member3])"},
+	)
+	dest := prefix + "key3-" + uuid.NewString()
+	batch.SDiffStore(dest, []string{prefix + key2, prefix + key})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SDiffStore(dest, [prefix + key2, prefix + key])"},
+	)
 
-	batch.SInterCard([]string{key, key2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([key, key2])"})
+	batch.SInter([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}},
+			TestName:         "SInter([prefix + key, prefix + key2])",
+		},
+	)
 
-	batch.SInterCardLimit([]string{key, key2}, 10)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([key, key2], 10)"})
+	batch.SInterStore(dest, []string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	batch.SInterCard([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([prefix + key, prefix + key2])"},
+	)
+
+	batch.SInterCardLimit([]string{prefix + key, prefix + key2}, 10)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
+	)
 
 	batch.SRandMember(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
@@ -267,19 +293,33 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 
 	batch.SAdd(key, []string{"member1"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SPopCount(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SPopCount(key, 1)"},
+	)
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
 	batch.SMIsMember(key, []string{"member1", "nonexistent"})
 	testData = append(
 		testData,
 		CommandTestData{ExpectedResponse: []any{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
 	)
 
-	batch.SUnionStore(dest, []string{key, key2})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SUnionStore(dest, [key, key2])"})
-
-	batch.SUnion([]string{key, key2})
+	batch.SUnionStore(dest, []string{prefix + key, prefix + key2})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}, "member3": {}}, TestName: "SUnion([key, key2])"},
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SUnionStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	batch.SUnion([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}, "member3": {}},
+			TestName:         "SUnion([prefix + key, prefix + key2])",
+		},
 	)
 
 	batch.SScan(key, "0")
@@ -292,10 +332,13 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
 	)
 
-	batch.SAdd(key2, []string{"newmember"})
+	batch.SAdd(prefix+key2, []string{"newmember"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key2, [newmember])"})
-	batch.SMove(key2, key, "newmember")
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SMove(key2, key, newmember)"})
+	batch.SMove(prefix+key2, prefix+key, "newmember")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: true, TestName: "SMove(prefix + key2, prefix + key, newmember)"},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Set commands"}
 }
