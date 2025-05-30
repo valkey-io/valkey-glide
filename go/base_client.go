@@ -298,12 +298,13 @@ func (client *baseClient) executeCommandWithRoute(
 		// Continue with execution
 	}
 	// Create span if OpenTelemetry is enabled and sampling is configured
-	var spanPtr uint64
+	var spanPtr *C.Option_GlideSpan = nil
 	otelInstance := GetInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
 		spanPtr = otelInstance.createSpan(requestType)
+		defer otelInstance.dropSpan(spanPtr)
 	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
@@ -317,16 +318,10 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			if spanPtr != 0 {
-				otelInstance.dropSpan(spanPtr)
-			}
 			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
-			if spanPtr != 0 {
-				otelInstance.dropSpan(spanPtr)
-			}
 			return nil, err
 		}
 
@@ -344,9 +339,6 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		if spanPtr != 0 {
-			otelInstance.dropSpan(spanPtr)
-		}
 		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
@@ -359,16 +351,13 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
-		C.uint64_t(spanPtr),
+		spanPtr,
 	)
 	client.mu.Unlock()
 	// Wait for result or context cancellation
 	var payload payload
 	select {
 	case <-ctx.Done():
-		if spanPtr != 0 {
-			otelInstance.dropSpan(spanPtr)
-		}
 		client.mu.Lock()
 		if client.pending != nil {
 			delete(client.pending, resultChannelPtr)
@@ -382,9 +371,6 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.pending != nil {
 		delete(client.pending, resultChannelPtr)
-	}
-	if spanPtr != 0 {
-		otelInstance.dropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 
@@ -437,6 +423,7 @@ func (client *baseClient) executeBatch(
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
 		spanPtr = otelInstance.createBatchSpan()
+		defer otelInstance.dropSpan(spanPtr)
 	}
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
@@ -450,9 +437,6 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		if spanPtr != 0 {
-			otelInstance.dropSpan(spanPtr)
-		}
 		return nil, &errors.ClosingError{Msg: "ExecuteBatch failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
@@ -478,9 +462,6 @@ func (client *baseClient) executeBatch(
 	var payload payload
 	select {
 	case <-ctx.Done():
-		if spanPtr != 0 {
-			otelInstance.dropSpan(spanPtr)
-		}
 		client.mu.Lock()
 		if client.pending != nil {
 			delete(client.pending, resultChannelPtr)
@@ -495,9 +476,6 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.pending != nil {
 		delete(client.pending, resultChannelPtr)
-	}
-	if spanPtr != 0 {
-		otelInstance.dropSpan(spanPtr)
 	}
 	client.mu.Unlock()
 
