@@ -823,7 +823,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
 /// Drops an OpenTelemetry span given its pointer
 /// # Safety
 /// * `span_ptr` must not be `null`.
-/// * `span_ptr` must be able to be safely casted to a valid [`Arc<Value>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
+/// * `span_ptr` must be able to be safely casted to a valid [`Arc<glide_core::GlideSpan>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dropOtelSpan<
     'local,
