@@ -1286,6 +1286,27 @@ func (b *BaseBatch[T]) SPop(key string) *T {
 	return b.addCmdAndTypeChecker(C.SPop, []string{key}, reflect.String, true)
 }
 
+// SPopCount removes and returns up to count random members from the set stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the set.
+//	count - The number of members to return.
+//		If count is positive, returns unique elements.
+//		If count is larger than the set's cardinality, returns the entire set.
+//
+// Command Response:
+//
+//	A `map[string]struct{}` of popped elements.
+//	If key does not exist, an empty collection will be returned.
+//
+// [valkey.io]: https://valkey.io/commands/spop/
+func (b *BaseBatch[T]) SPopCount(key string, count int64) *T {
+	return b.addCmdAndTypeChecker(C.SPop, []string{key, utils.IntToString(count)}, reflect.Map, true)
+}
+
 // Returns whether each member is a member of the set stored at key.
 //
 // See [valkey.io] for details.
