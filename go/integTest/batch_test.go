@@ -13,6 +13,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -122,17 +123,47 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
+func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	connectionName := "test-connection-" + uuid.New().String()
+
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+
+	pingOptions := options.PingOptions{
+		Message: "hello",
+	}
+	batch.PingWithOptions(pingOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
+
+	batch.Echo("hello world")
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
+
+	batch.ClientId()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
+
+	batch.ClientSetName(connectionName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
+
+	batch.ClientGetName()
+	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
+}
+
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		// more command groups here
+		CreateConnectionManagementTests,
 	}
 }
 
 type CommandTestData struct {
 	ExpectedResponse any
+	CheckTypeOnly    bool
 	TestName         string
 }
 
@@ -171,6 +202,11 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
 	assert.Equal(suite.T(), len(testData), len(result))
 	for i := range result {
-		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		if testData[i].CheckTypeOnly {
+			// If we can't check equality, we should just test that it's the same type
+			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		} else {
+			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		}
 	}
 }
