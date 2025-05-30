@@ -351,8 +351,7 @@ public class OpenTelemetry {
         if (config.getTraces() == null && config.getMetrics() == null) {
             Logger.log(
                     Logger.Level.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");
-            throw new ConfigurationError(
-                    "Both traces and metrics cannot be null. Provide either one of them.");
+            throw new ConfigurationError("At least one of traces or metrics must be provided");
         }
         if (config.getTraces() != null) {
             tracesEndpoint = config.getTraces().getEndpoint();

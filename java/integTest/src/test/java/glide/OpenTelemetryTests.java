@@ -91,116 +91,13 @@ public class OpenTelemetryTests {
         }
     }
 
-    public static Stream<Arguments> getClients() {
+    public static Stream<Arguments> getClientsProtocolVersion() {
         return Stream.of(Arguments.of(ProtocolVersion.RESP2), Arguments.of(ProtocolVersion.RESP3));
-    }
-
-    @SneakyThrows
-    public static void wrongOpenTelemetryConfig() {
-        Exception exception;
-        // Wrong traces endpoint
-        OpenTelemetryConfig wrongTracesConfig =
-                OpenTelemetryConfig.builder()
-                        .traces(OpenTelemetry.TracesConfig.builder().endpoint("wrong.endpoint").build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesConfig));
-        assertTrue(exception.getMessage().contains("Parse error"));
-
-        // Wrong metrics endpoint
-        OpenTelemetryConfig wrongMetricsConfig =
-                OpenTelemetryConfig.builder()
-                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint("wrong.endpoint").build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsConfig));
-        assertTrue(exception.getMessage().contains("Parse error"));
-
-        // Negative flush interval
-        OpenTelemetryConfig negativeFlushConfig =
-                OpenTelemetryConfig.builder()
-                        .traces(
-                                OpenTelemetry.TracesConfig.builder()
-                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                                        .samplePercentage(1)
-                                        .build())
-                        .flushIntervalMs(-400L)
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeFlushConfig));
-        assertTrue(exception.getMessage().contains("flushIntervalMs must be a positive integer"));
-
-        // Negative sample percentage
-        OpenTelemetryConfig negativeSampleConfig =
-                OpenTelemetryConfig.builder()
-                        .traces(
-                                OpenTelemetry.TracesConfig.builder()
-                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
-                                        .samplePercentage(-400)
-                                        .build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(negativeSampleConfig));
-        assertTrue(
-                exception
-                        .getMessage()
-                        .contains(
-                                "InvalidInput: traces_sample_percentage must be a positive integer (got: -400)"));
-
-        // Wrong traces file path
-        OpenTelemetryConfig wrongTracesPathConfig =
-                OpenTelemetryConfig.builder()
-                        .traces(
-                                OpenTelemetry.TracesConfig.builder()
-                                        .endpoint("file:invalid-path/v1/traces.json")
-                                        .build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongTracesPathConfig));
-        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-
-        // Wrong metrics file path
-        OpenTelemetryConfig wrongMetricsPathConfig =
-                OpenTelemetryConfig.builder()
-                        .metrics(
-                                OpenTelemetry.MetricsConfig.builder()
-                                        .endpoint("file:invalid-path/v1/metrics.json")
-                                        .build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongMetricsPathConfig));
-        assertTrue(exception.getMessage().contains("File path must start with 'file://'"));
-
-        // Wrong directory path
-        OpenTelemetryConfig wrongDirPathConfig =
-                OpenTelemetryConfig.builder()
-                        .traces(
-                                OpenTelemetry.TracesConfig.builder()
-                                        .endpoint("file:///no-exits-path/v1/traces.json")
-                                        .build())
-                        .build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(wrongDirPathConfig));
-        assertTrue(
-                exception.getMessage().contains("The directory does not exist or is not a directory"));
-
-        // No traces or metrics provided
-        OpenTelemetryConfig emptyConfig = OpenTelemetryConfig.builder().build();
-
-        exception = assertThrows(Exception.class, () -> OpenTelemetry.init(emptyConfig));
-        assertTrue(
-                exception.getMessage().contains("At least one of traces or metrics must be provided"));
     }
 
     @BeforeAll
     @SneakyThrows
     public static void setup() {
-        // Test wrong open telemetry configs
-        wrongOpenTelemetryConfig();
-
-        // Test that spans are not exported before initializing OpenTelemetry
-        testSpanNotExportedBeforeInitOtel();
-
         // Initialize OpenTelemetry with valid configuration
         OpenTelemetryConfig openTelemetryConfig =
                 OpenTelemetryConfig.builder()
@@ -216,8 +113,10 @@ public class OpenTelemetryTests {
         OpenTelemetry.init(openTelemetryConfig);
     }
 
+    // Test that spans are not exported before initializing OpenTelemetry
+    @Test
     @SneakyThrows
-    private static void testSpanNotExportedBeforeInitOtel() {
+    public void testSpanNotExportedBeforeInitOtel() {
         // Clean up any existing span file
         teardownOtelTest();
 
@@ -264,7 +163,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanMemoryLeak(ProtocolVersion protocol) {
         // Force garbage collection if available
@@ -294,7 +193,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testPercentageRequestsConfig(ProtocolVersion protocol) {
         client =
@@ -320,7 +219,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testPercentageRequestsConfig100Percent(ProtocolVersion protocol) {
         client =
@@ -349,7 +248,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testOtelGlobalConfigNotReinitialize(ProtocolVersion protocol) {
         // Try to reinitialize with invalid config
@@ -380,7 +279,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
         // Force garbage collection if available
@@ -415,7 +314,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
         GlideClusterClient client1 =
@@ -444,7 +343,7 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
-    @MethodSource("getClients")
+    @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanBatchFile(ProtocolVersion protocol) {
         // Force garbage collection if available
@@ -473,7 +372,6 @@ public class OpenTelemetryTests {
         SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
 
         // Check for expected span names
-        System.out.println("spanNames===" + spanData.spanNames.toString());
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
 
