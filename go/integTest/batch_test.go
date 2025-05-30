@@ -13,6 +13,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -122,12 +123,107 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
+func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{bitmap}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key := atomicPrefix + "key0" + uuid.New().String()
+	bitopkey1 := atomicPrefix + "key1" + uuid.New().String()
+	bitopkey2 := atomicPrefix + "key2" + uuid.New().String()
+	bitfieldkey1 := atomicPrefix + "key3" + uuid.New().String()
+	bitfieldkey2 := atomicPrefix + "key4" + uuid.New().String()
+	destKey := prefix + "dest" + uuid.New().String()
+
+	batch.SetBit(key, 7, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "SetBit(key, 7, 1)"})
+
+	batch.GetBit(key, 7)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GetBit(key, 7)"})
+
+	for i := int64(0); i < 6; i++ {
+		batch.SetBit(key, i, 1)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: fmt.Sprintf("SetBit(key, %d, 1)", i)},
+		)
+	}
+
+	batch.BitCount(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCount(key)"})
+
+	batch.BitCountWithOptions(key, *options.NewBitCountOptions().SetStart(0).SetEnd(5))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "BitCountWithOptions(key, 0, 5)"})
+
+	batch.BitPos(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPos(key, 1)"})
+
+	batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(5).SetEnd(6))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "BitPosWithOptions(key, 1, 5, 6)"})
+
+	batch.BitPosWithOptions(key, 1, *options.NewBitPosOptions().SetStart(0).SetEnd(6))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "BitPosWithOptions(key, 1, 0, 6)"})
+
+	commands := []options.BitFieldSubCommands{
+		options.NewBitFieldGet(options.SignedInt, 8, 16),
+		options.NewBitFieldOverflow(options.SAT),
+		options.NewBitFieldSet(options.UnsignedInt, 4, 0, 7),
+		options.NewBitFieldIncrBy(options.SignedInt, 5, 100, 1),
+	}
+	batch.BitField(bitfieldkey1, commands)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{int64(0), int64(0), int64(1)}, TestName: "BitField(key, commands)"},
+	)
+
+	bfcommands := []options.BitFieldSubCommands{
+		options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
+	}
+	batch.BitField(bitfieldkey2, bfcommands)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(0)}, TestName: "BitField(key, bfcommands)"})
+	commands2 := []options.BitFieldROCommands{
+		options.NewBitFieldGet(options.UnsignedInt, 8, 0),
+	}
+	batch.BitFieldRO(bitfieldkey2, commands2)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(24)}, TestName: "BitFieldRO(key, commands2)"})
+
+	bitopkey1 = prefix + bitopkey1
+	bitopkey2 = prefix + bitopkey2
+	batch.Set(bitopkey1, "foobar")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey1, foobar)"})
+	batch.Set(bitopkey2, "abcdef")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(bitopkey2, abcdef)"})
+
+	batch.BitOp(options.AND, destKey, []string{bitopkey1, bitopkey2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(AND, destKey, bitopkey1, bitopkey2)"},
+	)
+	batch.BitOp(options.OR, destKey, []string{bitopkey1, bitopkey2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(OR, destKey, bitopkey1, bitopkey2)"},
+	)
+	batch.BitOp(options.XOR, destKey, []string{bitopkey1, bitopkey2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(XOR, destKey, bitopkey1, bitopkey2)"},
+	)
+	batch.BitOp(options.NOT, destKey, []string{bitopkey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
+}
+
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		// more command groups here
+		CreateBitmapTest,
 	}
 }
 
