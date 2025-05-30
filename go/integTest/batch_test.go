@@ -232,9 +232,16 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 			res, err := c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), int64(0), res[0])
-			assert.Equal(suite.T(), ([]any)(nil), res[1])
-			assert.Equal(suite.T(), ([]any)(nil), res[2])
-			assert.Equal(suite.T(), map[string]any{}, res[3])
+			if suite.serverVersion >= "7.0.0" {
+				assert.Equal(suite.T(), ([]any)(nil), res[1])
+				assert.Equal(suite.T(), ([]any)(nil), res[2])
+				assert.Equal(suite.T(), map[string]any{}, res[3])
+			} else {
+				// In 6.2.0, errors are raised instead
+				assert.IsType(suite.T(), &errors.RequestError{}, res[1])
+				assert.IsType(suite.T(), &errors.RequestError{}, res[2])
+				assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
 				Publish("NonExistentChannel", "msg")
