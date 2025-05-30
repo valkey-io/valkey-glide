@@ -258,7 +258,7 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.PExpireAt(key1, 0)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(key1, 0)"})
 
-	if serverVer < "7.0.0" {
+	if serverVer >= "7.0.0" {
 		batch.ExpireWithOptions(key2, 1, constants.HasExistingExpiry)
 		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(key2, 1, HasExistingExpiry)"})
 
