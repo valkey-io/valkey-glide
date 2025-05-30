@@ -124,6 +124,7 @@ jobs:
                   make install-tools build
                   make -k unit-test integ-test
                   make -k pubsub-test
+                  make -k opentelemetry-test
 
             - name: Run Example Tests
               working-directory: go
@@ -368,67 +369,6 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
-                  path: |
-                      utils/clusters/**
-                      benchmarks/results/**
-                      go/reports/**
-
-    test-opentelemetry:
-        name: Go OpenTelemetry Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
-        timeout-minutes: 35
-        strategy:
-            fail-fast: false
-            matrix:
-                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
-                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
-                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
-        runs-on: ${{ matrix.host.RUNNER }}
-
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Output Matrix Parameters for this job
-              run: |
-                  echo "Job running with the following matrix configuration:"
-                  echo "${{ toJson(matrix) }}"
-
-            - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ matrix.go }}
-                  cache-dependency-path: go/go.sum
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      ffi/target
-                      glide-core/src/generated
-                  key: ${{ matrix.host.TARGET }}-go
-                  restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
-
-            - name: Install & build & test
-              working-directory: go
-              run: |
-                  make install-tools build
-                  make -k opentelemetry-test test-filter=TestOpenTelemetry
-
-            - name: Upload logs and reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-report-go-opentelemetry-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
