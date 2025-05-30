@@ -1,0 +1,100 @@
+<!--
+  Contains common functionality for all *.Assets.<PLATFORM>.csproj files
+  -->
+<!-- See: https://learn.microsoft.com/en-us/nuget/create-packages/native-files-in-net-packages#projects-targeting-net-framework -->
+<!-- ToDo: Once supporting Net Framework at a base-level, add a hint about non-sdk style projects support being only partial due to build system differences -->
+<Project>
+    <PropertyGroup>
+        <RustDir>$(MSBuildThisFileDirectory)../rust/</RustDir>
+        <TargetFrameworks>netstandard2.0;net8.0;net6.0</TargetFrameworks>
+        <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+        <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <IsPackable>True</IsPackable>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <IncludeSymbols>false</IncludeSymbols>
+        <PackageId>Valkey.Glide.Assets.$(DisplayRuntimeIdentifier)</PackageId>
+        <Configurations>Lint;Release;Debug</Configurations>
+        <RustLibPrefix Condition="'$(OS)' == 'Windows_NT'">lib</RustLibPrefix>
+        <RustLibPrefix Condition="'$(OS)' != 'Windows_NT'"/>
+    </PropertyGroup>
+
+
+    <Target Name="PreClean" BeforeTargets="Clean">
+        <Exec Command="cargo clean --target $(RustTuple)"
+              EnvironmentVariables="CARGO_TERM_COLOR=always"
+              ConsoleToMsBuild="true"
+              WorkingDirectory="$(RustDir)"
+              IgnoreExitCode="true">
+            <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
+        </Exec>
+    </Target>
+
+    <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+        <Exec Command="echo $(Configuration)" ConsoleToMsBuild="true"/>
+        <Exec Condition="'$(Configuration)' == 'Debug'"
+              Command="cargo build --target $(RustTuple)"
+              EnvironmentVariables="CARGO_TERM_COLOR=always"
+              ConsoleToMsBuild="true"
+              WorkingDirectory="$(RustDir)">
+            <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
+        </Exec>
+        <Exec Condition="'$(Configuration)' == 'Release'"
+              Command="cargo build --release --target $(RustTuple)"
+              EnvironmentVariables="CARGO_TERM_COLOR=always"
+              ConsoleToMsBuild="true"
+              WorkingDirectory="$(RustDir)">
+            <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec"/>
+        </Exec>
+    </Target>
+
+    <ItemGroup>
+        <!-- Debug -->
+        <None Condition="'$(Configuration)' == 'Debug' And '$(OS)' == 'Windows_NT'"
+              Include="$(RustDir)target/$(RustTuple)/debug/glide_rs.dll"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Condition="'$(Configuration)' == 'Debug'"
+              Include="$(RustDir)target/$(RustTuple)/debug/*glide_rs.pdb"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Condition="'$(Configuration)' == 'Debug' And '$(OS)' != 'Windows_NT'"
+              Include="$(RustDir)target/$(RustTuple)/debug/libglide_rs.so"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+
+        <!-- Release -->
+        <None Condition="'$(Configuration)' == 'Release' And '$(OS)' == 'Windows_NT'"
+              Include="$(RustDir)target/$(RustTuple)/release/glide_rs.dll"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <!--
+        <None Condition="'$(Configuration)' == 'Release'"
+              Include="$(RustDir)target/$(RustTuple)/release/*glide_rs.pdb"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        -->
+        <None Condition="'$(Configuration)' == 'Release' And '$(OS)' != 'Windows_NT'"
+              Include="$(RustDir)target/$(RustTuple)/release/libglide_rs.so"
+              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
+              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
+              Pack="True">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+</Project>
