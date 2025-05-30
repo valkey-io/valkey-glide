@@ -10,21 +10,23 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 	az := "us-east-1a"
 	const GET_CALLS = 3
 	getCmdStat := "cmdstat_get:calls=" + fmt.Sprint(GET_CALLS)
 
-	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2 * time.Second))
+	clientForConfigSet, err := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
 
 	// Reset the availability zone for all nodes
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": ""}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.Background()))
@@ -39,13 +41,14 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 	)
 	assert.NoError(suite.T(), err)
 
-	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ(az))
+	require.NoError(suite.T(), err)
 
 	for i := 0; i < GET_CALLS; i++ {
-		_, err := clientForTestingAz.Get(context.Background(), "foo")
+		_, err = clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
@@ -80,13 +83,14 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 }
 
 func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToAllReplicas() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 	az := "us-east-1a"
 
-	clientForConfigSet := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2 * time.Second))
+	clientForConfigSet, err := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
 
 	// Reset the availability zone for all nodes
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": ""}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 	suite.verifyOK(clientForConfigSet.ConfigResetStat(context.Background()))
@@ -117,10 +121,11 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 	clientForConfigSet.Close()
 
 	// Creating Client with AZ configuration for testing
-	clientForTestingAz := suite.clusterClient(suite.defaultClusterClientConfig().
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ(az))
+	require.NoError(suite.T(), err)
 
 	azGetResult, err := clientForTestingAz.ConfigGetWithOptions(context.Background(),
 		[]string{"availability-zone"}, options.RouteOption{Route: config.AllNodes})
@@ -156,18 +161,19 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 }
 
 func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
 	const nGetCalls = 3
 	const nReplicaCalls = 1
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nReplicaCalls)
 
-	clientForTestingAz := suite.clusterClient(config.NewClusterClientConfiguration().
+	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ("non-existing-az"))
+	require.NoError(suite.T(), err)
 
 	// Reset stats
 	suite.verifyOK(
@@ -201,7 +207,7 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 }
 
 func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
 	az := "us-east-1a"
 	otherAz := "us-east-1b"
@@ -209,17 +215,18 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls)
 
 	// Create client for setting the configs
-	clientForConfigSet := suite.clusterClient(config.NewClusterClientConfiguration().
+	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
 
 	// Reset stats and set all nodes to otherAz
 	suite.verifyOK(
 		clientForConfigSet.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
 	)
 
-	_, err := clientForConfigSet.ConfigSetWithOptions(context.Background(),
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
 		map[string]string{"availability-zone": otherAz}, options.RouteOption{Route: config.AllNodes})
 	assert.NoError(suite.T(), err)
 
@@ -242,16 +249,17 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	clientForConfigSet.Close()
 
 	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
-	clientForTestingAz := suite.clusterClient(config.NewClusterClientConfiguration().
+	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityReplicaAndPrimary).
 		WithClientAZ(az))
+	require.NoError(suite.T(), err)
 
 	// Execute GET commands
 	for i := 0; i < nGetCalls; i++ {
-		_, err := clientForTestingAz.Get(context.Background(), "foo")
+		_, err = clientForTestingAz.Get(context.Background(), "foo")
 		assert.NoError(suite.T(), err)
 	}
 
