@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
@@ -103,7 +104,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+				suite.SkipIfServerVersionLowerThan("7.0.0", t)
 			}
 			// Create channel definitions for all channels
 			channels := make([]ChannelDefn, len(tt.channelNames))
@@ -112,7 +113,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			}
 
 			// Create a client with subscriptions
-			receiver := suite.CreatePubSubReceiver(tt.clientType, channels, 1, false)
+			receiver := suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
 			t.Cleanup(func() { receiver.Close() })
 
 			// Allow subscription to establish
@@ -124,9 +125,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			if tt.sharded {
 				// For sharded channels, we need to use the cluster-specific methods
 				clusterClient, ok := receiver.(*glide.ClusterClient)
-				if !ok {
-					t.Fatal("Expected GlideClusterClient for sharded channels")
-				}
+				require.True(t, ok, "Expected GlideClusterClient for sharded channels")
 				if tt.pattern == "" {
 					activeChannels, err = clusterClient.PubSubShardChannels(context.Background())
 				} else {
@@ -139,7 +138,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 					activeChannels, err = receiver.PubSubChannelsWithPattern(context.Background(), tt.pattern)
 				}
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Sort both slices for consistent comparison
 			sort.Strings(activeChannels)
@@ -219,7 +218,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			// Create a client with subscriptions
-			receiver := suite.CreatePubSubReceiver(tt.clientType, tt.channelDefns, 1, false)
+			receiver := suite.CreatePubSubReceiver(tt.clientType, tt.channelDefns, 1, false, t)
 			t.Cleanup(func() { receiver.Close() })
 
 			// Allow subscription to establish
@@ -384,12 +383,12 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			if tt.sharded {
-				suite.SkipIfServerVersionLowerThanBy("7.0.0", t)
+				suite.SkipIfServerVersionLowerThan("7.0.0", t)
 			}
 
 			clients := make([]interfaces.BaseClientCommands, 0, len(tt.channelDefns))
 			for _, defn := range tt.channelDefns {
-				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false)
+				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false, t)
 				clients = append(clients, client)
 				t.Cleanup(func() { client.Close() })
 			}
@@ -403,14 +402,12 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 			if tt.sharded {
 				// For sharded channels, we need to use the cluster-specific methods
 				clusterClient, ok := clients[0].(*glide.ClusterClient)
-				if !ok {
-					t.Fatal("Expected GlideClusterClient for sharded channels")
-				}
+				require.True(t, ok, "Expected GlideClusterClient for sharded channels")
 				counts, err = clusterClient.PubSubShardNumSub(context.Background(), tt.queryChannels...)
 			} else {
 				counts, err = clients[0].PubSubNumSub(context.Background(), tt.queryChannels...)
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Verify counts match expected values
 			assert.Equal(t, tt.expectedCounts, counts)
