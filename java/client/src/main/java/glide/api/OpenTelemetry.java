@@ -79,11 +79,6 @@ public class OpenTelemetry {
     private static OpenTelemetryConfig openTelemetryConfig = null;
     private static final Random random = new Random();
 
-    // Instance created in a holder to make it a thread safe operation.
-    private static class InstanceHolder {
-        private static final OpenTelemetry instance = new OpenTelemetry();
-    }
-
     /** Configuration for OpenTelemetry integration. */
     public static class OpenTelemetryConfig {
         private TracesConfig traces;
@@ -340,7 +335,7 @@ public class OpenTelemetry {
      * );
      * }</pre>
      */
-    public static void init(OpenTelemetryConfig config) {
+    public static synchronized void init(OpenTelemetryConfig config) {
         if (openTelemetry == null) {
             internalInit(config);
             Logger.log(Logger.Level.INFO, "GlideOpenTelemetry", "OpenTelemetry initialized");
@@ -378,7 +373,7 @@ public class OpenTelemetry {
         OpenTelemetryResolver.initOpenTelemetry(
                 tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
 
-        openTelemetry = InstanceHolder.instance;
+        openTelemetry = new OpenTelemetry();
     }
 
     /**
