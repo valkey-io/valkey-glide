@@ -2237,6 +2237,68 @@ func (suite *GlideTestSuite) TestSRandMember() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSRandMemberCount() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		nonExistingKey := uuid.NewString()
+		stringKey := uuid.NewString()
+		members := []string{"one", "two", "three", "four", "five"}
+
+		// Test with empty set
+		emptyResult, err := client.SRandMemberCount(context.Background(), nonExistingKey, 2)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), emptyResult)
+
+		// Add members to the set
+		res, err := client.SAdd(context.Background(), key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res)
+
+		// Test with positive count (unique elements)
+		positiveResult, err := client.SRandMemberCount(context.Background(), key, 3)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 3, len(positiveResult))
+		// Verify all returned elements are unique and from the original set
+		uniqueElements := make(map[string]struct{})
+		for _, element := range positiveResult {
+			uniqueElements[element] = struct{}{}
+			assert.Contains(suite.T(), members, element)
+		}
+		assert.Equal(suite.T(), len(positiveResult), len(uniqueElements), "Elements should be unique")
+
+		// Test with count larger than set size (should return all elements)
+		largeCountResult, err := client.SRandMemberCount(context.Background(), key, 10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 5, len(largeCountResult))
+		// Verify all elements are returned
+		allElements := make(map[string]struct{})
+		for _, element := range largeCountResult {
+			allElements[element] = struct{}{}
+		}
+		assert.Equal(suite.T(), 5, len(allElements))
+
+		// Test with negative count (allows duplicates)
+		negativeResult, err := client.SRandMemberCount(context.Background(), key, -7)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 7, len(negativeResult))
+		// Verify all elements are from the original set (may contain duplicates)
+		for _, element := range negativeResult {
+			assert.Contains(suite.T(), members, element)
+		}
+
+		// Test with zero count (should return empty array)
+		zeroResult, err := client.SRandMemberCount(context.Background(), key, 0)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), zeroResult)
+
+		// Test with non-set key
+		suite.verifyOK(client.Set(context.Background(), stringKey, "value"))
+		_, err = client.SRandMemberCount(context.Background(), stringKey, 1)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &errors.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestSPop() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
