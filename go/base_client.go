@@ -298,7 +298,7 @@ func (client *baseClient) executeCommandWithRoute(
 		// Continue with execution
 	}
 	// Create span if OpenTelemetry is enabled and sampling is configured
-	var spanPtr *C.Option_GlideSpan = nil
+	var spanPtr uint64
 	otelInstance := GetInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
