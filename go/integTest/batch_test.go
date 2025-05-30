@@ -304,10 +304,13 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	}
 
 	batch.TTL(slotHashedKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "TTL(slotHashedKey1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), CheckType: true, TestName: "TTL(slotHashedKey1)"})
 
 	batch.PTTL(slotHashedKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "PTTL(slotHashedKey1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(-1), CheckType: true, TestName: "PTTL(slotHashedKey1)"},
+	)
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
