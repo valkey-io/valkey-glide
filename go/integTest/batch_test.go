@@ -610,7 +610,12 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	// TODO: fix use more specific type than 'any' when converters are added
 	testData := make([]CommandTestData, 0)
 	prefix := "{listKey}-"
-	key := prefix + uuid.NewString()
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+
+	key := atomicPrefix + uuid.NewString()
 
 	batch.LPush(key, []string{"val1", "val2"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LPush(key, [val1 val2])"})
@@ -642,7 +647,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.LIndex(key, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "LIndex(key, 1)"})
 
-	trimKey := prefix + "trim-" + uuid.NewString()
+	trimKey := atomicPrefix + "trim-" + uuid.NewString()
 	batch.RPush(trimKey, []string{"one", "two", "three", "four"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(trimKey, [one, two, three, four])"})
 	batch.LTrim(trimKey, 1, 2)
@@ -677,7 +682,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.BRPop([]string{key}, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "world"}, TestName: "BRPop([key], 1)"})
 
-	rpushxKey := prefix + "rpushx-" + uuid.NewString()
+	rpushxKey := atomicPrefix + "rpushx-" + uuid.NewString()
 	batch.RPush(rpushxKey, []string{"initial"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(rpushxKey, [initial])"})
 	batch.RPushX(rpushxKey, []string{"added"})
@@ -685,7 +690,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.LRange(rpushxKey, 0, -1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"})
 
-	lpushxKey := prefix + "lpushx-" + uuid.NewString()
+	lpushxKey := atomicPrefix + "lpushx-" + uuid.NewString()
 	batch.RPush(lpushxKey, []string{"initial"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(lpushxKey, [initial])"})
 	batch.LPushX(lpushxKey, []string{"added"})
@@ -709,7 +714,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"})
 
-	lsetKey := prefix + "lset-" + uuid.NewString()
+	lsetKey := atomicPrefix + "lset-" + uuid.NewString()
 	batch.RPush(lsetKey, []string{"one", "two", "three"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "RPush(lsetKey, [one, two, three])"})
 	batch.LSet(lsetKey, 1, "changed")
@@ -717,6 +722,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.LRange(lsetKey, 0, -1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"})
 
+	key = prefix + key
 	destKey := prefix + "dest-" + uuid.NewString()
 	batch.RPush(key, []string{"first", "second"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [first, second])"})
