@@ -2,7 +2,7 @@
 package glide.api;
 
 import glide.api.logging.Logger;
-import glide.api.models.exceptions.ConfigurationException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Random;
 
@@ -349,7 +349,12 @@ public class OpenTelemetry {
         String tracesEndpoint = null;
         int tracesSamplePercentage = -1;
         if (config.getTraces() == null && config.getMetrics() == null) {
-            Logger.log(Logger.Level.INFO, "GlideOpenTelemetry", "OpenTelemetry config error");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "GlideOpenTelemetry",
+                    "Error: Both traces and metrics are null"
+            );
+            throw new ConfigurationError("Both traces and metrics cannot be null. Provide either one of them.");
         }
         if (config.getTraces() != null) {
             tracesEndpoint = config.getTraces().getEndpoint();
@@ -410,13 +415,13 @@ public class OpenTelemetry {
      * This setting only affects traces, not metrics.
      *
      * @param percentage The sample percentage 0-100
-     * @throws ConfigurationException if OpenTelemetry is not initialized or traces config is not set
+     * @throws ConfigurationError if OpenTelemetry is not initialized or traces config is not set
      * @remarks This method can be called at runtime to change the sampling percentage without
      *     reinitializing OpenTelemetry.
      */
     public static void setSamplePercentage(int percentage) {
         if (openTelemetryConfig == null || openTelemetryConfig.getTraces() == null) {
-            throw new ConfigurationException("OpenTelemetry config traces not initialized");
+            throw new ConfigurationError("OpenTelemetry config traces not initialized");
         }
 
         openTelemetryConfig.getTraces().setSamplePercentage(percentage);
