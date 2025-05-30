@@ -4,8 +4,12 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strconv"
+	"time"
 	"unsafe"
+
+	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 )
 
 // Convert `s` of type `string` into `[]byte`
@@ -100,4 +104,13 @@ func ToString(v any) (string, bool) {
 	default:
 		return fmt.Sprintf("%v", val), true
 	}
+}
+
+// Convert to and perform bound checks for uint32 representation for milliseconds
+func DurationToMilliseconds(d time.Duration) (uint32, error) {
+	milliseconds := d.Milliseconds()
+	if milliseconds < 0 || milliseconds > math.MaxUint32 {
+		return 0, &errors.ConfigurationError{Msg: "invalid duration was specified"}
+	}
+	return uint32(milliseconds), nil
 }
