@@ -6362,7 +6362,7 @@ func (client *baseClient) BitOp(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key for the string to count the set bits of.
-//	options - The offset options - see [options.BitOffsetOptions].
+//	options - The offset options - see [options.BitCountOptions].
 //
 // Return value:
 //
