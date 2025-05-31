@@ -648,6 +648,7 @@ describe("Scan GlideClient", () => {
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
+                
             );
             const expectedKeys = Array.from(
                 { length: 100 },
