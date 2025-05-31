@@ -5,10 +5,12 @@
 #include <absl/status/statusor.h>
 
 #include <condition_variable>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "glide/glide_base.h"
 #include "helper.h"
@@ -146,6 +148,12 @@ class Future : public IFuture {
       result_ = absl::OkStatus();
     else if constexpr (std::is_same_v<T, absl::StatusOr<std::string>>)
       result_ = std::string(resp->string_value, resp->string_value_len);
+    else if constexpr (std::is_same_v<T,
+                                      absl::StatusOr<std::vector<std::byte>>>)
+      result_ = std::vector<std::byte>(
+          reinterpret_cast<const std::byte*>(resp->string_value),
+          reinterpret_cast<const std::byte*>(resp->string_value) +
+              resp->string_value_len);
     else if constexpr (std::is_same_v<T, absl::StatusOr<bool>>)
       result_ = resp->bool_value;
     else
