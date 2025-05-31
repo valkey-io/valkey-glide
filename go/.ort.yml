@@ -3,7 +3,7 @@ excludes:
     - pattern: "//indirect"
       reason: "DEV_DEPENDENCY_OF"
       comment: "Indirect dependencies used for development only."
-    - pattern: "github.com/stretchr/testify"
+    - pattern: "github.com/stretchr/testify|github.com/google/uuid"
       reason: "TEST_DEPENDENCY_OF"
       comment: "Testing framework not included in production code."
   paths:
