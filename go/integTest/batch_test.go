@@ -5,9 +5,6 @@ package integTest
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -778,15 +775,6 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 		clientType := fmt.Sprintf("%T", client)[7:]
 		for _, isAtomic := range []bool{true, false} {
 			for _, testProvider := range GetCommandGroupTestProviders() {
-				testToRunUntrimmed := runtime.FuncForPC(reflect.ValueOf(testProvider).Pointer()).Name()
-				testToRunTrimmed := strings.Replace(testToRunUntrimmed, "github.com/valkey-io/valkey-glide/go/v2/integTest.", "", 1)
-				switch testToRunTrimmed {
-				case "CreateListCommandsTest":
-					if suite.serverVersion < "7.0.0" {
-						continue
-					}
-				default:
-				}
 				batch := pipeline.NewClusterBatch(isAtomic)
 				testData := testProvider(batch, isAtomic, suite.serverVersion)
 
