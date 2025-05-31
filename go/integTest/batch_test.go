@@ -474,6 +474,96 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
 }
 
+func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	// TODO: After adding and fixing converters, remove 'any' typing in ExpectedResponse
+	testData := make([]CommandTestData, 0)
+	prefix := "{HashKey}-"
+	if !isAtomic {
+		prefix = ""
+	}
+	key := prefix + "1-" + uuid.NewString()
+
+	simpleMap := map[string]string{"k1": "value"}
+
+	batch.HSet(key, simpleMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(k1, simpleMap)"})
+	batch.HGet(key, "k1")
+	testData = append(testData, CommandTestData{ExpectedResponse: "value", TestName: "HGet(key, k1)"})
+
+	batch.HGetAll(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"k1": "value"}, TestName: "HGetAll(key)"})
+
+	batch.HMGet(key, []string{"k1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value"}, TestName: "HMGet(k1)"})
+
+	batch.HSetNX(key, "k1", "value2")
+	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "HSetNX(key, k1, value2)"})
+
+	batch.HDel(key, []string{"k1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HDel(key, k1)"})
+
+	batch.HSet(key, map[string]string{"field1": "value1", "field2": "value2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "HSet(key, multiple fields)"})
+	batch.HLen(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "HLen(key)"})
+
+	batch.HDel(key, []string{"field2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HDel(key, field2)"})
+	batch.HVals(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value1"}, TestName: "HVals(key)"})
+
+	batch.HExists(key, "field1")
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "HExists(key, field1)"})
+	batch.HExists(key, "nonexistent")
+	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "HExists(key, nonexistent)"})
+
+	batch.HKeys(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"field1"}, TestName: "HKeys(key)"})
+
+	batch.HStrLen(key, "field1")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "HStrLen(key, field1)"})
+
+	batch.HSet(key, map[string]string{"counter": "10"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(key, counter)"})
+	batch.HIncrBy(key, "counter", 5)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(15), TestName: "HIncrBy(key, counter, 5)"})
+
+	batch.HSet(key, map[string]string{"float_counter": "10.5"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(key, float_counter)"})
+	batch.HIncrByFloat(key, "float_counter", 1.5)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: float64(12), TestName: "HIncrByFloat(key, float_counter, 1.5)"},
+	)
+
+	batch.FlushAll()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushAll()"})
+	batch.HScan(key, "0")
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", ([]any)(nil)}, TestName: "HScan(key, 0)"})
+
+	batch.HSet(key, map[string]string{"counter": "10"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(key, counter)"})
+	batch.HRandField(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "counter", TestName: "HRandField(key)"})
+
+	batch.HRandFieldWithCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"counter"}, TestName: "HRandFieldWithCount(key, 1)"})
+
+	batch.HRandFieldWithCountWithValues(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{[]any{"counter", "10"}}, TestName: "HRandFieldWithCountWithValues(key, 1)"},
+	)
+
+	batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetCount(1))
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"counter", "10"}}, TestName: "HScanWithOptions(key, 0, options)"},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}
+}
+
 func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{hyperloglog}-"
@@ -510,6 +600,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		// more command groups here
 		CreateBitmapTest,
 		CreateGenericBaseTests,
+		CreateHashTest,
 		CreateHyperLogLogTest,
 	}
 }
