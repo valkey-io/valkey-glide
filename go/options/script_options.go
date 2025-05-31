@@ -148,10 +148,8 @@ func storeScript(script []byte) string {
 	))
 	defer C.free_script_hash_buffer(cHash)
 
-	buffer := (*C.uint8_t)(cHash.ptr)
 	len := C.int(cHash.len)
-
-	hash := string(C.GoBytes(unsafe.Pointer(buffer), len))
+	hash := string(C.GoBytes(unsafe.Pointer(cHash.ptr), len))
 
 	return hash
 }
@@ -168,6 +166,7 @@ func dropScript(hash string) error {
 	cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
 	err := C.drop_script(cHash, len)
+        defer C.free_drop_script_error(err)
 	if err == nil {
 		return nil
 	}

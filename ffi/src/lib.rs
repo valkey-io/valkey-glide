@@ -127,7 +127,9 @@ pub unsafe extern "C" fn drop_script(hash: *mut u8, len: usize) -> *mut c_char {
 /// * `error` must be an error returned by [`drop_script`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
-    _ = unsafe { CString::from_raw(error) };
+    if !error.is_null() {
+        _ = unsafe { CString::from_raw(error) };
+    }
 }
 
 /// The struct represents the response of the command.
@@ -212,7 +214,7 @@ pub enum ResponseType {
 /// `message` is the value returned by the command. The 'message' is managed by Rust and is freed when the callback returns control back to the caller.
 ///
 /// # Safety
-/// Message must be a valid pointer to a `CommandResponse`.
+/// `message` must be a valid pointer to a `CommandResponse` and must be freed using [`free_command_response`].
 pub type SuccessCallback =
     unsafe extern "C-unwind" fn(index_ptr: usize, message: *const CommandResponse) -> ();
 
@@ -225,7 +227,7 @@ pub type SuccessCallback =
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
 ///
 /// # Safety
-/// Message must be a valid pointer to a `CommandResponse`.
+/// `error_message` must be a valid pointer to a `c_char`.
 pub type FailureCallback = unsafe extern "C-unwind" fn(
     index_ptr: usize,
     error_message: *const c_char,
@@ -242,8 +244,8 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
 /// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
 /// * `message`: A pointer to the raw message bytes.
 /// * `message_len`: The length of the message data in bytes.
-/// * `channel`: A pointer to the raw channel name bytes.
-/// * `channel_len`: The length of the channel name in bytes.
+/// * `request_id`: A unique identifier for the raw request name bytes.
+/// * `request_id_len`: The length of the request name in bytes.
 /// * `pattern`: A pointer to the raw pattern bytes (null if no pattern).
 /// * `pattern_len`: The length of the pattern in bytes (0 if no pattern).
 ///
@@ -256,8 +258,8 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
     kind: PushKind,
     message: *const u8,
     message_len: i64,
-    channel: *const u8,
-    channel_len: i64,
+    request_id: *const u8,
+    request_id_len: i64,
     pattern: *const u8,
     pattern_len: i64,
 ) -> ();
@@ -394,7 +396,7 @@ impl ClientAdapter {
     /// For async clients, spawns the future and returns null immediately.
     /// For sync clients, blocks on the future and returns a `CommandResult`.
     #[must_use]
-    fn execute_request<Fut>(&self, channel: usize, request_future: Fut) -> *mut CommandResult
+    fn execute_request<Fut>(&self, request_id: usize, request_future: Fut) -> *mut CommandResult
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
     {
@@ -410,7 +412,7 @@ impl ClientAdapter {
                         result,
                         Some(success_callback),
                         Some(failure_callback),
-                        channel,
+                        request_id,
                     );
                 });
                 std::ptr::null_mut()
@@ -418,7 +420,7 @@ impl ClientAdapter {
             ClientType::SyncClient => {
                 // Block on the request for sync client
                 let result = self.runtime.block_on(request_future);
-                Self::handle_result(result, None, None, channel)
+                Self::handle_result(result, None, None, request_id)
             }
         }
     }
@@ -433,14 +435,17 @@ impl ClientAdapter {
         result: RedisResult<Value>,
         success_callback: Option<SuccessCallback>,
         failure_callback: Option<FailureCallback>,
-        channel: usize,
+        request_id: usize,
     ) -> *mut CommandResult {
         match result {
             Ok(value) => match valkey_value_to_command_response(value) {
                 Ok(command_response) => {
                     if let Some(success_callback) = success_callback {
                         unsafe {
-                            (success_callback)(channel, Box::into_raw(Box::new(command_response)));
+                            (success_callback)(
+                                request_id,
+                                Box::into_raw(Box::new(command_response)),
+                            );
                         }
                     } else {
                         return Box::into_raw(Box::new(CommandResult {
@@ -451,7 +456,7 @@ impl ClientAdapter {
                 }
                 Err(err) => {
                     if let Some(failure_callback) = failure_callback {
-                        unsafe { Self::send_async_redis_error(failure_callback, err, channel) };
+                        unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                     } else {
                         eprintln!("Error converting value to CommandResponse: {:?}", err);
                         return create_error_result_with_redis_error(err);
@@ -460,7 +465,7 @@ impl ClientAdapter {
             },
             Err(err) => {
                 if let Some(failure_callback) = failure_callback {
-                    unsafe { Self::send_async_redis_error(failure_callback, err, channel) };
+                    unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                 } else {
                     eprintln!("Error executing command: {:?}", err);
                     return create_error_result_with_redis_error(err);
@@ -477,7 +482,7 @@ impl ClientAdapter {
     ///
     /// # Parameters
     /// - `err`: The `RedisError` to handle.
-    /// - `channel`: The channel ID associated with the request.
+    /// - `request_id`: The unique ID associated with the request.
     ///
     /// # Returns
     /// - For async clients: Returns a null pointer after invoking the failure callback.
@@ -486,10 +491,10 @@ impl ClientAdapter {
     /// # Safety
     /// Unsafe, because calls to an FFI function. See the safety documentation of [`Self::handle_custom_error`].
     #[must_use]
-    unsafe fn handle_redis_error(&self, err: RedisError, channel: usize) -> *mut CommandResult {
+    unsafe fn handle_redis_error(&self, err: RedisError, request_id: usize) -> *mut CommandResult {
         let error_string = errors::error_message(&err);
         let error_type = errors::error_type(&err);
-        unsafe { Self::handle_custom_error(self, error_string, error_type, channel) }
+        unsafe { Self::handle_custom_error(self, error_string, error_type, request_id) }
     }
 
     /// Handles a Redis error by either invoking the failure callback (for async clients)
@@ -500,7 +505,7 @@ impl ClientAdapter {
     /// # Parameters
     /// - `error_string`: The error to handle.
     /// - `error_type`: The error type.
-    /// - `channel`: The channel ID associated with the request.
+    /// - `request_id`: The unique ID associated with the request.
     ///
     /// # Returns
     /// - For async clients: Returns a null pointer after invoking the failure callback.
@@ -512,7 +517,7 @@ impl ClientAdapter {
         &self,
         error_string: String,
         error_type: RequestErrorType,
-        channel: usize,
+        request_id: usize,
     ) -> *mut CommandResult {
         //logger_core::log(logger_core::Level::Error, "ffi", &error_string);
         match self.core.client_type {
@@ -525,7 +530,7 @@ impl ClientAdapter {
                         failure_callback,
                         error_string,
                         error_type,
-                        channel,
+                        request_id,
                     )
                 };
                 std::ptr::null_mut()
@@ -545,41 +550,42 @@ impl ClientAdapter {
     /// - `failure_callback`: The callback to invoke with the error.
     /// - `error_string`: The error message to report.
     /// - `error_type`: The error type to report.
-    /// - `channel`: An identifier used to correlate the error to the original request.
+    /// - `request_id`: An identifier used to correlate the error to the original request.
     ///
     /// # Safety
-    /// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
+    /// Unsafe, because calls to an FFI function. See the safety documentation of [`FailureCallback`].
     unsafe fn send_async_custom_error(
         failure_callback: FailureCallback,
         error_string: String,
         error_type: RequestErrorType,
-        channel: usize,
+        request_id: usize,
     ) {
         let err_ptr = CString::into_raw(
             CString::new(error_string).expect("Couldn't convert error message to CString"),
         );
-        unsafe { (failure_callback)(channel, err_ptr, error_type) };
+        unsafe { (failure_callback)(request_id, err_ptr, error_type) };
+        _ = unsafe { CString::from_raw(err_ptr as *mut c_char) };
     }
 
     /// Invokes the asynchronous failure callback with an error.
     ///
     /// This function is used in async client flows to report command execution failures
-    /// back to the calling language (e.g., Go) via a registered failure callback.
+    /// back to the calling language (e.g. Go) via a registered failure callback.
     ///
     /// # Parameters
     /// - `failure_callback`: The callback to invoke with the error.
     /// - `err`: The `RedisError` to report.
-    /// - `channel`: An identifier used to correlate the error to the original request.
+    /// - `request_id`: An identifier used to correlate the error to the original request.
     ///
     /// # Safety
     /// Unsafe, because calls to an FFI function. See the safety documentation of [`FailureCallback`].
     unsafe fn send_async_redis_error(
         failure_callback: FailureCallback,
         err: RedisError,
-        channel: usize,
+        request_id: usize,
     ) {
         let (c_err_str, error_type) = to_c_error(err);
-        unsafe { (failure_callback)(channel, c_err_str, error_type) };
+        unsafe { (failure_callback)(request_id, c_err_str, error_type) };
         _ = unsafe { CString::from_raw(c_err_str as *mut c_char) };
     }
 }
@@ -662,7 +668,7 @@ unsafe fn process_push_notification(
         })
         .collect();
 
-    let ((pattern_ptr, pattern_len), (channel_ptr, channel_len), (message_ptr, message_len)) = {
+    let ((pattern_ptr, pattern_len), (request_id, request_id_len), (message_ptr, message_len)) = {
         if strings.len() == 3 {
             (strings[0], strings[1], strings[2])
         } else {
@@ -677,14 +683,14 @@ unsafe fn process_push_notification(
             push_msg.kind.into(),
             message_ptr,
             message_len,
-            channel_ptr,
-            channel_len,
+            request_id,
+            request_id_len,
             pattern_ptr,
             pattern_len,
         );
         // Free memory
         let _ = Vec::from_raw_parts(message_ptr, message_len as usize, message_len as usize);
-        let _ = Vec::from_raw_parts(channel_ptr, channel_len as usize, channel_len as usize);
+        let _ = Vec::from_raw_parts(request_id, request_id_len as usize, request_id_len as usize);
         if !pattern_ptr.is_null() {
             let _ = Vec::from_raw_parts(pattern_ptr, pattern_len as usize, pattern_len as usize);
         }
@@ -1078,7 +1084,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
-/// * `channel` must be a channel pointer from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `request_id` must be a request ID from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
 /// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
@@ -1091,7 +1097,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn command(
     client_adapter_ptr: *const c_void,
-    channel: usize,
+    request_id: usize,
     command_type: RequestType,
     arg_count: c_ulong,
     args: *const usize,
@@ -1112,12 +1118,12 @@ pub unsafe extern "C-unwind" fn command(
     };
 
     // Create the command outside of the task to ensure that the command arguments passed
-    // from "go" are still valid
+    // from the foreign code are still valid
     let mut cmd = match command_type.get_command() {
         Some(cmd) => cmd,
         None => {
             let err = RedisError::from((ErrorKind::ClientError, "Couldn't fetch command type"));
-            return unsafe { client_adapter.handle_redis_error(err, channel) };
+            return unsafe { client_adapter.handle_redis_error(err, request_id) };
         }
     };
     for command_arg in arg_vec {
@@ -1134,7 +1140,7 @@ pub unsafe extern "C-unwind" fn command(
                     "Decoding route failed",
                     err.to_string(),
                 ));
-                return unsafe { client_adapter.handle_redis_error(err, channel) };
+                return unsafe { client_adapter.handle_redis_error(err, request_id) };
             }
         }
     } else {
@@ -1142,7 +1148,7 @@ pub unsafe extern "C-unwind" fn command(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(channel, async move {
+    client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
         client.send_command(&cmd, routing_info).await
     })
@@ -1379,7 +1385,7 @@ impl Drop for ClusterScanCursor {
 /// Allows the client to request a cluster scan command to be executed.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
-/// `channel` is a pointer to a valid payload buffer which is created in the client.
+/// `request_id` is a pointer to a valid payload buffer which is created in the client.
 /// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
 /// `arg_count` keeps track of how many option arguments are passed in the client.
 /// `args` is a pointer to C string representation of the string args.
@@ -1391,12 +1397,12 @@ impl Drop for ClusterScanCursor {
 ///
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
-/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
-    channel: usize,
+    request_id: usize,
     cursor: ClusterScanCursor,
     arg_count: c_ulong,
     args: *const usize,
@@ -1411,7 +1417,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
     let temp_str = match c_str.to_str() {
         Ok(temp_str) => temp_str,
         Err(e) => {
-            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), request_id) };
         }
     };
     let cursor_id = temp_str.to_string();
@@ -1435,7 +1441,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following MATCH.",
                         ));
-                        return unsafe { client_adapter.handle_redis_error(err, channel) };
+                        return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
                 b"TYPE" => match iter.next() {
@@ -1445,7 +1451,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following TYPE.",
                         ));
-                        return unsafe { client_adapter.handle_redis_error(err, channel) };
+                        return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
                 b"COUNT" => match iter.next() {
@@ -1455,7 +1461,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                             ErrorKind::ClientError,
                             "No argument following COUNT.",
                         ));
-                        return unsafe { client_adapter.handle_redis_error(err, channel) };
+                        return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
                 _ => {
@@ -1473,7 +1479,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                         Ok(v) => v,
                         Err(e) => {
                             return unsafe {
-                                client_adapter.handle_redis_error(RedisError::from(e), channel)
+                                client_adapter.handle_redis_error(RedisError::from(e), request_id)
                             };
                         }
                     }
@@ -1482,14 +1488,18 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                 }
             }
             Err(e) => {
-                return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+                return unsafe {
+                    client_adapter.handle_redis_error(RedisError::from(e), request_id)
+                };
             }
         };
 
         let converted_type = match str::from_utf8(object_type) {
             Ok(v) => ObjectType::from(v.to_string()),
             Err(e) => {
-                return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+                return unsafe {
+                    client_adapter.handle_redis_error(RedisError::from(e), request_id)
+                };
             }
         };
 
@@ -1513,7 +1523,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         Err(_error) => ScanStateRC::new(),
     };
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(channel, async move {
+    client_adapter.execute_request(request_id, async move {
         client
             .cluster_scan(&scan_state_cursor, cluster_scan_args)
             .await
@@ -1523,7 +1533,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
 /// Allows the client to request an update to the connection password.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
-/// `channel` is a pointer to a valid payload buffer which is created in the client.
+/// `request_id` is a unique identifier for a valid payload buffer which is created in the client.
 /// `password` is a pointer to C string representation of the password.
 /// `immediate_auth` is a boolean flag to indicate if the password should be updated immediately.
 /// `success_callback` is the callback that will be called when a command succeeds.
@@ -1533,12 +1543,12 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
 ///
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
-/// * `channel` must be valid until it is passed in a call to [`free_command_response`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn update_connection_password(
     client_adapter_ptr: *const c_void,
-    channel: usize,
+    request_id: usize,
     password: *const c_char,
     immediate_auth: bool,
 ) -> *mut CommandResult {
@@ -1552,7 +1562,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
     let password = match unsafe { CStr::from_ptr(password).to_str() } {
         Ok(password) => password,
         Err(e) => {
-            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), request_id) };
         }
     };
     let password_option = if password.is_empty() {
@@ -1561,7 +1571,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
         Some(password.to_string())
     };
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(channel, async move {
+    client_adapter.execute_request(request_id, async move {
         client
             .update_connection_password(password_option, immediate_auth)
             .await
@@ -1573,7 +1583,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
 /// # Parameters
 ///
 /// * `client_adapter_ptr`: Pointer to a valid `GlideClusterClient` returned from [`create_client`].
-/// * `channel`: Pointer to a valid payload buffer created in the calling language.
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
 /// * `hash`: SHA1 hash of the script for script caching.
 /// * `keys_count`: Number of keys in the keys array.
 /// * `keys`: Array of keys used by the script.
@@ -1588,7 +1598,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
 ///
 /// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
-/// * `channel` must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `request_id` must be valid until either `success_callback` or `failure_callback` is finished.
 /// * `hash` must be a valid null-terminated C string.
 /// * `keys` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `keys_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
@@ -1605,7 +1615,7 @@ pub unsafe extern "C-unwind" fn update_connection_password(
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn invoke_script(
     client_adapter_ptr: *const c_void,
-    channel: usize,
+    request_id: usize,
     hash: *const c_char,
     keys_count: c_ulong,
     keys: *const usize,
@@ -1626,7 +1636,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
     let hash_str = match unsafe { CStr::from_ptr(hash).to_str() } {
         Ok(hash) => hash,
         Err(e) => {
-            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), channel) };
+            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), request_id) };
         }
     };
 
@@ -1655,7 +1665,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
                     "Decoding route failed",
                     err.to_string(),
                 ));
-                return unsafe { client_adapter.handle_redis_error(err, channel) };
+                return unsafe { client_adapter.handle_redis_error(err, request_id) };
             }
         }
     } else {
@@ -1663,7 +1673,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(channel, async move {
+    client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, None)?;
         client
             .invoke_script(hash_str, &keys_vec, &args_vec, routing_info)
