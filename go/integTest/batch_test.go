@@ -218,7 +218,7 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
 }
 
-func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{baseKey}-"
 	atomicPrefix := prefix
@@ -471,28 +471,17 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		CommandTestData{ExpectedResponse: "value1", TestName: "Get(slotHashedKey2) after CopyWithOptions"},
 	)
 
-	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
-}
-
-func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	testData := make([]CommandTestData, 0)
-	prefix := "{key}-"
-	if !isAtomic {
-		prefix = ""
-	}
-	key := prefix + "1-" + uuid.NewString()
-
-	// Start clean
+	// GenericClusterCommands
 	batch.FlushAll()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "CustomCommand: FlushAll()"})
 
-	batch.CustomCommand([]string{"SET", key, "1"})
+	batch.CustomCommand([]string{"SET", slotHashedKey1, "1"})
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "CustomCommand: Set(key, 1)"})
-	batch.Get(key)
+	batch.Get(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "1", TestName: "Get(key1)"})
 
 	batch.RandomKey()
-	testData = append(testData, CommandTestData{ExpectedResponse: key, TestName: "RandomKey()"})
+	testData = append(testData, CommandTestData{ExpectedResponse: slotHashedKey1, TestName: "RandomKey()"})
 
 	// TODO: add Move in separate standalone batch tests
 
@@ -624,8 +613,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateStringTest,
 		// more command groups here
 		CreateBitmapTest,
-		CreateGenericBaseTests,
-		CreateGenericClusterCommandTests,
+		CreateGenericCommandTests,
 		CreateHashTest,
 		CreateHyperLogLogTest,
 	}
