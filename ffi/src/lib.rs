@@ -1856,7 +1856,7 @@ pub struct OpenTelemetryConfig {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct OpenTelemetryTracesConfig {
-    /// The endpoint to which trace data will be exported.
+    /// The endpoint to which trace data will be exported, `null` if not specified.
     pub endpoint: *const c_char,
     /// Whether sample percentage is specified
     pub has_sample_percentage: bool,
@@ -1873,7 +1873,7 @@ pub struct OpenTelemetryTracesConfig {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct OpenTelemetryMetricsConfig {
-    /// The endpoint to which metrics data will be exported.
+    /// The endpoint to which metrics data will be exported, `null` if not specified.
     pub endpoint: *const c_char,
 }
 
