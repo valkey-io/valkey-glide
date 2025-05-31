@@ -695,21 +695,23 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(lpushxKey, 0, -1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"})
 
-	batch.LMPop([]string{key}, constants.Left)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"})
+	if serverVer >= "7.0.0" {
+		batch.LMPop([]string{key}, constants.Left)
+		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"})
 
-	batch.RPush(key, []string{"hello"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(key, [hello])"})
-	batch.LMPopCount([]string{key}, constants.Left, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"})
+		batch.RPush(key, []string{"hello"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(key, [hello])"})
+		batch.LMPopCount([]string{key}, constants.Left, 1)
+		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"})
 
-	batch.RPush(key, []string{"hello", "world"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
-	batch.BLMPop([]string{key}, constants.Left, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"})
+		batch.RPush(key, []string{"hello", "world"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
+		batch.BLMPop([]string{key}, constants.Left, 1)
+		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"})
 
-	batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"})
+		batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
+		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"})
+	}
 
 	lsetKey := atomicPrefix + "lset-" + uuid.NewString()
 	batch.RPush(lsetKey, []string{"one", "two", "three"})
