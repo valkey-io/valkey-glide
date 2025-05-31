@@ -4,6 +4,7 @@ package glide.managers;
 import static glide.api.BaseClient.OK;
 
 import glide.api.models.exceptions.GlideException;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -25,6 +26,11 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
         // Note: errors are already handled before in CallbackDispatcher
         assert !response.hasClosingError() : "Unhandled response closing error";
         assert !response.hasRequestError() : "Unhandled response request error";
+
+        // Drop the OpenTelemetry span if one was created
+        if (response.hasRootSpanPtr() && response.getRootSpanPtr() != 0) {
+            OpenTelemetryResolver.dropOtelSpan(response.getRootSpanPtr());
+        }
 
         if (response.hasConstantResponse()) {
             return OK;
