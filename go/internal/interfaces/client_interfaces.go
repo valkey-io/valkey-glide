@@ -5,6 +5,7 @@ package interfaces
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -21,6 +22,10 @@ type BaseClientCommands interface {
 	GeoSpatialCommands
 	ScriptingAndFunctionBaseCommands
 	PubSubCommands
+
+	Watch(ctx context.Context, keys []string) (string, error)
+	Unwatch(ctx context.Context) (string, error)
+
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -51,6 +56,7 @@ type GlideClusterClientCommands interface {
 	ScriptingAndFunctionClusterCommands
 	PubSubClusterCommands
 
+	UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error)
 	Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error)
 	ExecWithOptions(
 		ctx context.Context,

@@ -496,7 +496,10 @@ func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription
 	}
 }
 
-func (suite *GlideTestSuite) createAnyClientWithTesting(clientType ClientType, subscription any) (interfaces.BaseClientCommands, error) {
+func (suite *GlideTestSuite) createAnyClientWithTesting(
+	clientType ClientType,
+	subscription any,
+) (interfaces.BaseClientCommands, error) {
 	switch clientType {
 	case StandaloneClient:
 		if sub, ok := subscription.(*config.StandaloneSubscriptionConfig); ok {
