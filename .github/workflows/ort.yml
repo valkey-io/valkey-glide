@@ -29,7 +29,6 @@ jobs:
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
             GO_ATTRIBUTIONS: "go/THIRD_PARTY_LICENSES_GO"
-            FFI_ATTRIBUTIONS: "ffi/THIRD_PARTY_LICENSES_FFI"
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
