@@ -474,7 +474,7 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
 }
 
-func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateGenericClusterCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{key}-"
 	if !isAtomic {
