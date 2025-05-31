@@ -102,26 +102,38 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 
 	// Convert Go config to C config
 	cConfig := C.OpenTelemetryConfig{
-		has_traces:            openTelemetryConfig.Traces != nil,
-		has_metrics:           openTelemetryConfig.Metrics != nil,
-		has_flush_interval_ms: openTelemetryConfig.FlushIntervalMs != nil,
-		flush_interval_ms:     C.int64_t(0), // Default to 0, will be set if provided
+		traces:  nil,
+		metrics: nil,
 	}
 
 	if openTelemetryConfig.FlushIntervalMs != nil {
+		cConfig.has_flush_interval_ms = true
 		cConfig.flush_interval_ms = C.int64_t(*openTelemetryConfig.FlushIntervalMs)
 	}
 
+	var tracesConfig *C.OpenTelemetryTracesConfig
+	var metricsConfig *C.OpenTelemetryMetricsConfig
+	var p pinner
+	defer p.Unpin()
+
 	if openTelemetryConfig.Traces != nil {
-		cConfig.traces.endpoint = C.CString(openTelemetryConfig.Traces.Endpoint)
-		defer C.free(unsafe.Pointer(cConfig.traces.endpoint))
-		cConfig.traces.has_sample_percentage = true
-		cConfig.traces.sample_percentage = C.uint32_t(openTelemetryConfig.Traces.SamplePercentage)
+		endpoint := C.CString(openTelemetryConfig.Traces.Endpoint)
+		tracesConfig = &C.OpenTelemetryTracesConfig{
+			endpoint:              endpoint,
+			has_sample_percentage: true,
+			sample_percentage:     C.uint32_t(openTelemetryConfig.Traces.SamplePercentage),
+		}
+		p.Pin(unsafe.Pointer(tracesConfig))
+		cConfig.traces = tracesConfig
 	}
 
 	if openTelemetryConfig.Metrics != nil {
-		cConfig.metrics.endpoint = C.CString(openTelemetryConfig.Metrics.Endpoint)
-		defer C.free(unsafe.Pointer(cConfig.metrics.endpoint))
+		endpoint := C.CString(openTelemetryConfig.Metrics.Endpoint)
+		metricsConfig = &C.OpenTelemetryMetricsConfig{
+			endpoint: endpoint,
+		}
+		p.Pin(unsafe.Pointer(metricsConfig))
+		cConfig.metrics = metricsConfig
 	}
 
 	// Initialize OpenTelemetry
@@ -129,8 +141,10 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	if errMsg != nil {
 		err := fmt.Errorf("failed to initialize OpenTelemetry: %s", C.GoString(errMsg))
 		C.free_c_string(errMsg)
+		p.Unpin()
 		return err
 	}
+
 	otelConfig = &openTelemetryConfig
 	otelInitialized = true
 	return nil

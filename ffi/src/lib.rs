@@ -1835,14 +1835,10 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct OpenTelemetryConfig {
-    /// Whether traces configuration is present
-    pub has_traces: bool,
     /// Configuration for exporting trace data. Only valid if has_traces is true.
-    pub traces: OpenTelemetryTracesConfig,
-    /// Whether metrics configuration is present
-    pub has_metrics: bool,
+    pub traces: *const OpenTelemetryTracesConfig,
     /// Configuration for exporting metrics data. Only valid if has_metrics is true.
-    pub metrics: OpenTelemetryMetricsConfig,
+    pub metrics: *const OpenTelemetryMetricsConfig,
     /// Whether flush interval is specified
     pub has_flush_interval_ms: bool,
     /// Interval in milliseconds between consecutive exports of telemetry data. Only valid if has_flush_interval_ms is true.
@@ -1891,7 +1887,7 @@ pub unsafe extern "C" fn init_open_telemetry(
 ) -> *const c_char {
     unsafe {
         // At least one of traces or metrics must be provided
-        if !(*open_telemetry_config).has_traces && !(*open_telemetry_config).has_metrics {
+        if (*open_telemetry_config).traces.is_null() && (*open_telemetry_config).metrics.is_null() {
             let error_msg = "At least one of traces or metrics must be provided for OpenTelemetry configuration";
             return CString::new(error_msg)
                 .unwrap_or_else(|_| {
@@ -1903,18 +1899,18 @@ pub unsafe extern "C" fn init_open_telemetry(
         let mut config = GlideOpenTelemetryConfigBuilder::default();
 
         // Initialize open telemetry traces exporter
-        if (*open_telemetry_config).has_traces {
-            let endpoint = CStr::from_ptr((*open_telemetry_config).traces.endpoint)
+        if !(*open_telemetry_config).traces.is_null() {
+            let endpoint = CStr::from_ptr((*(*open_telemetry_config).traces).endpoint)
                 .to_string_lossy()
                 .to_string();
             match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
                 Ok(exporter) => {
-                    let sample_percentage = if (*open_telemetry_config).traces.has_sample_percentage
-                    {
-                        Some((*open_telemetry_config).traces.sample_percentage)
-                    } else {
-                        None
-                    };
+                    let sample_percentage =
+                        if (*(*open_telemetry_config).traces).has_sample_percentage {
+                            Some((*(*open_telemetry_config).traces).sample_percentage)
+                        } else {
+                            None
+                        };
                     config = config.with_trace_exporter(exporter, sample_percentage);
                 }
                 Err(e) => {
@@ -1929,8 +1925,8 @@ pub unsafe extern "C" fn init_open_telemetry(
         }
 
         // Initialize open telemetry metrics exporter
-        if (*open_telemetry_config).has_metrics {
-            let endpoint = CStr::from_ptr((*open_telemetry_config).metrics.endpoint)
+        if !(*open_telemetry_config).metrics.is_null() {
+            let endpoint = CStr::from_ptr((*(*open_telemetry_config).metrics).endpoint)
                 .to_string_lossy()
                 .to_string();
             match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
