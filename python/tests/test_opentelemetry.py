@@ -15,6 +15,7 @@ from glide import (
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
 )
+from glide.async_commands.batch import ClusterBatch
 from glide.config import ProtocolVersion
 from glide.opentelemetry import OpenTelemetry
 from tests.conftest import create_client
@@ -89,7 +90,8 @@ def test_wrong_opentelemetry_config():
 
     # Negative flush interval
     with pytest.raises(
-        TypeError, match=r".*InvalidInput: flushIntervalMs must be a positive integer.*"
+        TypeError,
+        match=r".*InvalidInput: flush_interval_ms must be a positive integer.*",
     ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
@@ -183,12 +185,21 @@ async def test_span_not_exported_before_init_otel(request):
     await client.close()
 
 
-class TestOpenTelemetryGlideClient:
+class TestOpenTelemetryGlide:
+    @pytest_asyncio.fixture(scope="class")
+    async def setup_class(self, request):
+        # Test wrong OpenTelemetry config before initializing
+        test_wrong_opentelemetry_config()
+
+        # Test that spans are not exported before OpenTelemetry is initialized
+        await test_span_not_exported_before_init_otel(request)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest_asyncio.fixture(autouse=True)
-    async def setup_test(self, request):
+    async def setup_test(self, request, cluster_mode):
         # Initialize OpenTelemetry with 100% sampling for tests
         opentelemetry_config = OpenTelemetryConfig(
-            traces=OpenTelemetryTracesConfig(
+            OpenTelemetryTracesConfig(
                 endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
             ),
             metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
@@ -207,75 +218,17 @@ class TestOpenTelemetryGlideClient:
         if os.path.exists(VALID_ENDPOINT_TRACES):
             os.unlink(VALID_ENDPOINT_TRACES)
 
-        client = await create_client(request, cluster_mode=False, request_timeout=2000)
+        client = await create_client(
+            request, cluster_mode=cluster_mode, request_timeout=2000
+        )
         await client.custom_command(["FLUSHALL"])
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_automatic_span_lifecycle(self, request, protocol):
-        """Test that spans are automatically created and cleaned up"""
-        # This test should not run in parallel with other tests due to the memory check
-        # Force garbage collection
-        gc.collect()
-
-        # Get initial memory usage
-        process = psutil.Process()
-        initial_memory = process.memory_info().rss  # Get resident set size in bytes
-
-        # Create client
-        client = await create_client(
-            request,
-            cluster_mode=False,
-            protocol=protocol,
-        )
-
-        # Execute multiple commands
-        await client.set("test_key1", "value1")
-        await client.get("test_key1")
-        await client.set("test_key2", "value2")
-        await client.get("test_key2")
-
-        # Force garbage collection again
-        gc.collect()
-
-        # Wait for spans to be flushed
-        await asyncio.sleep(1)
-
-        # Get final memory usage
-        final_memory = process.memory_info().rss
-
-        # Calculate memory increase percentage
-        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
-
-        # Close client
-        await client.close()
-
-        # Assert memory increase is not more than 10%
-        assert (
-            memory_increase < 10
-        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
-
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_otel_global_config_not_reinitialize(self, request, protocol):
-        """Test that OpenTelemetry cannot be reinitialized"""
-        client = await create_client(
-            request,
-            cluster_mode=False,
-            protocol=protocol,
-        )
-
-        # Try to reinitialize with invalid config
-        opentelemetry_config = OpenTelemetryConfig(
-            traces=OpenTelemetryTracesConfig(endpoint="wrong.endpoint")
-        )
-
-        # This should not throw an error because OpenTelemetry is already initialized
-        OpenTelemetry.init(opentelemetry_config)
-
-        await client.close()
-
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_concurrent_commands_span_lifecycle(self, request, protocol):
+    async def test_concurrent_commands_span_lifecycle(
+        self, request, protocol, cluster_mode
+    ):
         """Test that spans are properly handled with concurrent commands"""
         # This test should not run in parallel with other tests due to the memory check
         # Force garbage collection
@@ -288,7 +241,7 @@ class TestOpenTelemetryGlideClient:
         # Create client
         client = await create_client(
             request,
-            cluster_mode=False,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
@@ -313,56 +266,85 @@ class TestOpenTelemetryGlideClient:
         # Get final memory usage
         final_memory = process.memory_info().rss
 
-        # Calculate memory increase percentage
-        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+        # Check that memory usage hasn't grown significantly (indicating span leaks)
+        # Allow for some reasonable growth, but not excessive
+        memory_growth = final_memory - initial_memory
+        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
 
-        # Close client
+        assert (
+            memory_growth < max_allowed_growth
+        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+
         await client.close()
 
-        # Assert memory increase is not more than 10%
-        assert (
-            memory_increase < 10
-        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_cluster_span_lifecycle(self, request, protocol, cluster_mode):
+        """Test that spans are properly handled with batch cluster operations"""
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
+        gc.collect()
 
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
 
-class TestOpenTelemetryGlideClusterClient:
-    @pytest_asyncio.fixture(scope="class")
-    async def setup_class(self, request):
-        # Test wrong OpenTelemetry config before initializing
-        test_wrong_opentelemetry_config()
-
-        # Test that spans are not exported before OpenTelemetry is initialized
-        await test_span_not_exported_before_init_otel(request)
-
-    @pytest_asyncio.fixture(autouse=True)
-    async def setup_test(self, request):
-        # Initialize OpenTelemetry with 100% sampling for tests
-        opentelemetry_config = OpenTelemetryConfig(
-            OpenTelemetryTracesConfig(
-                endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
-            ),
-            metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
-            flush_interval_ms=100,
+        # Create cluster client
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
         )
 
-        # Initialize OpenTelemetry
-        OpenTelemetry.init(opentelemetry_config)
-        # Clean up before each test
-        if os.path.exists(VALID_ENDPOINT_TRACES):
-            os.unlink(VALID_ENDPOINT_TRACES)
+        # Execute multiple concurrent batch operations using ClusterBatch
+        batch_operations = []
 
-        yield
+        # Create first batch
+        batch1 = ClusterBatch(is_atomic=True)
+        batch1.set("{batch}key1", "value1")
+        batch1.get("{batch}key1")
+        batch1.strlen("{batch}key1")
+        batch_operations.append(client.exec(batch1, raise_on_error=True))
 
-        # Clean up after each test
-        if os.path.exists(VALID_ENDPOINT_TRACES):
-            os.unlink(VALID_ENDPOINT_TRACES)
+        # Create second batch
+        batch2 = ClusterBatch(is_atomic=True)
+        batch2.set("{batch}key2", "value2")
+        batch2.object_refcount("{batch}key2")
+        batch_operations.append(client.exec(batch2, raise_on_error=True))
 
-        client = await create_client(request, cluster_mode=True, request_timeout=2000)
-        await client.custom_command(["FLUSHALL"])
+        # Create third batch
+        batch3 = ClusterBatch(is_atomic=True)
+        batch3.set("{batch}key3", "value3")
+        batch3.get("{batch}key3")
+        batch3.delete(["{batch}key1", "{batch}key2", "{batch}key3"])
+        batch_operations.append(client.exec(batch3, raise_on_error=True))
+
+        # Execute all batches concurrently
+        await asyncio.gather(*batch_operations)
+
+        # Force garbage collection again
+        gc.collect()
+
+        # Wait for spans to be flushed
+        await asyncio.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Check that memory usage hasn't grown significantly (indicating span leaks)
+        # Allow for some reasonable growth, but not excessive
+        memory_growth = final_memory - initial_memory
+        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
+
+        assert (
+            memory_growth < max_allowed_growth
+        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_span_memory_leak(self, request, protocol):
+    async def test_span_memory_leak(self, request, protocol, cluster_mode):
         """Test that spans don't cause memory leaks"""
         # This test should not run in parallel with other tests due to the memory check
         # Force garbage collection
@@ -371,7 +353,7 @@ class TestOpenTelemetryGlideClusterClient:
         # Create client and get initial memory usage
         client = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
@@ -401,13 +383,14 @@ class TestOpenTelemetryGlideClusterClient:
             memory_increase < 10
         ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_percentage_requests_config(self, request, protocol):
+    async def test_percentage_requests_config(self, request, protocol, cluster_mode):
         """Test that sample percentage configuration works correctly"""
         # Create client
         client = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
@@ -456,8 +439,11 @@ class TestOpenTelemetryGlideClusterClient:
 
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_otel_global_config_not_reinitialize(self, request, protocol):
+    async def test_otel_global_config_not_reinitialize(
+        self, request, protocol, cluster_mode
+    ):
         """Test that OpenTelemetry cannot be reinitialized"""
         # Try to reinitialize with invalid config
         opentelemetry_config = OpenTelemetryConfig(
@@ -470,7 +456,7 @@ class TestOpenTelemetryGlideClusterClient:
         # Create client
         client = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
@@ -488,8 +474,9 @@ class TestOpenTelemetryGlideClusterClient:
 
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_span_batch(self, request, protocol):
+    async def test_span_batch(self, request, protocol, cluster_mode):
         """Test that batch operations create spans correctly"""
         # This test should not run in parallel with other tests due to the memory check
         # Force garbage collection
@@ -502,12 +489,11 @@ class TestOpenTelemetryGlideClusterClient:
         # Create client
         client = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
         # Create and execute a batch using the correct Python API
-        from glide.async_commands.batch import ClusterBatch
 
         batch = ClusterBatch(is_atomic=True)
         batch.set("test_key", "foo")
@@ -547,19 +533,22 @@ class TestOpenTelemetryGlideClusterClient:
             memory_increase < 10
         ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_number_of_clients_with_same_config(self, request, protocol):
+    async def test_number_of_clients_with_same_config(
+        self, request, protocol, cluster_mode
+    ):
         """Test that multiple clients with the same config work correctly with OpenTelemetry"""
         # Create two clients
         client1 = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
         client2 = await create_client(
             request,
-            cluster_mode=True,
+            cluster_mode=cluster_mode,
             protocol=protocol,
         )
 

@@ -504,11 +504,6 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        # Create span if OpenTelemetry is configured and sampling indicates we should trace
-        span = None
-        if OpenTelemetry.should_sample():
-            span = create_otel_span(f"Script: {hash}")
-
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         (encoded_keys, keys_size) = self._encode_and_sum_size(keys)
@@ -526,11 +521,6 @@ class BaseClient(CoreCommands):
             request.script_invocation_pointers.args_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
-
-        # Add span pointer to request if span was created
-        if span:
-            request.root_span_ptr = span
-
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

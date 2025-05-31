@@ -39,10 +39,8 @@ pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
-    #[pyo3(get, set)]
     pub traces: Option<OpenTelemetryTracesConfig>,
     /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
-    #[pyo3(get, set)]
     pub metrics: Option<OpenTelemetryMetricsConfig>,
     /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
     #[pyo3(get, set)]
@@ -63,6 +61,18 @@ impl OpenTelemetryConfig {
             metrics,
             flush_interval_ms,
         }
+    }
+
+    fn get_traces(&self) -> Option<OpenTelemetryTracesConfig> {
+        self.traces.clone()
+    }
+
+    fn set_traces(&mut self, traces: OpenTelemetryTracesConfig) {
+        self.traces = Some(traces);
+    }
+
+    fn get_metrics(&self) -> Option<OpenTelemetryMetricsConfig> {
+        self.metrics.clone()
     }
 }
 
@@ -98,6 +108,14 @@ impl OpenTelemetryTracesConfig {
             sample_percentage,
         }
     }
+
+    fn get_endpoint(&self) -> String {
+        self.endpoint.clone()
+    }
+
+    fn get_sample_percentage(&self) -> Option<u32> {
+        self.sample_percentage
+    }
 }
 
 /// Configuration for exporting OpenTelemetry metrics.
@@ -119,6 +137,10 @@ impl OpenTelemetryMetricsConfig {
     #[new]
     fn new(endpoint: String) -> Self {
         OpenTelemetryMetricsConfig { endpoint }
+    }
+
+    fn get_endpoint(&self) -> String {
+        self.endpoint.clone()
     }
 }
 
@@ -551,7 +573,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
     // Set flush interval if provided
     if flush_interval_ms <= 0 {
         return Err(PyTypeError::new_err(format!(
-            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+            "InvalidInput: flush_interval_ms must be a positive integer (got: {})",
             flush_interval_ms
         )));
     }

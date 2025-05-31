@@ -35,17 +35,12 @@ If you need to change configuration, restart the process with new settings.
 """
 
 import random
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from glide.exceptions import ConfigurationError
 from glide.logger import Level, Logger
 
-if TYPE_CHECKING:
-    from .glide import OpenTelemetryConfig, OpenTelemetryTracesConfig
-else:
-    from .glide import OpenTelemetryConfig, OpenTelemetryTracesConfig
-
-from .glide import init_opentelemetry
+from .glide import OpenTelemetryConfig, OpenTelemetryTracesConfig, init_opentelemetry
 
 
 class OpenTelemetry:
@@ -67,7 +62,7 @@ class OpenTelemetry:
             metrics=OpenTelemetryMetricsConfig(
                 endpoint="http://localhost:4318/v1/metrics"
             ),
-            flush_interval_ms=5000  # Optional, defaults to 5000
+            flush_interval_ms=1000  # Optional, defaults to 5000
         ))
         ```
 
@@ -100,7 +95,7 @@ class OpenTelemetry:
             Logger.log(
                 Level.INFO,
                 "GlideOpenTelemetry",
-                f"OpenTelemetry initialized with config: {config}",
+                "OpenTelemetry initialized successfully",
             )
             return
 
@@ -116,7 +111,7 @@ class OpenTelemetry:
         Check if the OpenTelemetry instance is initialized.
 
         Returns:
-            True if the OpenTelemetry instance is initialized, False otherwise
+            bool: True if the OpenTelemetry instance is initialized, False otherwise
         """
         return cls._instance is not None
 
@@ -126,13 +121,13 @@ class OpenTelemetry:
         Get the sample percentage for traces.
 
         Returns:
-            The sample percentage for traces only if OpenTelemetry is initialized
-            and the traces config is set, otherwise None.
+            Optional[int]: The sample percentage for traces only if OpenTelemetry is initialized
+                and the traces config is set, otherwise None.
         """
-        if cls._config and getattr(cls._config, "traces", None):
-            traces_config = getattr(cls._config, "traces", None)
+        if cls._config and cls._config.get_traces():
+            traces_config = cls._config.get_traces()
             if traces_config:
-                return getattr(traces_config, "sample_percentage", None)
+                return traces_config.sample_percentage
         return None
 
     @classmethod
@@ -142,7 +137,7 @@ class OpenTelemetry:
         Uses the configured sample percentage to randomly decide whether to create a span for this request.
 
         Returns:
-            True if the request should be sampled, False otherwise
+            bool: True if the request should be sampled, False otherwise
         """
         percentage = cls.get_sample_percentage()
         return (
@@ -167,7 +162,7 @@ class OpenTelemetry:
             This method can be called at runtime to change the sampling percentage
             without reinitializing OpenTelemetry.
         """
-        if not cls._config or not getattr(cls._config, "traces", None):
+        if not cls._config or not cls._config.get_traces():
             raise ConfigurationError("OpenTelemetry config traces not initialized")
 
         if percentage < 0 or percentage > 100:
@@ -175,12 +170,12 @@ class OpenTelemetry:
 
         # Create a new traces config with the updated sample_percentage
         # This is necessary because the PyO3 binding doesn't properly handle direct assignment to Option<u32>
-        traces_config = getattr(cls._config, "traces", None)
+        traces_config = cls._config.get_traces()
         if traces_config:
-            endpoint = getattr(traces_config, "endpoint", "")
+            endpoint = traces_config.get_endpoint()
             new_traces_config = OpenTelemetryTracesConfig(
                 endpoint=endpoint, sample_percentage=percentage
             )
 
             # Replace the traces config
-            setattr(cls._config, "traces", new_traces_config)
+            cls._config.set_traces(new_traces_config)
