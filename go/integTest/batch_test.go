@@ -474,32 +474,7 @@ func CreateGenericBaseTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "Generic Base commands"}
 }
 
-func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	testData := make([]CommandTestData, 0)
-	prefix := "{hyperloglog}-"
-	atomicPrefix := prefix
-	if !isAtomic {
-		atomicPrefix = ""
-	}
-	key1 := atomicPrefix + "key-1-" + uuid.NewString()
-	key2 := atomicPrefix + "key-2-" + uuid.NewString()
-	dest := atomicPrefix + "dest-" + uuid.NewString()
-
-	batch.PfAdd(key1, []string{"val"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
-
-	batch.PfCount([]string{key1})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfCount([key1])"})
-
-	batch.PfAdd(key1, []string{"val2"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
-	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
-
-	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
-}
-
-func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	// TODO: After adding and fixing converters, remove 'any' typing in ExpectedResponse
 	testData := make([]CommandTestData, 0)
 	prefix := "{HashKey}-"
@@ -589,6 +564,31 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}
 }
 
+func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{hyperloglog}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key1 := atomicPrefix + "key-1-" + uuid.NewString()
+	key2 := atomicPrefix + "key-2-" + uuid.NewString()
+	dest := atomicPrefix + "dest-" + uuid.NewString()
+
+	batch.PfAdd(key1, []string{"val"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
+
+	batch.PfCount([]string{key1})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfCount([key1])"})
+
+	batch.PfAdd(key1, []string{"val2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
+	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
@@ -600,8 +600,8 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		// more command groups here
 		CreateBitmapTest,
 		CreateGenericBaseTests,
-		CreateHyperLogLogTest,
 		CreateHashTest,
+		CreateHyperLogLogTest,
 	}
 }
 
