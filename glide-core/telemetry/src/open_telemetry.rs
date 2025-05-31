@@ -12,7 +12,7 @@ use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
@@ -467,7 +467,7 @@ fn build_span_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
-static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
+static TIMEOUT_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -620,20 +620,13 @@ impl GlideOpenTelemetry {
     fn init_metrics() -> Result<(), GlideOTELError> {
         let meter = global::meter(TRACE_SCOPE);
         // Create timeout error counter
-        TIMEOUT_COUNTER
-            .lock()
-            .map_err(|_| {
-                GlideOTELError::Other(
-                    "OpenTelemetry error: Failed to initialize timeout counter".to_string(),
-                )
-            })?
-            .replace(
-                meter
-                    .u64_counter(TIMEOUT_ERROR_METRIC)
-                    .with_description("Number of timeout errors encountered")
-                    .with_unit("1")
-                    .build(),
-            );
+        TIMEOUT_COUNTER.get_or_init(|| {
+            meter
+                .u64_counter(TIMEOUT_ERROR_METRIC)
+                .with_description("Number of timeout errors encountered")
+                .with_unit("1")
+                .build()
+        });
 
         Ok(())
     }
@@ -644,9 +637,7 @@ impl GlideOpenTelemetry {
     pub fn record_timeout_error() -> Result<(), GlideOTELError> {
         if GlideOpenTelemetry::is_initialized() {
             TIMEOUT_COUNTER
-                .lock()
-                .map_err(|_| GlideOTELError::ReadLockError)?
-                .as_mut()
+                .get()
                 .ok_or_else(|| {
                     GlideOTELError::Other(
                         "OpenTelemetry error: Timeout counter not initialized".to_string(),
