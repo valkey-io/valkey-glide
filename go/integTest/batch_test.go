@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -34,25 +34,25 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.Error(suite.T(), err)
-			assert.IsType(suite.T(), &errors.TimeoutError{}, err)
+			suite.Error(err)
+			suite.IsType(&errors.TimeoutError{}, err)
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), []any{"OK"}, res)
+			suite.NoError(err)
+			suite.Equal([]any{"OK"}, res)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.Error(suite.T(), err)
-			assert.IsType(suite.T(), &errors.TimeoutError{}, err)
+			suite.Error(err)
+			suite.IsType(&errors.TimeoutError{}, err)
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), []any{"OK"}, res)
+			suite.NoError(err)
+			suite.Equal([]any{"OK"}, res)
 		}
 	})
 }
@@ -88,19 +88,88 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 			res, err2 = c.Exec(context.Background(), *batch, false)
 		}
 		// First exception is raised, all data lost
-		assert.Error(suite.T(), err1)
-		assert.IsType(suite.T(), &errors.RequestError{}, err1)
+		suite.Error(err1)
+		suite.IsType(&errors.RequestError{}, err1)
 
 		// Exceptions aren't raised, but stored in the result set
-		assert.NoError(suite.T(), err2)
-		assert.Len(suite.T(), res, 4)
-		assert.Equal(suite.T(), "OK", res[0])
-		assert.Equal(suite.T(), int64(1), res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
-		assert.Contains(suite.T(), res[1].(*errors.RequestError).Error(), "wrong kind of value")
-		assert.Contains(suite.T(), res[3].(*errors.RequestError).Error(), "no such key")
+		suite.NoError(err2)
+		suite.Len(res, 4)
+		suite.Equal("OK", res[0])
+		suite.Equal(int64(1), res[2])
+		suite.IsType(&errors.RequestError{}, res[1])
+		suite.IsType(&errors.RequestError{}, res[3])
+		suite.Contains(res[1].(*errors.RequestError).Error(), "wrong kind of value")
+		suite.Contains(res[3].(*errors.RequestError).Error(), "no such key")
 	})
+}
+
+func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
+	suite.runWithDefaultClients(func(client1 interfaces.BaseClientCommands) {
+		key1 := "{prefix}" + uuid.NewString()
+		key2 := "{prefix}" + uuid.NewString()
+		value := uuid.NewString()
+		ctx := context.Background()
+		suite.verifyOK(client1.Set(ctx, key1, value))
+		var client2 interfaces.BaseClientCommands
+		var transactionResult []any
+		var err error
+		switch client1.(type) {
+		case *glide.ClusterClient:
+			client2 = suite.defaultClusterClient()
+		case *glide.Client:
+			client2 = suite.defaultClient()
+		}
+
+		// Transaction executes command successfully with a read command on the watch key before
+		// transaction is executed.
+		suite.verifyOK(client1.Watch(ctx, []string{key1}))
+		res, err := client2.Get(ctx, key1)
+		suite.NoError(err)
+		suite.Equal(value, res.Value())
+
+		switch client := client1.(type) {
+		case *glide.ClusterClient:
+			transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		case *glide.Client:
+			transaction := pipeline.NewStandaloneBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		}
+		suite.NoError(err)
+		suite.Equal([]any{value, "OK", nil}, transactionResult)
+
+		suite.verifyOK(client1.Unwatch(ctx))
+
+		// Returns `nil` when a watched key is modified before it is executed in a transaction command.
+		// Transaction commands are not performed.
+		suite.verifyOK(client1.Watch(ctx, []string{key1}))
+		suite.verifyOK(client2.Set(ctx, key1, uuid.NewString()))
+
+		switch client := client1.(type) {
+		case *glide.ClusterClient:
+			transaction := pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		case *glide.Client:
+			transaction := pipeline.NewStandaloneBatch(true).Set(key1, uuid.NewString())
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		}
+		suite.NoError(err)
+		suite.Nil(transactionResult)
+
+		client2.Close()
+
+		// WATCH errors if no keys are given
+		_, err = client1.Watch(ctx, []string{})
+		suite.IsType(&errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestWatch_and_Unwatch_cross_slot() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+
+	suite.verifyOK(client.Watch(ctx, []string{"abc", "klm", "xyz"}))
+	suite.verifyOK(client.UnwatchWithOptions(ctx, options.RouteOption{Route: config.AllNodes}))
 }
 
 func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
@@ -160,7 +229,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 						standaloneBatch := pipeline.StandaloneBatch{BaseBatch: pipeline.BaseBatch[pipeline.StandaloneBatch]{Batch: batch.BaseBatch.Batch}}
 						res, err = c.Exec(context.Background(), standaloneBatch, true)
 					}
-					assert.NoError(suite.T(), err)
+					suite.NoError(err)
 					suite.verifyBatchTestResult(res, testData.CommandTestData)
 				})
 			}
@@ -169,8 +238,8 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 }
 
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
-	assert.Equal(suite.T(), len(testData), len(result))
+	suite.Equal(len(testData), len(result))
 	for i := range result {
-		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		suite.Equal(testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
 }

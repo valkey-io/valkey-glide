@@ -329,12 +329,15 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 
 // TODO: convert sets
 
-func handleAnyArrayResponse(response *C.struct_CommandResponse) ([]any, error) {
+func handleAnyArrayOrNilResponse(response *C.struct_CommandResponse) ([]any, error) {
 	defer C.free_command_response(response)
 
-	typeErr := checkResponseType(response, C.Array, false)
+	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
 		return nil, typeErr
+	}
+	if response.array_value == nil {
+		return nil, nil
 	}
 
 	slice := make([]any, 0, response.array_value_len)

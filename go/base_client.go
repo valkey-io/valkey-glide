@@ -464,9 +464,12 @@ func (client *baseClient) executeBatch(
 	if payload.error != nil {
 		return nil, payload.error
 	}
-	response, err := handleAnyArrayResponse(payload.value)
+	response, err := handleAnyArrayOrNilResponse(payload.value)
 	if err != nil {
 		return nil, err
+	}
+	if response == nil {
+		return nil, nil
 	}
 	return batch.Convert(response)
 }
@@ -8991,6 +8994,41 @@ func (client *baseClient) ScriptShow(ctx context.Context, sha1 string) (string, 
 // [valkey.io]: https://valkey.io/commands/script-kill
 func (client *baseClient) ScriptKill(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.ScriptKill, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Marks the given keys to be watched for conditional execution of an atomic batch (Transaction).
+// Transactions will only execute commands if the watched keys are not modified before execution of the
+// transaction.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Note:
+//
+//	In cluster mode, if keys in `keys` map to different hash slots,
+//	the command will be split across these slots and executed separately for each.
+//	This means the command is atomic only at the slot level. If one or more slot-specific
+//	requests fail, the entire call will return the first encountered error, even
+//	though some requests may have succeeded while others did not.
+//	If this behavior impacts your application logic, consider splitting the
+//	request into sub-requests per slot to ensure atomicity.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	keys - The keys to watch.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/watch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *baseClient) Watch(ctx context.Context, keys []string) (string, error) {
+	result, err := client.executeCommand(ctx, C.Watch, keys)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
