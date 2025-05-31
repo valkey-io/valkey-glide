@@ -606,7 +606,7 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	return BatchTestData{CommandTestData: testData, TestName: "Hyperloglog commands"}
 }
 
-func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	// TODO: fix use more specific type than 'any' when converters are added
 	testData := make([]CommandTestData, 0)
 	prefix := "{listKey}-"
