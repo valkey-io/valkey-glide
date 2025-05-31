@@ -108,18 +108,98 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
-	if isAtomic {
-		prefix = ""
+	atomicKeyPrefix := prefix
+	if !isAtomic {
+		atomicKeyPrefix = ""
 	}
 
-	key1 := prefix + "1-" + uuid.NewString()
+	atomicKey1 := atomicKeyPrefix + "1-" + uuid.NewString()
+	multiKey1 := prefix + "2-" + uuid.NewString()
+	multiKey2 := prefix + "3-" + uuid.NewString()
 
 	value1 := "value-1-" + uuid.NewString()
 
-	batch.Set(key1, value1)
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value1)"})
-	batch.Get(key1)
-	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "Get(key1)"})
+	batch.Set(atomicKey1, value1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
+
+	batch.SetWithOptions(atomicKey1, value1, *options.NewSetOptions().SetOnlyIfExists())
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: "OK", TestName: "SetWithOptions(atomicKey1, value1, OnlyIfExists)"},
+	)
+
+	batch.Get(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "Get(atomicKey1)"})
+
+	batch.GetEx(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetEx(atomicKey1)"})
+
+	batch.Set(atomicKey1, value1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
+	opts := options.NewGetExOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(constants.Seconds).
+			SetCount(5))
+	batch.GetExWithOptions(atomicKey1, *opts)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetExWithOptions(atomicKey1, opts)"})
+
+	batch.MSet(map[string]string{multiKey1: "value2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MSet(multiKey1, value2)"})
+
+	batch.MGet([]string{multiKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value2"}, TestName: "MGet(key2)"})
+
+	batch.MSetNX(map[string]string{multiKey2: "3"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "MSetNX(key3, 3)"})
+
+	batch.Incr(multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "Incr(key3)"})
+
+	batch.IncrBy(multiKey2, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "IncrBy(key3, 2)"})
+
+	batch.Set(atomicKey1, "3.5")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, 3.5)"})
+	batch.IncrByFloat(atomicKey1, 3.5)
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(7.0), TestName: "IncrByFloat(atomicKey1, 3.5)"})
+
+	batch.Decr(multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(5), TestName: "Decr(multiKey2)"})
+
+	batch.DecrBy(multiKey2, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "DecrBy(multiKey2, 2)"})
+
+	batch.Strlen(multiKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "Strlen(multiKey1)"})
+
+	batch.SetRange(multiKey1, 2, "b")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "SetRange(multiKey1, 2, b)"})
+
+	batch.GetRange(multiKey1, 0, 6)
+	testData = append(testData, CommandTestData{ExpectedResponse: "vabue2", TestName: "GetRange(multiKey1, 0, 6)"})
+
+	batch.Append(multiKey1, "3")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
+
+	batch.Set(multiKey2, "val")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
+	batch.LCS(multiKey1, multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: "va", TestName: "LCS(multiKey1, multiKey2)"})
+
+	batch.LCSLen(multiKey1, multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LCSLen(multiKey1, multiKey2)"})
+
+	batch.LCSWithOptions(multiKey1, multiKey2, *options.NewLCSIdxOptions().SetMinMatchLen(3))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
+			TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
+		},
+	)
+
+	batch.GetDel(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "7", TestName: "GetDel(atomicKey1)"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
