@@ -15,6 +15,7 @@ from glide.async_commands.batch import (
     ClusterTransaction,
     Transaction,
 )
+from glide.async_commands.batch_options import ClusterBatchOptions
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldSet,
@@ -992,11 +993,14 @@ async def exec_batch(
             cast(Batch, batch), raise_on_error, timeout
         )
     else:
+        options = ClusterBatchOptions(
+            route=route,
+            timeout=timeout,
+        )
         return await cast(GlideClusterClient, glide_client).exec(
             cast(ClusterBatch, batch),
             raise_on_error,
-            route,
-            timeout,
+            options,
         )
 
 
@@ -1011,7 +1015,8 @@ class TestBatch:
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
-            await glide_client.exec(transaction, raise_on_error=True)
+            options = ClusterBatchOptions()
+            await glide_client.exec(transaction, raise_on_error=True, options=options)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1097,7 +1102,8 @@ class TestBatch:
             batch.pubsub_shardnumsub()
             expected.append(cast(TResult, {}))
 
-        result = await glide_client.exec(batch, raise_on_error=True)
+        options = ClusterBatchOptions()
+        result = await glide_client.exec(batch, raise_on_error=True, options=options)
         assert isinstance(result, list)
 
         info_response = result[0]
@@ -1358,7 +1364,10 @@ class TestBatch:
             else ClusterBatch(is_atomic=True)
         )
         transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
-        results = await glide_client.exec(transaction, raise_on_error=True)
+        options = ClusterBatchOptions()
+        results = await glide_client.exec(
+            transaction, raise_on_error=True, options=options
+        )
         assert results is not None
 
         for element in results:
@@ -1543,7 +1552,10 @@ class TestBatch:
             batch = ClusterBatch(is_atomic=False)
             batch.config_set({config_key: config_value})
 
-            result = await glide_client.exec(batch, raise_on_error=True)
+            options = ClusterBatchOptions()
+            result = await glide_client.exec(
+                batch, raise_on_error=True, options=options
+            )
 
             assert result == ["OK"]
 
@@ -1632,9 +1644,8 @@ class TestBatch:
         batch.get(key)
 
         route = SlotKeyRoute(slot_type=SlotType.PRIMARY, slot_key=key)
-        results = await glide_client.exec(
-            batch, raise_on_error=True, route=route, timeout=2000
-        )
+        options = ClusterBatchOptions(route=route, timeout=2000)
+        results = await glide_client.exec(batch, raise_on_error=True, options=options)
 
         assert results == [OK, value_bytes]
 
