@@ -288,6 +288,9 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTe
 	batch.SRandMember(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
 
+	batch.SRandMemberCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "SRandMemberCount(key, 1)"})
+
 	batch.SPop(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SPop(key)"})
 
