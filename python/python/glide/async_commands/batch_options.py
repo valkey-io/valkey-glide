@@ -1,7 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from __future__ import annotations
-
 from typing import Optional
 
 from glide.constants import TSingleNodeRoute
@@ -82,14 +80,67 @@ class BatchRetryStrategy:
         Initialize a BatchRetryStrategy.
 
         Args:
-            retry_server_error (bool): Whether to retry on server errors. Defaults to False.
-            retry_connection_error (bool): Whether to retry on connection errors. Defaults to False.
+            retry_server_error (bool): If True, failed commands with a retriable error (e.g., TRYAGAIN)
+            will be automatically retried.
+            ⚠️ Warning: Enabling this flag may cause commands targeting the same slot to execute
+            out of order.
+            By default, this is set to False.
+            retry_connection_error (bool): If True, batch requests will be retried in case of connection errors.
+            ⚠️ Warning: Retrying after a connection error may lead to duplicate executions, since
+            the server might have already received and processed the request before the error occurred.
+            By default, this is set to False.
         """
         self.retry_server_error = retry_server_error
         self.retry_connection_error = retry_connection_error
 
 
-class ClusterBatchOptions:
+class BaseBatchOptions:
+    """
+    Base options settings class for sending a batch request. Shared settings for standalone and
+    cluster batch requests.
+
+    Args:
+        timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+            to complete. This duration encompasses sending the request, awaiting a response from the server,
+            and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+            it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
+    """
+
+    def __init__(
+        self,
+        timeout: Optional[int] = None,
+    ):
+        """
+        Initialize BaseBatchOptions.
+
+        Args:
+            timeout (Optional[int]): The timeout in milliseconds for the batch operation.
+        """
+        self.timeout = timeout
+
+
+class BatchOptions(BaseBatchOptions):
+    """
+    Options for a batch request for a standalone client.
+
+    Args:
+        timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+            to complete. This duration encompasses sending the request, awaiting a response from the server,
+            and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+            it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
+    """
+
+    def __init__(
+        self,
+        timeout: Optional[int] = None,
+    ):
+        """
+        Options for a batch request for a standalone client
+        """
+        super().__init__(timeout)
+
+
+class ClusterBatchOptions(BaseBatchOptions):
     """
     Options for cluster batch operations.
 
@@ -131,6 +182,6 @@ class ClusterBatchOptions:
             route (Optional[TSingleNodeRoute]): The route for single-node execution.
             timeout (Optional[int]): The timeout in milliseconds for the batch operation.
         """
+        super().__init__(timeout)
         self.retry_strategy = retry_strategy
         self.route = route
-        self.timeout = timeout

@@ -7,6 +7,12 @@ from glide.async_commands.batch import (
     TBatch,
     Transaction,
 )
+from glide.async_commands.batch_options import (
+    BaseBatchOptions,
+    BatchOptions,
+    BatchRetryStrategy,
+    ClusterBatchOptions,
+)
 from glide.async_commands.bitmap import (
     BitEncoding,
     BitFieldGet,
@@ -182,6 +188,11 @@ __all__ = [
     "Transaction",
     "TGlideClient",
     "TBatch",
+    # Batch Options
+    "BaseBatchOptions",
+    "BatchOptions",
+    "BatchRetryStrategy",
+    "ClusterBatchOptions",
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
