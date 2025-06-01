@@ -82,6 +82,8 @@ const client = await GlideClient.createClient({
     addresses: addresses,
     // if the server uses TLS, you'll need to enable it. Otherwise, the connection attempt will time out silently.
     // useTLS: true,
+    // It is recommended to set a timeout for your specific use case
+    requestTimeout: 500, // 500ms timeout
     clientName: "test_standalone_client",
 });
 // The empty array signifies that there are no additional arguments.
@@ -109,6 +111,8 @@ const client = await GlideClusterClient.createClient({
     addresses: addresses,
     // if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
     // useTLS: true,
+    // It is recommended to set a timeout for your specific use case
+    requestTimeout: 500, // 500ms timeout
     clientName: "test_cluster_client",
 });
 // The empty array signifies that there are no additional arguments.

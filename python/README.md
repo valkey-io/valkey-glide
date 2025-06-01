@@ -77,7 +77,8 @@ To install Valkey GLIDE using `pip`, follow these steps:
 >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
 >>> async def test_cluster_client():
 ...     addresses = [NodeAddress("address.example.com", 6379)]
-...     config = GlideClusterClientConfiguration(addresses)
+...     # It is recommended to set a timeout for your specific use case
+...     config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
 ...     client = await GlideClusterClient.create(config)
 ...     set_result = await client.set("foo", "bar")
 ...     print(f"Set response is {set_result}")
@@ -99,7 +100,8 @@ Get response is bar
 ...             NodeAddress("server_primary.example.com", 6379),
 ...             NodeAddress("server_replica.example.com", 6379)
 ...     ]
-...     config = GlideClientConfiguration(addresses)
+...     # It is recommended to set a timeout for your specific use case
+...     config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
 ...     client = await GlideClient.create(config)
 ...     set_result = await client.set("foo", "bar")
 ...     print(f"Set response is {set_result}")
