@@ -109,6 +109,7 @@ default = [
     "connection-manager",
     "cluster",
     "cluster-async",
+    "tls-rustls-insecure",
 ]
 aio = [
     "bytes",
