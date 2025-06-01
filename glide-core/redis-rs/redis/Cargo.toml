@@ -96,6 +96,8 @@ uuid = { version = "1.6", optional = true }
 
 telemetrylib = { path = "../../telemetry" }
 
+logger_core = { path = "../../../logger_core" } 
+
 lazy_static = "1"
 
 [features]
@@ -189,7 +191,7 @@ required-features = ["json", "serde/derive"]
 
 [[test]]
 name = "test_cluster_async"
-required-features = ["cluster-async", "tokio-comp"]
+required-features = ["cluster-async", "tokio-comp", "json"]
 
 [[test]]
 name = "test_async_cluster_connections_logic"

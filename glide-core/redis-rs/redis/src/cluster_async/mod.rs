@@ -48,6 +48,9 @@ use pipeline_routing::{
     collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
+
+use logger_core::log_error;
+
 use std::{
     collections::{HashMap, HashSet},
     fmt, io, mem,
@@ -66,7 +69,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::Telemetry;
+use telemetrylib::{GlideOpenTelemetry, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -952,6 +955,13 @@ impl<C> Future for Request<C> {
                     return next;
                 }
                 request.retry = request.retry.saturating_add(1);
+                // Record retry attempts metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
+                    log_error(
+                        "OpenTelemetry:retry_error",
+                        format!("Failed to record retry attempt: {}", e),
+                    );
+                }
 
                 if err.kind() == ErrorKind::AllConnectionsUnavailable {
                     return Next::ReconnectToInitialNodes {
