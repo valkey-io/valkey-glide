@@ -112,6 +112,7 @@ jobs:
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry
               run: cargo test --all-features -- --test-threads=1
+              # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
