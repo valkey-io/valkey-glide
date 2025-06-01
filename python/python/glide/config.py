@@ -383,7 +383,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-                please use `AdvancedGlideClusterClientConfiguration`.
+                Please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
