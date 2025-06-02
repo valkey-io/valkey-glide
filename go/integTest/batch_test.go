@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -1886,7 +1887,6 @@ type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestD
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
-		CreateStringTest,
 		CreateBitmapTest,
 		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
@@ -1897,6 +1897,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreatePubSubTests,
 		CreateSetCommandsTests,
 		CreateSortedSetTests,
+		CreateStringTest,
 	}
 }
 
