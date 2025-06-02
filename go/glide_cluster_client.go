@@ -574,6 +574,8 @@ func (client *ClusterClient) Echo(ctx context.Context, message string) (models.R
 
 // Echo the provided message back.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx     - The context for controlling the command execution.

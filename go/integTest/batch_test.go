@@ -448,6 +448,34 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
 }
 
+func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	connectionName := "test-connection-" + uuid.New().String()
+
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+
+	pingOptions := options.PingOptions{
+		Message: "hello",
+	}
+	batch.PingWithOptions(pingOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
+
+	batch.Echo("hello world")
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
+
+	batch.ClientId()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
+
+	batch.ClientSetName(connectionName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
+
+	batch.ClientGetName()
+	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
+}
+
 func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{baseKey}-"
@@ -1542,6 +1570,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateStringTest,
 		// more command groups here
 		CreateBitmapTest,
+		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
 		CreateGeospatialTests,
 		CreateHashTest,
@@ -1596,8 +1625,8 @@ func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []Comm
 	for i := range result {
 		if testData[i].CheckTypeOnly {
 			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
-		} else {
-			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+			continue
 		}
+		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
 }
