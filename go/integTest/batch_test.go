@@ -1298,72 +1298,28 @@ redis.register_function{ function_name = 'myfunc', callback = function() return 
 			LibraryName: libName,
 			WithCode:    false,
 		}
+		var res []any
+		var err error
 		switch c := client.(type) {
 		case *glide.ClusterClient:
-			// opts := pipeline.NewClusterBatchOptions().WithRoute(config.AllPrimaries)
-			// batch := pipeline.NewClusterBatch(isAtomic).
-			// 	FunctionFlush().
-			// 	FunctionFlushSync().
-			// 	FunctionFlushAsync().
-			// 	FunctionLoad(libCode, false).
-			// 	FCall(funcName).
-			// 	FCallReadOnly(funcName).
-			// 	FCallWithKeysAndArgs(funcName, []string{}, []string{}).
-			// 	FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-			// 	// Cluster specific
-			// 	FunctionStats().
-			// 	FunctionDelete(libName).
-			// 	FunctionLoad(libCode, false).
-			// 	FunctionList(query).
-			// 	FunctionKill()
+			opts := pipeline.NewClusterBatchOptions().WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42))
+			batch := pipeline.NewClusterBatch(isAtomic).
+				FunctionFlush().
+				FunctionFlushSync().
+				FunctionFlushAsync().
+				FunctionLoad(libCode, false).
+				FCall(funcName).
+				FCallReadOnly(funcName).
+				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
+				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
+				FunctionStats().
+				FunctionDelete(libName).
+				FunctionLoad(libCode, false).
+				FunctionList(query).
+				FunctionKill()
 
-			// res, err := c.ExecWithOptions(context.Background(), *batch, false, *opts)
-			// assert.NoError(suite.T(), err)
-			// assert.Equal(suite.T(), "OK", res[0])
-			// assert.Equal(suite.T(), "OK", res[1])
-			// assert.Equal(suite.T(), "OK", res[2])
-			// assert.Equal(suite.T(), libName, res[3])
-			// assert.Equal(suite.T(), int64(42), res[4])
-			// assert.Equal(suite.T(), int64(42), res[5])
-			// assert.Equal(suite.T(), int64(42), res[6])
-			// assert.Equal(suite.T(), int64(42), res[7])
-			// assert.True(
-			// 	suite.T(),
-			// 	reflect.DeepEqual(
-			// 		map[string]any{
-			// 			"engines": map[string]any{
-			// 				"LUA": map[string]any{
-			// 					"functions_count": int64(1),
-			// 					"libraries_count": int64(1),
-			// 				},
-			// 			},
-			// 			"running_script": nil,
-			// 		},
-			// 		res[8],
-			// 	),
-			// )
-			// assert.Equal(suite.T(), "OK", res[9])
-			// assert.Equal(
-			// 	suite.T(),
-			// 	[]any{
-			// 		map[string]any{
-			// 			"engine": "LUA",
-			// 			"functions": []any{
-			// 				map[string]any{
-			// 					"description": nil,
-			// 					"flags": map[string]struct{}{
-			// 						"no-writes": {},
-			// 					},
-			// 					"name": funcName,
-			// 				},
-			// 			},
-			// 			"library_name": libName,
-			// 		},
-			// 	},
-			// 	res[11],
-			// )
-
-			// TODO: FunctionKill, FunctionDump, FunctionRestore and FunctionRestoreWithPolicy
+			res, err = c.ExecWithOptions(context.Background(), *batch, false, *opts)
+			assert.NoError(suite.T(), err)
 
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
@@ -1375,61 +1331,58 @@ redis.register_function{ function_name = 'myfunc', callback = function() return 
 				FCallReadOnly(funcName).
 				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
 				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-				// Standalone Specific
 				FunctionStats().
 				FunctionDelete(libName).
 				FunctionLoad(libCode, false).
 				FunctionList(query).
 				FunctionKill()
 
-			res, err := c.Exec(context.Background(), *batch, false)
+			res, err = c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", res[0])
-			assert.Equal(suite.T(), "OK", res[1])
-			assert.Equal(suite.T(), "OK", res[2])
-			assert.Equal(suite.T(), libName, res[3])
-			assert.Equal(suite.T(), int64(42), res[4])
-			assert.Equal(suite.T(), int64(42), res[5])
-			assert.Equal(suite.T(), int64(42), res[6])
-			assert.Equal(suite.T(), int64(42), res[7])
-			assert.True(
-				suite.T(),
-				reflect.DeepEqual(
-					map[string]any{
-						"engines": map[string]any{
-							"LUA": map[string]any{
-								"functions_count": int64(1),
-								"libraries_count": int64(1),
-							},
-						},
-						"running_script": nil,
-					},
-					res[8],
-				),
-			)
-			assert.Equal(suite.T(), "OK", res[9])
-			assert.Equal(
-				suite.T(),
-				[]any{
-					map[string]any{
-						"engine": "LUA",
-						"functions": []any{
-							map[string]any{
-								"description": nil,
-								"flags": map[string]struct{}{
-									"no-writes": {},
-								},
-								"name": funcName,
-							},
-						},
-						"library_name": libName,
-					},
-				},
-				res[11],
-			)
-
-			// TODO: FunctionKill, FunctionDump, FunctionRestore and FunctionRestoreWithPolicy
 		}
+		assert.Equal(suite.T(), "OK", res[0])
+		assert.Equal(suite.T(), "OK", res[1])
+		assert.Equal(suite.T(), "OK", res[2])
+		assert.Equal(suite.T(), libName, res[3])
+		assert.Equal(suite.T(), int64(42), res[4])
+		assert.Equal(suite.T(), int64(42), res[5])
+		assert.Equal(suite.T(), int64(42), res[6])
+		assert.Equal(suite.T(), int64(42), res[7])
+		assert.True(
+			suite.T(),
+			reflect.DeepEqual(
+				map[string]any{
+					"engines": map[string]any{
+						"LUA": map[string]any{
+							"functions_count": int64(1),
+							"libraries_count": int64(1),
+						},
+					},
+					"running_script": nil,
+				},
+				res[8],
+			),
+		)
+		assert.Equal(suite.T(), "OK", res[9])
+		assert.Equal(
+			suite.T(),
+			[]any{
+				map[string]any{
+					"engine": "LUA",
+					"functions": []any{
+						map[string]any{
+							"description": nil,
+							"flags": map[string]struct{}{
+								"no-writes": {},
+							},
+							"name": funcName,
+						},
+					},
+					"library_name": libName,
+				},
+			},
+			res[11],
+		)
 	})
 }
 
