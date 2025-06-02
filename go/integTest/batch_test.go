@@ -1514,15 +1514,17 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStoreWithOptions(dest, keys, opts)"},
 	)
 
-	batch.ZInterCard([]string{prefix + key, prefix + key3})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCard(keys)"})
+	if serverVer >= "7.0.0" {
+		batch.ZInterCard([]string{prefix + key, prefix + key3})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCard(keys)"})
 
-	zInterCardOpts := options.NewZInterCardOptions().SetLimit(10)
-	batch.ZInterCardWithOptions([]string{prefix + key, prefix + key3}, *zInterCardOpts)
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCardWithOptions(keys, opts)"},
-	)
+		zInterCardOpts := options.NewZInterCardOptions().SetLimit(10)
+		batch.ZInterCardWithOptions([]string{prefix + key, prefix + key3}, *zInterCardOpts)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCardWithOptions(keys, opts)"},
+		)
+	}
 
 	batch.ZLexCount(key3, *options.NewRangeByLexQuery(options.NewLexBoundary("a", true), options.NewLexBoundary("c", true)))
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZLexCount(key3, [a, [c)"})
