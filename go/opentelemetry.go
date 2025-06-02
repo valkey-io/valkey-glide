@@ -3,6 +3,14 @@
 // ⚠️ OpenTelemetry can only be initialized once per process. Calling Init() more than once will be ignored.
 // If you need to change configuration, restart the process with new settings.
 
+// File Exporter Details
+// - For `file://` endpoints:
+//   - The path must start with `file://` (e.g., `file:///tmp/otel` or `file:///tmp/otel/traces.json`).
+//   - If the path is a directory or lacks a file extension, data is written to `signals.json` in that directory.
+//   - If the path includes a filename with an extension, that file is used as-is.
+//   - The parent directory must already exist; otherwise, initialization will fail with an InvalidInput error.
+//   - If the target file exists, new data is appended (not overwritten).
+
 package glide
 
 /*
@@ -42,8 +50,8 @@ type OpenTelemetryConfig struct {
 	Traces *OpenTelemetryTracesConfig
 	// Metrics configuration for exporting metrics data. If nil, metrics data will not be exported.
 	Metrics *OpenTelemetryMetricsConfig
-	// FlushIntervalMs is the interval in milliseconds between consecutive exports of telemetry data.
-	// If nil, a default value will be used.
+	// (Optional)FlushIntervalMs is the interval in milliseconds between consecutive exports of telemetry data.
+	// If not specified, defaults to 5000.
 	FlushIntervalMs *int64
 }
 
@@ -55,6 +63,10 @@ type OpenTelemetryConfig struct {
 //   - For file exporter: `file:///absolute/path/to/folder/file.json`
 //   - SamplePercentage: The percentage of requests to sample and create a span for, used to measure command duration.
 //     Must be between 0 and 100. If not specified, defaults to 1.
+//
+// Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more
+// detailed telemetry data but will impact performance. It is recommended to keep this number low (1-5%) in production
+// environments unless you have specific needs for higher sampling rates.
 type OpenTelemetryTracesConfig struct {
 	Endpoint         string
 	SamplePercentage int32
@@ -192,6 +204,9 @@ func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 	defer configMutex.Unlock()
 	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
 		return fmt.Errorf("OpenTelemetry config traces not initialized")
+	}
+	if percentage < 0 || percentage > 100 {
+		return fmt.Errorf("Otel sample percentage must be between 0 and 100")
 	}
 	otelConfig.Traces.SamplePercentage = percentage
 	return nil
