@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -36,25 +35,25 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.Error(suite.T(), err)
-			assert.IsType(suite.T(), &errors.TimeoutError{}, err)
+			suite.Error(err)
+			suite.IsType(&errors.TimeoutError{}, err)
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), []any{"OK"}, res)
+			suite.NoError(err)
+			suite.Equal([]any{"OK"}, res)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.Error(suite.T(), err)
-			assert.IsType(suite.T(), &errors.TimeoutError{}, err)
+			suite.Error(err)
+			suite.IsType(&errors.TimeoutError{}, err)
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), []any{"OK"}, res)
+			suite.NoError(err)
+			suite.Equal([]any{"OK"}, res)
 		}
 	})
 }
@@ -90,19 +89,88 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 			res, err2 = c.Exec(context.Background(), *batch, false)
 		}
 		// First exception is raised, all data lost
-		assert.Error(suite.T(), err1)
-		assert.IsType(suite.T(), &errors.RequestError{}, err1)
+		suite.Error(err1)
+		suite.IsType(&errors.RequestError{}, err1)
 
 		// Exceptions aren't raised, but stored in the result set
-		assert.NoError(suite.T(), err2)
-		assert.Len(suite.T(), res, 4)
-		assert.Equal(suite.T(), "OK", res[0])
-		assert.Equal(suite.T(), int64(1), res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
-		assert.Contains(suite.T(), res[1].(*errors.RequestError).Error(), "wrong kind of value")
-		assert.Contains(suite.T(), res[3].(*errors.RequestError).Error(), "no such key")
+		suite.NoError(err2)
+		suite.Len(res, 4)
+		suite.Equal("OK", res[0])
+		suite.Equal(int64(1), res[2])
+		suite.IsType(&errors.RequestError{}, res[1])
+		suite.IsType(&errors.RequestError{}, res[3])
+		suite.Contains(res[1].(*errors.RequestError).Error(), "wrong kind of value")
+		suite.Contains(res[3].(*errors.RequestError).Error(), "no such key")
 	})
+}
+
+func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
+	suite.runWithDefaultClients(func(client1 interfaces.BaseClientCommands) {
+		key1 := "{prefix}" + uuid.NewString()
+		key2 := "{prefix}" + uuid.NewString()
+		value := uuid.NewString()
+		ctx := context.Background()
+		suite.verifyOK(client1.Set(ctx, key1, value))
+		var client2 interfaces.BaseClientCommands
+		var transactionResult []any
+		var err error
+		switch client1.(type) {
+		case *glide.ClusterClient:
+			client2 = suite.defaultClusterClient()
+		case *glide.Client:
+			client2 = suite.defaultClient()
+		}
+
+		// Transaction executes command successfully with a read command on the watch key before
+		// transaction is executed.
+		suite.verifyOK(client1.Watch(ctx, []string{key1}))
+		res, err := client2.Get(ctx, key1)
+		suite.NoError(err)
+		suite.Equal(value, res.Value())
+
+		switch client := client1.(type) {
+		case *glide.ClusterClient:
+			transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		case *glide.Client:
+			transaction := pipeline.NewStandaloneBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		}
+		suite.NoError(err)
+		suite.Equal([]any{value, "OK", nil}, transactionResult)
+
+		suite.verifyOK(client1.Unwatch(ctx))
+
+		// Returns `nil` when a watched key is modified before it is executed in a transaction command.
+		// Transaction commands are not performed.
+		suite.verifyOK(client1.Watch(ctx, []string{key1}))
+		suite.verifyOK(client2.Set(ctx, key1, uuid.NewString()))
+
+		switch client := client1.(type) {
+		case *glide.ClusterClient:
+			transaction := pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		case *glide.Client:
+			transaction := pipeline.NewStandaloneBatch(true).Set(key1, uuid.NewString())
+			transactionResult, err = client.Exec(ctx, *transaction, true)
+		}
+		suite.NoError(err)
+		suite.Nil(transactionResult)
+
+		client2.Close()
+
+		// WATCH errors if no keys are given
+		_, err = client1.Watch(ctx, []string{})
+		suite.IsType(&errors.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestWatch_and_Unwatch_cross_slot() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+
+	suite.verifyOK(client.Watch(ctx, []string{"abc", "klm", "xyz"}))
+	suite.verifyOK(client.UnwatchWithOptions(ctx, options.RouteOption{Route: config.AllNodes}))
 }
 
 func (suite *GlideTestSuite) TestBatchGeoSpatial() {
@@ -154,7 +222,7 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
 			res, err = c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic)
 
@@ -183,36 +251,36 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
 			res, err = c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		}
 
 		// Verify GeoPos results
 		geoPos := res[2].([]any)
-		assert.Len(suite.T(), geoPos, 2)
-		assert.NotNil(suite.T(), geoPos[0])
-		assert.Nil(suite.T(), geoPos[1])
+		suite.Len(geoPos, 2)
+		suite.NotNil(geoPos[0])
+		suite.Nil(geoPos[1])
 
 		// Verify distance results (approximately)
 		geoDist := res[3].(float64)
-		assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+		suite.InDelta(166274.15, geoDist, 1.0)
 
 		geoDistKm := res[4].(float64)
-		assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+		suite.InDelta(166.27, geoDistKm, 0.1)
 
 		// Verify search results
 		geoSearch := res[5]
-		assert.Len(suite.T(), geoSearch, 3)
-		assert.Contains(suite.T(), geoSearch, "Palermo")
-		assert.Contains(suite.T(), geoSearch, "Catania")
-		assert.Contains(suite.T(), geoSearch, "Messina")
+		suite.Len(geoSearch, 3)
+		suite.Contains(geoSearch, "Palermo")
+		suite.Contains(geoSearch, "Catania")
+		suite.Contains(geoSearch, "Messina")
 
 		// Verify search with info results
 		geoSearchInfo := res[6].([]any)
-		assert.Len(suite.T(), geoSearchInfo, 3)
+		suite.Len(geoSearchInfo, 3)
 
 		// Verify full search results
 		geoSearchFull := res[7].([]any)
-		assert.Len(suite.T(), geoSearchFull, 1)
+		suite.Len(geoSearchFull, 1)
 	})
 }
 
@@ -230,24 +298,24 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 				PubSubShardNumSub()
 
 			res, err := c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), int64(0), res[0])
+			suite.NoError(err)
+			suite.Equal(int64(0), res[0])
 			if suite.serverVersion >= "7.0.0" {
-				assert.Equal(suite.T(), ([]any)(nil), res[1])
-				assert.Equal(suite.T(), ([]any)(nil), res[2])
-				assert.Equal(suite.T(), map[string]any{}, res[3])
+				suite.Equal(([]any)(nil), res[1])
+				suite.Equal(([]any)(nil), res[2])
+				suite.Equal(map[string]any{}, res[3])
 			} else {
 				// In 6.2.0, errors are raised instead
-				assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-				assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-				assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+				suite.IsType(&errors.RequestError{}, res[1])
+				suite.IsType(&errors.RequestError{}, res[2])
+				suite.IsType(&errors.RequestError{}, res[3])
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
 				Publish("NonExistentChannel", "msg")
 			res, err := c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), int64(0), res[0])
+			suite.NoError(err)
+			suite.Equal(int64(0), res[0])
 		}
 	})
 }
@@ -564,7 +632,10 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	}
 
 	batch.TTL(slotHashedKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "TTL(slotHashedKey1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(-1), CheckTypeOnly: true, TestName: "TTL(slotHashedKey1)"},
+	)
 
 	batch.PTTL(slotHashedKey1)
 	testData = append(
@@ -769,7 +840,13 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	geoAddOptions := options.GeoAddOptions{}
 	geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
 	batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)",
+		},
+	)
 
 	batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
 	testData = append(testData, CommandTestData{
@@ -793,20 +870,47 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
 
 	batch.GeoAddWithOptions(prefix+key, membersToGeospatialData2, geoAddOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)",
+		},
+	)
 
 	batch.GeoSearchStore(destKey, prefix+key, searchFrom, *searchByShape)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"},
+	)
 
 	batch.GeoSearchStoreWithResultOptions(destKey+"1", prefix+key, searchFrom, *searchByShape, *resultOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)",
+		},
+	)
 
 	storeInfoOptions := options.NewGeoSearchStoreInfoOptions().SetStoreDist(true)
 	batch.GeoSearchStoreWithInfoOptions(destKey+"2", prefix+key, searchFrom, *searchByShape, *storeInfoOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(3),
+			TestName:         "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)",
+		},
+	)
 
 	batch.GeoSearchStoreWithFullOptions(destKey+"3", prefix+key, searchFrom, *searchByShape, *resultOptions, *storeInfoOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)",
+		},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Geospatial commands"}
 }
@@ -947,33 +1051,57 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{"val1"}, TestName: "LPopCount(key, 1)"})
 
 	batch.RPush(key, []string{"elem1", "elem2", "elem3", "elem2"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(key, [elem1, elem2, elem3, elem2])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(key, [elem1, elem2, elem3, elem2])"},
+	)
 
 	batch.LPos(key, "elem2")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "LPos(key, elem2)"})
 
 	batch.LPosWithOptions(key, "elem2", *options.NewLPosOptions().SetRank(2))
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPosWithOptions(key, elem2, {Rank: 2})"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(3), TestName: "LPosWithOptions(key, elem2, {Rank: 2})"},
+	)
 
 	batch.LPosCount(key, "elem2", 2)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCount(key, elem2, 2)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCount(key, elem2, 2)"},
+	)
 
 	batch.LPosCountWithOptions(key, "elem2", 2, *options.NewLPosOptions().SetMaxLen(4))
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCountWithOptions(key, elem2, 2, {MaxLen: 4})"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{int64(1), int64(3)},
+			TestName:         "LPosCountWithOptions(key, elem2, 2, {MaxLen: 4})",
+		},
+	)
 
 	batch.LRange(key, 0, 2)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem1", "elem2", "elem3"}, TestName: "LRange(key, 0, 2)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"elem1", "elem2", "elem3"}, TestName: "LRange(key, 0, 2)"},
+	)
 
 	batch.LIndex(key, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "LIndex(key, 1)"})
 
 	trimKey := atomicPrefix + "trim-" + uuid.NewString()
 	batch.RPush(trimKey, []string{"one", "two", "three", "four"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(trimKey, [one, two, three, four])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(4), TestName: "RPush(trimKey, [one, two, three, four])"},
+	)
 	batch.LTrim(trimKey, 1, 2)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "LTrim(trimKey, 1, 2)"})
 	batch.LRange(trimKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"two", "three"}, TestName: "LRange(trimKey, 0, -1) after trim"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"two", "three"}, TestName: "LRange(trimKey, 0, -1) after trim"},
+	)
 
 	batch.LLen(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "LLen(key)"})
@@ -981,7 +1109,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRem(key, 1, "elem2")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "LRem(key, 1, elem2)"})
 	batch.LRange(key, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem1", "elem3", "elem2"}, TestName: "LRange(key, 0, -1) after LRem"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"elem1", "elem3", "elem2"}, TestName: "LRange(key, 0, -1) after LRem"},
+	)
 
 	batch.RPop(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "RPop(key)"})
@@ -994,7 +1125,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LInsert(key, constants.Before, "world", "there")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LInsert(key, Before, world, there)"})
 	batch.LRange(key, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"hello", "there", "world"}, TestName: "LRange(key, 0, -1) after LInsert"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"hello", "there", "world"}, TestName: "LRange(key, 0, -1) after LInsert"},
+	)
 
 	batch.BLPop([]string{key}, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "hello"}, TestName: "BLPop([key], 1)"})
@@ -1008,7 +1142,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.RPushX(rpushxKey, []string{"added"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPushX(rpushxKey, [added])"})
 	batch.LRange(rpushxKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"},
+	)
 
 	lpushxKey := atomicPrefix + "lpushx-" + uuid.NewString()
 	batch.RPush(lpushxKey, []string{"initial"})
@@ -1016,24 +1153,39 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LPushX(lpushxKey, []string{"added"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LPushX(lpushxKey, [added])"})
 	batch.LRange(lpushxKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"},
+	)
 
 	if serverVer >= "7.0.0" {
 		batch.LMPop([]string{key}, constants.Left)
-		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"},
+		)
 
 		batch.RPush(key, []string{"hello"})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "RPush(key, [hello])"})
 		batch.LMPopCount([]string{key}, constants.Left, 1)
-		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"},
+		)
 
 		batch.RPush(key, []string{"hello", "world"})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
 		batch.BLMPop([]string{key}, constants.Left, 1)
-		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"},
+		)
 
 		batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
-		testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"},
+		)
 	}
 
 	lsetKey := atomicPrefix + "lset-" + uuid.NewString()
@@ -1042,7 +1194,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LSet(lsetKey, 1, "changed")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "LSet(lsetKey, 1, changed)"})
 	batch.LRange(lsetKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"},
+	)
 
 	key = prefix + key
 	destKey := prefix + "dest-" + uuid.NewString()
@@ -1055,14 +1210,23 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(key, 0, -1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []any{"first"}, TestName: "LRange(key, 0, -1) after LMove"})
 	batch.LRange(destKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after LMove"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after LMove"},
+	)
 
 	batch.BLMove(key, destKey, constants.Right, constants.Left, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "first", TestName: "BLMove(key, destKey, Right, Left, 1)"})
 	batch.LRange(key, 0, -1)
 	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "LRange(key, 0, -1) after BLMove"})
 	batch.LRange(destKey, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"first", "second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after BLMove"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{"first", "second", "third", "fourth"},
+			TestName:         "LRange(destKey, 0, -1) after BLMove",
+		},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "List commands"}
 }
@@ -1314,11 +1478,17 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.BZMPop([]string{key}, constants.MIN, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}}, TestName: "BZMPop(key, MIN, 1)"},
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
+				TestName:         "BZMPop(key, MIN, 1)",
+			},
 		)
 
 		batch.ZAdd(key, membersScoreMap)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"},
+		)
 		batch.BZMPopWithOptions([]string{key}, constants.MIN, 1, *options.NewZMPopOptions().SetCount(1))
 		testData = append(
 			testData,
@@ -1344,11 +1514,17 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	if serverVer >= "7.0.0" {
 		batch.ZAdd(key, membersScoreMap)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"},
+		)
 		batch.ZMPop([]string{key}, constants.MIN)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}},
+				TestName:         "ZMPop([key], min)",
+			},
 		)
 
 		batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
@@ -1466,16 +1642,25 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZAdd(prefix+key, map[string]float64{"member1": 1.0})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(prefix+key, {member1:1.0})"})
 	batch.ZDiff([]string{prefix + key, prefix + key3})
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"},
+	)
 
 	batch.ZDiffWithScores([]string{prefix + key, prefix + key3})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZDiffWithScores([prefix+key, prefix+key3])"},
+		CommandTestData{
+			ExpectedResponse: map[string]any{"member1": float64(1.0)},
+			TestName:         "ZDiffWithScores([prefix+key, prefix+key3])",
+		},
 	)
 
 	batch.ZDiffStore(dest, []string{prefix + key, prefix + key3})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [prefix+key, prefix+key3])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [prefix+key, prefix+key3])"},
+	)
 
 	batch.ZInter(options.KeyArray{
 		Keys: []string{prefix + key, prefix + key3},
@@ -1568,7 +1753,6 @@ type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestD
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
-		// more command groups here
 		CreateBitmapTest,
 		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
@@ -1612,7 +1796,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 						standaloneBatch := pipeline.StandaloneBatch{BaseBatch: pipeline.BaseBatch[pipeline.StandaloneBatch]{Batch: batch.BaseBatch.Batch}}
 						res, err = c.Exec(context.Background(), standaloneBatch, true)
 					}
-					assert.NoError(suite.T(), err)
+					suite.NoError(err)
 					suite.verifyBatchTestResult(res, testData.CommandTestData)
 				})
 			}
@@ -1621,12 +1805,12 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 }
 
 func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []CommandTestData) {
-	assert.Equal(suite.T(), len(testData), len(result))
+	suite.Equal(len(testData), len(result))
 	for i := range result {
 		if testData[i].CheckTypeOnly {
-			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+			suite.IsType(testData[i].ExpectedResponse, result[i], testData[i].TestName)
 			continue
 		}
-		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+		suite.Equal(testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
 }

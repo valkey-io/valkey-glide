@@ -2556,3 +2556,52 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 	}
 	return handleOkResponse(result)
 }
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.UnWatch, []string{}, route.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}

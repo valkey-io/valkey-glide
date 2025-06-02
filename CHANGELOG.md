@@ -94,6 +94,8 @@
 * Java: Otel implementation ([#3962](https://github.com/valkey-io/valkey-glide/pull/3962))
 * Go: SRandMemberCount command added ([#4037](https://github.com/valkey-io/valkey-glide/pull/4037))
 * Go: SPopCount command added ([#4026](https://github.com/valkey-io/valkey-glide/pull/4026))
+* Go: Batch/Transaction/Pipeline ([#3938](https://github.com/valkey-io/valkey-glide/pull/3938) and [#4005](https://github.com/valkey-io/valkey-glide/pull/4005))
+* Go: `WATCH` and `UNWATCH` ([#4054](https://github.com/valkey-io/valkey-glide/pull/4054))
 * Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
 
 #### Breaking Changes

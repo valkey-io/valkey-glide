@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -155,4 +156,134 @@ func ExampleClusterClient_ExecWithOptions_route() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	// Output:
+}
+
+func ExampleClient_Watch_changedKey() {
+	var client *Client = getExampleClient() // example helper function
+	// Example 1: key is changed before transaction and transaction didn't execute
+	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	fmt.Println("Watch result: ", result)
+
+	result, err = client.Set(context.Background(), "sampleKey", "foobar")
+	fmt.Println("Set result: ", result)
+
+	transaction := pipeline.NewStandaloneBatch(true)
+	transaction.Set("sampleKey", "value")
+	// Set command retry parameters
+
+	result1, err := client.Exec(context.Background(), *transaction, false)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	// Transaction result is `nil`, it is not executed at all
+	fmt.Printf("Transation result: %#v", result1)
+
+	// Output:
+	// Watch result:  OK
+	// Set result:  OK
+	// Transation result: []interface {}(nil)
+}
+
+func ExampleClient_Watch_unchangedKey() {
+	var client *Client = getExampleClient() // example helper function
+	// Example 2: key is unchanged before transaction
+	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	fmt.Println("Watch result: ", result)
+
+	transaction := pipeline.NewStandaloneBatch(true)
+	transaction.Set("sampleKey", "value")
+	// Set command retry parameters
+
+	result1, err := client.Exec(context.Background(), *transaction, false)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println("Transation result: ", result1)
+
+	// Output:
+	// Watch result:  OK
+	// Transation result:  [OK]
+}
+
+func ExampleClusterClient_Watch_changedKey() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	// Example 1: key is changed before transaction and transaction didn't execute
+	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	fmt.Println("Watch result: ", result)
+
+	result, err = client.Set(context.Background(), "sampleKey", "foobar")
+	fmt.Println("Set result: ", result)
+
+	transaction := pipeline.NewClusterBatch(true)
+	transaction.Set("sampleKey", "value")
+	// Set command retry parameters
+
+	result1, err := client.Exec(context.Background(), *transaction, false)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	// Transaction result is `nil`, it is not executed at all
+	fmt.Printf("Transation result: %#v", result1)
+
+	// Output:
+	// Watch result:  OK
+	// Set result:  OK
+	// Transation result: []interface {}(nil)
+}
+
+func ExampleClusterClient_Watch_unchangedKey() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	// Example 2: key is unchanged before transaction
+	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	fmt.Println("Watch result: ", result)
+
+	transaction := pipeline.NewClusterBatch(true)
+	transaction.Set("sampleKey", "value")
+	// Set command retry parameters
+
+	result1, err := client.Exec(context.Background(), *transaction, false)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println("Transation result: ", result1)
+
+	// Output:
+	// Watch result:  OK
+	// Transation result:  [OK]
+}
+
+func ExampleClient_Unwatch() {
+	var client *Client = getExampleClient() // example helper function
+	result, err := client.Unwatch(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleClusterClient_Unwatch() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.Unwatch(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// OK
+}
+
+func ExampleClusterClient_UnwatchWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.UnwatchWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// OK
 }
