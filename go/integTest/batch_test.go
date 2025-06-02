@@ -183,20 +183,23 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	batch.Set(multiKey2, "val")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
-	batch.LCS(multiKey1, multiKey2)
-	testData = append(testData, CommandTestData{ExpectedResponse: "va", TestName: "LCS(multiKey1, multiKey2)"})
 
-	batch.LCSLen(multiKey1, multiKey2)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LCSLen(multiKey1, multiKey2)"})
+	if serverVer >= "7.0.0" {
+		batch.LCS(multiKey1, multiKey2)
+		testData = append(testData, CommandTestData{ExpectedResponse: "va", TestName: "LCS(multiKey1, multiKey2)"})
 
-	batch.LCSWithOptions(multiKey1, multiKey2, *options.NewLCSIdxOptions().SetMinMatchLen(3))
-	testData = append(
-		testData,
-		CommandTestData{
-			ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
-			TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
-		},
-	)
+		batch.LCSLen(multiKey1, multiKey2)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LCSLen(multiKey1, multiKey2)"})
+
+		batch.LCSWithOptions(multiKey1, multiKey2, *options.NewLCSIdxOptions().SetMinMatchLen(3))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
+				TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
+			},
+		)
+	}
 
 	batch.GetDel(atomicKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "7", TestName: "GetDel(atomicKey1)"})
