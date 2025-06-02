@@ -121,6 +121,8 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			"Messina": {Longitude: 15.556349, Latitude: 38.194136},
 		}
 
+		var res []any
+		var err error
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic)
@@ -151,36 +153,8 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
-			res, err := c.Exec(context.Background(), *batch, true)
+			res, err = c.Exec(context.Background(), *batch, true)
 			assert.NoError(suite.T(), err)
-
-			// Verify GeoPos results
-			geoPos := res[2].([]any)
-			assert.Len(suite.T(), geoPos, 2)
-			assert.NotNil(suite.T(), geoPos[0])
-			assert.Nil(suite.T(), geoPos[1])
-
-			// Verify distance results (approximately)
-			geoDist := res[3].(float64)
-			assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
-
-			geoDistKm := res[4].(float64)
-			assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
-
-			// Verify search results
-			geoSearch := res[5]
-			assert.Len(suite.T(), geoSearch, 3)
-			assert.Contains(suite.T(), geoSearch, "Palermo")
-			assert.Contains(suite.T(), geoSearch, "Catania")
-			assert.Contains(suite.T(), geoSearch, "Messina")
-
-			// Verify search with info results
-			geoSearchInfo := res[6].([]any)
-			assert.Len(suite.T(), geoSearchInfo, 3)
-
-			// Verify full search results
-			geoSearchFull := res[7].([]any)
-			assert.Len(suite.T(), geoSearchFull, 1)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic)
 
@@ -208,37 +182,37 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
-			res, err := c.Exec(context.Background(), *batch, true)
+			res, err = c.Exec(context.Background(), *batch, true)
 			assert.NoError(suite.T(), err)
-
-			// Verify GeoPos results
-			geoPos := res[2].([]any)
-			assert.Len(suite.T(), geoPos, 2)
-			assert.NotNil(suite.T(), geoPos[0])
-			assert.Nil(suite.T(), geoPos[1])
-
-			// Verify distance results (approximately)
-			geoDist := res[3].(float64)
-			assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
-
-			geoDistKm := res[4].(float64)
-			assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
-
-			// Verify search results
-			geoSearch := res[5]
-			assert.Len(suite.T(), geoSearch, 3)
-			assert.Contains(suite.T(), geoSearch, "Palermo")
-			assert.Contains(suite.T(), geoSearch, "Catania")
-			assert.Contains(suite.T(), geoSearch, "Messina")
-
-			// Verify search with info results
-			geoSearchInfo := res[6].([]any)
-			assert.Len(suite.T(), geoSearchInfo, 3)
-
-			// Verify full search results
-			geoSearchFull := res[7].([]any)
-			assert.Len(suite.T(), geoSearchFull, 1)
 		}
+
+		// Verify GeoPos results
+		geoPos := res[2].([]any)
+		assert.Len(suite.T(), geoPos, 2)
+		assert.NotNil(suite.T(), geoPos[0])
+		assert.Nil(suite.T(), geoPos[1])
+
+		// Verify distance results (approximately)
+		geoDist := res[3].(float64)
+		assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+
+		geoDistKm := res[4].(float64)
+		assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+
+		// Verify search results
+		geoSearch := res[5]
+		assert.Len(suite.T(), geoSearch, 3)
+		assert.Contains(suite.T(), geoSearch, "Palermo")
+		assert.Contains(suite.T(), geoSearch, "Catania")
+		assert.Contains(suite.T(), geoSearch, "Messina")
+
+		// Verify search with info results
+		geoSearchInfo := res[6].([]any)
+		assert.Len(suite.T(), geoSearchInfo, 3)
+
+		// Verify full search results
+		geoSearchFull := res[7].([]any)
+		assert.Len(suite.T(), geoSearchFull, 1)
 	})
 }
 
