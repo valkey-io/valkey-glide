@@ -1255,6 +1255,39 @@ func CreatePubSubTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer st
 	return BatchTestData{CommandTestData: testData, TestName: "PubSub commands"}
 }
 
+func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
+	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		var res []any
+		var err error
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic).
+				FunctionKill().
+				FunctionDump().
+				FunctionRestore("payload").
+				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			res, err = c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+		case *glide.Client:
+			// Just test that they run
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				FunctionKill().
+				FunctionDump().
+				FunctionRestore("payload").
+				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			res, err = c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+		}
+		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+	})
+}
+
 func (suite *GlideTestSuite) TestBatchFunctionCommands() {
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
