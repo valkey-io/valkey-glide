@@ -1351,20 +1351,24 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZRank(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRank(key, member1)"})
 
-	batch.ZRankWithScore(key, "member1")
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
-	)
+	if serverVer >= "7.2.0" {
+		batch.ZRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
+		)
+	}
 
 	batch.ZRevRank(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRevRank(key, member1)"})
 
-	batch.ZRevRankWithScore(key, "member1")
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
-	)
+	if serverVer >= "7.2.0" {
+		batch.ZRevRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
+		)
+	}
 
 	batch.ZScore(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: float64(1.0), TestName: "ZScore(key, member1)"})
