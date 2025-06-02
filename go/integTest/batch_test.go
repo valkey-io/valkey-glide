@@ -1745,11 +1745,6 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	return BatchTestData{CommandTestData: testData, TestName: "Sorted Set commands"}
 }
 
-// ClusterBatch - The Batch object
-// bool - isAtomic flag. True for transactions, false for pipeline
-// string - The server version we are running on
-type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
-func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{streamKey}-"
