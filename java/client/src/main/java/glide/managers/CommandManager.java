@@ -387,13 +387,6 @@ public class CommandManager {
      */
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
-
-        long spanPtr = 0;
-        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-            // Create OpenTelemetry span
-            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ScriptInvocation");
-        }
-
         CommandRequest.Builder builder;
 
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
@@ -428,11 +421,6 @@ public class CommandManager {
                                                             .map(ByteString::copyFrom)
                                                             .collect(Collectors.toList()))
                                             .build());
-        }
-
-        // Set the root span pointer if a span was created
-        if (spanPtr != 0) {
-            builder.setRootSpanPtr(spanPtr);
         }
 
         return builder;
