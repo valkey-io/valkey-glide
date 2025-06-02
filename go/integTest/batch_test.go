@@ -290,25 +290,25 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 
 func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		var res []any
 		var err error
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).
+				FunctionKill().
 				FunctionDump().
 				FunctionRestore("payload").
 				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
-
-			if suite.serverVersion >= "7.0.0" {
-				batch.FunctionKill()
-			}
 
 			res, err = c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
 		case *glide.Client:
 			// Just test that they run
 			batch := pipeline.NewStandaloneBatch(isAtomic).
+				FunctionKill().
 				FunctionDump().
 				FunctionRestore("payload").
 				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
@@ -323,14 +323,13 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
 		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
 		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-
-		if suite.serverVersion >= "7.0.0" {
-			assert.IsType(suite.T(), &errors.RequestError{}, res[3])
-		}
+		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
 	})
 }
 
 func (suite *GlideTestSuite) TestBatchFunctionCommands() {
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
 		funcName := "myfunc"
