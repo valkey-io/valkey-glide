@@ -189,7 +189,8 @@ func (suite *GlideTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
 
 		// The init should not throw error because it can only be initialized once per process
 		err := glide.GetInstance().Init(wrongConfig)
-		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "openTelemetry already initialized, ignoring new config")
 
 		// Verify that the original configuration is still in effect
 		// by checking if spans are still being exported to the correct endpoint
@@ -381,7 +382,8 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReini
 
 		// The init should not throw error because it can only be initialized once per process
 		err := glide.GetInstance().Init(wrongConfig)
-		assert.NoError(suite.T(), err, "OpenTelemetry should not throw error on reinitialization")
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "openTelemetry already initialized, ignoring new config")
 
 		// Execute a command to verify spans are still being exported
 		_, err = client.Set(context.Background(), "GlideClusterClient_test_otel_global_config", "value")
