@@ -1314,22 +1314,24 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		CommandTestData{ExpectedResponse: []any{key, "member2", float64(2.0)}, TestName: "BZPopMax(key, 1)"},
 	)
 
-	batch.ZAdd(key, membersScoreMap)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
-	batch.ZMPop([]string{key}, constants.MIN)
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
-	)
+	if serverVer >= "7.0.0" {
+		batch.ZAdd(key, membersScoreMap)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		batch.ZMPop([]string{key}, constants.MIN)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
+		)
 
-	batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
-	testData = append(
-		testData,
-		CommandTestData{
-			ExpectedResponse: []any{key, map[string]any{"member2": float64(2.0)}},
-			TestName:         "ZMPopWithOptions([key], min, opts)",
-		},
-	)
+		batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member2": float64(2.0)}},
+				TestName:         "ZMPopWithOptions([key], min, opts)",
+			},
+		)
+	}
 
 	batch.ZAdd(key, map[string]float64{"member1": 1.0})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
