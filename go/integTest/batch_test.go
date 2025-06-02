@@ -1752,11 +1752,15 @@ type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestD
 func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{streamKey}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
 
 	streamKey1 := prefix + "1-" + uuid.NewString()
-	streamKey2 := prefix + "2-" + uuid.NewString()
-	streamKey3 := prefix + "3-" + uuid.NewString()
-	streamKey4 := prefix + "4-" + uuid.NewString()
+	streamKey2 := atomicPrefix + "2-" + uuid.NewString()
+	streamKey3 := atomicPrefix + "3-" + uuid.NewString()
+	streamKey4 := atomicPrefix + "4-" + uuid.NewString()
 	groupName1 := "{groupName}-1-" + uuid.NewString()
 	groupName2 := "{groupName}-2-" + uuid.NewString()
 	groupName3 := "{groupName}-3-" + uuid.NewString()
