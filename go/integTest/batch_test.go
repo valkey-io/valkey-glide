@@ -1792,9 +1792,9 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadOpts := options.NewXReadOptions().SetCount(1)
 	batch.XReadWithOptions(map[string]string{streamKey1: "0-2"}, *xreadOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{
-			streamKey1: map[string]interface{}{
-				"0-3": []interface{}{[]interface{}{"field3", "value3"}},
+		ExpectedResponse: map[string]any{
+			streamKey1: map[string]any{
+				"0-3": []any{[]any{"field3", "value3"}},
 			},
 		},
 		TestName: "XRead(streamKey1, 0-2)",
@@ -1804,8 +1804,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{
-			"0-1": []interface{}{[]interface{}{"field1", "value1"}},
+		ExpectedResponse: map[string]any{
+			"0-1": []any{[]any{"field1", "value1"}},
 		},
 		TestName: "XRange(streamKey1, 0-1, 0-1)",
 	})
@@ -1814,8 +1814,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{
-			"0-1": []interface{}{[]interface{}{"field1", "value1"}},
+		ExpectedResponse: map[string]any{
+			"0-1": []any{[]any{"field1", "value1"}},
 		},
 		TestName: "XRevRange(streamKey1, 0-1, 0-1)",
 	})
@@ -1832,7 +1832,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XINFO CONSUMERS command
 	batch.XInfoConsumers(streamKey1, groupName1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []interface{}(nil), TestName: "XInfoConsumers(streamKey1, groupName1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoConsumers(streamKey1, groupName1)"})
 
 	// Create second group with makeStream option
 	batch.XGroupCreateWithOptions(streamKey1, groupName2, "0-0", *xgroupCreateOpts)
@@ -1849,8 +1849,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadgroupOpts := options.NewXReadGroupOptions().SetCount(2)
 	batch.XReadGroupWithOptions(groupName1, consumer1, map[string]string{streamKey1: "0-3"}, *xreadgroupOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{
-			streamKey1: map[string]interface{}{},
+		ExpectedResponse: map[string]any{
+			streamKey1: map[string]any{},
 		},
 		TestName: "XReadGroup(streamKey1, 0-3, groupName1, consumer1)",
 	})
@@ -1859,14 +1859,14 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xclaimOpts := options.NewXClaimOptions().SetForce()
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-1"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{},
+		ExpectedResponse: map[string]any{},
 		TestName:         "XClaim(streamKey1, groupName1, consumer1, 0-1)",
 	})
 
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]interface{}{
-			"0-3": []interface{}{[]interface{}{"field3", "value3"}},
+		ExpectedResponse: map[string]any{
+			"0-3": []any{[]any{"field3", "value3"}},
 		},
 		TestName: "XClaim(streamKey1, groupName1, consumer1, 0-3)",
 	})
@@ -1874,20 +1874,20 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// XCLAIMJUSTID commands with options
 	batch.XClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}{"0-3"},
+		ExpectedResponse: []any{"0-3"},
 		TestName:         "XClaimJustId(streamKey1, groupName1, consumer1, 0-3)",
 	})
 
 	batch.XClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-4"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}(nil),
+		ExpectedResponse: []any(nil),
 		TestName:         "XClaimJustId(streamKey1, groupName1, consumer1, 0-4)",
 	})
 
 	// XPENDING command
 	batch.XPending(streamKey1, groupName1)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}{int64(1), "0-3", "0-3", []interface{}{[]interface{}{consumer1, "1"}}},
+		ExpectedResponse: []any{int64(1), "0-3", "0-3", []any{[]any{consumer1, "1"}}},
 		TestName:         "XPending(streamKey1, groupName1)",
 	})
 
@@ -1895,13 +1895,13 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
 	batch.XAutoClaimWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}{"0-0", map[string]interface{}{"0-3": []interface{}{[]interface{}{"field3", "value3"}}}, []interface{}(nil)},
+		ExpectedResponse: []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)},
 		TestName:         "XAutoClaim(streamKey1, groupName1, consumer1, 0-0)",
 	})
 
 	batch.XAutoClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}{"0-0", []interface{}{"0-3"}, []interface{}(nil)},
+		ExpectedResponse: []any{"0-0", []any{"0-3"}, []any(nil)},
 		TestName:         "XAutoClaimJustId(streamKey1, groupName1, consumer1, 0-0)",
 	})
 
@@ -1913,7 +1913,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xpendingOpts := options.NewXPendingOptions("-", "+", 1)
 	batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []interface{}(nil),
+		ExpectedResponse: []any(nil),
 		TestName:         "XPending(streamKey1, groupName1, MIN, MAX, 1)",
 	})
 
@@ -1942,7 +1942,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XINFO GROUPS command
 	batch.XInfoGroups(streamKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []interface{}(nil), TestName: "XInfoGroups(streamKey1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoGroups(streamKey1)"})
 
 	// Add entry to streamKey2 and create group
 	if serverVer >= "7.0.0" {
