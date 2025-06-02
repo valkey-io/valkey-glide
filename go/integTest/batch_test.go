@@ -1750,6 +1750,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 // string - The server version we are running on
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
+func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{streamKey}-"
 	atomicPrefix := prefix
@@ -1943,22 +1944,27 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData
 	batch.XInfoGroups(streamKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: []interface{}(nil), TestName: "XInfoGroups(streamKey1)"})
 
-	// Add entry to streamKey2 and create group (for Redis >= 7.0.0)
-	xaddOpts6 := options.NewXAddOptions().SetId("1-0")
-	batch.XAddWithOptions(streamKey2, [][]string{{"f0", "v0"}}, *xaddOpts6)
-	testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
+	// Add entry to streamKey2 and create group
+	if serverVer >= "7.0.0" {
+		xaddOpts6 := options.NewXAddOptions().SetId("1-0")
+		batch.XAddWithOptions(streamKey2, [][]string{{"f0", "v0"}}, *xaddOpts6)
+		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
 
-	batch.XGroupCreate(streamKey2, groupName3, "0")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey2, groupName3, 0)"})
+		batch.XGroupCreate(streamKey2, groupName3, "0")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey2, groupName3, 0)"})
 
-	xgroupSetIdOpts2 := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
-	batch.XGroupSetIdWithOptions(streamKey2, groupName3, "1-0", *xgroupSetIdOpts2)
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"})
+		xgroupSetIdOpts2 := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
+		batch.XGroupSetIdWithOptions(streamKey2, groupName3, "1-0", *xgroupSetIdOpts2)
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"})
+	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}
 }
 
-type BatchTestDataProvider func(*pipeline.ClusterBatch, bool) BatchTestData
+// ClusterBatch - The Batch object
+// bool - isAtomic flag. True for transactions, false for pipeline
+// string - The server version we are running on
+type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 
 func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
