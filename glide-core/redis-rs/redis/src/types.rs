@@ -5,6 +5,7 @@ use std::ffi::{CString, NulError};
 use std::fmt;
 use std::hash::{BuildHasher, Hash};
 use std::io;
+use std::num::ParseIntError;
 use std::str::{from_utf8, Utf8Error};
 use std::string::FromUtf8Error;
 
@@ -819,6 +820,17 @@ impl From<FromUtf8Error> for RedisError {
     fn from(_: FromUtf8Error) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescription(ErrorKind::TypeError, "Cannot convert from UTF-8"),
+        }
+    }
+}
+
+impl From<ParseIntError> for RedisError {
+    fn from(_: ParseIntError) -> RedisError {
+        RedisError {
+            repr: ErrorRepr::WithDescription(
+                ErrorKind::TypeError,
+                "Cannot parse string as an integer",
+            ),
         }
     }
 }
