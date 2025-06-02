@@ -173,21 +173,251 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch_cross_slot() {
 	suite.verifyOK(client.UnwatchWithOptions(ctx, options.RouteOption{Route: config.AllNodes}))
 }
 
+func (suite *GlideTestSuite) TestBatchGeoSpatial() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		prefix := "{GeoKey}-"
+		atomicPrefix := prefix
+		if !isAtomic {
+			atomicPrefix = ""
+		}
+		key := atomicPrefix + "1-" + uuid.NewString()
+		membersToGeospatialData := map[string]options.GeospatialData{
+			"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+			"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+		}
+		membersToGeospatialData2 := map[string]options.GeospatialData{
+			"Messina": {Longitude: 15.556349, Latitude: 38.194136},
+		}
+
+		var res []any
+		var err error
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic)
+
+			key = prefix + key
+
+			batch.GeoAdd(key, membersToGeospatialData)
+
+			geoAddOptions := options.GeoAddOptions{}
+			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+
+			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+
+			batch.GeoDist(key, "Palermo", "Catania")
+
+			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+
+			searchFrom := &options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
+			}
+			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+			batch.GeoSearch(key, searchFrom, *searchByShape)
+
+			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+
+			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+
+			res, err = c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic)
+
+			batch.GeoAdd(key, membersToGeospatialData)
+
+			geoAddOptions := options.GeoAddOptions{}
+			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+
+			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+
+			batch.GeoDist(key, "Palermo", "Catania")
+
+			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+
+			searchFrom := &options.GeoCoordOrigin{
+				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
+			}
+			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+			batch.GeoSearch(key, searchFrom, *searchByShape)
+
+			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+
+			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+
+			res, err = c.Exec(context.Background(), *batch, true)
+			assert.NoError(suite.T(), err)
+		}
+
+		// Verify GeoPos results
+		geoPos := res[2].([]any)
+		assert.Len(suite.T(), geoPos, 2)
+		assert.NotNil(suite.T(), geoPos[0])
+		assert.Nil(suite.T(), geoPos[1])
+
+		// Verify distance results (approximately)
+		geoDist := res[3].(float64)
+		assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+
+		geoDistKm := res[4].(float64)
+		assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+
+		// Verify search results
+		geoSearch := res[5]
+		assert.Len(suite.T(), geoSearch, 3)
+		assert.Contains(suite.T(), geoSearch, "Palermo")
+		assert.Contains(suite.T(), geoSearch, "Catania")
+		assert.Contains(suite.T(), geoSearch, "Messina")
+
+		// Verify search with info results
+		geoSearchInfo := res[6].([]any)
+		assert.Len(suite.T(), geoSearchInfo, 3)
+
+		// Verify full search results
+		geoSearchFull := res[7].([]any)
+		assert.Len(suite.T(), geoSearchFull, 1)
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
+	// TODO: replace 'any' type after converters have been added
+
+	// Just test that the execution works
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic).
+				Publish("NonExistentChannel", "msg").
+				PubSubShardChannels().
+				PubSubShardChannelsWithPattern("").
+				PubSubShardNumSub()
+
+			res, err := c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res[0])
+			if suite.serverVersion >= "7.0.0" {
+				assert.Equal(suite.T(), ([]any)(nil), res[1])
+				assert.Equal(suite.T(), ([]any)(nil), res[2])
+				assert.Equal(suite.T(), map[string]any{}, res[3])
+			} else {
+				// In 6.2.0, errors are raised instead
+				assert.IsType(suite.T(), &errors.RequestError{}, res[1])
+				assert.IsType(suite.T(), &errors.RequestError{}, res[2])
+				assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+			}
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				Publish("NonExistentChannel", "msg")
+			res, err := c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res[0])
+		}
+	})
+}
+
 func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{stringKey}-"
-	if isAtomic {
-		prefix = ""
+	atomicKeyPrefix := prefix
+	if !isAtomic {
+		atomicKeyPrefix = ""
 	}
 
-	key1 := prefix + "1-" + uuid.NewString()
+	atomicKey1 := atomicKeyPrefix + "1-" + uuid.NewString()
+	multiKey1 := prefix + "2-" + uuid.NewString()
+	multiKey2 := prefix + "3-" + uuid.NewString()
 
 	value1 := "value-1-" + uuid.NewString()
 
-	batch.Set(key1, value1)
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(key1, value1)"})
-	batch.Get(key1)
-	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "Get(key1)"})
+	batch.Set(atomicKey1, value1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
+
+	batch.SetWithOptions(atomicKey1, value1, *options.NewSetOptions().SetOnlyIfExists())
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: "OK", TestName: "SetWithOptions(atomicKey1, value1, OnlyIfExists)"},
+	)
+
+	batch.Get(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "Get(atomicKey1)"})
+
+	batch.GetEx(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetEx(atomicKey1)"})
+
+	batch.Set(atomicKey1, value1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
+	opts := options.NewGetExOptions().
+		SetExpiry(options.NewExpiry().
+			SetType(constants.Seconds).
+			SetCount(5))
+	batch.GetExWithOptions(atomicKey1, *opts)
+	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetExWithOptions(atomicKey1, opts)"})
+
+	batch.MSet(map[string]string{multiKey1: "value2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MSet(multiKey1, value2)"})
+
+	batch.MGet([]string{multiKey1})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value2"}, TestName: "MGet(key2)"})
+
+	batch.MSetNX(map[string]string{multiKey2: "3"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "MSetNX(key3, 3)"})
+
+	batch.Incr(multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "Incr(key3)"})
+
+	batch.IncrBy(multiKey2, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "IncrBy(key3, 2)"})
+
+	batch.Set(atomicKey1, "3.5")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, 3.5)"})
+	batch.IncrByFloat(atomicKey1, 3.5)
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(7.0), TestName: "IncrByFloat(atomicKey1, 3.5)"})
+
+	batch.Decr(multiKey2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(5), TestName: "Decr(multiKey2)"})
+
+	batch.DecrBy(multiKey2, 2)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "DecrBy(multiKey2, 2)"})
+
+	batch.Strlen(multiKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "Strlen(multiKey1)"})
+
+	batch.SetRange(multiKey1, 2, "b")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "SetRange(multiKey1, 2, b)"})
+
+	batch.GetRange(multiKey1, 0, 6)
+	testData = append(testData, CommandTestData{ExpectedResponse: "vabue2", TestName: "GetRange(multiKey1, 0, 6)"})
+
+	batch.Append(multiKey1, "3")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
+
+	batch.Set(multiKey2, "val")
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
+
+	if serverVer >= "7.0.0" {
+		batch.LCS(multiKey1, multiKey2)
+		testData = append(testData, CommandTestData{ExpectedResponse: "va", TestName: "LCS(multiKey1, multiKey2)"})
+
+		batch.LCSLen(multiKey1, multiKey2)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "LCSLen(multiKey1, multiKey2)"})
+
+		batch.LCSWithOptions(multiKey1, multiKey2, *options.NewLCSIdxOptions().SetMinMatchLen(3))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
+				TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
+			},
+		)
+	}
+
+	batch.GetDel(atomicKey1)
+	testData = append(testData, CommandTestData{ExpectedResponse: "7", TestName: "GetDel(atomicKey1)"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
@@ -284,6 +514,34 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
+}
+
+func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	connectionName := "test-connection-" + uuid.New().String()
+
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+
+	pingOptions := options.PingOptions{
+		Message: "hello",
+	}
+	batch.PingWithOptions(pingOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
+
+	batch.Echo("hello world")
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
+
+	batch.ClientId()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
+
+	batch.ClientSetName(connectionName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
+
+	batch.ClientGetName()
+	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
 }
 
 func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
@@ -557,6 +815,71 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	// TODO: add Move in separate standalone batch tests
 
 	return BatchTestData{CommandTestData: testData, TestName: "Generic commands"}
+}
+
+func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{GeoKey}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+	key := atomicPrefix + "1-" + uuid.NewString()
+	destKey := prefix + "2-" + uuid.NewString()
+	membersToGeospatialData := map[string]options.GeospatialData{
+		"Palermo": {Longitude: 13.361389, Latitude: 38.115556},
+		"Catania": {Longitude: 15.087269, Latitude: 37.502669},
+	}
+	membersToGeospatialData2 := map[string]options.GeospatialData{
+		"Messina": {Longitude: 15.556349, Latitude: 38.194136},
+	}
+
+	batch.GeoAdd(key, membersToGeospatialData)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
+
+	geoAddOptions := options.GeoAddOptions{}
+	geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+	batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+
+	batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: []any{"sqc8b49rny0", "sqdtr74hyu0", nil},
+		TestName:         "GeoHash(key, [Palermo, Catania, NonExistingCity])",
+	})
+
+	searchFrom := &options.GeoCoordOrigin{
+		GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
+	}
+	searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+
+	resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+	batch.GeoSearchWithResultOptions(key, searchFrom, *searchByShape, *resultOptions)
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: []any{"Catania"},
+		TestName:         "GeoSearchWithResultOptions(key, searchFrom, searchByShape, resultOptions)",
+	})
+
+	batch.GeoAdd(prefix+key, membersToGeospatialData)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
+
+	batch.GeoAddWithOptions(prefix+key, membersToGeospatialData2, geoAddOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+
+	batch.GeoSearchStore(destKey, prefix+key, searchFrom, *searchByShape)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"})
+
+	batch.GeoSearchStoreWithResultOptions(destKey+"1", prefix+key, searchFrom, *searchByShape, *resultOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)"})
+
+	storeInfoOptions := options.NewGeoSearchStoreInfoOptions().SetStoreDist(true)
+	batch.GeoSearchStoreWithInfoOptions(destKey+"2", prefix+key, searchFrom, *searchByShape, *storeInfoOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)"})
+
+	batch.GeoSearchStoreWithFullOptions(destKey+"3", prefix+key, searchFrom, *searchByShape, *resultOptions, *storeInfoOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Geospatial commands"}
 }
 
 func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
@@ -875,6 +1198,499 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "List commands"}
 }
 
+func CreatePubSubTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	// TODO: replace 'any' type after converters have been added
+
+	// Just test that the execution works
+	testData := make([]CommandTestData, 0)
+
+	batch.PubSubChannels()
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannels()"})
+
+	batch.PubSubChannelsWithPattern("")
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannelsWithPattern()"})
+
+	batch.PubSubNumPat()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "PubSubNumPat()"})
+
+	batch.PubSubNumSub([]string{""})
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"": int64(0)}, TestName: "PubSubNumSub()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "PubSub commands"}
+}
+
+func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{set}-"
+	atomicKey := prefix
+	if !isAtomic {
+		atomicKey = ""
+	}
+
+	key := atomicKey + "key-" + uuid.NewString()
+
+	batch.SAdd(key, []string{"member1", "member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key, [member1, member2])"})
+
+	batch.SRem(key, []string{"member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SRem(key, [member2])"})
+
+	batch.SMembers(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SMembers(key)"},
+	)
+
+	batch.SCard(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SCard(key)"})
+
+	batch.SIsMember(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
+
+	key2 := atomicKey + "key2-" + uuid.NewString()
+	batch.SAdd(key2, []string{"member1", "member3"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
+	batch.SDiff([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{}, TestName: "SDiff([prefix + key, prefix + key2])"},
+	)
+
+	batch.SAdd(prefix+key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(prefix + key, [member1])"})
+	batch.SAdd(prefix+key2, []string{"member1", "member3"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(prefix + key2, [member1, member3])"},
+	)
+	dest := prefix + "key3-" + uuid.NewString()
+	batch.SDiffStore(dest, []string{prefix + key2, prefix + key})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SDiffStore(dest, [prefix + key2, prefix + key])"},
+	)
+
+	batch.SInter([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}},
+			TestName:         "SInter([prefix + key, prefix + key2])",
+		},
+	)
+
+	batch.SInterStore(dest, []string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	if serverVer >= "7.0.0" {
+		batch.SInterCard([]string{prefix + key, prefix + key2})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([prefix + key, prefix + key2])"},
+		)
+
+		batch.SInterCardLimit([]string{prefix + key, prefix + key2}, 10)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
+		)
+	}
+
+	batch.SRandMember(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
+
+	batch.SRandMemberCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "SRandMemberCount(key, 1)"})
+
+	batch.SPop(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SPop(key)"})
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SPopCount(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SPopCount(key, 1)"},
+	)
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SMIsMember(key, []string{"member1", "nonexistent"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
+	)
+
+	batch.SUnionStore(dest, []string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SUnionStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	batch.SUnion([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}, "member3": {}},
+			TestName:         "SUnion([prefix + key, prefix + key2])",
+		},
+	)
+
+	batch.SScan(key, "0")
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScan(key, 0)"})
+
+	scanOptions := options.NewBaseScanOptions().SetMatch("mem*")
+	batch.SScanWithOptions(key, "0", *scanOptions)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
+	)
+
+	batch.SAdd(prefix+key2, []string{"newmember"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key2, [newmember])"})
+	batch.SMove(prefix+key2, prefix+key, "newmember")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: true, TestName: "SMove(prefix + key2, prefix + key, newmember)"},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Set commands"}
+}
+
+func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{zset}-"
+	atomicPrefix := prefix
+	if !isAtomic {
+		atomicPrefix = ""
+	}
+
+	key := atomicPrefix + "key-" + uuid.NewString()
+
+	membersScoreMap := map[string]float64{"member1": 1.0, "member2": 2.0}
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+
+	zAddOpts, _ := options.NewZAddOptions().SetChanged(true)
+	batch.ZAddWithOptions(key, map[string]float64{"member3": 3.0}, *zAddOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "ZAddWithOptions(key, {member3:3.0}, opts)"},
+	)
+
+	batch.ZAddIncr(key, "member1", 1.5)
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(2.5), TestName: "ZAddIncr(key, member1, 1.5)"})
+
+	zAddIncrOpts := options.NewZAddOptions()
+	batch.ZAddIncrWithOptions(key, "member2", 2.0, *zAddIncrOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: float64(4.0), TestName: "ZAddIncrWithOptions(key, member2, 2.0, opts)"},
+	)
+
+	batch.ZIncrBy(key, 1.0, "member3")
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(4.0), TestName: "ZIncrBy(key, 1.0, member3)"})
+
+	batch.ZPopMin(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(2.5)}, TestName: "ZPopMin(key)"},
+	)
+
+	zPopOpts := options.NewZPopOptions().SetCount(2)
+	batch.ZPopMinWithOptions(key, *zPopOpts)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]any{"member2": float64(4.0), "member3": float64(4.0)},
+			TestName:         "ZPopMinWithOptions(key, opts)",
+		},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.ZPopMax(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member2": float64(2.0)}, TestName: "ZPopMax(key)"},
+	)
+
+	zPopOpts.SetCount(1)
+	batch.ZPopMaxWithOptions(key, *zPopOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZPopMaxWithOptions(key, opts)"},
+	)
+
+	batch.ZAdd(key, membersScoreMap)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+	batch.ZRem(key, []string{"member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRem(key, [member2])"})
+
+	batch.ZCard(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZCard(key)"})
+
+	batch.BZPopMin([]string{key}, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, "member1", float64(1)}, TestName: "BZPopMin([key])"},
+	)
+
+	if serverVer >= "7.0.0" {
+		batch.ZAdd(key, map[string]float64{"member1": float64(1.0)})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
+		batch.BZMPop([]string{key}, constants.MIN, 1)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}}, TestName: "BZMPop(key, MIN, 1)"},
+		)
+
+		batch.ZAdd(key, membersScoreMap)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		batch.BZMPopWithOptions([]string{key}, constants.MIN, 1, *options.NewZMPopOptions().SetCount(1))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
+				TestName:         "BZMPopWithOptions(key, MIN, 1, opts",
+			},
+		)
+	} else {
+		batch.ZAdd(key, map[string]float64{"member2": float64(2.0)})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member2:2.0})"})
+	}
+
+	rangeQuery := options.NewRangeByIndexQuery(0, -1)
+	batch.ZRange(key, rangeQuery)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member2"}, TestName: "ZRange(key, 0, -1)"})
+
+	batch.BZPopMax([]string{key}, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{key, "member2", float64(2.0)}, TestName: "BZPopMax(key, 1)"},
+	)
+
+	if serverVer >= "7.0.0" {
+		batch.ZAdd(key, membersScoreMap)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		batch.ZMPop([]string{key}, constants.MIN)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
+		)
+
+		batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member2": float64(2.0)}},
+				TestName:         "ZMPopWithOptions([key], min, opts)",
+			},
+		)
+	}
+
+	batch.ZAdd(key, map[string]float64{"member1": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
+	batch.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0}, TestName: "ZRangeWithScores(key, 0, -1)"},
+	)
+
+	dest := prefix + "dest-" + uuid.NewString()
+	prefixKey := prefix + "key2-" + uuid.NewString()
+	batch.ZAdd(prefixKey, map[string]float64{"member1": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(prefixKey, {member1:1.0})"})
+	batch.ZRangeStore(dest, prefixKey, options.NewRangeByIndexQuery(0, -1))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRangeStore(dest, prefixKey, 0, -1)"})
+
+	batch.ZRank(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRank(key, member1)"})
+
+	if serverVer >= "7.2.0" {
+		batch.ZRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
+		)
+	}
+
+	batch.ZRevRank(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRevRank(key, member1)"})
+
+	if serverVer >= "7.2.0" {
+		batch.ZRevRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
+		)
+	}
+
+	batch.ZScore(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: float64(1.0), TestName: "ZScore(key, member1)"})
+
+	zCountRange := options.NewZCountRange(
+		options.NewInclusiveScoreBoundary(0.0),
+		options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
+	)
+	batch.ZCount(key, *zCountRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZCount(key, 2.0, inf)"})
+
+	batch.ZScan(key, "0")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScan(key, 0)"},
+	)
+
+	zScanOpts := options.NewZScanOptions().SetCount(1)
+	batch.ZScanWithOptions(key, "0", *zScanOpts)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScanWithOptions(key, 0, opts)"},
+	)
+
+	key3 := atomicPrefix + "key3-" + uuid.NewString()
+	batch.ZAdd(key3, map[string]float64{"member1": 1.0, "member2": 2.0, "member3": 3.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "ZAdd(key3, members)"})
+	batch.ZRemRangeByRank(key3, 0, 0)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRemRangeByRank(key3, 0, 0)"})
+
+	scoreRange := options.NewRangeByScoreQuery(
+		options.NewInclusiveScoreBoundary(3),
+		options.NewInclusiveScoreBoundary(3),
+	)
+	batch.ZRemRangeByScore(key3, *scoreRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZRemRangeByScore(key3, 2, 3)"})
+
+	batch.ZAdd(key3, map[string]float64{"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "ZAdd(key3, members)"})
+	lexRange := options.NewRangeByLexQuery(
+		options.NewLexBoundary("a", true),
+		options.NewLexBoundary("b", true),
+	)
+	batch.ZRemRangeByLex(key3, *lexRange)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZRemRangeByLex(key3, [a, [b)"})
+
+	batch.ZRandMember(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "ZRandMember(key)"})
+
+	batch.ZRandMemberWithCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"})
+
+	batch.ZRandMemberWithCountWithScores(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{[]any{"member1", float64(1.0)}},
+			TestName:         "ZRandMemberWithCountWithScores(key, 1)",
+		},
+	)
+
+	batch.ZMScore(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{float64(1.0)}, TestName: "ZMScore(key, [member1])"})
+
+	batch.ZAdd(prefix+key3, map[string]float64{"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "ZAdd(prefix+key3, members)"})
+	batch.ZAdd(prefix+key, map[string]float64{"member1": 1.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(prefix+key, {member1:1.0})"})
+	batch.ZDiff([]string{prefix + key, prefix + key3})
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"})
+
+	batch.ZDiffWithScores([]string{prefix + key, prefix + key3})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZDiffWithScores([prefix+key, prefix+key3])"},
+	)
+
+	batch.ZDiffStore(dest, []string{prefix + key, prefix + key3})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [prefix+key, prefix+key3])"})
+
+	batch.ZInter(options.KeyArray{
+		Keys: []string{prefix + key, prefix + key3},
+	})
+	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "ZInter(keys)"})
+
+	batch.ZInterWithScores(
+		options.KeyArray{
+			Keys: []string{prefix + key, prefix + key3},
+		},
+		*options.NewZInterOptions().SetAggregate(options.AggregateSum),
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{}, TestName: "ZInterWithScores(keys, opts)"})
+
+	batch.ZInterStore(
+		dest,
+		options.KeyArray{
+			Keys: []string{prefix + key, prefix + key3},
+		},
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterStore(dest, keys)"})
+
+	batch.ZInterStoreWithOptions(
+		dest,
+		options.KeyArray{
+			Keys: []string{prefix + key, prefix + key3},
+		},
+		*options.NewZInterOptions().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterStoreWithOptions(dest, keys, opts)"},
+	)
+
+	key4 := prefix + "key4-" + uuid.NewString()
+	batch.ZAdd(key4, map[string]float64{"b": 2.0})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key4, members)"})
+	batch.ZUnion(
+		options.KeyArray{
+			Keys: []string{prefix + key, key4},
+		},
+	)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1", "b"}, TestName: "ZUnion(keys)"})
+
+	batch.ZUnionWithScores(
+		options.KeyArray{Keys: []string{prefix + key, key4}},
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0, "b": 2.0}, TestName: "ZUnionWithScores(keys, opts)"},
+	)
+
+	batch.ZUnionStore(dest, options.KeyArray{Keys: []string{prefix + key, key4}})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStore(dest, keys)"})
+
+	batch.ZUnionStoreWithOptions(
+		dest,
+		options.KeyArray{Keys: []string{prefix + key, key4}},
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+	)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStoreWithOptions(dest, keys, opts)"},
+	)
+
+	if serverVer >= "7.0.0" {
+		batch.ZInterCard([]string{prefix + key, prefix + key3})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCard(keys)"})
+
+		zInterCardOpts := options.NewZInterCardOptions().SetLimit(10)
+		batch.ZInterCardWithOptions([]string{prefix + key, prefix + key3}, *zInterCardOpts)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCardWithOptions(keys, opts)"},
+		)
+	}
+
+	batch.ZLexCount(key3, *options.NewRangeByLexQuery(options.NewLexBoundary("a", true), options.NewLexBoundary("c", true)))
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZLexCount(key3, [a, [c)"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Sorted Set commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
@@ -884,10 +1700,15 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		CreateBitmapTest,
+		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
+		CreateGeospatialTests,
 		CreateHashTest,
 		CreateHyperLogLogTest,
 		CreateListCommandsTest,
+		CreatePubSubTests,
+		CreateSetCommandsTests,
+		CreateSortedSetTests,
 	}
 }
 
@@ -934,8 +1755,8 @@ func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []Comm
 	for i := range result {
 		if testData[i].CheckTypeOnly {
 			suite.IsType(testData[i].ExpectedResponse, result[i], testData[i].TestName)
-		} else {
-			suite.Equal(testData[i].ExpectedResponse, result[i], testData[i].TestName)
+			continue
 		}
+		suite.Equal(testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
 }

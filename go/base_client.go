@@ -357,6 +357,13 @@ func (client *baseClient) executeCommandWithRoute(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
@@ -449,7 +456,13 @@ func (client *baseClient) executeBatch(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
-		// TODO: Need to deal with cleaning up any allocated memory
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
@@ -612,6 +625,13 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return models.DefaultStringResponse, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
@@ -8863,6 +8883,13 @@ func (client *baseClient) executeScriptWithRoute(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing

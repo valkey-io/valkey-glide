@@ -1268,6 +1268,30 @@ func (b *BaseBatch[T]) SRandMember(key string) *T {
 	return b.addCmdAndTypeChecker(C.SRandMember, []string{key}, reflect.String, true)
 }
 
+// SRandMemberCount returns multiple random members from the set value stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key from which to retrieve the set members.
+//	count - The number of members to return.
+//	       If count is positive, returns unique elements (no repetition) up to count or the set size, whichever is smaller.
+//	       If count is negative, returns elements with possible repetition (the same element may be returned multiple times),
+//	       and the number of returned elements is the absolute value of count.
+//
+// Command Response:
+//
+//	An array of random elements from the set.
+//	When count is positive, the returned elements are unique (no repetitions).
+//	When count is negative, the returned elements may contain duplicates.
+//	If the set does not exist or is empty, an empty array is returned.
+//
+// [valkey.io]: https://valkey.io/commands/srandmember/
+func (b *BaseBatch[T]) SRandMemberCount(key string, count int64) *T {
+	return b.addCmdAndTypeChecker(C.SRandMember, []string{key, utils.IntToString(count)}, reflect.Slice, false)
+}
+
 // Removes and returns one random member from the set stored at key.
 //
 // See [valkey.io] for details.
@@ -1284,6 +1308,27 @@ func (b *BaseBatch[T]) SRandMember(key string) *T {
 // [valkey.io]: https://valkey.io/commands/spop/
 func (b *BaseBatch[T]) SPop(key string) *T {
 	return b.addCmdAndTypeChecker(C.SPop, []string{key}, reflect.String, true)
+}
+
+// SPopCount removes and returns up to count random members from the set stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the set.
+//	count - The number of members to return.
+//		If count is positive, returns unique elements.
+//		If count is larger than the set's cardinality, returns the entire set.
+//
+// Command Response:
+//
+//	A `map[string]struct{}` of popped elements.
+//	If key does not exist, an empty collection will be returned.
+//
+// [valkey.io]: https://valkey.io/commands/spop/
+func (b *BaseBatch[T]) SPopCount(key string, count int64) *T {
+	return b.addCmdAndTypeChecker(C.SPop, []string{key, utils.IntToString(count)}, reflect.Map, false)
 }
 
 // Returns whether each member is a member of the set stored at key.
@@ -3052,7 +3097,7 @@ func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQue
 	}
 	args = append(args, queryArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Map, false)
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
@@ -4865,7 +4910,7 @@ func (b *BaseBatch[T]) ZInterWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Map, false)
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -4972,16 +5017,16 @@ func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 //
 // Command Response:
 //
-//	An array of elements and their scores representing the difference between the sorted sets.
+//	An map of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty array.
+//	command returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Map, false)
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -5075,7 +5120,7 @@ func (b *BaseBatch[T]) ZUnionWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Map, false)
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and

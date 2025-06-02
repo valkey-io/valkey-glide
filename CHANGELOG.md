@@ -13,6 +13,7 @@
 * Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
 * Core/Node: Create openTelemetry span to measure command latency ([#3391](https://github.com/valkey-io/valkey-glide/pull/3391))
 * Core: Add `opentelemetry` metrics support ([#3466](https://github.com/valkey-io/valkey-glide/pull/3466))
+* Core: Add `opentelemetry` moved, retry attemps counters and set_status ([#3944](https://github.com/valkey-io/valkey-glide/pull/3944))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 * Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
@@ -95,6 +96,7 @@
 * Go: SPopCount command added ([#4026](https://github.com/valkey-io/valkey-glide/pull/4026))
 * Go: Batch/Transaction/Pipeline ([#3938](https://github.com/valkey-io/valkey-glide/pull/3938) and [#4005](https://github.com/valkey-io/valkey-glide/pull/4005))
 * Go: `WATCH` and `UNWATCH` ([#4054](https://github.com/valkey-io/valkey-glide/pull/4054))
+* Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
 
 #### Breaking Changes
 

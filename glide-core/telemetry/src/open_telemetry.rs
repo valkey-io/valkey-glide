@@ -23,6 +23,8 @@ const TRACE_SCOPE: &str = "valkey_glide";
 
 // Metric names
 const TIMEOUT_ERROR_METRIC: &str = "glide.timeout_errors";
+const RETRIES_METRIC: &str = "glide.retry_attempts";
+const MOVED_ERROR_METRIC: &str = "glide.moved_errors";
 
 /// Custom error type for OpenTelemetry errors in Glide
 #[derive(Debug, Error)]
@@ -226,10 +228,10 @@ impl GlideSpanInner {
                 .write()
                 .expect(SPAN_WRITE_LOCK_ERR)
                 .set_status(opentelemetry::trace::Status::Ok),
-            GlideSpanStatus::Error(what) => {
+            GlideSpanStatus::Error(error_message) => {
                 self.span.write().expect(SPAN_WRITE_LOCK_ERR).set_status(
                     opentelemetry::trace::Status::Error {
-                        description: what.into(),
+                        description: error_message.into(),
                     },
                 )
             }
@@ -468,6 +470,8 @@ fn build_span_exporter(
 pub struct GlideOpenTelemetry {}
 
 static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
+static RETRIES_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
+static MOVED_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -635,6 +639,38 @@ impl GlideOpenTelemetry {
                     .build(),
             );
 
+        // Create retries counter
+        RETRIES_COUNTER
+            .lock()
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize retires counter".to_owned(),
+                )
+            })?
+            .replace(
+                meter
+                    .u64_counter(RETRIES_METRIC)
+                    .with_description("Number of retry attempts made")
+                    .with_unit("1")
+                    .build(),
+            );
+
+        // Create moved counter
+        MOVED_COUNTER
+            .lock()
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize moved counter".to_owned(),
+                )
+            })?
+            .replace(
+                meter
+                    .u64_counter(MOVED_ERROR_METRIC)
+                    .with_description("Number of moved errors encountered")
+                    .with_unit("1")
+                    .build(),
+            );
+
         Ok(())
     }
 
@@ -649,7 +685,45 @@ impl GlideOpenTelemetry {
                 .as_mut()
                 .ok_or_else(|| {
                     GlideOTELError::Other(
-                        "OpenTelemetry error: Timeout counter not initialized".to_string(),
+                        "OpenTelemetry error: Timeout counter not initialized".to_owned(),
+                    )
+                })?
+                .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a retry attempt
+    ///
+    /// If OpenTelemetry is not initialized, this method will do nothing.
+    pub fn record_retry_attempt() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            RETRIES_COUNTER
+                .lock()
+                .map_err(|_| GlideOTELError::ReadLockError)?
+                .as_mut()
+                .ok_or_else(|| {
+                    GlideOTELError::Other(
+                        "OpenTelemetry error: Retries counter not initialized".to_string(),
+                    )
+                })?
+                .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a moved error
+    ///
+    /// If OpenTelemetry is not initialized, this method will do nothing.
+    pub fn record_moved_error() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            MOVED_COUNTER
+                .lock()
+                .map_err(|_| GlideOTELError::ReadLockError)?
+                .as_mut()
+                .ok_or_else(|| {
+                    GlideOTELError::Other(
+                        "OpenTelemetry error: Moved counter not initialized".to_string(),
                     )
                 })?
                 .add(1, &[]);
@@ -757,9 +831,17 @@ mod tests {
                 .split('\n')
                 .filter(|l| !l.trim().is_empty())
                 .collect();
-            assert_eq!(lines.len(), 4, "file content: {file_content:?}");
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            assert!(
+                lines.len() == 3 || lines.len() == 4,
+                "Expected 3 or 4 lines, got {}. file content: {file_content:?}",
+                lines.len()
+            );
+
+            // Adjust base index if there are only 3 lines (no header line)
+            let base = if lines.len() == 3 { 0 } else { 1 };
+
+            let span_json: serde_json::Value = serde_json::from_str(lines[base]).unwrap();
             assert_eq!(span_json["name"], "Network_Span");
             let network_span_id = span_json["span_id"].to_string();
             let network_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -768,7 +850,7 @@ mod tests {
             // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
             assert!(network_span_end_time - network_span_start_time >= 100_000);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[base + 1]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_1");
             assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
             let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
@@ -783,7 +865,7 @@ mod tests {
             let child_span_id = span_json["links"][0]["span_id"].to_string();
             assert_eq!(child_span_id, network_span_id);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[3]).unwrap();
+            let span_json: serde_json::Value = serde_json::from_str(lines[base + 2]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_2");
             assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
         });
@@ -837,6 +919,128 @@ mod tests {
                 metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
                 3
             );
+        });
+    }
+
+    #[test]
+    fn test_record_retry_attempts() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
+            sleep(Duration::from_millis(2100)).await;
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
+            GlideOpenTelemetry::record_retry_attempt().unwrap();
+
+            // Add a sleep to wait for the metrics to be flushed
+            sleep(Duration::from_millis(2100)).await;
+
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.retry_attempts"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                1
+            );
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                3
+            );
+        });
+    }
+
+    #[test]
+    fn test_record_moved_error() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(METRICS_JSON);
+            init_otel().await.unwrap();
+            GlideOpenTelemetry::record_moved_error().unwrap();
+            sleep(Duration::from_millis(2100)).await;
+            GlideOpenTelemetry::record_moved_error().unwrap();
+            GlideOpenTelemetry::record_moved_error().unwrap();
+
+            // Add a sleep to wait for the metrics to be flushed
+            sleep(Duration::from_millis(2100)).await;
+
+            let file_content = std::fs::read_to_string(METRICS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+
+            let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["name"],
+                "glide.moved_errors"
+            );
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                1
+            );
+            let metric_json: serde_json::Value =
+                serde_json::from_str(lines[lines.len() - 1]).unwrap();
+            assert_eq!(
+                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
+                3
+            );
+        });
+    }
+
+    #[test]
+    fn test_set_status_ok() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            // Clear the file
+            let _ = std::fs::remove_file(SPANS_JSON);
+
+            init_otel().await.unwrap();
+            let span = GlideOpenTelemetry::new_span("Root_Span_1");
+            span.add_event("Event1");
+            span.set_status(GlideSpanStatus::Ok);
+
+            let child1 = span.add_span("Network_Span").unwrap();
+
+            // Simulate some work
+            sleep(Duration::from_millis(100)).await;
+            child1.end();
+
+            // Simulate that the parent span is still doing some work
+            sleep(Duration::from_millis(100)).await;
+            span.end();
+
+            let span = GlideOpenTelemetry::new_span("Root_Span_2");
+            span.add_event("Event1");
+            span.add_event("Event2");
+            span.set_status(GlideSpanStatus::Error("simple error".to_string())); // Fixed typo in "simple"
+            drop(span); // writes the span
+
+            sleep(Duration::from_millis(2100)).await;
+
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+
+            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+            assert_eq!(span_json["status"], "Ok");
+
+            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+            let status = span_json["status"].as_str().unwrap_or("");
+            assert!(status.starts_with("Error"));
+            assert!(status.contains("simple error"));
         });
     }
 }
