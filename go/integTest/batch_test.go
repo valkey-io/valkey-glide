@@ -2028,57 +2028,59 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	})
 
 	// XAUTOCLAIM commands
-	xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
-	batch.XAutoClaimWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)},
-		TestName:         "XAutoClaim(streamKey1, groupName1, consumer1, 0-0)",
-	})
+	if serverVer >= "6.2.0" {
+		xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
+		batch.XAutoClaimWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
+		testData = append(testData, CommandTestData{
+			ExpectedResponse: []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)},
+			TestName:         "XAutoClaim(streamKey1, groupName1, consumer1, 0-0)",
+		})
 
-	batch.XAutoClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{"0-0", []any{"0-3"}, []any(nil)},
-		TestName:         "XAutoClaimJustId(streamKey1, groupName1, consumer1, 0-0)",
-	})
+		batch.XAutoClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
+		testData = append(testData, CommandTestData{
+			ExpectedResponse: []any{"0-0", []any{"0-3"}, []any(nil)},
+			TestName:         "XAutoClaimJustId(streamKey1, groupName1, consumer1, 0-0)",
+		})
 
-	// XACK command
-	batch.XAck(streamKey1, groupName1, []string{"0-3"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "XAck(streamKey1, groupName1, 0-3)"})
+		// XACK command
+		batch.XAck(streamKey1, groupName1, []string{"0-3"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "XAck(streamKey1, groupName1, 0-3)"})
 
-	// XPENDING with range
-	xpendingOpts := options.NewXPendingOptions("-", "+", 1)
-	batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any(nil),
-		TestName:         "XPending(streamKey1, groupName1, MIN, MAX, 1)",
-	})
+		// XPENDING with range
+		xpendingOpts := options.NewXPendingOptions("-", "+", 1)
+		batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
+		testData = append(testData, CommandTestData{
+			ExpectedResponse: []any(nil),
+			TestName:         "XPending(streamKey1, groupName1, MIN, MAX, 1)",
+		})
 
-	// XGROUP DELCONSUMER command
-	batch.XGroupDelConsumer(streamKey1, groupName1, consumer1)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "XGroupDelConsumer(streamKey1, groupName1, consumer1)"})
+		// XGROUP DELCONSUMER command
+		batch.XGroupDelConsumer(streamKey1, groupName1, consumer1)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "XGroupDelConsumer(streamKey1, groupName1, consumer1)"})
 
-	// XGROUP DESTROY commands
-	batch.XGroupDestroy(streamKey1, groupName1)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "XGroupDestroy(streamKey1, groupName1)"})
+		// XGROUP DESTROY commands
+		batch.XGroupDestroy(streamKey1, groupName1)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "XGroupDestroy(streamKey1, groupName1)"})
 
-	batch.XGroupDestroy(streamKey1, groupName2)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "XGroupDestroy(streamKey1, groupName2)"})
+		batch.XGroupDestroy(streamKey1, groupName2)
+		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "XGroupDestroy(streamKey1, groupName2)"})
 
-	// XDEL command
-	batch.XDel(streamKey1, []string{"0-3", "0-5"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "XDel(streamKey1, 0-3,0-5)"})
+		// XDEL command
+		batch.XDel(streamKey1, []string{"0-3", "0-5"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "XDel(streamKey1, 0-3,0-5)"})
 
-	// Add entry to streamKey3 and create group
-	xaddOpts5 := options.NewXAddOptions().SetId("1-0")
-	batch.XAddWithOptions(streamKey3, [][]string{{"f0", "v0"}}, *xaddOpts5)
-	testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey3, f0=v0, 1-0)"})
+		// Add entry to streamKey3 and create group
+		xaddOpts5 := options.NewXAddOptions().SetId("1-0")
+		batch.XAddWithOptions(streamKey3, [][]string{{"f0", "v0"}}, *xaddOpts5)
+		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey3, f0=v0, 1-0)"})
 
-	batch.XGroupCreate(streamKey3, groupName3, "0")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey3, groupName3, 0)"})
+		batch.XGroupCreate(streamKey3, groupName3, "0")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey3, groupName3, 0)"})
 
-	// XINFO GROUPS command
-	batch.XInfoGroups(streamKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoGroups(streamKey1)"})
+		// XINFO GROUPS command
+		batch.XInfoGroups(streamKey1)
+		testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoGroups(streamKey1)"})
+	}
 
 	// Add entry to streamKey2 and create group
 	if serverVer >= "7.0.0" {
