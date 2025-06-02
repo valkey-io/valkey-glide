@@ -95,6 +95,7 @@
 * Go: SRandMemberCount command added ([#4037](https://github.com/valkey-io/valkey-glide/pull/4037))
 * Go: SPopCount command added ([#4026](https://github.com/valkey-io/valkey-glide/pull/4026))
 * Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
+
 #### Breaking Changes
 
 * Go: Drop support for Go 1.20 ([#3513](https://github.com/valkey-io/valkey-glide/pull/3513))
