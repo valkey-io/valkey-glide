@@ -15,7 +15,7 @@ from glide import (
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
 )
-from glide.async_commands.batch import ClusterBatch
+from glide.async_commands.batch import Batch, ClusterBatch
 from glide.config import ProtocolVersion
 from glide.opentelemetry import OpenTelemetry
 from tests.conftest import create_client
@@ -495,7 +495,12 @@ class TestOpenTelemetryGlide:
 
         # Create and execute a batch using the correct Python API
 
-        batch = ClusterBatch(is_atomic=True)
+        # Use appropriate batch type based on cluster mode
+        if cluster_mode:
+            batch = ClusterBatch(is_atomic=True)
+        else:
+            batch = Batch(is_atomic=True)
+
         batch.set("test_key", "foo")
         batch.object_refcount("test_key")
 

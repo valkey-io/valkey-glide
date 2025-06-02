@@ -461,7 +461,7 @@ class BaseClient(CoreCommands):
         span = None
 
         if OpenTelemetry.should_sample():
-            # Use "Batch" as span name for transactions
+            # Use "Batch" as span name for batches
             span = create_otel_span("Batch")
 
         request = CommandRequest()

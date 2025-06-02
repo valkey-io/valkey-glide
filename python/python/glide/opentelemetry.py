@@ -124,10 +124,10 @@ class OpenTelemetry:
             Optional[int]: The sample percentage for traces only if OpenTelemetry is initialized
                 and the traces config is set, otherwise None.
         """
-        if cls._config and cls._config.get_traces():
+        if cls._config:
             traces_config = cls._config.get_traces()
             if traces_config:
-                return traces_config.sample_percentage
+                return traces_config.get_sample_percentage()
         return None
 
     @classmethod

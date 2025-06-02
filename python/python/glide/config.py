@@ -206,10 +206,6 @@ class AdvancedBaseClientConfiguration:
                 raise ConfigurationError(
                     "use_insecure_tls cannot be enabled when use_tls is disabled."
                 )
-            if self.opentelemetry_config.sample_percentage is not None:
-                request.opentelemetry_config.sample_percentage = (
-                    self.opentelemetry_config.sample_percentage
-                )
 
         return request
 

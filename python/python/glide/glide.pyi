@@ -39,8 +39,6 @@ class OpenTelemetryConfig:
     def get_metrics(self) -> Optional[OpenTelemetryMetricsConfig]: ...
 
 class OpenTelemetryTracesConfig:
-    endpoint: str
-    sample_percentage: Optional[int]
     def __init__(
         self, endpoint: str, sample_percentage: Optional[int] = None
     ) -> None: ...
@@ -48,7 +46,6 @@ class OpenTelemetryTracesConfig:
     def get_sample_percentage(self) -> Optional[int]: ...
 
 class OpenTelemetryMetricsConfig:
-    endpoint: str
     def __init__(self, endpoint: str) -> None: ...
     def get_endpoint(self) -> str: ...
 

@@ -39,9 +39,9 @@ pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
-    pub traces: Option<OpenTelemetryTracesConfig>,
+    traces: Option<OpenTelemetryTracesConfig>,
     /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
-    pub metrics: Option<OpenTelemetryMetricsConfig>,
+    metrics: Option<OpenTelemetryMetricsConfig>,
     /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
     #[pyo3(get, set)]
     pub flush_interval_ms: Option<i64>,
@@ -89,13 +89,11 @@ impl OpenTelemetryConfig {
 #[derive(Clone)]
 pub struct OpenTelemetryTracesConfig {
     /// The endpoint to which trace data will be exported.
-    #[pyo3(get, set)]
-    pub endpoint: String,
+    endpoint: String,
     /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
     /// Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
     /// It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
-    #[pyo3(get, set)]
-    pub sample_percentage: Option<u32>,
+    sample_percentage: Option<u32>,
 }
 
 #[pymethods]
@@ -128,8 +126,7 @@ impl OpenTelemetryTracesConfig {
 #[derive(Clone)]
 pub struct OpenTelemetryMetricsConfig {
     /// The endpoint to which metrics data will be exported.
-    #[pyo3(get, set)]
-    pub endpoint: String,
+    endpoint: String,
 }
 
 #[pymethods]
