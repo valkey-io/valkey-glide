@@ -893,17 +893,19 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [prefix + key, prefix + key2])"},
 	)
 
-	batch.SInterCard([]string{prefix + key, prefix + key2})
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([prefix + key, prefix + key2])"},
-	)
+	if serverVer >= "7.0.0" {
+		batch.SInterCard([]string{prefix + key, prefix + key2})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([prefix + key, prefix + key2])"},
+		)
 
-	batch.SInterCardLimit([]string{prefix + key, prefix + key2}, 10)
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
-	)
+		batch.SInterCardLimit([]string{prefix + key, prefix + key2}, 10)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
+		)
+	}
 
 	batch.SRandMember(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
