@@ -827,6 +827,147 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	return BatchTestData{CommandTestData: testData, TestName: "List commands"}
 }
 
+func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	prefix := "{set}-"
+	atomicKey := prefix
+	if !isAtomic {
+		atomicKey = ""
+	}
+
+	key := atomicKey + "key-" + uuid.NewString()
+
+	batch.SAdd(key, []string{"member1", "member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key, [member1, member2])"})
+
+	batch.SRem(key, []string{"member2"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SRem(key, [member2])"})
+
+	batch.SMembers(key)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SMembers(key)"},
+	)
+
+	batch.SCard(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SCard(key)"})
+
+	batch.SIsMember(key, "member1")
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
+
+	key2 := atomicKey + "key2-" + uuid.NewString()
+	batch.SAdd(key2, []string{"member1", "member3"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
+	batch.SDiff([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{}, TestName: "SDiff([prefix + key, prefix + key2])"},
+	)
+
+	batch.SAdd(prefix+key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(prefix + key, [member1])"})
+	batch.SAdd(prefix+key2, []string{"member1", "member3"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(prefix + key2, [member1, member3])"},
+	)
+	dest := prefix + "key3-" + uuid.NewString()
+	batch.SDiffStore(dest, []string{prefix + key2, prefix + key})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SDiffStore(dest, [prefix + key2, prefix + key])"},
+	)
+
+	batch.SInter([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}},
+			TestName:         "SInter([prefix + key, prefix + key2])",
+		},
+	)
+
+	batch.SInterStore(dest, []string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	if serverVer >= "7.0.0" {
+		batch.SInterCard([]string{prefix + key, prefix + key2})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCard([prefix + key, prefix + key2])"},
+		)
+
+		batch.SInterCardLimit([]string{prefix + key, prefix + key2}, 10)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
+		)
+	}
+
+	batch.SRandMember(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
+
+	batch.SRandMemberCount(key, 1)
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "SRandMemberCount(key, 1)"})
+
+	batch.SPop(key)
+	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SPop(key)"})
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SPopCount(key, 1)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]struct{}{"member1": {}}, TestName: "SPopCount(key, 1)"},
+	)
+
+	batch.SAdd(key, []string{"member1"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key, [member1])"})
+	batch.SMIsMember(key, []string{"member1", "nonexistent"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
+	)
+
+	batch.SUnionStore(dest, []string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(2), TestName: "SUnionStore(dest, [prefix + key, prefix + key2])"},
+	)
+
+	batch.SUnion([]string{prefix + key, prefix + key2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: map[string]struct{}{"member1": {}, "member3": {}},
+			TestName:         "SUnion([prefix + key, prefix + key2])",
+		},
+	)
+
+	batch.SScan(key, "0")
+	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScan(key, 0)"})
+
+	scanOptions := options.NewBaseScanOptions().SetMatch("mem*")
+	batch.SScanWithOptions(key, "0", *scanOptions)
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
+	)
+
+	batch.SAdd(prefix+key2, []string{"newmember"})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SAdd(key2, [newmember])"})
+	batch.SMove(prefix+key2, prefix+key, "newmember")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: true, TestName: "SMove(prefix + key2, prefix + key, newmember)"},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Set commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
@@ -841,6 +982,7 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 		CreateHashTest,
 		CreateHyperLogLogTest,
 		CreateListCommandsTest,
+		CreateSetCommandsTests,
 	}
 }
 
