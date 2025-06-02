@@ -674,6 +674,13 @@ func (client *ClusterClient) clusterScan(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
