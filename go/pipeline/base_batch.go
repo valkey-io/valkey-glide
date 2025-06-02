@@ -6028,7 +6028,7 @@ func (b *BaseBatch[T]) FunctionFlushAsync() *T {
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (b *BaseBatch[T]) FCall(function string) *T {
-	return b.addCmdAndTypeChecker(C.FCall, []string{function, "0"}, reflect.Interface, false)
+	return b.addCmd(C.FCall, []string{function, "0"})
 }
 
 // Invokes a previously loaded function.
@@ -6056,7 +6056,7 @@ func (b *BaseBatch[T]) FCallWithKeysAndArgs(function string, keys []string, args
 	commandArgs := []string{function, strconv.Itoa(len(keys))}
 	commandArgs = append(commandArgs, keys...)
 	commandArgs = append(commandArgs, args...)
-	return b.addCmdAndTypeChecker(C.FCall, commandArgs, reflect.Interface, false)
+	return b.addCmd(C.FCall, commandArgs)
 }
 
 // Invokes a previously loaded read-only function.
@@ -6079,7 +6079,7 @@ func (b *BaseBatch[T]) FCallWithKeysAndArgs(function string, keys []string, args
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (b *BaseBatch[T]) FCallReadOnly(function string) *T {
-	return b.addCmdAndTypeChecker(C.FCallReadOnly, []string{function, "0"}, reflect.Interface, false)
+	return b.addCmd(C.FCallReadOnly, []string{function, "0"})
 }
 
 // Invokes a previously loaded read-only function.
@@ -6107,7 +6107,7 @@ func (b *BaseBatch[T]) FCallReadOnlyWithKeysAndArgs(function string, keys []stri
 	commandArgs := []string{function, strconv.Itoa(len(keys))}
 	commandArgs = append(commandArgs, keys...)
 	commandArgs = append(commandArgs, args...)
-	return b.addCmdAndTypeChecker(C.FCallReadOnly, commandArgs, reflect.Interface, false)
+	return b.addCmd(C.FCallReadOnly, commandArgs)
 }
 
 // Returns information about the functions and libraries.
