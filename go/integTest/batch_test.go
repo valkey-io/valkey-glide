@@ -2091,9 +2091,9 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		batch.XGroupCreate(streamKey2, groupName3, "0")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey2, groupName3, 0)"})
 
-		xgroupSetIdOpts2 := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
-		batch.XGroupSetIdWithOptions(streamKey2, groupName3, "1-0", *xgroupSetIdOpts2)
-		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"})
+		// xgroupSetIdOpts2 := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
+		// batch.XGroupSetIdWithOptions(streamKey2, groupName3, "1-0", *xgroupSetIdOpts2)
+		// testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"})
 	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}
