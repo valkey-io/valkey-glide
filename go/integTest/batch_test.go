@@ -287,6 +287,137 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
+	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		var res []any
+		var err error
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			batch := pipeline.NewClusterBatch(isAtomic).
+				FunctionKill().
+				FunctionDump().
+				FunctionRestore("payload").
+				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			res, err = c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+		case *glide.Client:
+			// Just test that they run
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				FunctionKill().
+				FunctionDump().
+				FunctionRestore("payload").
+				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			res, err = c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+		}
+		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
+		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchFunctionCommands() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+		funcName := "myfunc"
+		libCode := `#!lua name=` + libName + `
+redis.register_function{ function_name = 'myfunc', callback = function() return 42 end, flags = { 'no-writes' } }`
+		query := models.FunctionListQuery{
+			LibraryName: libName,
+			WithCode:    false,
+		}
+		var res []any
+		var err error
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			opts := pipeline.NewClusterBatchOptions().WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42))
+			batch := pipeline.NewClusterBatch(isAtomic).
+				FunctionFlush().
+				FunctionFlushSync().
+				FunctionFlushAsync().
+				FunctionLoad(libCode, false).
+				FCall(funcName).
+				FCallReadOnly(funcName).
+				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
+				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
+				FunctionStats().
+				FunctionDelete(libName).
+				FunctionLoad(libCode, false).
+				FunctionList(query).
+				FunctionKill()
+
+			res, err = c.ExecWithOptions(context.Background(), *batch, false, *opts)
+			assert.NoError(suite.T(), err)
+
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				FunctionFlush().
+				FunctionFlushSync().
+				FunctionFlushAsync().
+				FunctionLoad(libCode, false).
+				FCall(funcName).
+				FCallReadOnly(funcName).
+				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
+				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
+				FunctionStats().
+				FunctionDelete(libName).
+				FunctionLoad(libCode, false).
+				FunctionList(query).
+				FunctionKill()
+
+			res, err = c.Exec(context.Background(), *batch, false)
+			assert.NoError(suite.T(), err)
+		}
+		assert.Equal(suite.T(), "OK", res[0])
+		assert.Equal(suite.T(), "OK", res[1])
+		assert.Equal(suite.T(), "OK", res[2])
+		assert.Equal(suite.T(), libName, res[3])
+		assert.Equal(suite.T(), int64(42), res[4])
+		assert.Equal(suite.T(), int64(42), res[5])
+		assert.Equal(suite.T(), int64(42), res[6])
+		assert.Equal(suite.T(), int64(42), res[7])
+		assert.True(
+			suite.T(),
+			reflect.DeepEqual(
+				map[string]any{
+					"engines": map[string]any{
+						"LUA": map[string]any{
+							"functions_count": int64(1),
+							"libraries_count": int64(1),
+						},
+					},
+					"running_script": nil,
+				},
+				res[8],
+			),
+		)
+		assert.Equal(suite.T(), "OK", res[9])
+		assert.Equal(
+			suite.T(),
+			[]any{
+				map[string]any{
+					"engine": "LUA",
+					"functions": []any{
+						map[string]any{
+							"description": nil,
+							"flags": map[string]struct{}{
+								"no-writes": {},
+							},
+							"name": funcName,
+						},
+					},
+					"library_name": libName,
+				},
+			},
+			res[11],
+		)
+	})
+}
+
 func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 	// TODO: replace 'any' type after converters have been added
 
@@ -1253,137 +1384,6 @@ func CreatePubSubTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer st
 	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"": int64(0)}, TestName: "PubSubNumSub()"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "PubSub commands"}
-}
-
-func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
-	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic).
-				FunctionKill().
-				FunctionDump().
-				FunctionRestore("payload").
-				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		case *glide.Client:
-			// Just test that they run
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				FunctionKill().
-				FunctionDump().
-				FunctionRestore("payload").
-				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		}
-		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
-	})
-}
-
-func (suite *GlideTestSuite) TestBatchFunctionCommands() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
-		libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
-		funcName := "myfunc"
-		libCode := `#!lua name=` + libName + `
-redis.register_function{ function_name = 'myfunc', callback = function() return 42 end, flags = { 'no-writes' } }`
-		query := models.FunctionListQuery{
-			LibraryName: libName,
-			WithCode:    false,
-		}
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			opts := pipeline.NewClusterBatchOptions().WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42))
-			batch := pipeline.NewClusterBatch(isAtomic).
-				FunctionFlush().
-				FunctionFlushSync().
-				FunctionFlushAsync().
-				FunctionLoad(libCode, false).
-				FCall(funcName).
-				FCallReadOnly(funcName).
-				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
-				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-				FunctionStats().
-				FunctionDelete(libName).
-				FunctionLoad(libCode, false).
-				FunctionList(query).
-				FunctionKill()
-
-			res, err = c.ExecWithOptions(context.Background(), *batch, false, *opts)
-			assert.NoError(suite.T(), err)
-
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				FunctionFlush().
-				FunctionFlushSync().
-				FunctionFlushAsync().
-				FunctionLoad(libCode, false).
-				FCall(funcName).
-				FCallReadOnly(funcName).
-				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
-				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-				FunctionStats().
-				FunctionDelete(libName).
-				FunctionLoad(libCode, false).
-				FunctionList(query).
-				FunctionKill()
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		}
-		assert.Equal(suite.T(), "OK", res[0])
-		assert.Equal(suite.T(), "OK", res[1])
-		assert.Equal(suite.T(), "OK", res[2])
-		assert.Equal(suite.T(), libName, res[3])
-		assert.Equal(suite.T(), int64(42), res[4])
-		assert.Equal(suite.T(), int64(42), res[5])
-		assert.Equal(suite.T(), int64(42), res[6])
-		assert.Equal(suite.T(), int64(42), res[7])
-		assert.True(
-			suite.T(),
-			reflect.DeepEqual(
-				map[string]any{
-					"engines": map[string]any{
-						"LUA": map[string]any{
-							"functions_count": int64(1),
-							"libraries_count": int64(1),
-						},
-					},
-					"running_script": nil,
-				},
-				res[8],
-			),
-		)
-		assert.Equal(suite.T(), "OK", res[9])
-		assert.Equal(
-			suite.T(),
-			[]any{
-				map[string]any{
-					"engine": "LUA",
-					"functions": []any{
-						map[string]any{
-							"description": nil,
-							"flags": map[string]struct{}{
-								"no-writes": {},
-							},
-							"name": funcName,
-						},
-					},
-					"library_name": libName,
-				},
-			},
-			res[11],
-		)
-	})
 }
 
 func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
