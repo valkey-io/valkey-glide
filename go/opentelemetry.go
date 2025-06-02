@@ -105,7 +105,7 @@ func GetInstance() *OpenTelemetry {
 // It can only be called once per process. Subsequent calls will be ignored.
 func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	if otelInitialized {
-		return nil // otel already initialized, ignore the new config
+		return fmt.Errorf("openTelemetry already initialized, ignoring new config")
 	}
 	// At least one of traces or metrics must be provided
 	if openTelemetryConfig.Traces == nil && openTelemetryConfig.Metrics == nil {
@@ -203,10 +203,10 @@ func (o *OpenTelemetry) SetSamplePercentage(percentage int32) error {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	if !o.IsInitialized() || otelConfig == nil || otelConfig.Traces == nil {
-		return fmt.Errorf("OpenTelemetry config traces not initialized")
+		return fmt.Errorf("openTelemetry config traces not initialized")
 	}
 	if percentage < 0 || percentage > 100 {
-		return fmt.Errorf("Otel sample percentage must be between 0 and 100")
+		return fmt.Errorf("telemetry sample percentage must be between 0 and 100")
 	}
 	otelConfig.Traces.SamplePercentage = percentage
 	return nil
