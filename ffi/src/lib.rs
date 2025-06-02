@@ -244,8 +244,8 @@ pub type FailureCallback = unsafe extern "C-unwind" fn(
 /// * `kind`: An enum variant representing the PushKind (Message, PMessage, SMessage, etc.)
 /// * `message`: A pointer to the raw message bytes.
 /// * `message_len`: The length of the message data in bytes.
-/// * `request_id`: A unique identifier for the raw request name bytes.
-/// * `request_id_len`: The length of the request name in bytes.
+/// * `channel`: A pointer to the raw request name bytes.
+/// * `channel_len`: The length of the request name in bytes.
 /// * `pattern`: A pointer to the raw pattern bytes (null if no pattern).
 /// * `pattern_len`: The length of the pattern in bytes (0 if no pattern).
 ///
@@ -258,8 +258,8 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
     kind: PushKind,
     message: *const u8,
     message_len: i64,
-    request_id: *const u8,
-    request_id_len: i64,
+    channel: *const u8,
+    channel_len: i64,
     pattern: *const u8,
     pattern_len: i64,
 ) -> ();
@@ -668,7 +668,7 @@ unsafe fn process_push_notification(
         })
         .collect();
 
-    let ((pattern_ptr, pattern_len), (request_id, request_id_len), (message_ptr, message_len)) = {
+    let ((pattern_ptr, pattern_len), (channel, channel_len), (message_ptr, message_len)) = {
         if strings.len() == 3 {
             (strings[0], strings[1], strings[2])
         } else {
@@ -683,14 +683,14 @@ unsafe fn process_push_notification(
             push_msg.kind.into(),
             message_ptr,
             message_len,
-            request_id,
-            request_id_len,
+            channel,
+            channel_len,
             pattern_ptr,
             pattern_len,
         );
         // Free memory
         let _ = Vec::from_raw_parts(message_ptr, message_len as usize, message_len as usize);
-        let _ = Vec::from_raw_parts(request_id, request_id_len as usize, request_id_len as usize);
+        let _ = Vec::from_raw_parts(channel, channel_len as usize, channel_len as usize);
         if !pattern_ptr.is_null() {
             let _ = Vec::from_raw_parts(pattern_ptr, pattern_len as usize, pattern_len as usize);
         }
@@ -1385,7 +1385,7 @@ impl Drop for ClusterScanCursor {
 /// Allows the client to request a cluster scan command to be executed.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
-/// `request_id` is a pointer to a valid payload buffer which is created in the client.
+/// `request_id` is a unique identifier for a valid payload buffer which is created in the client.
 /// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
 /// `arg_count` keeps track of how many option arguments are passed in the client.
 /// `args` is a pointer to C string representation of the string args.
