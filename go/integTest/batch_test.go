@@ -296,20 +296,26 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).
-				FunctionKill().
 				FunctionDump().
 				FunctionRestore("payload").
 				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			if suite.serverVersion >= "7.0.0" {
+				batch.FunctionKill()
+			}
 
 			res, err = c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
 		case *glide.Client:
 			// Just test that they run
 			batch := pipeline.NewStandaloneBatch(isAtomic).
-				FunctionKill().
 				FunctionDump().
 				FunctionRestore("payload").
 				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+
+			if suite.serverVersion >= "7.0.0" {
+				batch.FunctionKill()
+			}
 
 			res, err = c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
@@ -317,7 +323,10 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
 		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
 		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+
+		if suite.serverVersion >= "7.0.0" {
+			assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+		}
 	})
 }
 
@@ -348,8 +357,7 @@ redis.register_function{ function_name = 'myfunc', callback = function() return 
 				FunctionStats().
 				FunctionDelete(libName).
 				FunctionLoad(libCode, false).
-				FunctionList(query).
-				FunctionKill()
+				FunctionList(query)
 
 			res, err = c.ExecWithOptions(context.Background(), *batch, false, *opts)
 			assert.NoError(suite.T(), err)
@@ -367,8 +375,7 @@ redis.register_function{ function_name = 'myfunc', callback = function() return 
 				FunctionStats().
 				FunctionDelete(libName).
 				FunctionLoad(libCode, false).
-				FunctionList(query).
-				FunctionKill()
+				FunctionList(query)
 
 			res, err = c.Exec(context.Background(), *batch, false)
 			assert.NoError(suite.T(), err)
