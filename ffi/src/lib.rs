@@ -1780,9 +1780,10 @@ pub(crate) unsafe fn get_pipeline_options(
 ///
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
-    let cmd = request_type
-        .get_command()
-        .expect("Couldn't fetch command type");
+    let cmd = match request_type.get_command() {
+        Some(cmd) => cmd,
+        None => return 0, // Return 0 if no command available
+    };
     let cmd_bytes = match cmd.command() {
         Some(bytes) => bytes,
         None => return 0, // Return 0 if no command bytes available
@@ -1885,110 +1886,104 @@ pub struct OpenTelemetryMetricsConfig {
 pub unsafe extern "C" fn init_open_telemetry(
     open_telemetry_config: *const OpenTelemetryConfig,
 ) -> *const c_char {
-    unsafe {
-        // At least one of traces or metrics must be provided
-        if (*open_telemetry_config).traces.is_null() && (*open_telemetry_config).metrics.is_null() {
-            let error_msg = "At least one of traces or metrics must be provided for OpenTelemetry configuration";
-            return CString::new(error_msg)
-                .unwrap_or_else(|_| {
-                    CString::new("Couldn't convert error message to C string").unwrap()
-                })
-                .into_raw();
+    // At least one of traces or metrics must be provided
+    if unsafe { (*open_telemetry_config).traces.is_null() }
+        && unsafe { (*open_telemetry_config).metrics.is_null() }
+    {
+        let error_msg =
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration";
+        return CString::new(error_msg)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw();
+    }
+
+    let mut config = GlideOpenTelemetryConfigBuilder::default();
+
+    // Initialize open telemetry traces exporter
+    if !unsafe { (*open_telemetry_config).traces.is_null() } {
+        let endpoint = unsafe { CStr::from_ptr((*(*open_telemetry_config).traces).endpoint) }
+            .to_string_lossy()
+            .to_string();
+        match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
+            Ok(exporter) => {
+                let sample_percentage =
+                    if unsafe { (*(*open_telemetry_config).traces).has_sample_percentage } {
+                        Some(unsafe { (*(*open_telemetry_config).traces).sample_percentage })
+                    } else {
+                        None
+                    };
+                config = config.with_trace_exporter(exporter, sample_percentage);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid traces exporter configuration: {}", e);
+                return CString::new(error_msg)
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
+                    .into_raw();
+            }
         }
+    }
 
-        let mut config = GlideOpenTelemetryConfigBuilder::default();
+    // Initialize open telemetry metrics exporter
+    if !unsafe { (*open_telemetry_config).metrics.is_null() } {
+        let endpoint = unsafe { CStr::from_ptr((*(*open_telemetry_config).metrics).endpoint) }
+            .to_string_lossy()
+            .to_string();
+        match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
+            Ok(exporter) => {
+                config = config.with_metrics_exporter(exporter);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid metrics exporter configuration: {}", e);
+                return CString::new(error_msg)
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
+                    .into_raw();
+            }
+        }
+    }
 
-        // Initialize open telemetry traces exporter
-        if !(*open_telemetry_config).traces.is_null() {
-            let endpoint = CStr::from_ptr((*(*open_telemetry_config).traces).endpoint)
-                .to_string_lossy()
-                .to_string();
-            match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
-                Ok(exporter) => {
-                    let sample_percentage =
-                        if (*(*open_telemetry_config).traces).has_sample_percentage {
-                            Some((*(*open_telemetry_config).traces).sample_percentage)
-                        } else {
-                            None
-                        };
-                    config = config.with_trace_exporter(exporter, sample_percentage);
-                }
+    let flush_interval_ms = if unsafe { (*open_telemetry_config).has_flush_interval_ms } {
+        unsafe { (*open_telemetry_config).flush_interval_ms }
+    } else {
+        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64
+    };
+
+    if flush_interval_ms <= 0 {
+        let error_msg = format!(
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+            flush_interval_ms
+        );
+        return CString::new(error_msg)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw();
+    }
+
+    config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    // Initialize OpenTelemetry synchronously
+    match glide_core::client::get_or_init_runtime() {
+        Ok(glide_runtime) => {
+            match glide_runtime
+                .runtime
+                .block_on(async { GlideOpenTelemetry::initialise(config.build()) })
+            {
+                Ok(_) => std::ptr::null(), // Success
                 Err(e) => {
-                    let error_msg = format!("Invalid traces exporter configuration: {}", e);
-                    return CString::new(error_msg)
+                    let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                    CString::new(error_msg)
                         .unwrap_or_else(|_| {
                             CString::new("Couldn't convert error message to C string").unwrap()
                         })
-                        .into_raw();
+                        .into_raw()
                 }
             }
         }
-
-        // Initialize open telemetry metrics exporter
-        if !(*open_telemetry_config).metrics.is_null() {
-            let endpoint = CStr::from_ptr((*(*open_telemetry_config).metrics).endpoint)
-                .to_string_lossy()
-                .to_string();
-            match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
-                Ok(exporter) => {
-                    config = config.with_metrics_exporter(exporter);
-                }
-                Err(e) => {
-                    let error_msg = format!("Invalid metrics exporter configuration: {}", e);
-                    return CString::new(error_msg)
-                        .unwrap_or_else(|_| {
-                            CString::new("Couldn't convert error message to C string").unwrap()
-                        })
-                        .into_raw();
-                }
-            }
-        }
-
-        let flush_interval_ms = if (*open_telemetry_config).has_flush_interval_ms {
-            (*open_telemetry_config).flush_interval_ms
-        } else {
-            DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64
-        };
-
-        if flush_interval_ms <= 0 {
-            let error_msg = format!(
-                "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-                flush_interval_ms
-            );
-            return CString::new(error_msg)
-                .unwrap_or_else(|_| {
-                    CString::new("Couldn't convert error message to C string").unwrap()
-                })
-                .into_raw();
-        }
-
-        config =
-            config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
-
-        // Initialize OpenTelemetry synchronously
-        match glide_core::client::get_or_init_runtime() {
-            Ok(glide_runtime) => {
-                match glide_runtime
-                    .runtime
-                    .block_on(async { GlideOpenTelemetry::initialise(config.build()) })
-                {
-                    Ok(_) => std::ptr::null(), // Success
-                    Err(e) => {
-                        let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
-                        CString::new(error_msg)
-                            .unwrap_or_else(|_| {
-                                CString::new("Couldn't convert error message to C string").unwrap()
-                            })
-                            .into_raw()
-                    }
-                }
-            }
-            Err(e) => CString::new(e)
-                .unwrap_or_else(|_| {
-                    CString::new("Couldn't convert error message to C string").unwrap()
-                })
-                .into_raw(),
-        }
+        Err(e) => CString::new(e)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw(),
     }
 }
 
