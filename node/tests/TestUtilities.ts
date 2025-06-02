@@ -2205,11 +2205,17 @@ export async function getServerVersion(
             tlsConfig,
         );
     } else {
-        const glideClient = await GlideClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
-        );
+        const glideClient = await GlideClient.createClient({
+            ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            ...tlsConfig,
+        });
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(clusterMode, addresses, glideClient);
+        await flushAndCloseClient(
+            clusterMode,
+            addresses,
+            glideClient,
+            tlsConfig,
+        );
     }
 
     let version = "";
