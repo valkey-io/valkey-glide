@@ -166,7 +166,7 @@ func dropScript(hash string) error {
 	cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
 	err := C.drop_script(cHash, len)
-        defer C.free_drop_script_error(err)
+	defer C.free_drop_script_error(err)
 	if err == nil {
 		return nil
 	}
