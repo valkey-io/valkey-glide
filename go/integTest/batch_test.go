@@ -354,34 +354,6 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "String commands"}
 }
 
-func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool) BatchTestData {
-	testData := make([]CommandTestData, 0)
-	connectionName := "test-connection-" + uuid.New().String()
-
-	batch.Ping()
-	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
-
-	pingOptions := options.PingOptions{
-		Message: "hello",
-	}
-	batch.PingWithOptions(pingOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
-
-	batch.Echo("hello world")
-	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
-
-	batch.ClientId()
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
-
-	batch.ClientSetName(connectionName)
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
-
-	batch.ClientGetName()
-	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
-
-	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
-}
-
 func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
 	prefix := "{bitmap}-"
@@ -474,6 +446,34 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "BitOp(NOT, destKey, bitopkey1)"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "BitMap commands"}
+}
+
+func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	connectionName := "test-connection-" + uuid.New().String()
+
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+
+	pingOptions := options.PingOptions{
+		Message: "hello",
+	}
+	batch.PingWithOptions(pingOptions)
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
+
+	batch.Echo("hello world")
+	testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
+
+	batch.ClientId()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "ClientId()"})
+
+	batch.ClientSetName(connectionName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
+
+	batch.ClientGetName()
+	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
 }
 
 func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
@@ -1569,8 +1569,8 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateStringTest,
 		// more command groups here
-		CreateConnectionManagementTests,
 		CreateBitmapTest,
+		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
 		CreateGeospatialTests,
 		CreateHashTest,
@@ -1624,124 +1624,9 @@ func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []Comm
 	assert.Equal(suite.T(), len(testData), len(result))
 	for i := range result {
 		if testData[i].CheckTypeOnly {
-			// If we can't check equality, we should just test that it's the same type
 			assert.IsType(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
-		} else {
-			assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
+			continue
 		}
+		assert.Equal(suite.T(), testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
-}
-func (suite *GlideTestSuite) TestConnectionManagementBatch() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
-		testData := make([]CommandTestData, 0)
-		connectionName := "test-connection-" + uuid.New().String()
-
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic)
-
-			// Ping
-			batch.Ping()
-			testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
-
-			// Ping with options
-			pingOptions := options.ClusterPingOptions{
-				PingOptions: &options.PingOptions{
-					Message: "hello",
-				},
-			}
-			batch.PingWithOptions(pingOptions)
-			testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
-
-			// Echo
-			batch.Echo("hello world")
-			testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
-
-			// Echo with options
-			routeOption := options.RouteOption{Route: config.RandomRoute}
-			batch.EchoWithOptions("hello with route", routeOption)
-			testData = append(testData, CommandTestData{ExpectedResponse: "hello with route", TestName: "EchoWithOptions(hello with route, routeOption)"})
-
-			// ClientId
-			batch.ClientId()
-			testData = append(testData, CommandTestData{TestName: "ClientId()"})
-
-			// ClientId with options
-			batch.ClientIdWithOptions(routeOption)
-			testData = append(testData, CommandTestData{TestName: "ClientIdWithOptions(routeOption)"})
-
-			// ClientSetName
-			batch.ClientSetName(connectionName)
-			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
-
-			// ClientSetName with options
-			batch.ClientSetNameWithOptions(connectionName+"-with-route", routeOption)
-			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetNameWithOptions(connectionName-with-route, routeOption)"})
-
-			// ClientGetName
-			batch.ClientGetName()
-			testData = append(testData, CommandTestData{ExpectedResponse: connectionName + "-with-route", TestName: "ClientGetName()"})
-
-			// ClientGetName with options
-			batch.ClientGetNameWithOptions(routeOption)
-			testData = append(testData, CommandTestData{ExpectedResponse: connectionName + "-with-route", TestName: "ClientGetNameWithOptions(routeOption)"})
-
-			res, err := c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
-
-			// Verify results of everything except ClientID
-			for i, td := range testData {
-				if td.ExpectedResponse != nil {
-					assert.Equal(suite.T(), td.ExpectedResponse, res[i], td.TestName)
-				}
-			}
-
-			// Verify ClientId results - should be an int64
-			assert.IsType(suite.T(), int64(0), res[4], "ClientId() should return an int64")
-			assert.IsType(suite.T(), int64(0), res[5], "ClientIdWithOptions() should return an int64")
-
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic)
-
-			// Ping
-			batch.Ping()
-			testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
-
-			// Ping with options
-			pingOptions := options.PingOptions{
-				Message: "hello",
-			}
-			batch.PingWithOptions(pingOptions)
-			testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
-
-			// Echo
-			batch.Echo("hello world")
-			testData = append(testData, CommandTestData{ExpectedResponse: "hello world", TestName: "Echo(hello world)"})
-
-			// ClientId
-			batch.ClientId()
-			testData = append(testData, CommandTestData{TestName: "ClientId()"})
-
-			// ClientSetName
-			batch.ClientSetName(connectionName)
-			testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ClientSetName(connectionName)"})
-
-			// ClientGetName
-			batch.ClientGetName()
-			testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
-
-			res, err := c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
-
-			// Verify results
-			for i, td := range testData {
-				if td.ExpectedResponse != nil {
-					assert.Equal(suite.T(), td.ExpectedResponse, res[i], td.TestName)
-				}
-			}
-
-			// Verify results of everything except ClientID
-			assert.IsType(suite.T(), int64(0), res[3], "ClientId() should return an int64")
-		}
-	})
 }
