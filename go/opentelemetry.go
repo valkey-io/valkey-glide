@@ -31,7 +31,7 @@ import (
 //	        Endpoint:         "http://localhost:4318/v1/traces",
 //	        SamplePercentage: 10, // Sample 10% of commands
 //	    },
-//	    FlushIntervalMs: &interval, // interval := int64(1000)
+//	    FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
 //	}
 //	err := glide.GetInstance().Init(config)
 //	if err != nil {
