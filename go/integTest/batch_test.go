@@ -222,7 +222,7 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
 			res, err = c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic)
 
@@ -251,36 +251,36 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
 
 			res, err = c.Exec(context.Background(), *batch, true)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		}
 
 		// Verify GeoPos results
 		geoPos := res[2].([]any)
-		assert.Len(suite.T(), geoPos, 2)
-		assert.NotNil(suite.T(), geoPos[0])
-		assert.Nil(suite.T(), geoPos[1])
+		suite.Len(geoPos, 2)
+		suite.NotNil(geoPos[0])
+		suite.Nil(geoPos[1])
 
 		// Verify distance results (approximately)
 		geoDist := res[3].(float64)
-		assert.InDelta(suite.T(), 166274.15, geoDist, 1.0)
+		suite.InDelta(166274.15, geoDist, 1.0)
 
 		geoDistKm := res[4].(float64)
-		assert.InDelta(suite.T(), 166.27, geoDistKm, 0.1)
+		suite.InDelta(166.27, geoDistKm, 0.1)
 
 		// Verify search results
 		geoSearch := res[5]
-		assert.Len(suite.T(), geoSearch, 3)
-		assert.Contains(suite.T(), geoSearch, "Palermo")
-		assert.Contains(suite.T(), geoSearch, "Catania")
-		assert.Contains(suite.T(), geoSearch, "Messina")
+		suite.Len(geoSearch, 3)
+		suite.Contains(geoSearch, "Palermo")
+		suite.Contains(geoSearch, "Catania")
+		suite.Contains(geoSearch, "Messina")
 
 		// Verify search with info results
 		geoSearchInfo := res[6].([]any)
-		assert.Len(suite.T(), geoSearchInfo, 3)
+		suite.Len(geoSearchInfo, 3)
 
 		// Verify full search results
 		geoSearchFull := res[7].([]any)
-		assert.Len(suite.T(), geoSearchFull, 1)
+		suite.Len(geoSearchFull, 1)
 	})
 }
 
@@ -298,24 +298,24 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 				PubSubShardNumSub()
 
 			res, err := c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), int64(0), res[0])
+			suite.NoError(err)
+			suite.Equal(int64(0), res[0])
 			if suite.serverVersion >= "7.0.0" {
-				assert.Equal(suite.T(), ([]any)(nil), res[1])
-				assert.Equal(suite.T(), ([]any)(nil), res[2])
-				assert.Equal(suite.T(), map[string]any{}, res[3])
+				suite.Equal(([]any)(nil), res[1])
+				suite.Equal(([]any)(nil), res[2])
+				suite.Equal(map[string]any{}, res[3])
 			} else {
 				// In 6.2.0, errors are raised instead
-				assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-				assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-				assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+				suite.IsType(&errors.RequestError{}, res[1])
+				suite.IsType(&errors.RequestError{}, res[2])
+				suite.IsType(&errors.RequestError{}, res[3])
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
 				Publish("NonExistentChannel", "msg")
 			res, err := c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), int64(0), res[0])
+			suite.NoError(err)
+			suite.Equal(int64(0), res[0])
 		}
 	})
 }
@@ -840,7 +840,13 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	geoAddOptions := options.GeoAddOptions{}
 	geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
 	batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)",
+		},
+	)
 
 	batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
 	testData = append(testData, CommandTestData{
@@ -864,20 +870,47 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "GeoAdd(key, membersToGeospatialData)"})
 
 	batch.GeoAddWithOptions(prefix+key, membersToGeospatialData2, geoAddOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)",
+		},
+	)
 
 	batch.GeoSearchStore(destKey, prefix+key, searchFrom, *searchByShape)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStore(destKey, key, searchFrom, searchByShape)"},
+	)
 
 	batch.GeoSearchStoreWithResultOptions(destKey+"1", prefix+key, searchFrom, *searchByShape, *resultOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoSearchStoreWithResultOptions(destKey+1, key, searchFrom, searchByShape, resultOptions)",
+		},
+	)
 
 	storeInfoOptions := options.NewGeoSearchStoreInfoOptions().SetStoreDist(true)
 	batch.GeoSearchStoreWithInfoOptions(destKey+"2", prefix+key, searchFrom, *searchByShape, *storeInfoOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(3),
+			TestName:         "GeoSearchStoreWithInfoOptions(destKey+2, key, searchFrom, searchByShape, storeInfoOptions)",
+		},
+	)
 
 	batch.GeoSearchStoreWithFullOptions(destKey+"3", prefix+key, searchFrom, *searchByShape, *resultOptions, *storeInfoOptions)
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: int64(1),
+			TestName:         "GeoSearchStoreWithFullOptions(destKey+3, key, searchFrom, searchByShape, resultOptions, storeInfoOptions)",
+		},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Geospatial commands"}
 }
@@ -1445,11 +1478,17 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.BZMPop([]string{key}, constants.MIN, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}}, TestName: "BZMPop(key, MIN, 1)"},
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
+				TestName:         "BZMPop(key, MIN, 1)",
+			},
 		)
 
 		batch.ZAdd(key, membersScoreMap)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"},
+		)
 		batch.BZMPopWithOptions([]string{key}, constants.MIN, 1, *options.NewZMPopOptions().SetCount(1))
 		testData = append(
 			testData,
@@ -1475,11 +1514,17 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	if serverVer >= "7.0.0" {
 		batch.ZAdd(key, membersScoreMap)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(2), TestName: "ZAdd(key, {member1:1.0, member2:2.0})"},
+		)
 		batch.ZMPop([]string{key}, constants.MIN)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}}, TestName: "ZMPop([key], min)"},
+			CommandTestData{
+				ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}},
+				TestName:         "ZMPop([key], min)",
+			},
 		)
 
 		batch.ZMPopWithOptions([]string{key}, constants.MIN, *options.NewZMPopOptions().SetCount(1))
@@ -1597,16 +1642,25 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZAdd(prefix+key, map[string]float64{"member1": 1.0})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(prefix+key, {member1:1.0})"})
 	batch.ZDiff([]string{prefix + key, prefix + key3})
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"},
+	)
 
 	batch.ZDiffWithScores([]string{prefix + key, prefix + key3})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZDiffWithScores([prefix+key, prefix+key3])"},
+		CommandTestData{
+			ExpectedResponse: map[string]any{"member1": float64(1.0)},
+			TestName:         "ZDiffWithScores([prefix+key, prefix+key3])",
+		},
 	)
 
 	batch.ZDiffStore(dest, []string{prefix + key, prefix + key3})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [prefix+key, prefix+key3])"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(1), TestName: "ZDiffStore(dest, [prefix+key, prefix+key3])"},
+	)
 
 	batch.ZInter(options.KeyArray{
 		Keys: []string{prefix + key, prefix + key3},
