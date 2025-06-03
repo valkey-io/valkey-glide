@@ -231,6 +231,9 @@ public class OpenTelemetryTests {
         OpenTelemetry.setSamplePercentage(100);
         assertEquals(100, OpenTelemetry.getSamplePercentage());
 
+        // Test that setting negative value throws an exception
+        assertThrows(Exception.class, () -> OpenTelemetry.setSamplePercentage(-100));
+
         // Execute a series of commands
         for (int i = 0; i < 10; i++) {
             String key = "testPercentageRequestsConfig_" + i;
