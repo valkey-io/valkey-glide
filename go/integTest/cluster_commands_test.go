@@ -2433,12 +2433,12 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
-	code := CreateLongRunningLuaScript(5, true)
+	code := CreateLongRunningLuaScript(6, true)
 	script := options.NewScript(code)
 
 	go invokeClient.InvokeScript(context.Background(), *script)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	result, err = killClient.ScriptKill(context.Background())
 	assert.NoError(suite.T(), err)
