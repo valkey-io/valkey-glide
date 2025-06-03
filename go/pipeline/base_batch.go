@@ -4576,7 +4576,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -4601,7 +4601,7 @@ func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end opti
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -4618,7 +4618,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Map, true)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4662,9 +4662,8 @@ func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end o
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
-//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRangeWithOptions(
@@ -4679,7 +4678,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Map, true)
 }
 
 // Returns information about the stream stored at `key`.
