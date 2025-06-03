@@ -297,7 +297,15 @@ func (client *baseClient) executeCommandWithRoute(
 	default:
 		// Continue with execution
 	}
-
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	otelInstance := GetInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
+		// Pass the request type to determine the descriptive name of the command
+		// to use as the span name
+		spanPtr = otelInstance.createSpan(requestType)
+		defer otelInstance.dropSpan(spanPtr)
+	}
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -305,7 +313,6 @@ func (client *baseClient) executeCommandWithRoute(
 		cArgsPtr = &cArgs[0]
 		argLengthsPtr = &argLengths[0]
 	}
-
 	var routeBytesPtr *C.uchar = nil
 	var routeBytesCount C.uintptr_t = 0
 	if route != nil {
@@ -321,7 +328,6 @@ func (client *baseClient) executeCommandWithRoute(
 		routeBytesCount = C.uintptr_t(len(msg))
 		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
 	}
-
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -345,9 +351,9 @@ func (client *baseClient) executeCommandWithRoute(
 		argLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
-
 	// Wait for result or context cancellation
 	var payload payload
 	select {
@@ -416,6 +422,17 @@ func (client *baseClient) executeBatch(
 				len(batch.Errors), strings.Join(batch.Errors, ", ")),
 		}
 	}
+
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	otelInstance := GetInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
+		// Pass the request type to determine the descriptive name of the command
+		// to use as the span name
+		spanPtr = otelInstance.createBatchSpan()
+		defer otelInstance.dropSpan(spanPtr)
+	}
+
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
 	resultChannelPtr := unsafe.Pointer(&resultChannel)
@@ -444,6 +461,7 @@ func (client *baseClient) executeBatch(
 		&batchInfo,
 		C._Bool(raiseOnError),
 		optionsPtr,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 

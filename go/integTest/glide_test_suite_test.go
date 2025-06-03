@@ -61,6 +61,7 @@ var (
 	)
 	pubsubtest       = flag.Bool("pubsub", false, "Set to true to run pubsub tests")
 	longTimeoutTests = flag.Bool("long-timeout-tests", false, "Set to true to run tests with longer timeouts")
+	otelTest         = flag.Bool("otel-test", false, "Set to true to run opentelemetry tests")
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -109,6 +110,24 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
+
+	// OpenTelemetry illegal config tests and setup
+	if *otelTest {
+		WrongOpenTelemetryConfig(suite)
+		intervalMs := int64(otelSpanFlushIntervalMs)
+		openTelemetryConfig := glide.OpenTelemetryConfig{
+			Traces: &glide.OpenTelemetryTracesConfig{
+				Endpoint:         validFileEndpointTraces,
+				SamplePercentage: 100,
+			},
+			Metrics: &glide.OpenTelemetryMetricsConfig{
+				Endpoint: validEndpointMetrics,
+			},
+			FlushIntervalMs: &intervalMs,
+		}
+		err := glide.GetInstance().Init(openTelemetryConfig)
+		assert.NoError(suite.T(), err)
+	}
 }
 
 func parseHosts(suite *GlideTestSuite, addresses string) []config.NodeAddress {
@@ -244,6 +263,16 @@ func (suite *GlideTestSuite) TearDownSuite() {
 }
 
 func (suite *GlideTestSuite) TearDownTest() {
+	if *otelTest {
+		time.Sleep(100 * time.Millisecond)
+		// Remove the span file if it exists
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			if err := os.Remove(validEndpointTraces); err != nil {
+				suite.T().Logf("Failed to remove span file: %v", err)
+			}
+		}
+	}
+
 	for _, client := range suite.clients {
 		client.FlushDB(context.Background())
 		client.Close()

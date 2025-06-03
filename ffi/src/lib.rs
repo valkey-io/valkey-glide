@@ -10,6 +10,10 @@ use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
+use glide_core::{
+    DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
+    GlideOpenTelemetrySignalsExporter, GlideSpan,
+};
 use protobuf::Message;
 use redis::ErrorKind;
 use redis::ObjectType;
@@ -25,6 +29,7 @@ use std::future::Future;
 use std::mem::ManuallyDrop;
 use std::slice::from_raw_parts;
 use std::str;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     ffi::{CString, c_void},
@@ -1093,6 +1098,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
 /// * This function should only be called should with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn command(
@@ -1104,6 +1110,7 @@ pub unsafe extern "C-unwind" fn command(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -1128,6 +1135,9 @@ pub unsafe extern "C-unwind" fn command(
     };
     for command_arg in arg_vec {
         cmd.arg(command_arg);
+    }
+    if span_ptr != 0 {
+        cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
 
     let route = if !route_bytes.is_null() {
@@ -1773,6 +1783,7 @@ pub unsafe extern "C" fn batch(
     batch_ptr: *const BatchInfo,
     raise_on_error: bool,
     options_ptr: *const BatchOptionsInfo,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -1782,7 +1793,7 @@ pub unsafe extern "C" fn batch(
     let mut client = client_adapter.core.client.clone();
 
     // TODO handle panics
-    let pipeline = match unsafe { create_pipeline(batch_ptr) } {
+    let mut pipeline = match unsafe { create_pipeline(batch_ptr) } {
         Ok(pipeline) => pipeline,
         Err(err) => {
             return unsafe {
@@ -1794,9 +1805,13 @@ pub unsafe extern "C" fn batch(
             };
         }
     };
+    if span_ptr != 0 {
+        pipeline.set_pipeline_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
+    }
+    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
-    client_adapter.execute_request(callback_index, async move {
+    let result = client_adapter.execute_request(callback_index, async move {
         if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -1812,7 +1827,12 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         }
-    })
+    });
+
+    if let Ok(span) = child_span {
+        span.end();
+    }
+    result
 }
 
 /// Convert raw C string to a rust string.
@@ -1948,4 +1968,271 @@ pub(crate) unsafe fn get_pipeline_options(
         timeout,
         PipelineRetryStrategy::new(info.retry_server_error, info.retry_connection_error),
     )
+}
+
+/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
+///
+#[unsafe(no_mangle)]
+pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    let cmd = match request_type.get_command() {
+        Some(cmd) => cmd,
+        None => return 0, // Return 0 if no command available
+    };
+    let cmd_bytes = match cmd.command() {
+        Some(bytes) => bytes,
+        None => return 0, // Return 0 if no command bytes available
+    };
+    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
+        Ok(name) => name,
+        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+    };
+
+    let span = GlideOpenTelemetry::new_span(command_name);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
+/// Creates an OpenTelemetry span with a fixed name "batch" and returns a pointer to the span as u64.
+///
+#[unsafe(no_mangle)]
+pub extern "C" fn create_batch_otel_span() -> u64 {
+    let command_name = "Batch";
+
+    let span = GlideOpenTelemetry::new_span(command_name);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
+/// Drops an OpenTelemetry span given its pointer as u64.
+///
+/// # Safety
+/// * `span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`] or `0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
+    if span_ptr == 0 {
+        return;
+    }
+    unsafe {
+        Arc::from_raw(span_ptr as *const GlideSpan);
+    }
+}
+
+/// Configuration for OpenTelemetry integration in the Node.js client.
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+/// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+/// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+///
+/// At least one of traces or metrics must be provided.
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct OpenTelemetryConfig {
+    /// Configuration for exporting trace data. Only valid if has_traces is true.
+    pub traces: *const OpenTelemetryTracesConfig,
+    /// Configuration for exporting metrics data. Only valid if has_metrics is true.
+    pub metrics: *const OpenTelemetryMetricsConfig,
+    /// Whether flush interval is specified
+    pub has_flush_interval_ms: bool,
+    /// Interval in milliseconds between consecutive exports of telemetry data. Only valid if has_flush_interval_ms is true.
+    pub flush_interval_ms: i64,
+}
+
+/// Configuration for exporting OpenTelemetry traces.
+///
+/// - `endpoint`: The endpoint to which trace data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+/// - `has_sample_percentage`: Whether sample percentage is specified
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. Only valid if has_sample_percentage is true.
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct OpenTelemetryTracesConfig {
+    /// The endpoint to which trace data will be exported, `null` if not specified.
+    pub endpoint: *const c_char,
+    /// Whether sample percentage is specified
+    pub has_sample_percentage: bool,
+    /// The percentage of requests to sample and create a span for, used to measure command duration. Only valid if has_sample_percentage is true.
+    pub sample_percentage: u32,
+}
+
+/// Configuration for exporting OpenTelemetry metrics.
+///
+/// - `endpoint`: The endpoint to which metrics data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct OpenTelemetryMetricsConfig {
+    /// The endpoint to which metrics data will be exported, `null` if not specified.
+    pub endpoint: *const c_char,
+}
+
+/// Initializes OpenTelemetry with the given configuration.
+///
+/// # Safety
+/// * `open_telemetry_config` and its underlying traces and metrics pointers must be valid until the function returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn init_open_telemetry(
+    open_telemetry_config: *const OpenTelemetryConfig,
+) -> *const c_char {
+    // At least one of traces or metrics must be provided
+    if unsafe { (*open_telemetry_config).traces.is_null() }
+        && unsafe { (*open_telemetry_config).metrics.is_null() }
+    {
+        let error_msg =
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration";
+        return CString::new(error_msg)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw();
+    }
+
+    let mut config = GlideOpenTelemetryConfigBuilder::default();
+
+    // Initialize open telemetry traces exporter
+    if !unsafe { (*open_telemetry_config).traces.is_null() } {
+        let endpoint = unsafe { CStr::from_ptr((*(*open_telemetry_config).traces).endpoint) }
+            .to_string_lossy()
+            .to_string();
+        match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
+            Ok(exporter) => {
+                let sample_percentage =
+                    if unsafe { (*(*open_telemetry_config).traces).has_sample_percentage } {
+                        Some(unsafe { (*(*open_telemetry_config).traces).sample_percentage })
+                    } else {
+                        None
+                    };
+                config = config.with_trace_exporter(exporter, sample_percentage);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid traces exporter configuration: {}", e);
+                return CString::new(error_msg)
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
+                    .into_raw();
+            }
+        }
+    }
+
+    // Initialize open telemetry metrics exporter
+    if !unsafe { (*open_telemetry_config).metrics.is_null() } {
+        let endpoint = unsafe { CStr::from_ptr((*(*open_telemetry_config).metrics).endpoint) }
+            .to_string_lossy()
+            .to_string();
+        match GlideOpenTelemetrySignalsExporter::from_str(&endpoint) {
+            Ok(exporter) => {
+                config = config.with_metrics_exporter(exporter);
+            }
+            Err(e) => {
+                let error_msg = format!("Invalid metrics exporter configuration: {}", e);
+                return CString::new(error_msg)
+                    .unwrap_or_else(|_| {
+                        CString::new("Couldn't convert error message to C string").unwrap()
+                    })
+                    .into_raw();
+            }
+        }
+    }
+
+    let flush_interval_ms = if unsafe { (*open_telemetry_config).has_flush_interval_ms } {
+        unsafe { (*open_telemetry_config).flush_interval_ms }
+    } else {
+        DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64
+    };
+
+    if flush_interval_ms <= 0 {
+        let error_msg = format!(
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
+            flush_interval_ms
+        );
+        return CString::new(error_msg)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw();
+    }
+
+    config = config.with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    // Initialize OpenTelemetry synchronously
+    match glide_core::client::get_or_init_runtime() {
+        Ok(glide_runtime) => {
+            match glide_runtime
+                .runtime
+                .block_on(async { GlideOpenTelemetry::initialise(config.build()) })
+            {
+                Ok(_) => std::ptr::null(), // Success
+                Err(e) => {
+                    let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                    CString::new(error_msg)
+                        .unwrap_or_else(|_| {
+                            CString::new("Couldn't convert error message to C string").unwrap()
+                        })
+                        .into_raw()
+                }
+            }
+        }
+        Err(e) => CString::new(e)
+            .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
+            .into_raw(),
+    }
+}
+
+/// Frees a C string.
+///
+/// # Safety
+/// * `s` must be a valid pointer to a C string or `null`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_c_string(s: *mut c_char) {
+    unsafe {
+        if s.is_null() {
+            return;
+        }
+        drop(CString::from_raw(s));
+    };
+}
+
+/// This function converts a raw pointer to a GlideSpan into a safe Rust reference.
+/// It handles the unsafe pointer operations internally, incrementing the reference count
+/// to ensure the span remains valid while in use.
+///
+/// # Safety
+///
+/// This function is marked as unsafe because it dereferences a raw pointer. The caller
+/// must ensure that:
+/// * The pointer is valid and points to a properly allocated GlideSpan
+/// * The pointer is properly aligned
+/// * The data pointed to is not modified while the returned reference is in use
+/// * The pointer is not used after the referenced data is dropped
+///
+/// # Arguments
+///
+/// * `command_span` - An optional raw pointer (as u64) to a GlideSpan
+///
+/// # Returns
+///
+/// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
+/// * `None` - If the pointer is None
+unsafe fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
+    command_span.map(|command_span| unsafe {
+        Arc::increment_strong_count(command_span as *const GlideSpan);
+        (*Arc::from_raw(command_span as *const GlideSpan)).clone()
+    })
+}
+
+/// Creates a child span for telemetry if telemetry is enabled
+fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, String> {
+    // Early return if no parent span is provided
+    let parent_span = span.ok_or_else(|| "No parent span provided".to_string())?;
+
+    match parent_span.add_span(name) {
+        Ok(child_span) => Ok(child_span),
+        Err(error_msg) => Err(format!(
+            "Opentelemetry failed to create child span with name `{}`. Error: {:?}",
+            name, error_msg
+        )),
+    }
 }
