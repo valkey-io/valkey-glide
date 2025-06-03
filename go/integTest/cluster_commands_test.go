@@ -25,7 +25,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
 	client := suite.defaultClusterClient()
 	result, err := client.CustomCommand(context.Background(), []string{"INFO"})
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	// INFO is routed to all primary nodes by default
 	for _, value := range result.MultiValue() {
 		assert.True(suite.T(), strings.Contains(value.(string), "# Stats"))
@@ -36,7 +36,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 	client := suite.defaultClusterClient()
 	result, err := client.CustomCommand(context.Background(), []string{"ECHO", "GO GLIDE GO"})
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	// ECHO is routed to a single random node
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
 }
@@ -154,7 +154,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Info() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllPrimaries)
 	result, err := client.CustomCommandWithRoute(context.Background(), []string{"INFO"}, route)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.True(suite.T(), result.IsMultiValue())
 	multiValue := result.MultiValue()
 	for _, value := range multiValue {
@@ -166,7 +166,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Echo() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.RandomRoute)
 	result, err := client.CustomCommandWithRoute(context.Background(), []string{"ECHO", "GO GLIDE GO"}, route)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.True(suite.T(), result.IsSingleValue())
 	assert.Equal(suite.T(), "GO GLIDE GO", result.SingleValue().(string))
 }
@@ -183,7 +183,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_AllNodes() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllNodes)
 	result, err := client.CustomCommandWithRoute(context.Background(), []string{"PING"}, route)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.True(suite.T(), result.IsSingleValue())
 	assert.Equal(suite.T(), "PONG", result.SingleValue())
 }
@@ -197,7 +197,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_NoRoute() {
 		RouteOption: nil,
 	}
 	result, err := client.PingWithOptions(context.Background(), options)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "hello", result)
 }
 
@@ -210,7 +210,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_WithRoute() {
 		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
 	result, err := client.PingWithOptions(context.Background(), options)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "hello", result)
 }
 
@@ -1054,8 +1054,8 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_InvalidParamete
 
 	// Test empty password
 	_, err := testClient.UpdateConnectionPassword(context.Background(), "", true)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
+
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() {
@@ -1070,8 +1070,8 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() 
 	// Test immediate re-authentication fails when no server password is set
 	pwd := uuid.NewString()
 	_, err = testClient.UpdateConnectionPassword(context.Background(), pwd, true)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
+
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_LongPassword() {
@@ -1117,25 +1117,24 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_ImmediateAuthWr
 
 	// Test that re-authentication fails when using wrong password
 	_, err = testClient.UpdateConnectionPassword(context.Background(), pwd, true)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
 
 	// But using correct password returns OK
 	_, err = testClient.UpdateConnectionPassword(context.Background(), notThePwd, true)
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 
 	// Cleanup: Reset password
 	_, err = adminClient.CustomCommand(context.Background(), []string{"CONFIG", "SET", "requirepass", ""})
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 }
 
 func (suite *GlideTestSuite) TestClusterLolwut() {
 	client := suite.defaultClusterClient()
 
 	result, err := client.Lolwut(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), result)
-	assert.Contains(suite.T(), result, "Redis ver.")
+	suite.NoError(err)
+	suite.NotEmpty(result)
+	suite.Contains(result, "Redis ver.")
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
@@ -1148,13 +1147,13 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
 	result, err := client.LolwutWithOptions(context.Background(), options)
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 
-	assert.True(suite.T(), result.IsMultiValue())
+	suite.True(result.IsMultiValue())
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		assert.Contains(suite.T(), value, "Redis ver.")
+		suite.Contains(value, "Redis ver.")
 	}
 }
 
@@ -1167,9 +1166,9 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
 	}
 	result, err := client.LolwutWithOptions(context.Background(), options)
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 
-	assert.True(suite.T(), result.IsMultiValue())
+	suite.True(result.IsMultiValue())
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
@@ -1547,7 +1546,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDeleteWithRoute(context.Background(), "anotherLib", route)
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
 
 	// Test with all primaries route
 	libName = "mylib1c_all"
@@ -1560,22 +1559,22 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 	// Flush all functions with SYNC option and all primaries route
 	route = options.RouteOption{Route: config.AllPrimaries}
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Load function with all primaries route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, false, route)
-	assert.NoError(t, err)
-	assert.Equal(t, libName, result)
+	suite.NoError(err)
+	suite.Equal(libName, result)
 
 	// Test FCALL with all primaries route
 	functionResult, err = client.FCallWithArgsWithRoute(context.Background(), funcName, []string{"one", "two"}, route)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	if functionResult.IsSingleValue() {
-		assert.Equal(t, "one", functionResult.SingleValue())
+		suite.Equal("one", functionResult.SingleValue())
 	} else {
 		for _, value := range functionResult.MultiValue() {
-			assert.Equal(t, "one", value)
+			suite.Equal("one", value)
 		}
 	}
 
@@ -1622,7 +1621,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDeleteWithRoute(context.Background(), "anotherLib", route)
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
@@ -1674,16 +1673,16 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 	// load new lib and delete it - first lib remains loaded
 	anotherLib := GenerateLuaLibCode("anotherLib", map[string]string{"anotherFunc": ""}, false)
 	result, err = client.FunctionLoad(context.Background(), anotherLib, true)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "anotherLib", result)
+	suite.NoError(err)
+	suite.Equal("anotherLib", result)
 
 	deleteResult, err := client.FunctionDelete(context.Background(), "anotherLib")
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", deleteResult)
+	suite.NoError(err)
+	suite.Equal("OK", deleteResult)
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDelete(context.Background(), "anotherLib")
-	assert.IsType(suite.T(), &glideErrors.RequestError{}, err)
+	suite.Error(err)
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
@@ -1694,8 +1693,8 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 
 	// Flush all functions with SYNC option
 	result, err := client.FunctionFlushSync(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Load first function
 	libName := "functionStats_without_route"
@@ -1705,12 +1704,12 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 	}
 	code := GenerateLuaLibCode(libName, functions, false)
 	result, err = client.FunctionLoad(context.Background(), code, true)
-	assert.NoError(t, err)
-	assert.Equal(t, libName, result)
+	suite.NoError(err)
+	suite.Equal(libName, result)
 
 	// Check stats after loading first function
 	stats, err := client.FunctionStats(context.Background())
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
@@ -1725,12 +1724,12 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 	}
 	code2 := GenerateLuaLibCode(libName2, functions2, false)
 	result, err = client.FunctionLoad(context.Background(), code2, true)
-	assert.NoError(t, err)
-	assert.Equal(t, libName2, result)
+	suite.NoError(err)
+	suite.Equal(libName2, result)
 
 	// Check stats after loading second function
 	stats, err = client.FunctionStats(context.Background())
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
@@ -1739,12 +1738,12 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 
 	// Flush all functions
 	result, err = client.FunctionFlushSync(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Check stats after flushing
 	stats, err = client.FunctionStats(context.Background())
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
@@ -1769,17 +1768,17 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 	// Flush all functions with SYNC option and single node route
 	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
 	result, err := client.FunctionFlushSyncWithRoute(context.Background(), route)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Load function with single node route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, true, route)
-	assert.NoError(t, err)
-	assert.Equal(t, libName, result)
+	suite.NoError(err)
+	suite.Equal(libName, result)
 
 	// Check stats with single node route
 	stats, err := client.FunctionStatsWithRoute(context.Background(), route)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats.MultiValue() {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
@@ -1794,12 +1793,12 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 	}
 	code2 := GenerateLuaLibCode(libName2, functions2, false)
 	result, err = client.FunctionLoadWithRoute(context.Background(), code2, true, route)
-	assert.NoError(t, err)
-	assert.Equal(t, libName2, result)
+	suite.NoError(err)
+	suite.Equal(libName2, result)
 
 	// Check stats after loading second function
 	stats, err = client.FunctionStatsWithRoute(context.Background(), route)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats.MultiValue() {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(3), nodeStats.Engines["LUA"].FunctionCount)
@@ -1808,12 +1807,12 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 
 	// Flush all functions
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Check stats after flushing
 	stats, err = client.FunctionStatsWithRoute(context.Background(), route)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats.MultiValue() {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(0), nodeStats.Engines["LUA"].FunctionCount)
@@ -1831,17 +1830,17 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 	// Flush all functions with SYNC option and all primaries route
 	route = options.RouteOption{Route: config.AllPrimaries}
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", result)
+	suite.NoError(err)
+	suite.Equal("OK", result)
 
 	// Load function with all primaries route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, true, route)
-	assert.NoError(t, err)
-	assert.Equal(t, libName, result)
+	suite.NoError(err)
+	suite.Equal(libName, result)
 
 	// Check stats with all primaries route
 	stats, err = client.FunctionStatsWithRoute(context.Background(), route)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	for _, nodeStats := range stats.MultiValue() {
 		assert.Empty(t, nodeStats.RunningScript.Name)
 		assert.Equal(t, int64(1), nodeStats.Engines["LUA"].FunctionCount)
@@ -2131,7 +2130,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 
 	// Dumping an empty lib
 	emptyDump, err := client.FunctionDump(context.Background())
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), emptyDump)
 	assert.Greater(suite.T(), len(emptyDump), 0)
 
@@ -2149,12 +2148,12 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 
 	// Load the functions
 	loadResult, err := client.FunctionLoad(context.Background(), code, true)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), libname1, loadResult)
 
 	// Dump the library
 	dump, err := client.FunctionDump(context.Background())
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 
 	// Restore without cleaning the lib and/or overwrite option causes an error
 	_, err = client.FunctionRestore(context.Background(), dump)
@@ -2171,7 +2170,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 
 	// Verify functions still work after replace
 	result1, err := client.FCallReadOnlyWithArgs(context.Background(), name1, []string{"meow", "woem"})
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	if result1.IsSingleValue() {
 		assert.Equal(suite.T(), "meow", result1.SingleValue())
 	} else {
@@ -2181,7 +2180,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	}
 
 	result2, err := client.FCallReadOnlyWithArgs(context.Background(), name2, []string{"meow", "woem"})
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	if result2.IsSingleValue() {
 		assert.Equal(suite.T(), int64(2), result2.SingleValue())
 	} else {
@@ -2197,7 +2196,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 		name2: "return #args",
 	}, true)
 	loadResult, err = client.FunctionLoad(context.Background(), code, true)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), libname2, loadResult)
 
 	// REPLACE policy now fails due to a name collision
@@ -2214,7 +2213,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 
 	// Verify original functions work again
 	result1, err = client.FCallReadOnlyWithArgs(context.Background(), name1, []string{"meow", "woem"})
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	if result1.IsSingleValue() {
 		assert.Equal(suite.T(), "meow", result1.SingleValue())
 	} else {
@@ -2224,7 +2223,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	}
 
 	result2, err = client.FCallReadOnlyWithArgs(context.Background(), name2, []string{"meow", "woem"})
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	if result2.IsSingleValue() {
 		assert.Equal(suite.T(), int64(2), result2.SingleValue())
 	} else {
@@ -2243,7 +2242,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	routeOption := options.RouteOption{Route: config.AllPrimaries}
 	// Test simple script that returns a string
 	clusterResponse, err := clusterClient.InvokeScriptWithRoute(context.Background(), *script1, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	for _, value := range clusterResponse.MultiValue() {
 		assert.Equal(suite.T(), "Hello", value)
 	}
@@ -2256,7 +2255,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	scriptOptions := options.NewScriptOptions()
 	scriptOptions.WithKeys([]string{key1}).WithArgs([]string{"value1"})
 	setResponse, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", setResponse)
 
 	// Set another key with the same script
@@ -2264,7 +2263,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	scriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
 	setResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions2)
 	assert.Equal(suite.T(), "OK", setResponse2)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	script2.Close()
 
 	// Test script that gets a key's value
@@ -2274,7 +2273,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	scriptOptions3 := options.NewScriptOptions()
 	scriptOptions3.WithKeys([]string{key1})
 	getResponse1, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions3)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "value1", getResponse1)
 
 	// Get another key's value
@@ -2282,7 +2281,7 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	scriptOptions4.WithKeys([]string{key2})
 	getResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions4)
 	assert.Equal(suite.T(), "value2", getResponse2)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	script3.Close()
 }
 
@@ -2357,17 +2356,17 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 
 	// Load script
 	_, err := client.InvokeScript(context.Background(), *script)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 
 	// Check existence of script
 	scriptHash := script.GetHash()
 	result, err := client.ScriptExists(context.Background(), []string{scriptHash})
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), []bool{true}, result)
 
 	// Flush the script cache
 	flushResult, err := client.ScriptFlush(context.Background())
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
 	// Create a script
@@ -2376,12 +2375,12 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 
 	// Load script
 	_, err = client.InvokeScriptWithRoute(context.Background(), *script, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 
 	// Check existence of script
 	scriptHash = script.GetHash()
 	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), []bool{true}, result)
 
 	// Create ScriptFlushOptions with default mode (SYNC) and route
@@ -2389,17 +2388,17 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 
 	// Flush the script cache
 	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
 	// Check that the script no longer exists
 	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), []bool{false}, result)
 
 	// Test with ASYNC mode
 	_, err = client.InvokeScriptWithRoute(context.Background(), *script, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 
 	// Create ScriptFlushOptions with ASYNC mode and route
 	scriptFlushOptions = options.NewScriptFlushOptions().
@@ -2407,11 +2406,11 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 		WithRoute(&routeOption)
 
 	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
 	result, err = client.ScriptExistsWithRoute(context.Background(), []string{scriptHash}, routeOption)
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), []bool{false}, result)
 
 	script.Close()
@@ -2551,8 +2550,7 @@ func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
 		true,
 		*pipeline.NewClusterBatchOptions().WithRetryStrategy(*pipeline.NewClusterBatchRetryStrategy()),
 	)
-	assert.Error(suite.T(), err)
-	assert.IsType(suite.T(), &errors.RequestError{}, err)
+	suite.Error(err)
 }
 
 func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
