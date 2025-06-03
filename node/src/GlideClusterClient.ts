@@ -208,6 +208,9 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  * ```typescript
  * const config: AdvancedGlideClusterClientConfiguration = {
  *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ *   tlsAdvancedConfiguration: {
+ *     insecure: true, // Skip TLS certificate verification (use only in development)
+ *   },
  * };
  * ```
  */
@@ -588,6 +591,8 @@ export class GlideClusterClient extends BaseClient {
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
+     *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     *      For advanced tls configuration, please use the {@link AdvancedGlideClusterClientConfiguration} option.
      * - **Periodic Checks**: The `periodicChecks` setting allows you to configure how often the client checks for cluster topology changes.
      * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
      */

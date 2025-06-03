@@ -551,6 +551,8 @@ export type ReadFrom =
  * ### Security Settings
  *
  * - **TLS**: Enable secure communication using `useTLS`.
+ *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+ *      For advanced tls configuration, , see {@link AdvancedBaseClientConfiguration}.
  * - **Authentication**: Provide `credentials` to authenticate with the server.
  *
  * ### Communication Settings
@@ -740,6 +742,10 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
+ * ### TLS config
+ *
+ * - **TLS Configuration**: The `tlsAdvancedConfiguration` property allows for advanced TLS settings, such as enabling insecure mode.
+ *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
@@ -755,6 +761,29 @@ export interface AdvancedBaseClientConfiguration {
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
+
+    /**
+     * The advanced TLS configuration settings. This allows for more granular control of TLS behavior,
+     * such as enabling an insecure mode that bypasses certificate validation.
+     */
+    tlsAdvancedConfiguration?: {
+        /**
+         * Whether to bypass TLS certificate verification.
+         *
+         * - When set to `true`, the client skips certificate validation.
+         *   This is useful when connecting to servers or clusters using self-signed certificates,
+         *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+         *
+         * - This setting is typically used in development or testing environments.
+         *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+         *
+         * - Only valid if TLS is already enabled in the base client configuration.
+         *   Enabling it without TLS will result in a `ConfigurationError`.
+         *
+         * - Default: false (verification is enforced).
+         */
+        insecure?: boolean;
+    };
 }
 
 /**
@@ -7875,6 +7904,17 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+
+        // Apply TLS configuration if present
+        if (options.tlsAdvancedConfiguration?.insecure) {
+            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+                throw new ConfigurationError(
+                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                );
+            }
+        }
     }
 
     /**
