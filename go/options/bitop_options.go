@@ -3,7 +3,7 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
+	"errors"
 )
 
 type BitOpType string
@@ -26,11 +26,11 @@ type BitOp struct {
 func NewBitOp(operation BitOpType, destKey string, srcKeys []string) (*BitOp, error) {
 	if operation == NOT {
 		if len(srcKeys) != 1 {
-			return nil, glideErrors.NewRequestError("BITOP NOT requires exactly 1 source key")
+			return nil, errors.New("BITOP NOT requires exactly 1 source key")
 		}
 	} else {
 		if len(srcKeys) < 2 {
-			return nil, glideErrors.NewRequestError("BITOP requires at least 2 source keys")
+			return nil, errors.New("BITOP requires at least 2 source keys")
 		}
 	}
 
