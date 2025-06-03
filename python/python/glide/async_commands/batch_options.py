@@ -80,15 +80,21 @@ class BatchRetryStrategy:
         Initialize a BatchRetryStrategy.
 
         Args:
-            retry_server_error (bool): If True, failed commands with a retriable error (e.g., TRYAGAIN)
+        retry_server_error (bool): If `True`, failed commands with a retriable error (e.g., `TRYAGAIN`)
             will be automatically retried.
-            ⚠️ Warning: Enabling this flag may cause commands targeting the same slot to execute
+
+            ⚠️ **Warning:** Enabling this flag may cause commands targeting the same slot to execute
             out of order.
-            By default, this is set to False.
-            retry_connection_error (bool): If True, batch requests will be retried in case of connection errors.
-            ⚠️ Warning: Retrying after a connection error may lead to duplicate executions, since
+
+            By default, this is set to `False`.
+
+        retry_connection_error (bool): If `True`, batch requests will be retried in case of connection errors.
+
+            ⚠️ **Warning:** Retrying after a connection error may lead to duplicate executions, since
             the server might have already received and processed the request before the error occurred.
-            By default, this is set to False.
+
+            By default, this is set to `False`.
+
         """
         self.retry_server_error = retry_server_error
         self.retry_connection_error = retry_connection_error
@@ -114,7 +120,10 @@ class BaseBatchOptions:
         Initialize BaseBatchOptions.
 
         Args:
-            timeout (Optional[int]): The timeout in milliseconds for the batch operation.
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+                it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
         """
         self.timeout = timeout
 
@@ -136,6 +145,12 @@ class BatchOptions(BaseBatchOptions):
     ):
         """
         Options for a batch request for a standalone client
+
+        Args:
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+                it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
         """
         super().__init__(timeout)
 
@@ -144,14 +159,7 @@ class ClusterBatchOptions(BaseBatchOptions):
     """
     Options for cluster batch operations.
 
-    This class encapsulates all configuration options for cluster batch execution,
-    including retry strategy, routing, and timeout settings.
-
     Args:
-        retry_strategy (Optional[BatchRetryStrategy]): ⚠️ **Please see `BatchRetryStrategy`for more information about the retry strategy.**
-            Defines the retry strategy for handling cluster batch request failures. See `BatchRetryStrategy`
-            for detailed configuration options, warnings, and behavior information.
-
         route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
             will send the batch to the specified node defined by `route`.
 
@@ -160,6 +168,34 @@ class ClusterBatchOptions(BaseBatchOptions):
             - For Atomic Batches (Transactions), the entire transaction will be redirected.
             - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
               will be redirected.
+
+        retry_strategy (Optional[BatchRetryStrategy]): ⚠️ **Please see `BatchRetryStrategy` and read carefully before enabling these
+            options.**
+
+            Defines the retry strategy for handling cluster batch request failures.
+
+            This strategy determines whether failed commands should be retried, potentially impacting
+            execution order.
+
+            - If `retry_server_error` is `True`, retriable errors (e.g., TRYAGAIN) will
+              trigger a retry.
+            - If `retry_connection_error` is `True`, connection failures will trigger a
+              retry.
+
+            **Warnings:**
+
+            - Retrying server errors may cause commands targeting the same slot to execute out of
+              order.
+            - Retrying connection errors may lead to duplicate executions, as it is unclear which
+              commands have already been processed.
+
+            **Note:** Currently, retry strategies are supported only for non-atomic batches.
+
+            **Recommendation:** It is recommended to increase the timeout in `timeout`
+            when enabling these strategies.
+
+            **Default:** Both `retry_server_error` and `retry_connection_error` are set to
+            `False`.
 
         timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
             to complete. This duration encompasses sending the request, awaiting a response from the server,
@@ -178,9 +214,47 @@ class ClusterBatchOptions(BaseBatchOptions):
         Initialize ClusterBatchOptions.
 
         Args:
-            retry_strategy (Optional[BatchRetryStrategy]): The retry strategy for handling failures.
-            route (Optional[TSingleNodeRoute]): The route for single-node execution.
-            timeout (Optional[int]): The timeout in milliseconds for the batch operation.
+            route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
+                will send the batch to the specified node defined by `route`.
+
+                If a redirection error occurs:
+
+                - For Atomic Batches (Transactions), the entire transaction will be redirected.
+                - For Non-Atomic Batches (Pipelines), only the commands that encountered redirection errors
+                will be redirected.
+
+            retry_strategy (Optional[BatchRetryStrategy]): ⚠️ **Please see `BatchRetryStrategy` and read carefully before enabling these
+                options.**
+
+                Defines the retry strategy for handling cluster batch request failures.
+
+                This strategy determines whether failed commands should be retried, potentially impacting
+                execution order.
+
+                - If `retry_server_error` is `True`, retriable errors (e.g., TRYAGAIN) will
+                trigger a retry.
+                - If `retry_connection_error` is `True`, connection failures will trigger a
+                retry.
+
+                **Warnings:**
+
+                - Retrying server errors may cause commands targeting the same slot to execute out of
+                order.
+                - Retrying connection errors may lead to duplicate executions, as it is unclear which
+                commands have already been processed.
+
+                **Note:** Currently, retry strategies are supported only for non-atomic batches.
+
+                **Recommendation:** It is recommended to increase the timeout in `timeout`
+                when enabling these strategies.
+
+                **Default:** Both `retry_server_error` and `retry_connection_error` are set to
+                `False`.
+
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+                it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
         """
         super().__init__(timeout)
         self.retry_strategy = retry_strategy

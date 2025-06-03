@@ -8,7 +8,6 @@ from glide.async_commands.batch import (
     Transaction,
 )
 from glide.async_commands.batch_options import (
-    BaseBatchOptions,
     BatchOptions,
     BatchRetryStrategy,
     ClusterBatchOptions,
