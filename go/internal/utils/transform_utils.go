@@ -4,12 +4,11 @@ package utils
 
 import (
 	"fmt"
+	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"math"
 	"strconv"
 	"time"
 	"unsafe"
-
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 )
 
 // Convert `s` of type `string` into `[]byte`
@@ -110,7 +109,7 @@ func ToString(v any) (string, bool) {
 func DurationToMilliseconds(d time.Duration) (uint32, error) {
 	milliseconds := d.Milliseconds()
 	if milliseconds < 0 || milliseconds > math.MaxUint32 {
-		return 0, &errors.ConfigurationError{Msg: "invalid duration was specified"}
+		return 0, glideErrors.NewConfigurationError("invalid duration was specified")
 	}
 	return uint32(milliseconds), nil
 }

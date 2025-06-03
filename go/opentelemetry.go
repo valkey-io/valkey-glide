@@ -14,7 +14,6 @@
 package glide
 
 /*
-#cgo LDFLAGS: -lglide_ffi
 #include "lib.h"
 #include <stdlib.h>
 */
