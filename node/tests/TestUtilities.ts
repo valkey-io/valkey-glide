@@ -6,7 +6,7 @@ import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { Socket } from "net";
 import { promisify } from "util";
-import ValkeyCluster from "../../utils/TestUtils";
+import ValkeyCluster, { TestTLSConfig } from "../../utils/TestUtils";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -439,11 +439,13 @@ export async function flushAndCloseClient(
     cluster_mode: boolean,
     addresses: [string, number][],
     client?: BaseClient,
+    tlsConfig?: TestTLSConfig,
 ) {
     try {
         await testTeardown(
             cluster_mode,
             getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                ...tlsConfig,
                 requestTimeout: 2000,
             }),
         );
@@ -2184,23 +2186,36 @@ export async function CreateJsonBatchCommands(
 export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
+    tlsConfig?: TestTLSConfig,
 ): Promise<string> {
     let info = "";
 
     if (clusterMode) {
-        const glideClusterClient = await GlideClusterClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
-        );
+        const glideClusterClient = await GlideClusterClient.createClient({
+            ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            ...tlsConfig,
+        });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
-        await flushAndCloseClient(clusterMode, addresses, glideClusterClient);
-    } else {
-        const glideClient = await GlideClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+        await flushAndCloseClient(
+            clusterMode,
+            addresses,
+            glideClusterClient,
+            tlsConfig,
         );
+    } else {
+        const glideClient = await GlideClient.createClient({
+            ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            ...tlsConfig,
+        });
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(clusterMode, addresses, glideClient);
+        await flushAndCloseClient(
+            clusterMode,
+            addresses,
+            glideClient,
+            tlsConfig,
+        );
     }
 
     let version = "";

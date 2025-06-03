@@ -4,6 +4,10 @@
 
 import { execFile } from "child_process";
 import { lt } from "semver";
+import {
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+} from "../node/build-ts";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
@@ -35,6 +39,12 @@ function parseOutput(input: string): {
     };
 }
 
+export type TestTLSConfig = {useTLS: boolean; advancedConfiguration?: {
+                    tlsAdvancedConfiguration?: {
+                        insecure?: boolean,
+                    },
+                },};
+
 export class ValkeyCluster {
     private addresses: [string, number][];
     private clusterFolder: string | undefined;
@@ -57,12 +67,21 @@ export class ValkeyCluster {
         getVersionCallback: (
             addresses: [string, number][],
             clusterMode: boolean,
+            tlsConfig?: TestTLSConfig,
         ) => Promise<string>,
+        tls: boolean = false,
+        tlsConfig?: TestTLSConfig,
         loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
-            let command = `start -r ${replicaCount} -n ${shardCount}`;
+            let command = ``;
 
+            if (tls) {
+                command += "--tls ";
+            }
+
+            command += `start -r ${replicaCount} -n ${shardCount}`;
+            
             if (cluster_mode) {
                 command += " --cluster-mode";
             }
@@ -89,7 +108,7 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(addresses, cluster_mode).then(
+                            getVersionCallback(addresses, cluster_mode, tlsConfig).then(
                                 (ver) =>
                                     new ValkeyCluster(
                                         ver,
