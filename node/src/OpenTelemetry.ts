@@ -71,7 +71,7 @@ export class OpenTelemetry {
      * 
      * ```
      *
-     * Note:
+     * @remarks
      *   OpenTelemetry can only be initialized once per process. Subsequent calls to
      *   init() will be ignored. This is by design, as OpenTelemetry is a global
      *   resource that should be configured once at application startup.
