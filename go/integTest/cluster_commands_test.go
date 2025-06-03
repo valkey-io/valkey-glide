@@ -2427,13 +2427,9 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 
-	fmt.Println("Finished flushing")
-
 	// Ensure no script is running at the beginning
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
-	fmt.Println("printing error")
-	fmt.Println(err.Error())
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
@@ -2515,7 +2511,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 
 	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
@@ -2523,7 +2519,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	script.Close()
 
 	// Wait until script finishes
-	time.Sleep(6 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKill(context.Background())
