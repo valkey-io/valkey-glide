@@ -124,6 +124,7 @@ jobs:
                   make install-tools build
                   make -k unit-test integ-test
                   make -k pubsub-test
+                  make -k opentelemetry-test
 
             - name: Run Example Tests
               working-directory: go

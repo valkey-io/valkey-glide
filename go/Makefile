@@ -152,7 +152,7 @@ example-test:
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
-integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
+integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(test-filter), -testify.m $(test-filter))
 integ-test: __it
 
 # modules tests - run substask with default filter
@@ -160,12 +160,16 @@ modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -te
 modules-test: __it
 
 # pubsub tests - run subtask with the pubsub flag enabled
-pubsub-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule -pubsub -testify.m TestPubSub
+pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -pubsub -testify.m TestPubSub
 pubsub-test: __it
 
 # long timeout tests - run subtask with the long timeout flag enabled
-long-timeout-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
+long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
 long-timeout-test: __it
+
+# opentelemetry tests - run subtask with the opentelemetry flag enabled
+opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
+opentelemetry-test: __it
 
 __it:
 	mkdir -p reports
