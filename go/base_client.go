@@ -1313,6 +1313,7 @@ func (client *baseClient) LCSWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(ctx context.Context, key string) (models.Result[string], error) {
+		return models.CreateNilStringResult(), glideErrors.NewRequestError("key is required")
 	result, err := client.executeCommand(ctx, C.GetDel, []string{key})
 	if err != nil {
 		return models.CreateNilStringResult(), err
