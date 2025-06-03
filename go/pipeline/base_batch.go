@@ -195,12 +195,18 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 //
 // Command Response:
 //
-//	An array of values corresponding to the provided keys.
-//	If a key is not found, its corresponding value in the list will be `nil`.
+//	An array of [models.Result[string]] values corresponding to the provided keys.
+//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (b *BaseBatch[T]) MGet(keys []string) *T {
-	return b.addCmdAndTypeChecker(C.MGet, keys, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.MGet,
+		keys,
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOfStringOrNil,
+	)
 }
 
 // Increments the number stored at key by one. If key does not exist, it is set to `0` before performing the operation.
@@ -516,13 +522,19 @@ func (b *BaseBatch[T]) HGetAll(key string) *T {
 //
 // Command Response:
 //
-//	An array of values associated with the given fields, in the same order as they are requested.
-//	For every field that does not exist in the hash, a `nil` is returned.
-//	If key does not exist, returns an empty array.
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
+//	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
 func (b *BaseBatch[T]) HMGet(key string, fields []string) *T {
-	return b.addCmdAndTypeChecker(C.HMGet, append([]string{key}, fields...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.HMGet,
+		append([]string{key}, fields...),
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOfStringOrNil,
+	)
 }
 
 // Sets the specified fields to their respective values in the hash stored at key.
@@ -618,7 +630,7 @@ func (b *BaseBatch[T]) HLen(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hvals/
 func (b *BaseBatch[T]) HVals(key string) *T {
-	return b.addCmdAndTypeChecker(C.HVals, []string{key}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.HVals, []string{key}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns if field is an existing field in the hash stored at key.
@@ -654,7 +666,7 @@ func (b *BaseBatch[T]) HExists(key string, field string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hkeys/
 func (b *BaseBatch[T]) HKeys(key string) *T {
-	return b.addCmdAndTypeChecker(C.HKeys, []string{key}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.HKeys, []string{key}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the string length of the value associated with field in the hash stored at key.
@@ -812,7 +824,13 @@ func (b *BaseBatch[T]) HRandField(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (b *BaseBatch[T]) HRandFieldWithCount(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(C.HRandField, []string{key, utils.IntToString(count)}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.HRandField,
+		[]string{key, utils.IntToString(count)},
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Retrieves up to `count` random field names along with their values from the hash
@@ -839,11 +857,12 @@ func (b *BaseBatch[T]) HRandFieldWithCount(key string, count int64) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hrandfield/
 func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(
+	return b.addCmdAndConverter(
 		C.HRandField,
 		[]string{key, utils.IntToString(count), constants.WithValuesKeyword},
 		reflect.Slice,
 		false,
+		internal.Convert2DArrayOfString,
 	)
 }
 
@@ -901,7 +920,13 @@ func (b *BaseBatch[T]) LPop(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/lpop/
 func (b *BaseBatch[T]) LPopCount(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(C.LPop, []string{key, utils.IntToString(count)}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.LPop,
+		[]string{key, utils.IntToString(count)},
+		reflect.Slice,
+		true,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Returns the index of the first occurrence of element inside the list specified by key.
@@ -961,11 +986,12 @@ func (b *BaseBatch[T]) LPosWithOptions(key string, element string, options optio
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
 func (b *BaseBatch[T]) LPosCount(key string, element string, count int64) *T {
-	return b.addCmdAndTypeChecker(
+	return b.addCmdAndConverter(
 		C.LPos,
 		[]string{key, element, constants.CountKeyword, utils.IntToString(count)},
 		reflect.Slice,
 		false,
+		internal.ConvertArrayOf[int64],
 	)
 }
 
@@ -991,11 +1017,12 @@ func (b *BaseBatch[T]) LPosCountWithOptions(key string, element string, count in
 	if err != nil {
 		return b.addError("LPosCountWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(
+	return b.addCmdAndConverter(
 		C.LPos,
 		append([]string{key, element, constants.CountKeyword, utils.IntToString(count)}, optionArgs...),
 		reflect.Slice,
 		false,
+		internal.ConvertArrayOf[int64],
 	)
 }
 
@@ -1289,7 +1316,13 @@ func (b *BaseBatch[T]) SRandMember(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/srandmember/
 func (b *BaseBatch[T]) SRandMemberCount(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(C.SRandMember, []string{key, utils.IntToString(count)}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.SRandMember,
+		[]string{key, utils.IntToString(count)},
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Removes and returns one random member from the set stored at key.
@@ -1346,7 +1379,13 @@ func (b *BaseBatch[T]) SPopCount(key string, count int64) *T {
 //
 // [valkey.io]: https://valkey.io/commands/smismember/
 func (b *BaseBatch[T]) SMIsMember(key string, members []string) *T {
-	return b.addCmdAndTypeChecker(C.SMIsMember, append([]string{key}, members...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.SMIsMember,
+		append([]string{key}, members...),
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[bool],
+	)
 }
 
 // Gets the union of all the given sets.
@@ -1458,11 +1497,12 @@ func (b *BaseBatch[T]) SMove(source string, destination string, member string) *
 //
 // [valkey.io]: https://valkey.io/commands/lrange/
 func (b *BaseBatch[T]) LRange(key string, start int64, end int64) *T {
-	return b.addCmdAndTypeChecker(
+	return b.addCmdAndConverter(
 		C.LRange,
 		[]string{key, utils.IntToString(start), utils.IntToString(end)},
 		reflect.Slice,
 		false,
+		internal.ConvertArrayOf[string],
 	)
 }
 
@@ -1596,7 +1636,13 @@ func (b *BaseBatch[T]) RPop(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/rpop/
 func (b *BaseBatch[T]) RPopCount(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(C.RPop, []string{key, utils.IntToString(count)}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.RPop,
+		[]string{key, utils.IntToString(count)},
+		reflect.Slice,
+		true,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Inserts element in the list at key either before or after the pivot.
@@ -1649,7 +1695,13 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.BLPop,
+		append(keys, utils.FloatToString(timeoutSecs)),
+		reflect.Slice,
+		true,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
@@ -1676,7 +1728,13 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BRPop(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.BRPop,
+		append(keys, utils.FloatToString(timeoutSecs)),
+		reflect.Slice,
+		true,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Inserts all the specified values at the tail of the list stored at `key`, only if key exists and holds a list. If key is
@@ -2921,7 +2979,13 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 //
 // [Blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.BZPopMin,
+		append(keys, utils.FloatToString(timeoutSecs)),
+		reflect.Slice,
+		true,
+		internal.ConvertKeyWithMemberAndScore,
+	)
 }
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
@@ -2973,7 +3037,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
-	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Slice, true)
+	return b.addCmdAndConverter(C.BZMPop, args, reflect.Slice, true, internal.ConvertKeyWithArrayOfMembersAndScores)
 }
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
@@ -3035,7 +3099,7 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 		return b.addError("BZMPopWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Slice, true)
+	return b.addCmdAndConverter(C.BZMPop, args, reflect.Slice, true, internal.ConvertKeyWithArrayOfMembersAndScores)
 }
 
 // Returns the specified range of elements in the sorted set stored at `key`.
@@ -4001,7 +4065,7 @@ func (b *BaseBatch[T]) ObjectRefCount(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (b *BaseBatch[T]) Sort(key string) *T {
-	return b.addCmdAndTypeChecker(C.Sort, []string{key}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.Sort, []string{key}, reflect.Slice, false, internal.ConvertArrayOfStringOrNil)
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
@@ -4031,7 +4095,13 @@ func (b *BaseBatch[T]) SortWithOptions(key string, options options.SortOptions) 
 	if err != nil {
 		return b.addError("SortWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.Sort, append([]string{key}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.Sort,
+		append([]string{key}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOfStringOrNil,
+	)
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
@@ -4050,7 +4120,7 @@ func (b *BaseBatch[T]) SortWithOptions(key string, options options.SortOptions) 
 //
 // [valkey.io]: https://valkey.io/commands/sort_ro/
 func (b *BaseBatch[T]) SortReadOnly(key string) *T {
-	return b.addCmdAndTypeChecker(C.SortReadOnly, []string{key}, reflect.Slice, true)
+	return b.addCmdAndConverter(C.SortReadOnly, []string{key}, reflect.Slice, false, internal.ConvertArrayOfStringOrNil)
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
@@ -4079,7 +4149,13 @@ func (b *BaseBatch[T]) SortReadOnlyWithOptions(key string, options options.SortO
 	if err != nil {
 		return b.addError("SortReadOnlyWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.SortReadOnly, append([]string{key}, optionArgs...), reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.SortReadOnly,
+		append([]string{key}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOfStringOrNil,
+	)
 }
 
 // Sorts the elements in the list, set, or sorted set at key and stores the result in
@@ -5224,7 +5300,7 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
-	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Slice, true)
+	return b.addCmdAndConverter(C.ZMPop, args, reflect.Slice, true, internal.ConvertKeyWithArrayOfMembersAndScores)
 }
 
 // Removes and returns up to `count` members from the first non-empty sorted set
@@ -5269,7 +5345,7 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 		return b.addError("ZMPopWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.ZMPop, args, reflect.Slice, true)
+	return b.addCmdAndConverter(C.ZMPop, args, reflect.Slice, true, internal.ConvertKeyWithArrayOfMembersAndScores)
 }
 
 // Returns the cardinality of the intersection of the sorted sets specified by `keys`.
@@ -5369,7 +5445,7 @@ func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 func (b *BaseBatch[T]) BZPopMax(keys []string, timeoutSecs float64) *T {
 	args := append(keys, utils.FloatToString(timeoutSecs))
-	return b.addCmdAndTypeChecker(C.BZPopMax, args, reflect.Slice, true)
+	return b.addCmdAndConverter(C.BZPopMax, args, reflect.Slice, true, internal.ConvertKeyWithMemberAndScore)
 }
 
 // Adds geospatial members with their positions to the specified sorted set stored at `key`.

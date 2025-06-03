@@ -29,16 +29,14 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
-
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
-	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -408,9 +406,9 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 
 func (client *baseClient) executeBatch(
 	ctx context.Context,
-	batch pipeline.Batch,
+	batch internal.Batch,
 	raiseOnError bool,
-	options *pipeline.BatchOptions,
+	options *internal.BatchOptions,
 ) ([]any, error) {
 	// Check if context is already done
 	select {
@@ -508,14 +506,15 @@ func (client *baseClient) executeBatch(
 	return batch.Convert(response)
 }
 
-func createBatchOptionsInfo(pinner pinner, options pipeline.BatchOptions) C.BatchOptionsInfo {
+func createBatchOptionsInfo(pinner pinner, options internal.BatchOptions) C.BatchOptionsInfo {
 	info := C.BatchOptionsInfo{}
-	if options.RetryStrategy != nil {
-		info.retry_server_error = C._Bool(options.RetryStrategy.RetryServerError)
-		info.retry_connection_error = C._Bool(options.RetryStrategy.RetryConnectionError)
-	} else {
-		info.retry_server_error = C._Bool(false)
-		info.retry_connection_error = C._Bool(false)
+	info.retry_server_error = C._Bool(false)
+	info.retry_connection_error = C._Bool(false)
+	if options.RetryServerError != nil {
+		info.retry_server_error = C._Bool(*options.RetryServerError)
+	}
+	if options.RetryConnectionError != nil {
+		info.retry_connection_error = C._Bool(*options.RetryConnectionError)
 	}
 	if options.Timeout != nil {
 		info.has_timeout = C._Bool(true)
@@ -561,7 +560,7 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	return nil
 }
 
-func createBatchInfo(pinner pinner, batch pipeline.Batch) C.BatchInfo {
+func createBatchInfo(pinner pinner, batch internal.Batch) C.BatchInfo {
 	numCommands := len(batch.Commands)
 	info := C.BatchInfo{}
 	info.is_atomic = C._Bool(batch.IsAtomic)
@@ -581,10 +580,10 @@ func createBatchInfo(pinner pinner, batch pipeline.Batch) C.BatchInfo {
 	return info
 }
 
-func createCmdInfo(pinner pinner, cmd pipeline.Cmd) C.CmdInfo {
+func createCmdInfo(pinner pinner, cmd internal.Cmd) C.CmdInfo {
 	numArgs := len(cmd.Args)
 	info := C.CmdInfo{}
-	info.request_type = uint32(cmd.RequestType)
+	info.request_type = cmd.RequestType
 	cArgsPtr := make([]*C.uchar, numArgs)
 	argLengthsPtr := make([]C.ulong, numArgs)
 	for i, str := range cmd.Args {
@@ -954,8 +953,8 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 //
 // Return value:
 //
-//	An array of values corresponding to the provided keys.
-//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()]
+//	An array of [models.Result[string]] values corresponding to the provided keys.
+//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *baseClient) MGet(ctx context.Context, keys []string) ([]models.Result[string], error) {
@@ -1388,9 +1387,8 @@ func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]s
 //
 // Return value:
 //
-//	An array of models.Result[string]s associated with the given fields, in the same order as they are requested.
-//	For every field that does not exist in the hash, a [models.Result[string]](models.CreateNilStringResult()) is
-//	returned.
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
 //	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
@@ -2646,7 +2644,7 @@ func (client *baseClient) SMove(ctx context.Context, source string, destination 
 //
 // Return value:
 //
-//	Array of elements as models.Result[string] in the specified range.
+//	Array of strings in the specified range.
 //	If start exceeds the end of the list, or if start is greater than end, an empty array will be returned.
 //	If end exceeds the actual end of the list, the range will stop at the actual end of the list.
 //	If key does not exist an empty array will be returned.

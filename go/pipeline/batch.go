@@ -10,20 +10,10 @@ import (
 	"reflect"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
-
-// TODO - move to internals
-type Cmd struct {
-	RequestType C.RequestType
-	Args        []string
-	// Response converter
-	Converter func(any) any
-}
-
-// ====================
 
 // BaseBatchOptions contains common options for both standalone and cluster batches.
 type BaseBatchOptions struct {
@@ -168,35 +158,24 @@ func (cbo *ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetr
 	return cbo
 }
 
-// ====================
-
-// TODO - move this struct and convert methods to internals
-type BatchOptions struct {
-	Timeout       *uint32
-	Route         *config.Route
-	RetryStrategy *ClusterBatchRetryStrategy
+func (sbo StandaloneBatchOptions) Convert() internal.BatchOptions {
+	return internal.BatchOptions{Timeout: sbo.Timeout}
 }
 
-func (sbo StandaloneBatchOptions) Convert() BatchOptions {
-	return BatchOptions{Timeout: sbo.Timeout}
-}
-
-func (cbo ClusterBatchOptions) Convert() BatchOptions {
-	return BatchOptions{Timeout: cbo.Timeout, Route: cbo.Route, RetryStrategy: cbo.RetryStrategy}
+func (cbo ClusterBatchOptions) Convert() internal.BatchOptions {
+	opts := internal.BatchOptions{Timeout: cbo.Timeout, Route: cbo.Route, RetryServerError: nil, RetryConnectionError: nil}
+	if cbo.RetryStrategy != nil {
+		opts.RetryServerError = &cbo.RetryStrategy.RetryServerError
+		opts.RetryConnectionError = &cbo.RetryStrategy.RetryConnectionError
+	}
+	return opts
 }
 
 // ====================
-
-// TODO make private if possible
-type Batch struct {
-	Commands []Cmd
-	IsAtomic bool
-	Errors   []string // errors processing command args, spotted while batch is filled
-}
 
 // BaseBatch is the base structure for both standalone and cluster batch implementations.
 type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
-	Batch
+	internal.Batch
 	self *T
 }
 
@@ -228,20 +207,6 @@ type ClusterBatch struct {
 
 // ====================
 
-func (b Batch) Convert(response []any) ([]any, error) {
-	if len(response) != len(b.Commands) {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf("Response misaligned: received %d responses for %d commands", len(response), len(b.Commands)),
-		}
-	}
-	for i, res := range response {
-		response[i] = b.Commands[i].Converter(res)
-	}
-	return response, nil
-}
-
-// ====================
-
 // NewStandaloneBatch creates a new batch for standalone Valkey servers.
 //
 // Parameters:
@@ -254,7 +219,7 @@ func (b Batch) Convert(response []any) ([]any, error) {
 //
 //	A new StandaloneBatch instance.
 func NewStandaloneBatch(isAtomic bool) *StandaloneBatch {
-	b := StandaloneBatch{BaseBatch: BaseBatch[StandaloneBatch]{Batch: Batch{IsAtomic: isAtomic}}}
+	b := StandaloneBatch{BaseBatch: BaseBatch[StandaloneBatch]{Batch: internal.Batch{IsAtomic: isAtomic}}}
 	b.self = &b
 	return &b
 }
@@ -271,20 +236,22 @@ func NewStandaloneBatch(isAtomic bool) *StandaloneBatch {
 //
 //	A new ClusterBatch instance.
 func NewClusterBatch(isAtomic bool) *ClusterBatch {
-	b := ClusterBatch{BaseBatch: BaseBatch[ClusterBatch]{Batch: Batch{IsAtomic: isAtomic}}}
+	b := ClusterBatch{BaseBatch: BaseBatch[ClusterBatch]{Batch: internal.Batch{IsAtomic: isAtomic}}}
 	b.self = &b
 	return &b
 }
 
 // Add a cmd to batch without response type checking nor conversion
 func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: func(res any) any { return res }})
+	// b.Commands = append(b.Commands, internal.Cmd{RequestType: internal.RequestType(request), Args: args, Converter: func(res
+	// any) any { return res }})
+	b.Batch.Commands = append(b.Batch.Commands, internal.MakeCmd(uint32(request), args, func(res any) any { return res }))
 	return b.self
 }
 
 func (b *BaseBatch[T]) addError(command string, err error) *T {
-	b.Errors = append(b.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
-		len(b.Commands)+len(b.Errors)+1, command, err))
+	b.Batch.Errors = append(b.Batch.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
+		len(b.Batch.Commands)+len(b.Batch.Errors)+1, command, err))
 	return b.self
 }
 
@@ -307,24 +274,9 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	converter func(res any) any,
 ) *T {
 	converterAndTypeChecker := func(res any) any {
-		if res == nil {
-			if isNilable {
-				return nil
-			}
-			return &errors.RequestError{
-				Msg: fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType),
-			}
-		}
-		if reflect.TypeOf(res).Kind() == expectedType {
-			return converter(res)
-		}
-		// data lost even though it was incorrect
-		// TODO maybe still return the data?
-		return &errors.RequestError{
-			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
-		}
+		return internal.ConverterAndTypeChecker(res, expectedType, isNilable, converter)
 	}
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
+	b.Batch.Commands = append(b.Batch.Commands, internal.MakeCmd(uint32(request), args, converterAndTypeChecker))
 	return b.self
 }
 
