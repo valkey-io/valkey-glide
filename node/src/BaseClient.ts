@@ -552,7 +552,7 @@ export type ReadFrom =
  *
  * - **TLS**: Enable secure communication using `useTLS`.
  *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
- *      For advanced tls configuration, please use `AdvancedBaseClientConfiguration`.
+ *      For advanced tls configuration, , see {@link AdvancedBaseClientConfiguration}.
  * - **Authentication**: Provide `credentials` to authenticate with the server.
  *
  * ### Communication Settings
@@ -744,7 +744,7 @@ export interface BaseClientConfiguration {
  *
  * ### TLS config
  *
- * - **TLS Configuration**: The `tlsConfig` property allows for advanced TLS settings, such as enabling insecure mode.
+ * - **TLS Configuration**: The `tlsAdvancedConfiguration` property allows for advanced TLS settings, such as enabling insecure mode.
  *
  * @example
  * ```typescript
@@ -782,7 +782,7 @@ export interface AdvancedBaseClientConfiguration {
          *
          * - Default: false (verification is enforced).
          */
-        insecure: boolean;
+        insecure?: boolean;
     };
 }
 
@@ -7911,7 +7911,7 @@ export class BaseClient {
                 request.tlsMode = connection_request.TlsMode.InsecureTls;
             } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
-                    "TLS is configured as insecure, but TLS is not enabled.",
+                    "InsecureTls cannot be enabled when useTLS is disabled.",
                 );
             }
         }

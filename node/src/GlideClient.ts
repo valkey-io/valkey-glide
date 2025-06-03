@@ -233,7 +233,8 @@ export class GlideClient extends BaseClient {
      * @remarks
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish a secure connection using TLS.
-     *      For advanced tls configuration, please use the AdvancedGlideClientConfiguration option.
+     *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     *      For advanced tls configuration, please use the {@link AdvancedGlideClientConfiguration} option.
      * - **Reconnection Strategy**: The `connectionBackoff` settings define how the client will attempt to reconnect in case of disconnections.
      * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
      */

@@ -11,6 +11,12 @@ import {
     getServerVersion,
 } from "./TestUtilities";
 const TIMEOUT = 50000;
+const TLS_OPTIONS = {
+    advancedConfiguration: {
+        tlsAdvancedConfiguration: { insecure: true },
+    },
+    useTLS: true,
+};
 
 // tls cluster tests
 describe("tls GlideClusterClient", () => {
@@ -24,26 +30,17 @@ describe("tls GlideClusterClient", () => {
             2,
             getServerVersion,
             true,
-            {
-                advancedConfiguration: {
-                    tlsAdvancedConfiguration: {
-                        insecure: true,
-                    },
-                },
-                useTLS: true,
-            },
+            TLS_OPTIONS,
         );
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(true, cluster.getAddresses(), client, {
-            advancedConfiguration: {
-                tlsAdvancedConfiguration: {
-                    insecure: true,
-                },
-            },
-            useTLS: true,
-        });
+        await flushAndCloseClient(
+            true,
+            cluster.getAddresses(),
+            client,
+            TLS_OPTIONS,
+        );
     });
 
     afterAll(async () => {
@@ -55,20 +52,15 @@ describe("tls GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clusterClient connect with insecure TLS (protocol: %p)",
         async (protocol) => {
-            const config = getClientConfigurationOption(
-                cluster.getAddresses(),
-                protocol,
-                { useTLS: true },
-            );
-            const c = {
-                advancedConfiguration: {
-                    tlsAdvancedConfiguration: {
-                        insecure: true,
-                    },
-                },
-                ...config,
+            const config = {
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                ...TLS_OPTIONS,
             };
-            client = await GlideClusterClient.createClient(c);
+
+            client = await GlideClusterClient.createClient(config);
 
             const result = await client.ping();
             expect(result.toString()).toBe("PONG");
@@ -89,26 +81,17 @@ describe("tls GlideClient", () => {
             1,
             getServerVersion,
             true,
-            {
-                advancedConfiguration: {
-                    tlsAdvancedConfiguration: {
-                        insecure: true,
-                    },
-                },
-                useTLS: true,
-            },
+            TLS_OPTIONS,
         );
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client, {
-            advancedConfiguration: {
-                tlsAdvancedConfiguration: {
-                    insecure: true,
-                },
-            },
-            useTLS: true,
-        });
+        await flushAndCloseClient(
+            false,
+            cluster.getAddresses(),
+            client,
+            TLS_OPTIONS,
+        );
     });
 
     afterAll(async () => {
@@ -120,20 +103,15 @@ describe("tls GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Standalone client connect with insecure TLS (protocol: %p)",
         async (protocol) => {
-            const config = getClientConfigurationOption(
-                cluster.getAddresses(),
-                protocol,
-                { useTLS: true },
-            );
-            const c = {
-                advancedConfiguration: {
-                    tlsAdvancedConfiguration: {
-                        insecure: true,
-                    },
-                },
-                ...config,
+            const config = {
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+                ...TLS_OPTIONS,
             };
-            client = await GlideClient.createClient(c);
+
+            client = await GlideClient.createClient(config);
 
             const result = await client.ping();
             expect(result.toString()).toBe("PONG");
