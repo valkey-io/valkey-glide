@@ -2418,7 +2418,6 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
-	key := uuid.NewString()
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
@@ -2437,7 +2436,7 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	code := CreateLongRunningLuaScript(7, true)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
+	go invokeClient.InvokeScript(context.Background(), *script)
 
 	time.Sleep(3 * time.Second)
 
