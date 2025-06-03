@@ -2028,16 +2028,26 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XAUTOCLAIM commands
 	if serverVer >= "6.2.0" {
+		expectedXAutoClaimResponse := []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}}
+		if serverVer >= "7.0.0" {
+			expectedXAutoClaimResponse = []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)}
+		}
+
+		expectedXAutoClaimJustIdResponse := []any{"0-0", []any{"0-3"}}
+		if serverVer >= "7.0.0" {
+			expectedXAutoClaimJustIdResponse = []any{"0-0", []any{"0-3"}, []any(nil)}
+		}
+
 		xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
 		batch.XAutoClaimWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
 		testData = append(testData, CommandTestData{
-			ExpectedResponse: []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)},
+			ExpectedResponse: expectedXAutoClaimResponse,
 			TestName:         "XAutoClaim(streamKey1, groupName1, consumer1, 0-0)",
 		})
 
 		batch.XAutoClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, "0-0", *xautoclaimOpts)
 		testData = append(testData, CommandTestData{
-			ExpectedResponse: []any{"0-0", []any{"0-3"}, []any(nil)},
+			ExpectedResponse: expectedXAutoClaimJustIdResponse,
 			TestName:         "XAutoClaimJustId(streamKey1, groupName1, consumer1, 0-0)",
 		})
 
