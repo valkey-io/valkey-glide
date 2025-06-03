@@ -12,7 +12,7 @@ use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
@@ -469,9 +469,9 @@ fn build_span_exporter(
 #[derive(Clone)]
 pub struct GlideOpenTelemetry {}
 
-static TIMEOUT_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
-static RETRIES_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
-static MOVED_COUNTER: Mutex<Option<opentelemetry::metrics::Counter<u64>>> = Mutex::new(None);
+static TIMEOUT_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static RETRIES_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static MOVED_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -623,53 +623,51 @@ impl GlideOpenTelemetry {
     /// Initialize metrics counters
     fn init_metrics() -> Result<(), GlideOTELError> {
         let meter = global::meter(TRACE_SCOPE);
+
         // Create timeout error counter
         TIMEOUT_COUNTER
-            .lock()
-            .map_err(|_| {
-                GlideOTELError::Other(
-                    "OpenTelemetry error: Failed to initialize timeout counter".to_string(),
-                )
-            })?
-            .replace(
+            .set(
                 meter
                     .u64_counter(TIMEOUT_ERROR_METRIC)
                     .with_description("Number of timeout errors encountered")
                     .with_unit("1")
                     .build(),
-            );
+            )
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize timeout counter".to_owned(),
+                )
+            })?;
 
         // Create retries counter
         RETRIES_COUNTER
-            .lock()
-            .map_err(|_| {
-                GlideOTELError::Other(
-                    "OpenTelemetry error: Failed to initialize retires counter".to_owned(),
-                )
-            })?
-            .replace(
+            .set(
                 meter
                     .u64_counter(RETRIES_METRIC)
                     .with_description("Number of retry attempts made")
                     .with_unit("1")
                     .build(),
-            );
+            )
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize retries counter".to_owned(),
+                )
+            })?;
 
         // Create moved counter
         MOVED_COUNTER
-            .lock()
-            .map_err(|_| {
-                GlideOTELError::Other(
-                    "OpenTelemetry error: Failed to initialize moved counter".to_owned(),
-                )
-            })?
-            .replace(
+            .set(
                 meter
                     .u64_counter(MOVED_ERROR_METRIC)
                     .with_description("Number of moved errors encountered")
                     .with_unit("1")
                     .build(),
-            );
+            )
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize moved counter".to_owned(),
+                )
+            })?;
 
         Ok(())
     }
@@ -680,9 +678,7 @@ impl GlideOpenTelemetry {
     pub fn record_timeout_error() -> Result<(), GlideOTELError> {
         if GlideOpenTelemetry::is_initialized() {
             TIMEOUT_COUNTER
-                .lock()
-                .map_err(|_| GlideOTELError::ReadLockError)?
-                .as_mut()
+                .get()
                 .ok_or_else(|| {
                     GlideOTELError::Other(
                         "OpenTelemetry error: Timeout counter not initialized".to_owned(),
@@ -699,9 +695,7 @@ impl GlideOpenTelemetry {
     pub fn record_retry_attempt() -> Result<(), GlideOTELError> {
         if GlideOpenTelemetry::is_initialized() {
             RETRIES_COUNTER
-                .lock()
-                .map_err(|_| GlideOTELError::ReadLockError)?
-                .as_mut()
+                .get()
                 .ok_or_else(|| {
                     GlideOTELError::Other(
                         "OpenTelemetry error: Retries counter not initialized".to_string(),
@@ -718,9 +712,7 @@ impl GlideOpenTelemetry {
     pub fn record_moved_error() -> Result<(), GlideOTELError> {
         if GlideOpenTelemetry::is_initialized() {
             MOVED_COUNTER
-                .lock()
-                .map_err(|_| GlideOTELError::ReadLockError)?
-                .as_mut()
+                .get()
                 .ok_or_else(|| {
                     GlideOTELError::Other(
                         "OpenTelemetry error: Moved counter not initialized".to_string(),
