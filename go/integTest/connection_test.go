@@ -20,7 +20,7 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 		WithAddress(&suite.standaloneHosts[0])
 	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
@@ -34,7 +34,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 
 	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
@@ -46,7 +46,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 
 	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()

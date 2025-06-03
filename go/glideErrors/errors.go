@@ -4,6 +4,7 @@ package glideErrors
 
 // #include "../lib.h"
 import "C"
+import "errors"
 
 // ConnectionError is a client error that occurs when there is an error while connecting or when a connection
 // disconnects.
@@ -17,16 +18,16 @@ func NewConnectionError(message string) *ConnectionError {
 
 func (e *ConnectionError) Error() string { return e.msg }
 
-// RequestError is a client error that occurs when an error is reported during a request.
-type RequestError struct {
-	msg string
-}
+// // RequestError is a client error that occurs when an error is reported during a request.
+// type RequestError struct {
+// 	msg string
+// }
 
-func NewRequestError(message string) *RequestError {
-	return &RequestError{msg: message}
-}
+// func NewRequestError(message string) *RequestError {
+// 	return &RequestError{msg: message}
+// }
 
-func (e *RequestError) Error() string { return e.msg }
+// func (e *RequestError) Error() string { return e.msg }
 
 // ExecAbortError is a client error that occurs when a transaction is aborted.
 type ExecAbortError struct {
@@ -83,6 +84,13 @@ func NewConfigurationError(message string) *ConfigurationError {
 
 func (e *ConfigurationError) Error() string { return e.msg }
 
+func IsError(val any) error {
+	if err, ok := val.(error); ok {
+		return err
+	}
+	return nil
+}
+
 // GoError converts a C error type to a corresponding Go error.
 func GoError(cErrorType uint32, errorMessage string) error {
 	switch cErrorType {
@@ -93,6 +101,6 @@ func GoError(cErrorType uint32, errorMessage string) error {
 	case C.Disconnect:
 		return &DisconnectError{errorMessage}
 	default:
-		return &RequestError{errorMessage}
+		return errors.New(errorMessage)
 	}
 }
