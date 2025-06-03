@@ -2422,9 +2422,18 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
+	// Flush before setup
+	result, err := invokeClient.ScriptFlush(context.Background())
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result)
+
+	fmt.Println("Finished flushing")
+
 	// Ensure no script is running at the beginning
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
+	fmt.Println("printing error")
+	fmt.Println(err.Error())
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
@@ -2435,7 +2444,7 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 
 	time.Sleep(1 * time.Second)
 
-	result, err := killClient.ScriptKill(context.Background())
+	result, err = killClient.ScriptKill(context.Background())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
@@ -2492,10 +2501,13 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
+	fmt.Println("finished flushing")
 
 	// Ensure no script is running at the beginning
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
+	fmt.Println("printing error")
+	fmt.Println(err.Error())
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	code := CreateLongRunningLuaScript(7, false)
