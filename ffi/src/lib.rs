@@ -1785,6 +1785,7 @@ pub unsafe extern "C" fn batch(
     options_ptr: *const BatchOptionsInfo,
     span_ptr: u64,
 ) -> *mut CommandResult {
+    dbg!("raise_on_error: ", raise_on_error);
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_ptr);
