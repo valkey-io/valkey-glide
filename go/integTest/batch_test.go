@@ -2171,7 +2171,6 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		xpendingOpts := options.NewXPendingOptions("-", "+", 1)
 		batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
 		testData = append(testData, CommandTestData{
-			// ExpectedResponse: []any(nil),
 			ExpectedResponse: []models.XPendingDetail{},
 			TestName:         "XPendingWithOptions(streamKey1, groupName1, MIN, MAX, 1)",
 		})
