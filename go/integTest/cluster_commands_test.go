@@ -2602,7 +2602,7 @@ func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
 	assert.IsType(suite.T(), &errors.RequestError{}, err)
 }
 
-func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
+func (suite *GlideTestSuite) Test_BatchWithSingleNodeRoute() {
 	client := suite.defaultClusterClient()
 	opts := pipeline.NewClusterBatchOptions()
 

@@ -1718,7 +1718,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	rangeQuery := options.NewRangeByIndexQuery(0, -1)
 	batch.ZRange(key, rangeQuery)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member2"}, TestName: "ZRange(key, 0, -1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"member2"}, TestName: "ZRange(key, 0, -1)"})
 
 	batch.BZPopMax([]string{key}, 1)
 	testData = append(
@@ -1854,13 +1854,16 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "ZRandMember(key)"})
 
 	batch.ZRandMemberWithCount(key, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []string{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"},
+	)
 
 	batch.ZRandMemberWithCountWithScores(key, 1)
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{[]any{"member1", float64(1.0)}},
+			ExpectedResponse: []models.MemberAndScore{{Member: "member1", Score: 1}},
 			TestName:         "ZRandMemberWithCountWithScores(key, 1)",
 		},
 	)
@@ -2118,20 +2121,40 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// XPENDING command
 	batch.XPending(streamKey1, groupName1)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{int64(1), "0-3", "0-3", []any{[]any{consumer1, "1"}}},
-		TestName:         "XPending(streamKey1, groupName1)",
+		ExpectedResponse: models.XPendingSummary{
+			NumOfMessages:    1,
+			StartId:          models.CreateStringResult("0-3"),
+			EndId:            models.CreateStringResult("0-3"),
+			ConsumerMessages: []models.ConsumerPendingMessage{{ConsumerName: consumer1, MessageCount: 1}},
+		},
+		TestName: "XPending(streamKey1, groupName1)",
 	})
 
 	// XAUTOCLAIM commands
 	if serverVer >= "6.2.0" {
-		expectedXAutoClaimResponse := []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}}
-		if serverVer >= "7.0.0" {
-			expectedXAutoClaimResponse = []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)}
+		expectedXAutoClaimResponse := models.XAutoClaimResponse{
+			NextEntry:      "0-0",
+			ClaimedEntries: map[string][][]string{"0-3": {{"field3", "value3"}}},
 		}
 
-		expectedXAutoClaimJustIdResponse := []any{"0-0", []any{"0-3"}}
 		if serverVer >= "7.0.0" {
-			expectedXAutoClaimJustIdResponse = []any{"0-0", []any{"0-3"}, []any(nil)}
+			expectedXAutoClaimResponse = models.XAutoClaimResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  map[string][][]string{"0-3": {{"field3", "value3"}}},
+				DeletedMessages: []string{},
+			}
+		}
+
+		expectedXAutoClaimJustIdResponse := models.XAutoClaimJustIdResponse{
+			NextEntry:      "0-0",
+			ClaimedEntries: []string{"0-3"},
+		}
+		if serverVer >= "7.0.0" {
+			expectedXAutoClaimJustIdResponse = models.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{"0-3"},
+				DeletedMessages: []string{},
+			}
 		}
 
 		xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
@@ -2155,8 +2178,9 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		xpendingOpts := options.NewXPendingOptions("-", "+", 1)
 		batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
 		testData = append(testData, CommandTestData{
-			ExpectedResponse: []any(nil),
-			TestName:         "XPending(streamKey1, groupName1, MIN, MAX, 1)",
+			// ExpectedResponse: []any(nil),
+			ExpectedResponse: []models.XPendingDetail{},
+			TestName:         "XPendingWithOptions(streamKey1, groupName1, MIN, MAX, 1)",
 		})
 
 		// XGROUP DELCONSUMER command
