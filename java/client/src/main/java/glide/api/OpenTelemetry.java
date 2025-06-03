@@ -251,8 +251,12 @@ public class OpenTelemetry {
          * Sets the sample percentage for traces.
          *
          * @param samplePercentage The sample percentage for traces
+         * @throws ConfigurationError if the sample percentage is not between 0 and 100
          */
         public void setSamplePercentage(Integer samplePercentage) {
+            if (samplePercentage < 0 || samplePercentage > 100) {
+                throw new ConfigurationError("Sample percentage must be between 0 and 100");
+            }
             this.samplePercentage = samplePercentage;
         }
     }
