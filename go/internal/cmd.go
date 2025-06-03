@@ -8,6 +8,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
@@ -123,6 +124,7 @@ func (node mapConverter[T]) convert(data any) any {
 	return result
 }
 
+// Converts an untyped array into a []T
 func (node arrayConverter[T]) convert(data any) any {
 	if data == nil {
 		if node.canBeNil {
@@ -186,10 +188,14 @@ func ConvertArrayOfStringOrNil(data any) any {
 func ConvertArrayOf[T any](data any) any {
 	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
 
-	return arrayConverter[T]{
+	converted := arrayConverter[T]{
 		nil,
 		false,
 	}.convert(arr)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
 	// actually returns a []T
 }
 
@@ -225,7 +231,9 @@ func ConvertKeyWithArrayOfMembersAndScores(data any) any {
 		nil,
 		false,
 	}.convert(arr[1])
-
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
 	res, ok := converted.(map[string]float64)
 
 	if !ok {
@@ -233,27 +241,202 @@ func ConvertKeyWithArrayOfMembersAndScores(data any) any {
 			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
 		}
 	}
-	MemberAndScoreArray := make([]models.MemberAndScore, 0, len(res))
+	memberAndScoreArray := make([]models.MemberAndScore, 0, len(res))
 
 	for k, v := range res {
-		MemberAndScoreArray = append(MemberAndScoreArray, models.MemberAndScore{Member: k, Score: v})
+		memberAndScoreArray = append(memberAndScoreArray, models.MemberAndScore{Member: k, Score: v})
 	}
 
 	return models.CreateKeyWithArrayOfMembersAndScoresResult(
-		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: MemberAndScoreArray},
+		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: memberAndScoreArray},
 	)
+}
+
+// ZRandMemberWithCountWithScores
+func ConvertArrayOfMemberAndScore(data any) any {
+	converted := arrayConverter[[]any]{
+		arrayConverter[any]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	pairs, ok := converted.([][]any)
+	if !ok {
+		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of data: %T", converted)}
+	}
+	memberAndScoreArray := make([]models.MemberAndScore, 0, len(pairs))
+	for _, pair := range pairs {
+		memberAndScoreArray = append(
+			memberAndScoreArray,
+			models.MemberAndScore{Member: pair[0].(string), Score: pair[1].(float64)},
+		)
+	}
+	return memberAndScoreArray
+}
+
+// XAutoClaim XAutoClaimWithOptions
+func ConvertXAutoClaimResponse(data any) any {
+	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	len := len(arr)
+	if len < 2 || len > 3 {
+		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+	}
+	converted := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(arr[1])
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+
+	claimedEntries, ok := converted.(map[string][][]string)
+	if !ok {
+		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+	var deletedMessages []string = nil
+	if len == 3 {
+		converted = arrayConverter[string]{
+			nil,
+			false,
+		}.convert(arr[2])
+		if err, ok := converted.(*errors.RequestError); ok {
+			return err
+		}
+		deletedMessages, ok = converted.([]string)
+		if !ok {
+			return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
+		}
+	}
+	return models.XAutoClaimResponse{
+		NextEntry:       arr[0].(string),
+		ClaimedEntries:  claimedEntries,
+		DeletedMessages: deletedMessages,
+	}
+}
+
+// XAutoClaimJustId XAutoClaimJustIdWithOptions
+func ConvertXAutoClaimJustIdResponse(data any) any {
+	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	len := len(arr)
+	if len < 2 || len > 3 {
+		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+	}
+	converted := arrayConverter[string]{
+		nil,
+		false,
+	}.convert(arr[1])
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+
+	claimedEntries, ok := converted.([]string)
+	if !ok {
+		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+	}
+	var deletedMessages []string = nil
+	if len == 3 {
+		converted = arrayConverter[string]{
+			nil,
+			false,
+		}.convert(arr[2])
+		if err, ok := converted.(*errors.RequestError); ok {
+			return err
+		}
+		deletedMessages, ok = converted.([]string)
+		if !ok {
+			return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
+		}
+	}
+	return models.XAutoClaimJustIdResponse{
+		NextEntry:       arr[0].(string),
+		ClaimedEntries:  claimedEntries,
+		DeletedMessages: deletedMessages,
+	}
+}
+
+// XPending
+func ConvertXPendingResponse(data any) any {
+	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+
+	NumOfMessages := arr[0].(int64)
+	var StartId, EndId models.Result[string]
+	if arr[1] == nil {
+		StartId = models.CreateNilStringResult()
+	} else {
+		StartId = models.CreateStringResult(arr[1].(string))
+	}
+	if arr[2] == nil {
+		EndId = models.CreateNilStringResult()
+	} else {
+		EndId = models.CreateStringResult(arr[2].(string))
+	}
+
+	if pendingMessages, ok := arr[3].([]any); ok {
+		var ConsumerPendingMessages []models.ConsumerPendingMessage
+		for _, msg := range pendingMessages {
+			consumerMessage := msg.([]any)
+			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
+			if err == nil {
+				ConsumerPendingMessages = append(ConsumerPendingMessages, models.ConsumerPendingMessage{
+					ConsumerName: consumerMessage[0].(string),
+					MessageCount: count,
+				})
+			}
+		}
+		return models.XPendingSummary{
+			NumOfMessages:    NumOfMessages,
+			StartId:          StartId,
+			EndId:            EndId,
+			ConsumerMessages: ConsumerPendingMessages,
+		}
+	} else {
+		return models.XPendingSummary{NumOfMessages: NumOfMessages, StartId: StartId, EndId: EndId, ConsumerMessages: make([]models.ConsumerPendingMessage, 0)}
+	}
+}
+
+// XPendingWithOptions
+func ConvertXPendingWithOptionsResponse(data any) any {
+	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	pendingDetails := make([]models.XPendingDetail, 0, len(arr))
+
+	for _, message := range arr {
+		detail := message.([]any)
+
+		pDetail := models.XPendingDetail{
+			Id:            detail[0].(string),
+			ConsumerName:  detail[1].(string),
+			IdleTime:      detail[2].(int64),
+			DeliveryCount: detail[3].(int64),
+		}
+		pendingDetails = append(pendingDetails, pDetail)
+	}
+	return pendingDetails
 }
 
 func Convert2DArrayOfString(data any) any {
 	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
 
-	return arrayConverter[[]string]{
+	converted := arrayConverter[[]string]{
 		arrayConverter[string]{
 			nil,
 			false,
 		},
 		false,
 	}.convert(arr)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
 	// actually returns a [][]string
 }
 

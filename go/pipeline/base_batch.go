@@ -3131,12 +3131,12 @@ func (b *BaseBatch[T]) ZRange(key string, rangeQuery options.ZRangeQuery) *T {
 		return b.addError("ZRange", err)
 	}
 	args = append(args, queryArgs...)
-	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZRange, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the specified range of elements with their scores in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
-
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -3435,7 +3435,7 @@ func (b *BaseBatch[T]) XAutoClaimWithOptions(
 		return b.addError("XAutoClaimWithOptions", err)
 	}
 	args = append(args, optArgs...)
-	return b.addCmdAndTypeChecker(C.XAutoClaim, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XAutoClaim, args, reflect.Slice, false, internal.ConvertXAutoClaimResponse)
 }
 
 // Transfers ownership of pending stream entries and returns just the IDs.
@@ -3514,7 +3514,7 @@ func (b *BaseBatch[T]) XAutoClaimJustIdWithOptions(
 	}
 	args = append(args, optArgs...)
 	args = append(args, constants.JustIdKeyword)
-	return b.addCmdAndTypeChecker(C.XAutoClaim, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XAutoClaim, args, reflect.Slice, false, internal.ConvertXAutoClaimJustIdResponse)
 }
 
 // Removes the specified entries by id from a stream, and returns the number of entries deleted.
@@ -3618,12 +3618,18 @@ func (b *BaseBatch[T]) ZScanWithOptions(key string, cursor string, options optio
 //
 // Command Response:
 //
-//	A summary that includes the total number of pending messages, smallest and greatest IDs,
-//	and consumer information.
+// An [models.XPendingSummary] struct that includes a summary with the following fields:
+//
+//	NumOfMessages - The total number of pending messages for this consumer group.
+//	StartId - The smallest ID among the pending messages or nil if no pending messages exist.
+//	EndId - The greatest ID among the pending messages or nil if no pending messages exists.
+//	GroupConsumers - An array of ConsumerPendingMessages with the following fields:
+//	ConsumerName - The name of the consumer.
+//	MessageCount - The number of pending messages for this consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (b *BaseBatch[T]) XPending(key string, group string) *T {
-	return b.addCmdAndTypeChecker(C.XPending, []string{key, group}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XPending, []string{key, group}, reflect.Slice, false, internal.ConvertXPendingResponse)
 }
 
 // Returns stream message summary information for pending messages matching a given range of IDs.
@@ -3638,13 +3644,18 @@ func (b *BaseBatch[T]) XPending(key string, group string) *T {
 //
 // Command Response:
 //
-//	A slice of details about pending messages, including ID, consumer name, idle time, and delivery count.
+// A slice of [models.XPendingDetail] structs, where each detail struct includes the following fields:
+//
+//	Id - The ID of the pending message.
+//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//	DeliveryCount - The number of times this message was delivered.
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (b *BaseBatch[T]) XPendingWithOptions(key string, group string, opts options.XPendingOptions) *T {
 	optionArgs, _ := opts.ToArgs()
 	args := append([]string{key, group}, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XPending, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XPending, args, reflect.Slice, false, internal.ConvertXPendingWithOptionsResponse)
 }
 
 // Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
@@ -3944,7 +3955,13 @@ func (b *BaseBatch[T]) ZRandMember(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (b *BaseBatch[T]) ZRandMemberWithCount(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(C.ZRandMember, []string{key, utils.IntToString(count)}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.ZRandMember,
+		[]string{key, utils.IntToString(count)},
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Returns random members with scores from the sorted set stored at key.
@@ -3959,16 +3976,17 @@ func (b *BaseBatch[T]) ZRandMemberWithCount(key string, count int64) *T {
 //
 // Command Response:
 //
-//	An array of member and score pairs from the sorted set.
+//	An array of [models.MemberAndScore] objects, which store member names and their respective scores.
 //	If the sorted set does not exist or is empty, the response will be an empty array.
 //
 // [valkey.io]: https://valkey.io/commands/zrandmember/
 func (b *BaseBatch[T]) ZRandMemberWithCountWithScores(key string, count int64) *T {
-	return b.addCmdAndTypeChecker(
+	return b.addCmdAndConverter(
 		C.ZRandMember,
 		[]string{key, utils.IntToString(count), constants.WithScoresKeyword},
 		reflect.Slice,
 		false,
+		internal.ConvertArrayOfMemberAndScore,
 	)
 }
 
