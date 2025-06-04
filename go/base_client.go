@@ -4061,8 +4061,12 @@ func (client *baseClient) XAddWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4085,8 +4089,12 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //
 // Return value:
 //
-//	A map of stream keys to StreamResponse objects containing stream entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -4124,8 +4132,12 @@ func (client *baseClient) XReadWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroup(
@@ -4155,8 +4167,12 @@ func (client *baseClient) XReadGroup(
 //
 // Return value:
 //
-//	A map of stream keys to StreamResponse objects containing stream entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroupWithOptions(
