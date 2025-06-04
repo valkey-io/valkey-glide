@@ -164,15 +164,12 @@ type Expiry struct {
 
 // isExpiryTypeSeconds checks if the expiry type should be in seconds
 func isExpiryTypeSeconds(duration time.Duration) bool {
-	if duration%time.Second == 0 {
-		return true
-	}
-	return false
+	return duration%time.Second == 0
 }
 
 // NewExpiryIn creates a new Expiry with a duration from now
 func NewExpiryIn(duration time.Duration) *Expiry {
-	dur := 0
+	dur := int(duration.Milliseconds())
 	expiryType := constants.Milliseconds
 	if isExpiryTypeSeconds(duration) {
 		expiryType = constants.Seconds
