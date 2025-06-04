@@ -1188,14 +1188,6 @@ func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return models.CreateEmptyClusterValue[string](), err
-		}
-		return models.CreateClusterMultiValue[string](data), nil
-	}
 	data, err := handleOkResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
@@ -1251,14 +1243,14 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	// if opts.Route != nil &&
-	// 	(opts.Route).IsMultiNode() {
-	// 	data, err := handleStringToStringMapResponse(response)
-	// 	if err != nil {
-	// 		return models.CreateEmptyClusterValue[models.Result[string]](), err
-	// 	}
-	// 	return models.CreateClusterMultiValue[models.Result[string]](data), nil
-	// }
+	if opts.Route != nil &&
+		(opts.Route).IsMultiNode() {
+		data, err := handleStringToStringOrNilMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[models.Result[string]](), err
+		}
+		return models.CreateClusterMultiValue[models.Result[string]](data), nil
+	}
 	data, err := handleStringOrNilResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[models.Result[string]](), err

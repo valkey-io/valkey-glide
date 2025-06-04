@@ -1335,6 +1335,21 @@ func (suite *GlideTestSuite) TestClusterClientGetNameWithRoute() {
 	assert.True(t, response.SingleValue().IsNil())
 }
 
+func (suite *GlideTestSuite) TestClusterClientGetNameWithMultiNodeRoutes() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{Route: route}
+
+	response, err := client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+	for _, value := range response.MultiValue() {
+		assert.True(t, value.IsNil())
+	}
+}
+
 func (suite *GlideTestSuite) TestClientSetGetName() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1369,6 +1384,19 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	assert.True(t, response2.IsSingleValue())
+
+	// same sections with multinode routes
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", response.SingleValue())
+	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	for _, data := range response2.MultiValue() {
+		assert.Equal(t, connectionName, data.Value())
+	}
 }
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
