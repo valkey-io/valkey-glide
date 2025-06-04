@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
 
@@ -244,7 +244,6 @@ func TestConfig_AzAffinity(t *testing.T) {
 }
 
 func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
-	var errorType *errors.ConfigurationError
 	// RequestTimeout Negative duration
 	config := NewClientConfiguration().
 		WithRequestTimeout(-1 * time.Hour)
