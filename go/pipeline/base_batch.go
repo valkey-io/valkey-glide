@@ -2578,7 +2578,7 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 	if err != nil {
 		return b.addError("XReadWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.XRead, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.XRead, args, reflect.Map, true)
 }
 
 // Reads entries from the given streams owned by a consumer group.
