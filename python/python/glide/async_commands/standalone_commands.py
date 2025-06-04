@@ -123,7 +123,7 @@ class StandaloneCommands(CoreCommands):
             # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
 
         Example (Atomic Batch - Transaction with options):
-            >>> from glide.async_commands.batch_options import BatchOptions
+            >>> from glide import BatchOptions
             >>> transaction = Batch(is_atomic=True)
             >>> transaction.set("key", "1")
             >>> transaction.incr("key")
