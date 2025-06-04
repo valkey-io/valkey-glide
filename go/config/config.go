@@ -498,9 +498,9 @@ func NewAdvancedClientConfiguration() *AdvancedClientConfiguration {
 
 // WithConnectionTimeout sets the duration to wait for a TCP/TLS connection to complete.
 // The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
-// during initial client creation and any reconnections that may occur during request processing.
+// during initial client creation and any reconnection that may occur during request processing.
 // Note: A high connection timeout may lead to prolonged blocking of the entire command
-// pipeline. If not explicitly set, a default value of 250 milliseconds will be used.
+// pipeline. If not explicitly set, a default value of 2000 milliseconds will be used.
 //
 // Using a negative value or a value that exceeds the max duration of 2^32 - 1 milliseconds will lead to an invalid
 // configuration.
