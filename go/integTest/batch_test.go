@@ -15,7 +15,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -41,7 +40,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&glideErrors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -56,7 +55,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&glideErrors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -70,7 +69,6 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 }
 
 func (suite *GlideTestSuite) TestBatchRaiseOnError() {
-	suite.T().Skip()
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		key1 := "{BatchRaiseOnError}" + uuid.NewString()
 		key2 := "{BatchRaiseOnError}" + uuid.NewString()
@@ -108,8 +106,8 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])
 		suite.Equal(int64(1), res[2])
-		suite.Error(glideErrors.IsError(res[1]))
-		suite.Error(glideErrors.IsError(res[3]))
+		suite.Error(glide.IsError(res[1]))
+		suite.Error(glide.IsError(res[3]))
 		suite.Contains(res[1].(error).Error(), "wrong kind of value")
 		suite.Contains(res[3].(error).Error(), "no such key")
 	})
@@ -296,7 +294,6 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 }
 
 func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
-	suite.T().Skip()
 	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
@@ -328,7 +325,6 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 			res, err = c.Exec(context.Background(), *batch, false)
 			suite.NoError(err)
 		}
-		fmt.Println("Responses:", res)
 
 		suite.Error(res[0].(error))
 		suite.Error(res[1].(error))
@@ -457,9 +453,9 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 				suite.Equal(map[string]any{}, res[3])
 			} else {
 				// In 6.2.0, errors are raised instead
-				suite.Error(glideErrors.IsError(res[1]))
-				suite.Error(glideErrors.IsError(res[2]))
-				suite.Error(glideErrors.IsError(res[3]))
+				suite.Error(glide.IsError(res[1]))
+				suite.Error(glide.IsError(res[2]))
+				suite.Error(glide.IsError(res[3]))
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).

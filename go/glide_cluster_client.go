@@ -12,7 +12,6 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -637,7 +636,7 @@ func (client *ClusterClient) clusterScan(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, glideErrors.NewClosingError("Cluster Scan failed. The client is closed.")
+		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 

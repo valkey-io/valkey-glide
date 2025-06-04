@@ -34,7 +34,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
@@ -155,7 +154,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
 	)
 	if err != nil {
-		return nil, glideErrors.NewClosingError(err.Error())
+		return nil, NewClosingError(err.Error())
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
@@ -171,7 +170,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
-		return nil, glideErrors.NewConnectionError(message)
+		return nil, NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
@@ -200,7 +199,7 @@ func (client *baseClient) Close() {
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
 	for channelPtr := range client.pending {
 		resultChannel := *(*chan payload)(channelPtr)
-		resultChannel <- payload{value: nil, error: glideErrors.NewClosingError("ExecuteCommand failed. The client is closed.")}
+		resultChannel <- payload{value: nil, error: NewClosingError("ExecuteCommand failed. The client is closed.")}
 	}
 	client.pending = nil
 }
@@ -344,7 +343,7 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, glideErrors.NewClosingError("ExecuteCommand failed. The client is closed.")
+		return nil, NewClosingError("ExecuteCommand failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
@@ -447,7 +446,7 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, glideErrors.NewClosingError("ExecuteBatch failed. The client is closed.")
+		return nil, NewClosingError("ExecuteBatch failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -625,7 +624,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return models.DefaultStringResponse, glideErrors.NewClosingError("UpdatePassword failed. The client is closed.")
+		return models.DefaultStringResponse, NewClosingError("UpdatePassword failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -1320,9 +1319,6 @@ func (client *baseClient) LCSWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
 func (client *baseClient) GetDel(ctx context.Context, key string) (models.Result[string], error) {
-	if key == "" {
-		return models.CreateNilStringResult(), errors.New("key is required")
-	}
 	result, err := client.executeCommand(ctx, C.GetDel, []string{key})
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -8903,7 +8899,7 @@ func (client *baseClient) executeScriptWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, glideErrors.NewClosingError("ExecuteScript failed. The client is closed.")
+		return nil, NewClosingError("ExecuteScript failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	hash_cstring := C.CString(hash)

@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
@@ -59,7 +58,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &glideErrors.ConnectionError{}, err)
+	assert.IsType(suite.T(), &glide.ConnectionError{}, err)
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {

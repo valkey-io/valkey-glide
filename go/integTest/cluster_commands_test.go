@@ -15,8 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -784,7 +784,7 @@ func (suite *GlideTestSuite) TestFlushDB_Failure() {
 	result, err := client.FlushDB(context.Background())
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAll_Success() {
@@ -810,7 +810,7 @@ func (suite *GlideTestSuite) TestFlushAll_Failure() {
 	result, err := client.FlushAll(context.Background())
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAllWithOptions_AllNodes() {
@@ -1055,7 +1055,6 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_InvalidParamete
 	// Test empty password
 	_, err := testClient.UpdateConnectionPassword(context.Background(), "", true)
 	suite.Error(err)
-
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() {
@@ -1071,7 +1070,6 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_NoServerAuth() 
 	pwd := uuid.NewString()
 	_, err = testClient.UpdateConnectionPassword(context.Background(), pwd, true)
 	suite.Error(err)
-
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster_LongPassword() {

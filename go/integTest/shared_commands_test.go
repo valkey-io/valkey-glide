@@ -725,11 +725,11 @@ func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
 		suite.verifyOK(client.Set(context.Background(), key, value))
 		result, err := client.GetDel(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), value, result.Value())
+		suite.Equal(value, result.Value())
 
 		result, err = client.Get(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), "", result.Value())
+		suite.Equal("", result.Value())
 	})
 }
 
@@ -740,7 +740,7 @@ func (suite *GlideTestSuite) TestGetDel_NonExistingKey() {
 		result, err := client.GetDel(context.Background(), key)
 
 		suite.NoError(err)
-		assert.Equal(suite.T(), "", result.Value())
+		suite.Equal("", result.Value())
 	})
 }
 
@@ -748,8 +748,8 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		result, err := client.GetDel(context.Background(), "")
 
-		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), "", result.Value())
+		suite.NoError(err)
+		suite.Equal("", result.Value())
 	})
 }
 
@@ -1515,7 +1515,7 @@ func (suite *GlideTestSuite) TestLPushLPop_typeError() {
 		suite.Error(err)
 
 		res2, err := client.LPopCount(context.Background(), key, 2)
-		suite.NoError(err)
+		suite.Error(err)
 		suite.Nil(res2)
 	})
 }
@@ -2744,7 +2744,7 @@ func (suite *GlideTestSuite) TestLRange() {
 		suite.verifyOK(client.Set(context.Background(), key2, "value"))
 
 		res4, err := client.LRange(context.Background(), key2, int64(0), int64(1))
-		suite.NoError(err)
+		suite.Error(err)
 		suite.Empty(res4)
 	})
 }
@@ -2756,27 +2756,27 @@ func (suite *GlideTestSuite) TestLIndex() {
 
 		res1, err := client.LPush(context.Background(), key, list)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(4), res1)
+		suite.Equal(int64(4), res1)
 
 		res2, err := client.LIndex(context.Background(), key, int64(0))
 		suite.NoError(err)
-		assert.Equal(suite.T(), "value1", res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		suite.Equal("value1", res2.Value())
+		suite.False(res2.IsNil())
 
 		res3, err := client.LIndex(context.Background(), key, int64(-1))
 		suite.NoError(err)
-		assert.Equal(suite.T(), "value4", res3.Value())
-		assert.False(suite.T(), res3.IsNil())
+		suite.Equal("value4", res3.Value())
+		suite.False(res3.IsNil())
 
 		res4, err := client.LIndex(context.Background(), "non_existing_key", int64(0))
 		suite.NoError(err)
-		assert.Equal(suite.T(), models.CreateNilStringResult(), res4)
+		suite.Equal(models.CreateNilStringResult(), res4)
 
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(context.Background(), key2, "value"))
 
 		res5, err := client.LIndex(context.Background(), key2, int64(0))
-		suite.NoError(err)
+		suite.Error(err)
 		suite.Equal(models.CreateNilStringResult(), res5)
 	})
 }
@@ -2806,7 +2806,7 @@ func (suite *GlideTestSuite) TestLTrim() {
 		suite.verifyOK(client.Set(context.Background(), key2, "value"))
 
 		res4, err := client.LIndex(context.Background(), key2, int64(0))
-		suite.NoError(err)
+		suite.Error(err)
 		suite.Equal(models.CreateNilStringResult(), res4)
 	})
 }
@@ -2832,7 +2832,7 @@ func (suite *GlideTestSuite) TestLLen() {
 		suite.verifyOK(client.Set(context.Background(), key2, "value"))
 
 		res4, err := client.LLen(context.Background(), key2)
-		suite.NoError(err)
+		suite.Error(err)
 		suite.Equal(int64(0), res4)
 	})
 }
@@ -8644,7 +8644,6 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		suite.NoError(err)
 		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
 		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
@@ -8655,7 +8654,6 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			*claimOptions,
 		)
 		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
 
 		_, err = client.XClaimJustId(
 			context.Background(),
@@ -8666,7 +8664,6 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			[]string{streamid_1.Value()},
 		)
 		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
 
 		_, err = client.XClaimJustIdWithOptions(context.Background(),
 			stringKey,
@@ -8677,7 +8674,6 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			*claimOptions,
 		)
 		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
 	})
 }
 

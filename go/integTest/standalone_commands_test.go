@@ -14,7 +14,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/google/uuid"
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 
@@ -451,7 +451,7 @@ func (suite *GlideTestSuite) TestPing_ClosedClient() {
 
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestPingWithOptions_WithMessage() {
@@ -476,7 +476,7 @@ func (suite *GlideTestSuite) TestPingWithOptions_ClosedClient() {
 	result, err := client.PingWithOptions(context.Background(), options)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestTime_Success() {
@@ -507,7 +507,7 @@ func (suite *GlideTestSuite) TestTime_Error() {
 
 	assert.NotNil(suite.T(), err)
 	assert.Nil(suite.T(), results)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAll() {
@@ -582,7 +582,7 @@ func (suite *GlideTestSuite) TestFlushAll_ClosedClient() {
 	response, err := client.FlushAllWithOptions(context.Background(), options.SYNC)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", response)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestFlushAll_MultipleFlush() {
@@ -692,7 +692,7 @@ func (suite *GlideTestSuite) TestFlushDBWithOptions_ClosedClient() {
 	result, err := client.FlushDBWithOptions(context.Background(), options.SYNC)
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
-	assert.IsType(suite.T(), &glideErrors.ClosingError{}, err)
+	assert.IsType(suite.T(), &glide.ClosingError{}, err)
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPasswordAuthNonValidPass() {
