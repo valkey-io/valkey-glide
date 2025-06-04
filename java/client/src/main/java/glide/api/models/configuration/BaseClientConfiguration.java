@@ -47,7 +47,7 @@ public abstract class BaseClientConfiguration {
     /**
      * The duration in milliseconds that the client should wait for a request to complete. This
      * duration encompasses sending the request, awaiting for a response from the server, and any
-     * required reconnections or retries. If the specified timeout is exceeded for a pending request,
+     * required reconnection or retries. If the specified timeout is exceeded for a pending request,
      * it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds
      * will be used.
      */
