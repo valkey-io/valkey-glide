@@ -2910,7 +2910,7 @@ func (client *baseClient) BLPop(ctx context.Context, keys []string, timeout time
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeout - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3103,7 +3103,7 @@ func (client *baseClient) LMPopCount(
 //	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
-//	timeout   - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3160,7 +3160,7 @@ func (client *baseClient) BLMPop(
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeout  - The duration to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //
 // indefinitely.
 //
@@ -3293,7 +3293,7 @@ func (client *baseClient) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeout - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
@@ -4595,7 +4595,7 @@ func (client *baseClient) BZPopMin(
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeout   - The duration to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Return value:
