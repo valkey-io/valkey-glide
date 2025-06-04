@@ -37,7 +37,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&glideErrors.TimeoutError{}, err)
@@ -52,7 +52,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&glideErrors.TimeoutError{}, err)
@@ -98,10 +98,10 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 			_, err1 = c.Exec(context.Background(), *batch, true)
 			res, err2 = c.Exec(context.Background(), *batch, false)
 		}
-		// First exception is raised, all data lost
+		// First error is raised, all data lost
 		suite.Error(err1)
 
-		// Exceptions aren't raised, but stored in the result set
+		// Errors aren't raised, but stored in the result set
 		suite.NoError(err2)
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])

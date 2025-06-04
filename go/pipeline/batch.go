@@ -6,7 +6,6 @@ package pipeline
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -310,15 +309,15 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 			if isNilable {
 				return nil
 			}
-			return errors.New(fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType))
+			return fmt.Errorf("Unexpected return type from Glide: got nil, expected %v", expectedType)
 		}
 		if reflect.TypeOf(res).Kind() == expectedType {
 			return converter(res)
 		}
 		// data lost even though it was incorrect
 		// TODO maybe still return the data?
-		return errors.New(
-			fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
+		return fmt.Errorf(
+			"Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType,
 		)
 	}
 	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
