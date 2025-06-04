@@ -155,7 +155,7 @@ class ClusterCommands(CoreCommands):
             >>> atomic_batch.get("key")
             >>> atomic_result = await cluster_client.exec(atomic_batch, False, options)
             >>> print(f"Atomic Batch Result: {atomic_result}")
-            # Output: [OK, 2, 2]
+            # Output: Atomic Batch Result: [OK, 2, 2]
 
             # Non-atomic batch (pipeline): keys may span different hash slots
             >>> retry_strategy = BatchRetryStrategy(retry_server_error=True, retry_connection_error=False)
@@ -167,7 +167,7 @@ class ClusterCommands(CoreCommands):
             >>> non_atomic_batch.get("key2")
             >>> non_atomic_result = await cluster_client.exec(non_atomic_batch, False, pipeline_options)
             >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
-            # Output: [OK, OK, value1, value2]
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
         """
         commands = batch.commands[:]
 

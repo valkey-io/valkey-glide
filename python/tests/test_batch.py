@@ -15,7 +15,11 @@ from glide.async_commands.batch import (
     ClusterTransaction,
     Transaction,
 )
-from glide.async_commands.batch_options import BatchOptions, ClusterBatchOptions
+from glide.async_commands.batch_options import (
+    BatchOptions,
+    BatchRetryStrategy,
+    ClusterBatchOptions,
+)
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldSet,
@@ -1655,3 +1659,20 @@ class TestBatch:
             assert (
                 node_info.strip() == b"# Errorstats"
             ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_retry_strategy_with_atomic_batch_raises_error(
+        self, glide_client: GlideClusterClient
+    ):
+        """Test that using retry strategies with atomic batches raises RequestError."""
+        batch = ClusterBatch(is_atomic=True)
+        batch.set("key", "value")
+
+        retry_strategy = BatchRetryStrategy(retry_server_error=True)
+        options = ClusterBatchOptions(retry_strategy=retry_strategy)
+
+        with pytest.raises(
+            RequestError, match="Retry strategies are not supported for atomic batches"
+        ):
+            await glide_client.exec(batch, raise_on_error=True, options=options)
