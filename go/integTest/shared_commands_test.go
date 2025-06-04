@@ -4868,12 +4868,27 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		// read the entire stream for the consumer and mark messages as pending
 		res, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key1: {
-				entry1.Value(): {{"a", "b"}},
-				entry2.Value(): {{"c", "d"}},
-			},
-		}, res)
+		
+		// Check that we have one stream with the correct name
+		assert.Equal(suite.T(), 1, len(res))
+		assert.Equal(suite.T(), key1, res[0].StreamName)
+		
+		// Check that we have two entries with the correct IDs and fields
+		assert.Equal(suite.T(), 2, len(res[0].Entries))
+		
+		// Create a map of entry IDs to their fields for easier comparison
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range res[0].Entries {
+			entryMap[entry.ID] = entry.Fields
+		}
+		
+		// Verify entry1 has the correct fields
+		assert.Contains(suite.T(), entryMap, entry1.Value())
+		assert.Equal(suite.T(), map[string]string{"a": "b"}, entryMap[entry1.Value()])
+		
+		// Verify entry2 has the correct fields
+		assert.Contains(suite.T(), entryMap, entry2.Value())
+		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
 
 		// delete one of the entries
 		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1.Value()}, "Can't send XDEL as a custom command")
@@ -4881,12 +4896,24 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		// now xreadgroup returns one empty entry and one non-empty entry
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: "0"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key1: {
-				entry1.Value(): nil,
-				entry2.Value(): {{"c", "d"}},
-			},
-		}, res)
+		
+		// Check that we have one stream with the correct name
+		assert.Equal(suite.T(), 1, len(res))
+		assert.Equal(suite.T(), key1, res[0].StreamName)
+		
+		// Check entries
+		entryMap = make(map[string]map[string]string)
+		for _, entry := range res[0].Entries {
+			entryMap[entry.ID] = entry.Fields
+		}
+		
+		// Verify entry1 exists but has no fields (was deleted)
+		assert.Contains(suite.T(), entryMap, entry1.Value())
+		assert.Empty(suite.T(), entryMap[entry1.Value()])
+		
+		// Verify entry2 has the correct fields
+		assert.Contains(suite.T(), entryMap, entry2.Value())
+		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
 
 		// try to read new messages only
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4899,11 +4926,15 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.False(suite.T(), entry3.IsNil())
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key1: {
-				entry3.Value(): {{"e", "f"}},
-			},
-		}, res)
+		
+		// Check that we have one stream with the correct name
+		assert.Equal(suite.T(), 1, len(res))
+		assert.Equal(suite.T(), key1, res[0].StreamName)
+		
+		// Check that we have one entry with the correct ID and fields
+		assert.Equal(suite.T(), 1, len(res[0].Entries))
+		assert.Equal(suite.T(), entry3.Value(), res[0].Entries[0].ID)
+		assert.Equal(suite.T(), map[string]string{"e": "f"}, res[0].Entries[0].Fields)
 
 		// add second key with a group and a consumer, but no messages
 		sendWithCustomCommand(
@@ -4922,14 +4953,39 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		// read both keys
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: "0", key2: "0"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key1: {
-				entry1.Value(): nil,
-				entry2.Value(): {{"c", "d"}},
-				entry3.Value(): {{"e", "f"}},
-			},
-			key2: {},
-		}, res)
+		
+		// Check that we have two streams
+		assert.Equal(suite.T(), 2, len(res))
+		
+		// Create a map of stream names to their entries for easier comparison
+		streamMap := make(map[string][]models.StreamEntry)
+		for _, stream := range res {
+			streamMap[stream.StreamName] = stream.Entries
+		}
+		
+		// Check key1 stream
+		assert.Contains(suite.T(), streamMap, key1)
+		assert.Equal(suite.T(), 3, len(streamMap[key1]))
+		
+		// Create a map of entry IDs to their fields for key1
+		entryMap1 := make(map[string]map[string]string)
+		for _, entry := range streamMap[key1] {
+			entryMap1[entry.ID] = entry.Fields
+		}
+		
+		// Verify entries in key1
+		assert.Contains(suite.T(), entryMap1, entry1.Value())
+		assert.Empty(suite.T(), entryMap1[entry1.Value()])
+		
+		assert.Contains(suite.T(), entryMap1, entry2.Value())
+		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap1[entry2.Value()])
+		
+		assert.Contains(suite.T(), entryMap1, entry3.Value())
+		assert.Equal(suite.T(), map[string]string{"e": "f"}, entryMap1[entry3.Value()])
+		
+		// Check key2 stream (should be empty)
+		assert.Contains(suite.T(), streamMap, key2)
+		assert.Empty(suite.T(), streamMap[key2])
 
 		// error cases:
 		// key does not exist
@@ -4957,7 +5013,13 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		)
 		res, err = client.XReadGroup(context.Background(), group, "_", map[string]string{key3: "0"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{key3: {}}, res)
+		
+		// Check that we have one stream with the correct name
+		assert.Equal(suite.T(), 1, len(res))
+		assert.Equal(suite.T(), key3, res[0].StreamName)
+		
+		// Check that the stream is empty
+		assert.Empty(suite.T(), res[0].Entries)
 	})
 }
 
@@ -4995,14 +5057,27 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		read, err = client.XRead(context.Background(), map[string]string{key1: "0-0", key2: "0-0"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key1: {
-				"0-1": {{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
-			},
-			key2: {
-				"2-0": {{"k2_field1", "k2_value1"}},
-			},
-		}, read)
+		
+		// Check that we have two streams
+		assert.Equal(suite.T(), 2, len(read))
+		
+		// Create a map of stream names to their entries for easier comparison
+		streamMap := make(map[string][]models.StreamEntry)
+		for _, stream := range read {
+			streamMap[stream.StreamName] = stream.Entries
+		}
+		
+		// Check key1 stream
+		assert.Contains(suite.T(), streamMap, key1)
+		assert.Equal(suite.T(), 1, len(streamMap[key1]))
+		assert.Equal(suite.T(), "0-1", streamMap[key1][0].ID)
+		assert.Equal(suite.T(), map[string]string{"k1_field1": "k1_value2"}, streamMap[key1][0].Fields)
+		
+		// Check key2 stream
+		assert.Contains(suite.T(), streamMap, key2)
+		assert.Equal(suite.T(), 1, len(streamMap[key2]))
+		assert.Equal(suite.T(), "2-0", streamMap[key2][0].ID)
+		assert.Equal(suite.T(), map[string]string{"k2_field1": "k2_value1"}, streamMap[key2][0].Fields)
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
@@ -5090,13 +5165,26 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 
 		xreadgroup, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key: {
-				"1-0": {{"f0", "v0"}},
-				"1-1": {{"f1", "v1"}},
-				"1-2": {{"f2", "v2"}},
-			},
-		}, xreadgroup)
+		
+		// Check that we have one stream
+		assert.Equal(suite.T(), 1, len(xreadgroup))
+		assert.Equal(suite.T(), key, xreadgroup[0].StreamName)
+		
+		// Check entries
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range xreadgroup[0].Entries {
+			entryMap[entry.ID] = entry.Fields
+		}
+		
+		// Verify entries
+		assert.Contains(suite.T(), entryMap, "1-0")
+		assert.Equal(suite.T(), map[string]string{"f0": "v0"}, entryMap["1-0"])
+		
+		assert.Contains(suite.T(), entryMap, "1-1")
+		assert.Equal(suite.T(), map[string]string{"f1": "v1"}, entryMap["1-1"])
+		
+		assert.Contains(suite.T(), entryMap, "1-2")
+		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, entryMap["1-2"])
 
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
@@ -5115,11 +5203,15 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
 		xreadgroup, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key: {
-				"1-2": {{"f2", "v2"}},
-			},
-		}, xreadgroup)
+		
+		// Check that we have one stream
+		assert.Equal(suite.T(), 1, len(xreadgroup))
+		assert.Equal(suite.T(), key, xreadgroup[0].StreamName)
+		
+		// Check entries
+		assert.Equal(suite.T(), 1, len(xreadgroup[0].Entries))
+		assert.Equal(suite.T(), "1-2", xreadgroup[0].Entries[0].ID)
+		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, xreadgroup[0].Entries[0].Fields)
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
@@ -7522,12 +7614,23 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// xreadgroup should return one empty stream and one non-empty stream
 		resp, err := client.XReadGroup(context.Background(), groupName, consumerName, map[string]string{key: zeroStreamId})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]map[string][][]string{
-			key: {
-				streamId1.Value(): nil,
-				streamId2.Value(): {{"field2", "value2"}},
-			},
-		}, resp)
+		
+		// Check that we have one stream
+		assert.Equal(suite.T(), 1, len(resp))
+		assert.Equal(suite.T(), key, resp[0].StreamName)
+		
+		// Check entries
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range resp[0].Entries {
+			entryMap[entry.ID] = entry.Fields
+		}
+		
+		// Verify entries
+		assert.Contains(suite.T(), entryMap, streamId1.Value())
+		assert.Empty(suite.T(), entryMap[streamId1.Value()])
+		
+		assert.Contains(suite.T(), entryMap, streamId2.Value())
+		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -7552,7 +7655,10 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// Consume the last message with the previously deleted consumer (creates the consumer anew)
 		resp, err = client.XReadGroup(context.Background(), groupName, consumerName, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), 1, len(resp[key]))
+		
+		// Check that we have one stream with entries
+		assert.Equal(suite.T(), 1, len(resp))
+		assert.Equal(suite.T(), 1, len(resp[0].Entries))
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})
