@@ -652,7 +652,7 @@ export interface BaseClientConfiguration {
     credentials?: ServerCredentials;
     /**
      * The duration in milliseconds that the client should wait for a request to complete.
-     * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
+     * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnection or retries.
      * If the specified timeout is exceeded for a pending request, it will result in a timeout error.
      * If not explicitly set, a default value of 250 milliseconds will be used.
      * Value must be an integer.
@@ -756,9 +756,9 @@ export interface BaseClientConfiguration {
 export interface AdvancedBaseClientConfiguration {
     /**
      * The duration in milliseconds to wait for a TCP/TLS connection to complete.
-     * This applies both during initial client creation and any reconnections that may occur during request processing.
+     * This applies both during initial client creation and any reconnection that may occur during request processing.
      * **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-     * If not explicitly set, a default value of 250 milliseconds will be used.
+     * If not explicitly set, a default value of 2000 milliseconds will be used.
      */
     connectionTimeout?: number;
 

@@ -33,7 +33,7 @@ use std::time::Duration;
 use tokio_util::codec::Decoder;
 
 // Default connection timeout in ms
-const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
+const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
 
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
