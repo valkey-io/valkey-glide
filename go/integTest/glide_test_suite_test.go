@@ -125,7 +125,7 @@ func (suite *GlideTestSuite) SetupSuite() {
 			},
 			FlushIntervalMs: &intervalMs,
 		}
-		err := glide.GetInstance().Init(openTelemetryConfig)
+		err := glide.GetOtelInstance().Init(openTelemetryConfig)
 		assert.NoError(suite.T(), err)
 	}
 }

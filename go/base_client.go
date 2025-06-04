@@ -299,7 +299,7 @@ func (client *baseClient) executeCommandWithRoute(
 	}
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
-	otelInstance := GetInstance()
+	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name
@@ -425,7 +425,7 @@ func (client *baseClient) executeBatch(
 
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
-	otelInstance := GetInstance()
+	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Pass the request type to determine the descriptive name of the command
 		// to use as the span name

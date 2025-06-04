@@ -35,7 +35,7 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 			Endpoint: "wrong.endpoint",
 		},
 	}
-	err := glide.GetInstance().Init(cfg)
+	err := glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Parse error")
 
@@ -45,7 +45,7 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 			Endpoint: "wrong.endpoint",
 		},
 	}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Parse error")
 
@@ -58,7 +58,7 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 		},
 		FlushIntervalMs: &negativeFlushInterval,
 	}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "flushIntervalMs must be a positive integer")
 
@@ -69,7 +69,7 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 			SamplePercentage: 400,
 		},
 	}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "sample percentage must be between 0 and 100")
 	// Test wrong file path format
@@ -78,7 +78,7 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 			Endpoint: "file:invalid-path/v1/traces.json",
 		},
 	}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "File path must start with 'file://'")
 	// Test non-existent directory
@@ -87,12 +87,12 @@ func WrongOpenTelemetryConfig(suite *GlideTestSuite) {
 			Endpoint: "file:///no-exists-path/v1/traces.json",
 		},
 	}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "The directory does not exist")
 	// Test no traces or metrics provided
 	cfg = glide.OpenTelemetryConfig{}
-	err = glide.GetInstance().Init(cfg)
+	err = glide.GetOtelInstance().Init(cfg)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "at least one of traces or metrics must be provided")
 }
@@ -188,7 +188,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_GlobalConfigNotReinitialize() {
 		}
 
 		// The init should not throw error because it can only be initialized once per process
-		err := glide.GetInstance().Init(wrongConfig)
+		err := glide.GetOtelInstance().Init(wrongConfig)
 		assert.Error(suite.T(), err)
 		assert.Contains(suite.T(), err.Error(), "openTelemetry already initialized, ignoring new config")
 
@@ -310,9 +310,9 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage()
 	}
 	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
 		// Set sampling percentage to 0
-		err := glide.GetInstance().SetSamplePercentage(0)
+		err := glide.GetOtelInstance().SetSamplePercentage(0)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int32(0), glide.GetInstance().GetSamplePercentage())
+		assert.Equal(suite.T(), int32(0), glide.GetOtelInstance().GetSamplePercentage())
 
 		// Wait for any existing spans to be flushed
 		time.Sleep(500 * time.Millisecond)
@@ -337,7 +337,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSamplingPercentage()
 		assert.True(suite.T(), os.IsNotExist(err), "Span file should not exist with 0% sampling")
 
 		// Set sampling percentage to 100
-		err = glide.GetInstance().SetSamplePercentage(100)
+		err = glide.GetOtelInstance().SetSamplePercentage(100)
 		require.NoError(suite.T(), err)
 
 		// Execute commands with 100% sampling
@@ -381,7 +381,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientGlobalConfigNotReini
 		}
 
 		// The init should not throw error because it can only be initialized once per process
-		err := glide.GetInstance().Init(wrongConfig)
+		err := glide.GetOtelInstance().Init(wrongConfig)
 		assert.Error(suite.T(), err)
 		assert.Contains(suite.T(), err.Error(), "openTelemetry already initialized, ignoring new config")
 
