@@ -7595,14 +7595,29 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.NoError(suite.T(), err)
 
 		// read the stream for the consumer and mark messages as pending
-		expectedGroup := map[string]map[string][][]string{
-			key: {streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
-		}
 		actualGroup, err := client.XReadGroup(context.Background(), groupName, consumerName, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		assert.True(suite.T(), reflect.DeepEqual(expectedGroup, actualGroup),
-			"Expected and actual results do not match",
-		)
+
+		// Check that we have the stream with the correct name in the map
+		assert.Equal(suite.T(), 1, len(actualGroup))
+		streamResponse, exists := actualGroup[key]
+		assert.True(suite.T(), exists)
+
+		// Check that we have two entries with the correct IDs and fields
+		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
+
+		// Create a map of entry IDs to their fields for easier comparison
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range streamResponse.Entries {
+			entryMap[entry.ID] = entry.Fields
+		}
+
+		// Verify entries
+		assert.Contains(suite.T(), entryMap, streamId1.Value())
+		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamId1.Value()])
+
+		assert.Contains(suite.T(), entryMap, streamId2.Value())
+		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(context.Background(), key, []string{streamId1.Value()})
@@ -7615,11 +7630,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 
 		// Check that we have one stream
 		assert.Equal(suite.T(), 1, len(resp))
-		streamResponse, exists := resp[key]
+		streamResponse, exists = resp[key]
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap := make(map[string]map[string]string)
+		entryMap = make(map[string]map[string]string)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7660,6 +7675,8 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		streamResponse, exists = resp[key]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
+		assert.Equal(suite.T(), streamId3.Value(), streamResponse.Entries[0].ID)
+		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, streamResponse.Entries[0].Fields)
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})

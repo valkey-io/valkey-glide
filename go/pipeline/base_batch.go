@@ -2569,8 +2569,8 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A slice of StreamResponse objects containing stream entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs
+//	mapped to an array entries or `nil` if a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {
