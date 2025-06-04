@@ -1935,16 +1935,9 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadOpts := options.NewXReadOptions().SetCount(1)
 	batch.XReadWithOptions(map[string]string{streamKey1: "0-2"}, *xreadOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]models.StreamResponse{
-			streamKey1: {
-				Entries: []models.StreamEntry{
-					{
-						ID: "0-3",
-						Fields: map[string]string{
-							"field3": "value3",
-						},
-					},
-				},
+		ExpectedResponse: map[string]any{
+			streamKey1: map[string]any{
+				"0-3": []any{[]any{"field3", "value3"}},
 			},
 		},
 		TestName: "XRead(streamKey1, 0-2)",
@@ -2004,10 +1997,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadgroupOpts := options.NewXReadGroupOptions().SetCount(2)
 	batch.XReadGroupWithOptions(groupName1, consumer1, map[string]string{streamKey1: "0-3"}, *xreadgroupOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]models.StreamResponse{
-			streamKey1: {
-				Entries: []models.StreamEntry{},
-			},
+		ExpectedResponse: map[string]any{
+			streamKey1: map[string]any{},
 		},
 		TestName: "XReadGroup(streamKey1, 0-3, groupName1, consumer1)",
 	})
