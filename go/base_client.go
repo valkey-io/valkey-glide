@@ -417,8 +417,8 @@ func (client *baseClient) executeBatch(
 		// Continue with execution
 	}
 	if len(batch.Errors) > 0 {
-		return nil, errors.New(fmt.Sprintf("There were %d errors while preparing commands in this batch: %s",
-			len(batch.Errors), strings.Join(batch.Errors, ", ")))
+		return nil, fmt.Errorf("There were %d errors while preparing commands in this batch: %s",
+			len(batch.Errors), strings.Join(batch.Errors, ", "))
 	}
 
 	// Create span if OpenTelemetry is enabled and sampling is configured

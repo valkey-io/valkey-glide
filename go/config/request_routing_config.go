@@ -109,7 +109,7 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 
 	port, err := strconv.ParseInt(split[1], 10, 32)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("port must be a valid integer. Received: %s", split[1]))
+		return nil, fmt.Errorf("port must be a valid integer. Received: %s", split[1])
 	}
 
 	return &ByAddressRoute{Host: split[0], Port: int32(port)}, nil
