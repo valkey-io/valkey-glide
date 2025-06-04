@@ -37,7 +37,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(1)
+			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
@@ -46,13 +46,13 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(2000)
+			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(1)
+			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
@@ -61,7 +61,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(2000)
+			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
