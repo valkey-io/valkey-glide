@@ -1639,7 +1639,7 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 // Parameters:
 //
 //	keys        - The keys of the lists to pop from.
-//	timeout - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1666,7 +1666,7 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeout time.Duration) *T {
 // Parameters:
 //
 //	keys        - The keys of the lists to pop from.
-//	timeout - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1812,7 +1812,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [constants.ListDirection].
-//	timeout  - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1858,7 +1858,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [constants.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeout   - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1968,7 +1968,7 @@ func (b *BaseBatch[T]) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeout - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -2949,7 +2949,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeout  - The duration to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Command Response:
@@ -3001,7 +3001,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeout   - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Command Response:
