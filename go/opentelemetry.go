@@ -1,15 +1,27 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 // Package glide provides functionality for OpenTelemetry integration.
 // ⚠️ OpenTelemetry can only be initialized once per process. Calling Init() more than once will be ignored.
 // If you need to change configuration, restart the process with new settings.
 
-// File Exporter Details
+// OpenTelemetry Configuration:
+//   - traces: (optional) Configure trace exporting with endpoint and sample percentage
+//   - metrics: (optional) Configure metrics exporting with endpoint
+//   - flush_interval_ms: (optional) Interval in milliseconds for flushing data to the collector (defaults to 5000ms)
+//
+// File Exporter Details:
 // - For `file://` endpoints:
 //   - The path must start with `file://` (e.g., `file:///tmp/otel` or `file:///tmp/otel/traces.json`).
 //   - If the path is a directory or lacks a file extension, data is written to `signals.json` in that directory.
 //   - If the path includes a filename with an extension, that file is used as-is.
 //   - The parent directory must already exist; otherwise, initialization will fail with an InvalidInput error.
 //   - If the target file exists, new data is appended (not overwritten).
+//
+// Validation Rules:
+//   - flush_interval_ms must be a positive integer
+//   - sample_percentage must be between 0 and 100
+//   - File exporter paths must start with file:// and have an existing parent directory
+//   - Invalid configuration will return an error when calling Init()
 
 package glide
 
@@ -34,17 +46,22 @@ import (
 //
 // Example usage:
 //
-//	config := glide.OpenTelemetryConfig{
-//	    Traces: &glide.OpenTelemetryTracesConfig{
-//	        Endpoint:         "http://localhost:4318/v1/traces",
-//	        SamplePercentage: 10, // Sample 10% of commands
-//	    },
-//	    FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
-//	}
-//	err := glide.GetInstance().Init(config)
-//	if err != nil {
-//	    log.Fatalf("Failed to initialize OpenTelemetry: %v", err)
-//	}
+//		import "github.com/valkey-io/valkey-glide/go/v2"
+//
+//		config := glide.OpenTelemetryConfig{
+//			Traces: &glide.OpenTelemetryTracesConfig{
+//				Endpoint:         "http://localhost:4318/v1/traces",
+//				SamplePercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via `SetSamplePercentage()`
+//	        },
+//			Metrics: &glide.OpenTelemetryMetricsConfig{
+//				Endpoint: "http://localhost:4318/v1/metrics",
+//			},
+//			FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
+//		}
+//		err := glide.GetOtelInstance().Init(config)
+//		if err != nil {
+//			log.Fatalf("Failed to initialize OpenTelemetry: %v", err)
+//		}
 type OpenTelemetryConfig struct {
 	// Traces configuration for exporting trace data. If nil, trace data will not be exported.
 	Traces *OpenTelemetryTracesConfig
@@ -57,12 +74,13 @@ type OpenTelemetryConfig struct {
 
 // OpenTelemetryTracesConfig represents the configuration for exporting OpenTelemetry traces.
 //
-// - Endpoint: The endpoint to which trace data will be exported. Expected format:
+// Endpoint: The endpoint to which trace data will be exported. Expected format:
 //   - For gRPC: `grpc://host:port`
 //   - For HTTP: `http://host:port` or `https://host:port`
 //   - For file exporter: `file:///absolute/path/to/folder/file.json`
-//   - SamplePercentage: The percentage of requests to sample and create a span for, used to measure command duration.
-//     Must be between 0 and 100. If not specified, defaults to 1.
+//
+// SamplePercentage: The percentage of requests to sample and create a span for, used to measure command duration.
+//   - Must be between 0 and 100. If not specified, defaults to 1.
 //
 // Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more
 // detailed telemetry data but will impact performance. It is recommended to keep this number low (1-5%) in production
@@ -89,12 +107,37 @@ var (
 )
 
 // OpenTelemetry provides functionality for OpenTelemetry integration.
-// It can only be initialized once per process. Calling Init() more than once will be ignored.
-// If you need to change configuration, restart the process with new settings.
+//
+// This struct provides a centralized way to initialize OpenTelemetry and control
+// sampling behavior at runtime.
+//
+// Example usage:
+//
+//		import "github.com/valkey-io/valkey-glide/go/v2"
+//
+//		config := glide.OpenTelemetryConfig{
+//			Traces: &glide.OpenTelemetryTracesConfig{
+//				Endpoint:         "http://localhost:4318/v1/traces",
+//				SamplePercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via `SetSamplePercentage()`
+//	        },
+//			Metrics: &glide.OpenTelemetryMetricsConfig{
+//				Endpoint: "http://localhost:4318/v1/metrics",
+//			},
+//			FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
+//		}
+//		err := glide.GetOtelInstance().Init(config)
+//		if err != nil {
+//			log.Fatalf("Failed to initialize OpenTelemetry: %v", err)
+//		}
+//
+// Note:
+// OpenTelemetry can only be initialized once per process. Subsequent calls to
+// Init() will be ignored. This is by design, as OpenTelemetry is a global
+// resource that should be configured once at application startup.
 type OpenTelemetry struct{}
 
-// GetInstance returns the singleton OpenTelemetry instance.
-func GetInstance() *OpenTelemetry {
+// GetOtelInstance returns the singleton OpenTelemetry instance.
+func GetOtelInstance() *OpenTelemetry {
 	if otelInstance == nil {
 		otelInstance = &OpenTelemetry{}
 	}
