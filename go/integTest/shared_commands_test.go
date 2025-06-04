@@ -7615,11 +7615,12 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 
 		// Check that we have one stream
 		assert.Equal(suite.T(), 1, len(resp))
-		assert.Equal(suite.T(), key, resp[0].StreamName)
+		streamResponse, exists := resp[key]
+		assert.True(suite.T(), exists)
 
 		// Check entries
 		entryMap := make(map[string]map[string]string)
-		for _, entry := range resp[0].Entries {
+		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
@@ -7656,7 +7657,9 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 
 		// Check that we have one stream with entries
 		assert.Equal(suite.T(), 1, len(resp))
-		assert.Equal(suite.T(), 1, len(resp[0].Entries))
+		streamResponse, exists = resp[key]
+		assert.True(suite.T(), exists)
+		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})
@@ -7785,12 +7788,16 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 			*options.NewXReadGroupOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
-		expectedResult := map[string]map[string][][]string{
-			key: {
-				"0-1": {{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-			},
-		}
-		assert.Equal(suite.T(), expectedResult, xReadGroup)
+
+		// Check that we have the stream with the correct name in the map
+		assert.Equal(suite.T(), 1, len(xReadGroup))
+		streamResponse, exists := xReadGroup[key]
+		assert.True(suite.T(), exists)
+
+		// Check that we have one entry with the correct ID and fields
+		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
+		assert.Equal(suite.T(), "0-1", streamResponse.Entries[0].ID)
+		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, streamResponse.Entries[0].Fields)
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
 		time.Sleep(2000 * time.Millisecond)
@@ -7813,13 +7820,27 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		xReadGroup, err = client.XReadGroup(context.Background(), group, consumer2, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		expectedResult = map[string]map[string][][]string{
-			key: {
-				"0-2": {{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-				"0-3": {{"e3_f1", "e3_v1"}},
-			},
+
+		// Check that we have the stream with the correct name in the map
+		assert.Equal(suite.T(), 1, len(xReadGroup))
+		streamResponse, exists = xReadGroup[key]
+		assert.True(suite.T(), exists)
+
+		// Check that we have two entries with the correct IDs and fields
+		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
+
+		// Create a map of entry IDs to their fields for easier comparison
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range streamResponse.Entries {
+			entryMap[entry.ID] = entry.Fields
 		}
-		assert.Equal(suite.T(), expectedResult, xReadGroup)
+
+		// Verify entries
+		assert.Contains(suite.T(), entryMap, "0-2")
+		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
+
+		assert.Contains(suite.T(), entryMap, "0-3")
+		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
 
 		// Verify that xinfo_consumers contains info for 2 consumers now
 		info, err = client.XInfoConsumers(context.Background(), key, group)
@@ -8360,13 +8381,27 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		// Read the stream entries for consumer 1 and mark messages as pending
 		xReadGroupResult1, err := client.XReadGroup(context.Background(), groupName, consumer1, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		expectedResult := map[string]map[string][][]string{
-			key: {
-				streamid_1.Value(): {{"field1", "value1"}},
-				streamid_2.Value(): {{"field2", "value2"}},
-			},
+
+		// Check that we have the stream with the correct name in the map
+		assert.Equal(suite.T(), 1, len(xReadGroupResult1))
+		streamResponse, exists := xReadGroupResult1[key]
+		assert.True(suite.T(), exists)
+
+		// Check that we have two entries with the correct IDs and fields
+		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
+
+		// Create a map of entry IDs to their fields for easier comparison
+		entryMap := make(map[string]map[string]string)
+		for _, entry := range streamResponse.Entries {
+			entryMap[entry.ID] = entry.Fields
 		}
-		assert.Equal(suite.T(), expectedResult, xReadGroupResult1)
+
+		// Verify entries
+		assert.Contains(suite.T(), entryMap, streamid_1.Value())
+		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamid_1.Value()])
+
+		assert.Contains(suite.T(), entryMap, streamid_2.Value())
+		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamid_2.Value()])
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -8379,14 +8414,30 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		// read the entire stream for consumer 2 and mark messages as pending
 		xReadGroupResult2, err := client.XReadGroup(context.Background(), groupName, consumer2, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		expectedResult2 := map[string]map[string][][]string{
-			key: {
-				streamid_3.Value(): {{"field3", "value3"}},
-				streamid_4.Value(): {{"field4", "value4"}},
-				streamid_5.Value(): {{"field5", "value5"}},
-			},
+
+		// Check that we have the stream with the correct name in the map
+		assert.Equal(suite.T(), 1, len(xReadGroupResult2))
+		streamResponse2, exists := xReadGroupResult2[key]
+		assert.True(suite.T(), exists)
+
+		// Check that we have three entries with the correct IDs and fields
+		assert.Equal(suite.T(), 3, len(streamResponse2.Entries))
+
+		// Create a map of entry IDs to their fields for easier comparison
+		entryMap2 := make(map[string]map[string]string)
+		for _, entry := range streamResponse2.Entries {
+			entryMap2[entry.ID] = entry.Fields
 		}
-		assert.Equal(suite.T(), expectedResult2, xReadGroupResult2)
+
+		// Verify entries
+		assert.Contains(suite.T(), entryMap2, streamid_3.Value())
+		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, entryMap2[streamid_3.Value()])
+
+		assert.Contains(suite.T(), entryMap2, streamid_4.Value())
+		assert.Equal(suite.T(), map[string]string{"field4": "value4"}, entryMap2[streamid_4.Value()])
+
+		assert.Contains(suite.T(), entryMap2, streamid_5.Value())
+		assert.Equal(suite.T(), map[string]string{"field5": "value5"}, entryMap2[streamid_5.Value()])
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
