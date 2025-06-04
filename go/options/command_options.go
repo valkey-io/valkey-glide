@@ -4,6 +4,7 @@ package options
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
@@ -105,7 +106,7 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
 		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
-			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
 		case constants.KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
@@ -143,7 +144,7 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
 		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
-			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
 		case constants.Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
@@ -156,22 +157,73 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 
 // Expiry is used to configure the lifetime of a value.
 type Expiry struct {
-	Type  constants.ExpiryType
-	Count uint64
+	Type      constants.ExpiryType
+	Duration  uint64
+	Timestamp time.Time
 }
 
-func NewExpiry() *Expiry {
-	return &Expiry{}
+// isExpiryTypeSeconds checks if the expiry type should be in seconds
+func isExpiryTypeSeconds(duration time.Duration) bool {
+	if duration%time.Second == 0 {
+		return true
+	}
+	return false
 }
 
+// NewExpiryIn creates a new Expiry with a duration from now
+func NewExpiryIn(duration time.Duration) *Expiry {
+	dur := 0
+	expiryType := constants.Milliseconds
+	if isExpiryTypeSeconds(duration) {
+		expiryType = constants.Seconds
+		dur = int(duration.Seconds())
+	}
+	return &Expiry{
+		Type:     expiryType,
+		Duration: uint64(dur),
+	}
+}
+
+// NewExpireAt creates a new Expiry with a specific timestamp
+func NewExpireAt(timestamp time.Time) *Expiry {
+	expiryType := constants.UnixMilliseconds
+	if isExpiryTypeSeconds(time.Until(timestamp)) {
+		expiryType = constants.UnixSeconds
+	}
+	return &Expiry{
+		Type:      expiryType,
+		Timestamp: timestamp,
+	}
+}
+
+// NewExpiryKeepExisting creates a new Expiry with the existing expiry
+func NewExpiryKeepExisting() *Expiry {
+	return &Expiry{
+		Type: constants.KeepExisting,
+	}
+}
+
+// NewExpiryPersist creates a new Expiry with the persist expiry
+func NewExpiryPersist() *Expiry {
+	return &Expiry{
+		Type: constants.Persist,
+	}
+}
+
+// SetType sets the expiry type (seconds or milliseconds)
 func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	ex.Type = expiryType
 	return ex
 }
 
-func (ex *Expiry) SetCount(count uint64) *Expiry {
-	ex.Count = count
-	return ex
+// GetCount returns the count in the appropriate unit (seconds or milliseconds)
+func (ex *Expiry) GetTime() uint64 {
+	if ex.Type == constants.UnixSeconds {
+		return uint64(ex.Timestamp.Unix())
+	} else if ex.Type == constants.UnixMilliseconds {
+		return uint64(ex.Timestamp.UnixMilli())
+	}
+	return ex.Duration
 }
 
 // LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
