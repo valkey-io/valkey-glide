@@ -10,7 +10,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/v2/glideErrors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -52,7 +51,7 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	msg := C.GoString(cErrorMessage)
 	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: nil, error: glideErrors.GoError(uint32(cErrorType), msg)}
+	resultChannel <- payload{value: nil, error: GoError(uint32(cErrorType), msg)}
 }
 
 //

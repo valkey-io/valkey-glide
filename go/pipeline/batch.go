@@ -317,7 +317,9 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 		}
 		// data lost even though it was incorrect
 		// TODO maybe still return the data?
-		return errors.New(fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType))
+		return errors.New(
+			fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
+		)
 	}
 	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
 	return b.self

@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-package glideErrors
+package glide
 
-// #include "../lib.h"
+// #include "lib.h"
 import "C"
 import "errors"
 
@@ -17,17 +17,6 @@ func NewConnectionError(message string) *ConnectionError {
 }
 
 func (e *ConnectionError) Error() string { return e.msg }
-
-// // RequestError is a client error that occurs when an error is reported during a request.
-// type RequestError struct {
-// 	msg string
-// }
-
-// func NewRequestError(message string) *RequestError {
-// 	return &RequestError{msg: message}
-// }
-
-// func (e *RequestError) Error() string { return e.msg }
 
 // ExecAbortError is a client error that occurs when a transaction is aborted.
 type ExecAbortError struct {
