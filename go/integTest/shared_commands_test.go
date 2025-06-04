@@ -5052,7 +5052,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		}
 		read, err = testClient.XReadWithOptions(context.Background(),
 			map[string]string{key1: "0-1"},
-			*options.NewXReadOptions().SetBlock(1000),
+			*options.NewXReadOptions().SetBlock(1000 * time.Millisecond),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), read)
@@ -5064,7 +5064,7 @@ func (suite *GlideTestSuite) TestXRead() {
 			_, err := testClient.XReadWithOptions(
 				context.Background(),
 				map[string]string{key1: "0-1"},
-				*options.NewXReadOptions().SetBlock(0),
+				*options.NewXReadOptions().SetBlock(0 * time.Millisecond),
 			)
 			assert.IsType(suite.T(), &errors.ClosingError{}, err)
 			finished <- true

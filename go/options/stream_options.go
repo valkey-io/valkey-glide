@@ -3,6 +3,8 @@
 package options
 
 import (
+	"time"
+
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
@@ -141,7 +143,8 @@ func (xacp *XAutoClaimOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XRead` in [StreamCommands]
 type XReadOptions struct {
-	count, block int64
+	count int64
+	block time.Duration
 }
 
 // Create new empty `XReadOptions`
@@ -157,7 +160,7 @@ func (xro *XReadOptions) SetCount(count int64) *XReadOptions {
 
 // If set, the request will be blocked for the set amount of milliseconds or until the server has
 // the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
-func (xro *XReadOptions) SetBlock(block int64) *XReadOptions {
+func (xro *XReadOptions) SetBlock(block time.Duration) *XReadOptions {
 	xro.block = block
 	return xro
 }
@@ -168,15 +171,16 @@ func (xro *XReadOptions) ToArgs() ([]string, error) {
 		args = append(args, constants.CountKeyword, utils.IntToString(xro.count))
 	}
 	if xro.block >= 0 {
-		args = append(args, constants.BlockKeyword, utils.IntToString(xro.block))
+		args = append(args, constants.BlockKeyword, utils.IntToString(xro.block.Milliseconds()))
 	}
 	return args, nil
 }
 
 // Optional arguments for `XReadGroup` in [StreamCommands]
 type XReadGroupOptions struct {
-	count, block int64
-	noAck        bool
+	count int64
+	block time.Duration
+	noAck bool
 }
 
 // Create new empty `XReadOptions`
@@ -192,7 +196,7 @@ func (xrgo *XReadGroupOptions) SetCount(count int64) *XReadGroupOptions {
 
 // If set, the request will be blocked for the set amount of milliseconds or until the server has
 // the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
-func (xrgo *XReadGroupOptions) SetBlock(block int64) *XReadGroupOptions {
+func (xrgo *XReadGroupOptions) SetBlock(block time.Duration) *XReadGroupOptions {
 	xrgo.block = block
 	return xrgo
 }
@@ -210,7 +214,7 @@ func (xrgo *XReadGroupOptions) ToArgs() ([]string, error) {
 		args = append(args, constants.CountKeyword, utils.IntToString(xrgo.count))
 	}
 	if xrgo.block >= 0 {
-		args = append(args, constants.BlockKeyword, utils.IntToString(xrgo.block))
+		args = append(args, constants.BlockKeyword, utils.IntToString(xrgo.block.Milliseconds()))
 	}
 	if xrgo.noAck {
 		args = append(args, constants.NoAckKeyword)
