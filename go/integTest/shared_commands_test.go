@@ -2510,12 +2510,12 @@ func (suite *GlideTestSuite) TestSUnion() {
 		suite.NoError(err)
 		suite.True(reflect.DeepEqual(res5, expected2))
 
-		// Exceptions with empty keys
+		// Errors with empty keys
 		res6, err := client.SUnion(context.Background(), []string{})
 		suite.Nil(res6)
 		suite.Error(err)
 
-		// Exception with a non-set key
+		// Error with a non-set key
 		suite.verifyOK(client.Set(context.Background(), nonSetKey, "value"))
 		res7, err := client.SUnion(context.Background(), []string{nonSetKey, key1})
 		suite.Nil(res7)
@@ -2713,7 +2713,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 0)
 
-		// exceptions
+		// error cases
 		// non-set key
 		_, err = client.Set(context.Background(), key2, "test")
 		suite.NoError(err)
@@ -5244,7 +5244,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.Nil(t, err)
 		assert.Equal(t, float64(3), resIncr.Value())
 
-		// exceptions
+		// error cases
 		// non-sortedset key
 		_, err = client.Set(context.Background(), key2, "test")
 		assert.NoError(t, err)
@@ -6039,7 +6039,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), xLenResult)
 
-		// Throw Exception: Key exists - but it is not a stream
+		// Throw error: Key exists - but it is not a stream
 		suite.verifyOK(client.Set(context.Background(), key2, "xtrimtest"))
 		_, err = client.XTrim(context.Background(), key2, *options.NewXTrimOptionsWithMinId("0-1"))
 		suite.Error(err)
@@ -6345,7 +6345,7 @@ func (suite *GlideTestSuite) TestZScan() {
 			}
 		}
 
-		// Test exceptions
+		// Test errors
 		// Non-set key
 		stringKey := uuid.New().String()
 		setRes, err := client.Set(context.Background(), stringKey, "test")

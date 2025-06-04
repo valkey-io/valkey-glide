@@ -101,8 +101,8 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -154,8 +154,8 @@ func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBat
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
