@@ -4065,7 +4065,7 @@ func (client *baseClient) XAddWithOptions(
 //	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
-func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) ([]models.StreamResponse, error) {
+func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
 	return client.XReadWithOptions(ctx, keysAndIds, *options.NewXReadOptions())
 }
 
@@ -4085,7 +4085,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //
 // Return value:
 //
-//	A slice of StreamResponse objects containing stream entries or `nil` if
+//	A map of stream keys to StreamResponse objects containing stream entries or `nil` if
 //	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
@@ -4093,7 +4093,7 @@ func (client *baseClient) XReadWithOptions(
 	ctx context.Context,
 	keysAndIds map[string]string,
 	opts options.XReadOptions,
-) ([]models.StreamResponse, error) {
+) (map[string]models.StreamResponse, error) {
 	args, err := internal.CreateStreamCommandArgs(make([]string, 0, 5+2*len(keysAndIds)), keysAndIds, &opts)
 	if err != nil {
 		return nil, err
@@ -4104,7 +4104,7 @@ func (client *baseClient) XReadWithOptions(
 		return nil, err
 	}
 
-	return handleXReadGroupResponse(result)
+	return handleStreamResponse(result)
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -4133,7 +4133,7 @@ func (client *baseClient) XReadGroup(
 	group string,
 	consumer string,
 	keysAndIds map[string]string,
-) ([]models.StreamResponse, error) {
+) (map[string]models.StreamResponse, error) {
 	return client.XReadGroupWithOptions(ctx, group, consumer, keysAndIds, *options.NewXReadGroupOptions())
 }
 
@@ -4155,7 +4155,7 @@ func (client *baseClient) XReadGroup(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+//	A map of stream keys to StreamResponse objects containing stream entries or `nil` if
 //	a key does not exist or does not contain requiested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
@@ -4165,7 +4165,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	consumer string,
 	keysAndIds map[string]string,
 	opts options.XReadGroupOptions,
-) ([]models.StreamResponse, error) {
+) (map[string]models.StreamResponse, error) {
 	args, err := internal.CreateStreamCommandArgs([]string{constants.GroupKeyword, group, consumer}, keysAndIds, &opts)
 	if err != nil {
 		return nil, err
@@ -4176,7 +4176,7 @@ func (client *baseClient) XReadGroupWithOptions(
 		return nil, err
 	}
 
-	return handleXReadGroupResponse(result)
+	return handleStreamResponse(result)
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.

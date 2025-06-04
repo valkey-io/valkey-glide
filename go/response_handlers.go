@@ -1174,12 +1174,12 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
 }
 
-func handleXReadGroupResponse(response *C.struct_CommandResponse) ([]models.StreamResponse, error) {
+func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
 	if err := checkResponseType(response, C.Map, false); err != nil {
 		return nil, err
 	}
-	
+
 	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
@@ -1189,41 +1189,40 @@ func handleXReadGroupResponse(response *C.struct_CommandResponse) ([]models.Stre
 	}
 
 	// Convert the raw response to the structured StreamResponse format
-	result := make([]models.StreamResponse, 0)
-	
+	result := make(map[string]models.StreamResponse)
+
 	// Process the map data directly
 	streamMap, ok := data.(map[string]any)
 	if !ok {
 		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
 	}
-	
+
 	for streamName, streamData := range streamMap {
 		streamResponse := models.StreamResponse{
-			StreamName: streamName,
-			Entries:    make([]models.StreamEntry, 0),
+			Entries: make([]models.StreamEntry, 0),
 		}
-		
+
 		// Process stream entries
 		entriesData, ok := streamData.([]any)
 		if !ok {
 			continue
 		}
-		
+
 		for _, entryData := range entriesData {
 			entryPair, ok := entryData.([]any)
 			if !ok || len(entryPair) < 2 {
 				continue
 			}
-			
+
 			// Get the ID
 			id, ok := entryPair[0].(string)
 			if !ok {
 				continue
 			}
-			
+
 			// Process fields
 			fields := make(map[string]string)
-			
+
 			// Field-value pairs
 			fieldValuePairs, ok := entryPair[1].([]any)
 			if ok && len(fieldValuePairs) > 0 {
@@ -1237,16 +1236,16 @@ func handleXReadGroupResponse(response *C.struct_CommandResponse) ([]models.Stre
 					}
 				}
 			}
-			
+
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
 				Fields: fields,
 			})
 		}
-		
-		result = append(result, streamResponse)
+
+		result[streamName] = streamResponse
 	}
-	
+
 	return result, nil
 }
 

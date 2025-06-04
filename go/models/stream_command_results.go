@@ -9,10 +9,8 @@ type StreamEntry struct {
 	Fields map[string]string
 }
 
-// StreamResponse represents 
+// StreamResponse represents a stream with its entries
 type StreamResponse struct {
-	// The name of the stream or the key of the stream
-	StreamName string
 	// The entries in the stream
 	Entries []StreamEntry
 }
