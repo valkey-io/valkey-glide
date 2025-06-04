@@ -177,9 +177,9 @@ class AdvancedBaseClientConfiguration:
 
     Attributes:
         connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
-            This applies both during initial client creation and any reconnections that may occur during request processing.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-            If not explicitly set, a default value of 250 milliseconds will be used.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
         tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
             This allows for more granular control of TLS behavior, such as enabling an insecure mode
             that bypasses certificate validation.
@@ -236,7 +236,7 @@ class BaseClientConfiguration:
         request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
             complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
             explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -389,7 +389,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required
-                reconnections or retries.
+                reconnection or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
                 If not explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -554,7 +554,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
             set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of

@@ -216,6 +216,8 @@ public class Main {
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
                         .useTLS(useSsl)
+                        // It is recommended to set a timeout for your specific use case
+                        .requestTimeout(500) // 500ms timeout
                         .build();
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
@@ -266,6 +268,8 @@ public class Main {
                 GlideClusterClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port1).port(port2).port(port3).port(port4).port(port5).port(port6).build())
                         .useTLS(useSsl)
+                        // It is recommended to set a timeout for your specific use case
+                        .requestTimeout(500) // 500ms timeout
                         .build();
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
