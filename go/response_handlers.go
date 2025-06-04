@@ -1176,10 +1176,6 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 
 func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
-	if err := checkResponseType(response, C.Map, false); err != nil {
-		return nil, err
-	}
-
 	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
@@ -1196,47 +1192,36 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 	if !ok {
 		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
 	}
-
 	for streamName, streamData := range streamMap {
 		streamResponse := models.StreamResponse{
 			Entries: make([]models.StreamEntry, 0),
 		}
-
-		// Process stream entries
-		entriesData, ok := streamData.([]any)
-		if !ok {
-			continue
-		}
-
-		for _, entryData := range entriesData {
-			entryPair, ok := entryData.([]any)
-			if !ok || len(entryPair) < 2 {
-				continue
-			}
-
-			// Get the ID
-			id, ok := entryPair[0].(string)
+		// Process fields
+		for id, entriesArray := range streamData.(map[string]any) {
+			// Process stream entries
+			entriesData, ok := entriesArray.([]any)
 			if !ok {
-				continue
+				entriesData = []any{}
 			}
-
-			// Process fields
 			fields := make(map[string]string)
+			for _, entryData := range entriesData {
+				fieldValuePairs, ok := entryData.([]any)
+				if !ok || len(fieldValuePairs) < 2 {
+					continue
+				}
 
-			// Field-value pairs
-			fieldValuePairs, ok := entryPair[1].([]any)
-			if ok && len(fieldValuePairs) > 0 {
-				for i := 0; i < len(fieldValuePairs); i += 2 {
-					if i+1 < len(fieldValuePairs) {
-						fieldName, okField := fieldValuePairs[i].(string)
-						fieldValue, okValue := fieldValuePairs[i+1].(string)
-						if okField && okValue {
-							fields[fieldName] = fieldValue
+				if ok && len(fieldValuePairs) > 0 {
+					for i := 0; i < len(fieldValuePairs); i += 2 {
+						if i+1 < len(fieldValuePairs) {
+							fieldName, okField := fieldValuePairs[i].(string)
+							fieldValue, okValue := fieldValuePairs[i+1].(string)
+							if okField && okValue {
+								fields[fieldName] = fieldValue
+							}
 						}
 					}
 				}
 			}
-
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
 				Fields: fields,
@@ -1245,7 +1230,6 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 
 		result[streamName] = streamResponse
 	}
-
 	return result, nil
 }
 

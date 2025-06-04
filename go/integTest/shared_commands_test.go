@@ -5059,6 +5059,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Nil(suite.T(), err)
 
 		// Check that we have two streams
+		fmt.Println("output--------")
+		fmt.Println(len(read))
 		assert.Equal(suite.T(), 2, len(read))
 
 		// Check key1 stream
