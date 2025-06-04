@@ -82,11 +82,7 @@ public class FTSearchOptions {
 
         void count(boolean count) {}
 
-        public FTSearchOptionsBuilder identifiers(Map<GlideString, GlideString> identifiers) {
-            this.identifiers$value = identifiers;
-            this.identifiers$set = true;
-            return this;
-        }
+        void identifiers(Map<GlideString, GlideString> identifiers) {}
 
         public FTSearchOptionsBuilder() {
             this.identifiers$value = new HashMap<>();
@@ -94,31 +90,32 @@ public class FTSearchOptions {
 
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field) {
-            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
-            updatedMap.put(gs(field), null);
-            return this.identifiers(updatedMap);
+            this.identifiers$value.put(gs(field), null);
+            this.identifiers$set = true;
+            return this;
         }
 
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field, @NonNull String alias) {
-            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
-            updatedMap.put(gs(field), gs(alias));
-            return this.identifiers(updatedMap);
+            this.identifiers$value.put(gs(field), gs(alias));
+            this.identifiers$set = true;
+            return this;
         }
 
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull GlideString field) {
-            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
-            updatedMap.put(field, null);
-            return this.identifiers(updatedMap);
+            this.identifiers$value.put(field, null);
+            this.identifiers$set = true;
+            return this;
         }
 
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(
                 @NonNull GlideString field, @NonNull GlideString alias) {
             Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
-            updatedMap.put(field, alias);
-            return this.identifiers(updatedMap);
+            this.identifiers$value.put(field, alias);
+            this.identifiers$set = true;
+            return this;
         }
 
         /**
