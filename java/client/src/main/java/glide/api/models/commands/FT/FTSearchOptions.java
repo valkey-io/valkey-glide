@@ -82,31 +82,43 @@ public class FTSearchOptions {
 
         void count(boolean count) {}
 
-        void identifiers(Map<GlideString, GlideString> identifiers) {}
+        public FTSearchOptionsBuilder identifiers(Map<GlideString, GlideString> identifiers) {
+            this.identifiers$value = identifiers;
+            this.identifiers$set = true;
+            return this;
+        }
+
+        public FTSearchOptionsBuilder() {
+            this.identifiers$value = new HashMap<>();
+        }
 
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field) {
-            this.identifiers$value.put(gs(field), null);
-            return this;
+            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
+            updatedMap.put(gs(field), null);
+            return this.identifiers(updatedMap);
         }
 
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field, @NonNull String alias) {
-            this.identifiers$value.put(gs(field), gs(alias));
-            return this;
+            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
+            updatedMap.put(gs(field), gs(alias));
+            return this.identifiers(updatedMap);
         }
 
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull GlideString field) {
-            this.identifiers$value.put(field, null);
-            return this;
+            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
+            updatedMap.put(field, null);
+            return this.identifiers(updatedMap);
         }
 
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(
                 @NonNull GlideString field, @NonNull GlideString alias) {
-            this.identifiers$value.put(field, alias);
-            return this;
+            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
+            updatedMap.put(field, alias);
+            return this.identifiers(updatedMap);
         }
 
         /**
