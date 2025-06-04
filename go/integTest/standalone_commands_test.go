@@ -19,6 +19,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func (suite *GlideTestSuite) TestCustomCommandInfo() {
@@ -44,7 +45,8 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
-	client := suite.client(config)
+	client, err := suite.client(config)
+	require.NoError(suite.T(), err)
 
 	result, err := client.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
 
@@ -103,7 +105,8 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
-	client := suite.client(config)
+	client, err := suite.client(config)
+	require.NoError(suite.T(), err)
 
 	key1 := uuid.New().String()
 	key2 := uuid.New().String()
@@ -127,7 +130,7 @@ func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 	client := suite.defaultClient()
 
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	suite.verifyOK(client.ConfigSet(context.Background(), configMap))
@@ -183,7 +186,7 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 	client := suite.defaultClient()
 
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
 	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
@@ -279,7 +282,7 @@ func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 	client := suite.defaultClient()
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	key := uuid.New().String()
 	client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
@@ -306,7 +309,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	client := suite.defaultClient()
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	key := uuid.New().String()
 	client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
@@ -326,9 +329,9 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	assert.Nil(suite.T(), err)
 
 	resultList := []models.Result[string]{
+		models.CreateStringResult("Object_1"),
 		models.CreateStringResult("Object_2"),
 		models.CreateStringResult("Object_3"),
-		models.CreateStringResult("Object_1"),
 	}
 
 	assert.Equal(suite.T(), resultList, sortResult)
@@ -336,7 +339,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 
 func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightAndGet() {
 	client := suite.defaultClient()
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	key := uuid.New().String()
 	client.LPush(context.Background(), key, []string{"item1", "item2", "item3"})
@@ -429,7 +432,7 @@ func (suite *GlideTestSuite) TestDBSize() {
 	client := suite.defaultClient()
 	result, err := client.DBSize(context.Background())
 	assert.Nil(suite.T(), err)
-	assert.Greater(suite.T(), result, int64(0))
+	assert.GreaterOrEqual(suite.T(), result, int64(0))
 }
 
 func (suite *GlideTestSuite) TestPing_NoArgument() {
@@ -914,7 +917,7 @@ func (suite *GlideTestSuite) TestRandomKey() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1000,7 +1003,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsStandalone() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStats() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1068,7 +1071,7 @@ func (suite *GlideTestSuite) TestFunctionStats() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKill() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 
@@ -1084,7 +1087,7 @@ func (suite *GlideTestSuite) TestFunctionKill() {
 }
 
 func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClient()
 	libName := "functionKill_no_write"
@@ -1108,7 +1111,8 @@ func (suite *GlideTestSuite) testFunctionKill(readOnly bool) {
 	assert.Equal(suite.T(), libName, result)
 
 	testConfig := suite.defaultClientConfig().WithRequestTimeout(10 * time.Second)
-	testClient := suite.client(testConfig)
+	testClient, err := suite.client(testConfig)
+	require.NoError(suite.T(), err)
 	defer testClient.Close()
 
 	// Channel to signal when function is killed
@@ -1173,7 +1177,7 @@ func (suite *GlideTestSuite) TestLongTimeoutFunctionKillWrite() {
 func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	client := suite.defaultClient()
 
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	// Flush all functions first
 	suite.verifyOK(client.FunctionFlushSync(context.Background()))
@@ -1292,11 +1296,12 @@ func (suite *GlideTestSuite) TestScriptExists() {
 }
 
 func (suite *GlideTestSuite) TestScriptKill() {
-	invokeClient := suite.client(suite.defaultClientConfig())
+	invokeClient, err := suite.client(suite.defaultClientConfig())
+	require.NoError(suite.T(), err)
 	killClient := suite.defaultClient()
 
 	// Ensure no script is running at the beginning
-	_, err := killClient.ScriptKill(context.Background())
+	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 

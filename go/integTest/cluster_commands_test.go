@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -1467,7 +1469,7 @@ func (suite *GlideTestSuite) TestRandomKeyWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1624,7 +1626,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1685,7 +1687,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1751,7 +1753,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1882,7 +1884,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1898,7 +1900,7 @@ func (suite *GlideTestSuite) TestFunctionKilWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestFunctionKillWithRoute() {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 
@@ -1934,7 +1936,7 @@ func (suite *GlideTestSuite) TestLongTimeoutFunctionKillNoWriteWithRoute() {
 }
 
 func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_no_write"
@@ -1977,7 +1979,8 @@ func (suite *GlideTestSuite) testFunctionKillNoWrite(withRoute bool) {
 	assert.Equal(suite.T(), libName, result)
 
 	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
-	testClient := suite.clusterClient(testConfig)
+	testClient, err := suite.clusterClient(testConfig)
+	require.NoError(suite.T(), err)
 	defer testClient.Close()
 
 	// Channel to signal when function is killed
@@ -2050,7 +2053,7 @@ func (suite *GlideTestSuite) TestLongTimeoutFunctionKillKeyBasedWriteFunction() 
 		suite.T().Skip("Timeout tests are disabled")
 	}
 
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	client := suite.defaultClusterClient()
 	libName := "functionKill_key_based_write_function"
@@ -2079,7 +2082,8 @@ func (suite *GlideTestSuite) TestLongTimeoutFunctionKillKeyBasedWriteFunction() 
 	assert.Equal(suite.T(), libName, result)
 
 	testConfig := suite.defaultClusterClientConfig().WithRequestTimeout(10 * time.Second)
-	testClient := suite.clusterClient(testConfig)
+	testClient, err := suite.clusterClient(testConfig)
+	require.NoError(suite.T(), err)
 	defer testClient.Close()
 
 	// Channel to signal when unkillable error is found
@@ -2120,7 +2124,7 @@ func (suite *GlideTestSuite) TestLongTimeoutFunctionKillKeyBasedWriteFunction() 
 func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	client := suite.defaultClusterClient()
 
-	suite.SkipIfServerVersionLowerThanBy("7.0.0", suite.T())
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	// Flush all functions first
 	suite.verifyOK(client.FunctionFlushSync(context.Background()))
@@ -2414,11 +2418,12 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
-	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
 	// Ensure no script is running at the beginning
-	_, err := killClient.ScriptKill(context.Background())
+	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
@@ -2446,7 +2451,8 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
 
-	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
 	// key for routing to a primary node
@@ -2456,7 +2462,7 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	}
 
 	// Ensure no script is running at the beginning
-	_, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
@@ -2483,11 +2489,12 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	key := uuid.NewString()
-	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
 	// Ensure no script is running at the beginning
-	_, err := killClient.ScriptKill(context.Background())
+	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
@@ -2516,7 +2523,8 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
 
 	key := uuid.NewString()
-	invokeClient := suite.clusterClient(suite.defaultClusterClientConfig())
+	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
 	// key for routing to a primary node
@@ -2525,7 +2533,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	}
 
 	// Ensure no script is running at the beginning
-	_, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
@@ -2549,4 +2557,70 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+}
+
+func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
+	_, err := suite.defaultClusterClient().ExecWithOptions(
+		context.Background(),
+		*pipeline.NewClusterBatch(true),
+		true,
+		*pipeline.NewClusterBatchOptions().WithRetryStrategy(*pipeline.NewClusterBatchRetryStrategy()),
+	)
+	assert.Error(suite.T(), err)
+	assert.IsType(suite.T(), &errors.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
+	client := suite.defaultClusterClient()
+	opts := pipeline.NewClusterBatchOptions()
+
+	for _, isAtomic := range []bool{true, false} {
+		// TODO use info when implemented
+		batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"info", "replication"})
+
+		res, err := client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypePrimary, "abc")),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypeReplica, "abc")),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypeReplica, 42)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
+
+		res, err = client.ExecWithOptions(
+			context.Background(),
+			*batch,
+			true,
+			*opts.WithRoute(config.NewByAddressRoute(suite.clusterHosts[0].Host, int32(suite.clusterHosts[0].Port))),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
+	}
 }

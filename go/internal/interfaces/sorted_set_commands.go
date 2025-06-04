@@ -80,7 +80,7 @@ type SortedSetCommands interface {
 		ctx context.Context,
 		keys []string,
 		scoreFilter constants.ScoreFilter,
-		opts options.ZPopOptions,
+		opts options.ZMPopOptions,
 	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZRangeWithScores(

@@ -34,7 +34,7 @@ const ASYNC_WRITE_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write loc
 const ASYNC_READ_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write lock";
 
 /// Success callback function for String responses for the async client
-extern "C" fn string_success_callback(index: usize, response_ptr: *const CommandResponse) {
+extern "C-unwind" fn string_success_callback(index: usize, response_ptr: *const CommandResponse) {
     let mut metrics = ASYNC_METRICS.write().expect(ASYNC_WRITE_LOCK_ERR);
     metrics
         .results
@@ -43,7 +43,7 @@ extern "C" fn string_success_callback(index: usize, response_ptr: *const Command
 }
 
 /// Failure callback function for the async client
-extern "C" fn failure_callback(
+extern "C-unwind" fn failure_callback(
     index: usize,
     err_msg_ptr: *const c_char,
     error_type: RequestErrorType,
@@ -176,6 +176,7 @@ fn execute_command(
             args_len_ptr,
             route_bytes,
             route_len,
+            0,
         )
     };
     if command_res_ptr.is_null() {
@@ -247,7 +248,7 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
             client_type,
             std::mem::transmute::<
                 *mut c_void,
-                unsafe extern "C" fn(
+                unsafe extern "C-unwind" fn(
                     client_ptr: usize,
                     kind: PushKind,
                     message: *const u8,

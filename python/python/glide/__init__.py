@@ -130,6 +130,7 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.constants import (
     OK,
@@ -173,7 +174,13 @@ from glide.routes import (
     SlotType,
 )
 
-from .glide import ClusterScanCursor, Script
+from .glide import (
+    ClusterScanCursor,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+    Script,
+)
 
 PubSubMsg = CoreCommands.PubSubMsg
 
@@ -201,6 +208,9 @@ __all__ = [
     "ReadFrom",
     "ServerCredentials",
     "NodeAddress",
+    "OpenTelemetryConfig",
+    "OpenTelemetryTracesConfig",
+    "OpenTelemetryMetricsConfig",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
@@ -215,6 +225,7 @@ __all__ = [
     "TJsonUniversalResponse",
     "TOK",
     "TResult",
+    "TlsAdvancedConfiguration",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
     "FtAggregateResponse",
