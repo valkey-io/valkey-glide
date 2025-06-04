@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,9 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&errors.TimeoutError{}, err)
+
+			time.Sleep(1 * time.Second)
+
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(2000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
@@ -53,6 +57,9 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&errors.TimeoutError{}, err)
+
+			time.Sleep(1 * time.Second)
+
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(2000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
