@@ -1216,16 +1216,16 @@ func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 //	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterValue[string], error) {
+func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterValue[models.Result[string]], error) {
 	response, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringOrNilResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
 // Gets the name of the current connection.
@@ -1246,24 +1246,24 @@ func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterV
 func (client *ClusterClient) ClientGetNameWithOptions(
 	ctx context.Context,
 	opts options.RouteOption,
-) (models.ClusterValue[string], error) {
+) (models.ClusterValue[models.Result[string]], error) {
 	response, err := client.executeCommandWithRoute(ctx, C.ClientGetName, []string{}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return models.CreateEmptyClusterValue[string](), err
-		}
-		return models.CreateClusterMultiValue[string](data), nil
-	}
-	data, err := handleStringResponse(response)
+	// if opts.Route != nil &&
+	// 	(opts.Route).IsMultiNode() {
+	// 	data, err := handleStringToStringMapResponse(response)
+	// 	if err != nil {
+	// 		return models.CreateEmptyClusterValue[models.Result[string]](), err
+	// 	}
+	// 	return models.CreateClusterMultiValue[models.Result[string]](data), nil
+	// }
+	data, err := handleStringOrNilResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
 // Rewrites the configuration file with the current configuration.

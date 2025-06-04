@@ -1312,6 +1312,29 @@ func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClusterClientGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	response, err := client.ClientGetName(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	assert.True(t, response.SingleValue().IsNil())
+}
+
+func (suite *GlideTestSuite) TestClusterClientGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	route := config.Route(config.RandomRoute)
+	opts := options.RouteOption{Route: route}
+
+	response, err := client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	assert.True(t, response.SingleValue().IsNil())
+}
+
 func (suite *GlideTestSuite) TestClientSetGetName() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1332,9 +1355,9 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	response, err := client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
-	response, err = client.ClientGetNameWithOptions(context.Background(), opts)
+	response2, err := client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	assert.True(t, response2.IsSingleValue())
 
 	// same sections with random route
 	connectionName = "ConnectionName-" + uuid.NewString()
@@ -1343,9 +1366,9 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
-	response, err = client.ClientGetNameWithOptions(context.Background(), opts)
+	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	assert.True(t, response2.IsSingleValue())
 }
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
