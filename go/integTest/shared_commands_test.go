@@ -2990,18 +2990,18 @@ func (suite *GlideTestSuite) TestBLPop() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res1)
 
-		res2, err := client.BLPop(context.Background(), []string{listKey1, listKey2}, float64(0.5))
+		res2, err := client.BLPop(context.Background(), []string{listKey1, listKey2}, 500*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []string{listKey1, "value2"}, res2)
 
-		res3, err := client.BLPop(context.Background(), []string{listKey2}, float64(1.0))
+		res3, err := client.BLPop(context.Background(), []string{listKey2}, 1*time.Second)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res3)
 
 		key := uuid.NewString()
 		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		res4, err := client.BLPop(context.Background(), []string{key}, float64(1.0))
+		res4, err := client.BLPop(context.Background(), []string{key}, 1*time.Second)
 		assert.Nil(suite.T(), res4)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -3017,18 +3017,18 @@ func (suite *GlideTestSuite) TestBRPop() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res1)
 
-		res2, err := client.BRPop(context.Background(), []string{listKey1, listKey2}, float64(0.5))
+		res2, err := client.BRPop(context.Background(), []string{listKey1, listKey2}, 500*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []string{listKey1, "value1"}, res2)
 
-		res3, err := client.BRPop(context.Background(), []string{listKey2}, float64(1.0))
+		res3, err := client.BRPop(context.Background(), []string{listKey2}, 1*time.Second)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res3)
 
 		key := uuid.NewString()
 		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		res4, err := client.BRPop(context.Background(), []string{key}, float64(1.0))
+		res4, err := client.BRPop(context.Background(), []string{key}, 1*time.Second)
 		assert.Nil(suite.T(), res4)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -3180,11 +3180,11 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		res1, err := client.BLMPop(context.Background(), []string{key1}, constants.Left, float64(0.1))
+		res1, err := client.BLMPop(context.Background(), []string{key1}, constants.Left, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res1)
 
-		res2, err := client.BLMPopCount(context.Background(), []string{key1}, constants.Left, int64(1), float64(0.1))
+		res2, err := client.BLMPopCount(context.Background(), []string{key1}, constants.Left, int64(1), 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Nil(suite.T(), res2)
 
@@ -3195,7 +3195,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res4)
 
-		res5, err := client.BLMPop(context.Background(), []string{key1}, constants.Left, float64(0.1))
+		res5, err := client.BLMPop(context.Background(), []string{key1}, constants.Left, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -3203,7 +3203,13 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 			res5,
 		)
 
-		res6, err := client.BLMPopCount(context.Background(), []string{key2, key1}, constants.Right, int64(2), float64(0.1))
+		res6, err := client.BLMPopCount(
+			context.Background(),
+			[]string{key2, key1},
+			constants.Right,
+			int64(2),
+			100*time.Millisecond,
+		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -3215,7 +3221,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 
 		suite.verifyOK(client.Set(context.Background(), key3, "value"))
 
-		res7, err := client.BLMPop(context.Background(), []string{key3}, constants.Left, float64(0.1))
+		res7, err := client.BLMPop(context.Background(), []string{key3}, constants.Left, 100*time.Millisecond)
 		assert.Nil(suite.T(), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -3231,7 +3237,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		key2 := "{key}-2" + uuid.NewString()
 		key3 := "{key}-3" + uuid.NewString()
 
-		res1, err := client.BZMPop(context.Background(), []string{key1}, constants.MIN, float64(0.1))
+		res1, err := client.BZMPop(context.Background(), []string{key1}, constants.MIN, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res1.IsNil())
 
@@ -3252,7 +3258,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		res5, err := client.BZMPopWithOptions(context.Background(),
 			[]string{key1},
 			constants.MAX,
-			float64(0.1),
+			100*time.Millisecond,
 			*options.NewZMPopOptions().SetCount(2),
 		)
 		assert.Nil(suite.T(), err)
@@ -3267,7 +3273,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		)
 
 		// Try to pop the minimum value from key2
-		res6, err := client.BZMPop(context.Background(), []string{key2}, constants.MIN, float64(0.1))
+		res6, err := client.BZMPop(context.Background(), []string{key2}, constants.MIN, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -3283,7 +3289,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		)
 
 		// Pop the minimum value from multiple keys
-		res7, err := client.BZMPop(context.Background(), []string{key1, key2}, constants.MIN, float64(0.1))
+		res7, err := client.BZMPop(context.Background(), []string{key1, key2}, constants.MIN, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(
 			suite.T(),
@@ -3301,7 +3307,7 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		suite.verifyOK(client.Set(context.Background(), key3, "value"))
 
 		// Popping a non-existent value in key3
-		res8, err := client.BZMPop(context.Background(), []string{key3}, constants.MIN, float64(0.1))
+		res8, err := client.BZMPop(context.Background(), []string{key3}, constants.MIN, 100*time.Millisecond)
 		assert.True(suite.T(), res8.IsNil())
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -4455,7 +4461,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		nonExistentKey := "{key}-3" + uuid.NewString()
 		nonListKey := "{key}-4" + uuid.NewString()
 
-		res1, err := client.BLMove(context.Background(), key1, key2, constants.Left, constants.Right, float64(0.1))
+		res1, err := client.BLMove(context.Background(), key1, key2, constants.Left, constants.Right, 100*time.Millisecond)
 		assert.Equal(suite.T(), models.CreateNilStringResult(), res1)
 		assert.Nil(suite.T(), err)
 
@@ -4464,7 +4470,14 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Equal(suite.T(), int64(4), res2)
 
 		// only source exists, only source elements gets popped, creates a list at nonExistingKey
-		res3, err := client.BLMove(context.Background(), key1, nonExistentKey, constants.Right, constants.Left, float64(0.1))
+		res3, err := client.BLMove(
+			context.Background(),
+			key1,
+			nonExistentKey,
+			constants.Right,
+			constants.Left,
+			100*time.Millisecond,
+		)
 		assert.Equal(suite.T(), "four", res3.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4473,7 +4486,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Equal(suite.T(), []string{"one", "two", "three"}, res4)
 
 		// source and destination are the same, performing list rotation, "one" gets popped and added back
-		res5, err := client.BLMove(context.Background(), key1, key1, constants.Left, constants.Left, float64(0.1))
+		res5, err := client.BLMove(context.Background(), key1, key1, constants.Left, constants.Left, 100*time.Millisecond)
 		assert.Equal(suite.T(), "one", res5.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4485,7 +4498,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res7)
 
-		res8, err := client.BLMove(context.Background(), key1, key2, constants.Right, constants.Left, float64(0.1))
+		res8, err := client.BLMove(context.Background(), key1, key2, constants.Right, constants.Left, 100*time.Millisecond)
 		assert.Equal(suite.T(), "three", res8.Value())
 		assert.Nil(suite.T(), err)
 
@@ -4500,7 +4513,14 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// source exists but is not a list type key
 		suite.verifyOK(client.Set(context.Background(), nonListKey, "value"))
 
-		res11, err := client.BLMove(context.Background(), nonListKey, key1, constants.Left, constants.Left, float64(0.1))
+		res11, err := client.BLMove(
+			context.Background(),
+			nonListKey,
+			key1,
+			constants.Left,
+			constants.Left,
+			100*time.Millisecond,
+		)
 		assert.Equal(suite.T(), models.CreateNilStringResult(), res11)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -4508,7 +4528,14 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// destination exists but is not a list type key
 		suite.verifyOK(client.Set(context.Background(), nonListKey, "value"))
 
-		res12, err := client.BLMove(context.Background(), key1, nonListKey, constants.Left, constants.Left, float64(0.1))
+		res12, err := client.BLMove(
+			context.Background(),
+			key1,
+			nonListKey,
+			constants.Left,
+			constants.Left,
+			100*time.Millisecond,
+		)
 		assert.Equal(suite.T(), models.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &errors.RequestError{}, err)
@@ -5279,17 +5306,17 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 		assert.Equal(suite.T(), int64(1), zaddResult2)
 
 		// Pop minimum element from key1 and key2
-		bzpopminResult1, err := client.BZPopMin(context.Background(), []string{key1, key2}, float64(.5))
+		bzpopminResult1, err := client.BZPopMin(context.Background(), []string{key1, key2}, 500*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), models.KeyWithMemberAndScore{Key: key1, Member: "a", Score: 1.0}, bzpopminResult1.Value())
 
 		// Attempt to pop from non-existent key3
-		bzpopminResult2, err := client.BZPopMin(context.Background(), []string{key3}, float64(1))
+		bzpopminResult2, err := client.BZPopMin(context.Background(), []string{key3}, 1*time.Second)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), bzpopminResult2.IsNil())
 
 		// Pop minimum element from key2
-		bzpopminResult3, err := client.BZPopMin(context.Background(), []string{key3, key2}, float64(.5))
+		bzpopminResult3, err := client.BZPopMin(context.Background(), []string{key3, key2}, 500*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), models.KeyWithMemberAndScore{Key: key2, Member: "c", Score: 2.0}, bzpopminResult3.Value())
 
@@ -5297,7 +5324,7 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 		suite.verifyOK(client.Set(context.Background(), key3, "value"))
 
 		// Attempt to pop from key3 which is not a sorted set
-		_, err = client.BZPopMin(context.Background(), []string{key3}, float64(.5))
+		_, err = client.BZPopMin(context.Background(), []string{key3}, 500*time.Millisecond)
 		if assert.Error(suite.T(), err) {
 			assert.IsType(suite.T(), &errors.RequestError{}, err)
 		}
@@ -10667,7 +10694,7 @@ func (suite *GlideTestSuite) TestBZPopMax() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 
-		res1, err := client.BZPopMax(context.Background(), []string{key1}, float64(0.1))
+		res1, err := client.BZPopMax(context.Background(), []string{key1}, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res1.IsNil())
 
@@ -10681,7 +10708,7 @@ func (suite *GlideTestSuite) TestBZPopMax() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res2)
 
-		res3, err := client.BZPopMax(context.Background(), []string{key1}, float64(0.1))
+		res3, err := client.BZPopMax(context.Background(), []string{key1}, 100*time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), models.KeyWithMemberAndScore{Key: key1, Member: "three", Score: 3.0}, res3.Value())
 	})
