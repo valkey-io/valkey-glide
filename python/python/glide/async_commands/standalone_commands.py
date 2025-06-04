@@ -138,7 +138,7 @@ class StandaloneCommands(CoreCommands):
             # Expected Output: Transaction Result: [OK, 2, b'2']
 
         Example (Non-Atomic Batch - Pipeline with options):
-            >>> from glide.async_commands.batch_options import BatchOptions
+            >>> from glide import BatchOptions
             >>> pipeline = Batch(is_atomic=False)
             >>> pipeline.custom_command(["set", "key1", "value1"])
             >>> pipeline.custom_command(["set", "key2", "value2"])

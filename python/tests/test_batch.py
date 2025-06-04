@@ -989,7 +989,7 @@ async def exec_batch(
     raise_on_error: bool = False,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_client, GlideClient):
-        batch_options = BatchOptions(timeout=timeout) if timeout else None
+        batch_options = BatchOptions(timeout=timeout)
         return await cast(GlideClient, glide_client).exec(
             cast(Batch, batch), raise_on_error, batch_options
         )
@@ -1548,10 +1548,7 @@ class TestBatch:
             batch = ClusterBatch(is_atomic=False)
             batch.config_set({config_key: config_value})
 
-            options = ClusterBatchOptions()
-            result = await glide_client.exec(
-                batch, raise_on_error=True, options=options
-            )
+            result = await glide_client.exec(batch, raise_on_error=True)
 
             assert result == ["OK"]
 

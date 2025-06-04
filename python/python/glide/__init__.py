@@ -195,7 +195,6 @@ __all__ = [
     "TGlideClient",
     "TBatch",
     # Batch Options
-    "BaseBatchOptions",
     "BatchOptions",
     "BatchRetryStrategy",
     "ClusterBatchOptions",

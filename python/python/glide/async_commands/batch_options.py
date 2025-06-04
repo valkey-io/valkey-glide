@@ -80,20 +80,20 @@ class BatchRetryStrategy:
         Initialize a BatchRetryStrategy.
 
         Args:
-        retry_server_error (bool): If `True`, failed commands with a retriable error (e.g., `TRYAGAIN`)
-            will be automatically retried.
+            retry_server_error (bool): If `True`, failed commands with a retriable error (e.g., `TRYAGAIN`)
+                will be automatically retried.
 
-            ⚠️ **Warning:** Enabling this flag may cause commands targeting the same slot to execute
-            out of order.
+                ⚠️ **Warning:** Enabling this flag may cause commands targeting the same slot to execute
+                out of order.
 
-            By default, this is set to `False`.
+                By default, this is set to `False`.
 
-        retry_connection_error (bool): If `True`, batch requests will be retried in case of connection errors.
+            retry_connection_error (bool): If `True`, batch requests will be retried in case of connection errors.
 
-            ⚠️ **Warning:** Retrying after a connection error may lead to duplicate executions, since
-            the server might have already received and processed the request before the error occurred.
+                ⚠️ **Warning:** Retrying after a connection error may lead to duplicate executions, since
+                the server might have already received and processed the request before the error occurred.
 
-            By default, this is set to `False`.
+                By default, this is set to `False`.
 
         """
         self.retry_server_error = retry_server_error
@@ -160,6 +160,11 @@ class ClusterBatchOptions(BaseBatchOptions):
     Options for cluster batch operations.
 
     Args:
+        timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+            to complete. This duration encompasses sending the request, awaiting a response from the server,
+            and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+            it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
+
         route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
             will send the batch to the specified node defined by `route`.
 
@@ -197,23 +202,23 @@ class ClusterBatchOptions(BaseBatchOptions):
             **Default:** Both `retry_server_error` and `retry_connection_error` are set to
             `False`.
 
-        timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
-            to complete. This duration encompasses sending the request, awaiting a response from the server,
-            and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
-            it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
-
     """
 
     def __init__(
         self,
-        retry_strategy: Optional[BatchRetryStrategy] = None,
-        route: Optional[TSingleNodeRoute] = None,
         timeout: Optional[int] = None,
+        route: Optional[TSingleNodeRoute] = None,
+        retry_strategy: Optional[BatchRetryStrategy] = None,
     ):
         """
         Initialize ClusterBatchOptions.
 
         Args:
+            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
+                to complete. This duration encompasses sending the request, awaiting a response from the server,
+                and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
+                it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
+
             route (Optional[TSingleNodeRoute]): Configures single-node routing for the batch request. The client
                 will send the batch to the specified node defined by `route`.
 
@@ -250,11 +255,6 @@ class ClusterBatchOptions(BaseBatchOptions):
 
                 **Default:** Both `retry_server_error` and `retry_connection_error` are set to
                 `False`.
-
-            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
-                to complete. This duration encompasses sending the request, awaiting a response from the server,
-                and any required reconnections or retries. If the specified timeout is exceeded for a pending request,
-                it will result in a timeout error. If not explicitly set, the client's default request timeout will be used.
         """
         super().__init__(timeout)
         self.retry_strategy = retry_strategy

@@ -21,6 +21,7 @@ from glide.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
+from glide.exceptions import RequestError
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -179,9 +180,8 @@ class ClusterCommands(CoreCommands):
                 or options.retry_strategy.retry_connection_error
             )
         ):
-            raise ValueError(
+            raise RequestError(
                 "Retry strategies are not supported for atomic batches (transactions). "
-                "Retry strategies can only be used with non-atomic batches (pipelines)."
             )
 
         # Extract values to make the _execute_batch call cleaner
