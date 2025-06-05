@@ -1359,7 +1359,13 @@ func ExampleClient_XClaim() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s has %d fields\n", id, len(claimResponse.Fields))
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 has 2 fields
 }
 
 func ExampleClusterClient_XClaim() {
@@ -1398,7 +1404,13 @@ func ExampleClusterClient_XClaim() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s has %d fields\n", id, len(claimResponse.Fields))
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 has 2 fields
 }
 
 func ExampleClient_XClaimWithOptions() {

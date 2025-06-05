@@ -6463,7 +6463,7 @@ func (client *baseClient) XClaim(
 	consumer string,
 	minIdleTime int64,
 	ids []string,
-) (map[string][][]string, error) {
+) (map[string]models.XClaimResponse, error) {
 	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
@@ -6495,7 +6495,7 @@ func (client *baseClient) XClaimWithOptions(
 	minIdleTime int64,
 	ids []string,
 	opts options.XClaimOptions,
-) (map[string][][]string, error) {
+) (map[string]models.XClaimResponse, error) {
 	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6506,7 +6506,7 @@ func (client *baseClient) XClaimWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayResponse(result)
+	return handleXClaimResponse(result)
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with

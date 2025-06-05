@@ -135,7 +135,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		ids []string,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimWithOptions(
 		ctx context.Context,
@@ -145,7 +145,7 @@ type StreamCommands interface {
 		minIdleTime int64,
 		ids []string,
 		options options.XClaimOptions,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimJustId(
 		ctx context.Context,
