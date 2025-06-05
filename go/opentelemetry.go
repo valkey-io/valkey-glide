@@ -27,7 +27,6 @@ package glide
 
 /*
 #include "lib.h"
-#include <stdlib.h>
 */
 import "C"
 
