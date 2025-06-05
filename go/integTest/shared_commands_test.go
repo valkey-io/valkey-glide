@@ -4757,25 +4757,29 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 
 		xreadgroup, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		
+
 		// Check that we have the stream with the correct name in the map
 		assert.Equal(suite.T(), 1, len(xreadgroup))
 		streamResponse, exists := xreadgroup[key]
 		assert.True(suite.T(), exists)
-		
+
 		// Check that we have two entries with the correct IDs and fields
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
-		
+
 		// Create a map of entry IDs to their fields for easier comparison
 		entryMap := make(map[string]map[string]string)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
-		
+
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
-		assert.Equal(suite.T(), map[string]string{"entry1_field1": "entry1_value1", "entry1_field2": "entry1_value2"}, entryMap["0-1"])
-		
+		assert.Equal(
+			suite.T(),
+			map[string]string{"entry1_field1": "entry1_value1", "entry1_field2": "entry1_value2"},
+			entryMap["0-1"],
+		)
+
 		assert.Contains(suite.T(), entryMap, "0-2")
 		assert.Equal(suite.T(), map[string]string{"entry2_field1": "entry2_value1"}, entryMap["0-2"])
 
@@ -7999,28 +8003,28 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		xReadGroup, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
-		
+
 		// Check that we have the stream with the correct name in the map
 		assert.Equal(suite.T(), 1, len(xReadGroup))
 		streamResponse, exists := xReadGroup[key]
 		assert.True(suite.T(), exists)
-		
+
 		// Check that we have three entries with the correct IDs and fields
 		assert.Equal(suite.T(), 3, len(streamResponse.Entries))
-		
+
 		// Create a map of entry IDs to their fields for easier comparison
 		entryMap := make(map[string]map[string]string)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
-		
+
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
 		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, entryMap["0-1"])
-		
+
 		assert.Contains(suite.T(), entryMap, "0-2")
 		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
-		
+
 		assert.Contains(suite.T(), entryMap, "0-3")
 		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
 
