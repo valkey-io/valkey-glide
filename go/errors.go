@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -76,6 +77,19 @@ func NewConfigurationError(message string) *ConfigurationError {
 }
 
 func (e *ConfigurationError) Error() string { return e.msg }
+
+type BatchError struct {
+	errors []error
+}
+
+func NewBatchError(errs []error) *BatchError {
+	return &BatchError{errors: errs}
+}
+
+func (e *BatchError) Error() string {
+	return fmt.Sprintf("there were %d errors while preparing commands in this batch: \n%s",
+		len(e.errors), ErrorsToString(e.errors))
+}
 
 func IsError(val any) error {
 	if err, ok := val.(error); ok {

@@ -56,9 +56,10 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 		WithAddress(&config.NodeAddress{Host: "invalid-host"})
 	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), client)
-	assert.NotNil(suite.T(), err)
-	assert.ErrorAs(suite.T(), err, &glide.ConnectionError{})
+	suite.Nil(client)
+	suite.Error(err)
+	var connErr *glide.ConnectionError
+	suite.ErrorAs(err, &connErr)
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
