@@ -1458,7 +1458,21 @@ func ExampleClient_XClaimWithOptions() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
+		// Print a sample field if available
+		if len(claimResponse.Fields) > 0 {
+			for field, value := range claimResponse.Fields {
+				fmt.Printf("Field: %s, Value: %s\n", field, value)
+				break // Just print the first field as an example
+			}
+		}
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 with retry count: 3
+	// Field: entry1_field1, Value: entry1_value1
 }
 
 func ExampleClusterClient_XClaimWithOptions() {

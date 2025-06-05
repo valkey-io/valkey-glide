@@ -6452,8 +6452,10 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //
 // Return value:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: map[string]string of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6483,8 +6485,10 @@ func (client *baseClient) XClaim(
 //
 // Return value:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: map[string]string of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
