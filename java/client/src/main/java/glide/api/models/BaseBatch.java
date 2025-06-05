@@ -5055,8 +5055,9 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements An <code>array</code> of members to add to the HyperLogLog stored at <code>key
      *     </code>.
      * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
-     *     approximated cardinality is altered, then returns <code>1</code>. Otherwise, returns <code>
-     *      0</code>.
+     *     approximated cardinality is altered, then returns <code>true</code>. Otherwise, returns
+     *     <code>
+     *      false</code>.
      */
     public <ArgType> T pfadd(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
