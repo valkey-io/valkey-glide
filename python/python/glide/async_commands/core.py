@@ -6050,18 +6050,18 @@ class CoreCommands(Protocol):
 
         Returns:
             int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns 1.
+            altered, then returns `true`.
 
-            Otherwise, returns 0.
+            Otherwise, returns `false`.
 
         Examples:
             >>> await client.pfadd("hll_1", ["a", "b", "c" ])
-                1 # A data structure was created or modified
+                true # A data structure was created or modified
             >>> await client.pfadd("hll_2", [])
-                1 # A new empty data structure was created
+                true # A new empty data structure was created
         """
         return cast(
-            int,
+            bool,
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 

@@ -4280,10 +4280,10 @@ class BaseBatch:
             elements (List[TEncodable]): A list of members to add to the HyperLogLog stored at `key`.
 
         Commands response:
-            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns 1.
+            bool: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns `true`.
 
-            Otherwise, returns 0.
+            Otherwise, returns `false`.
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
