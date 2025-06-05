@@ -566,7 +566,8 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a models.Result[string].
+//	Otherwise, returns [models.CreateNilStringResult()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *Client) ClientGetName(ctx context.Context) (models.Result[string], error) {

@@ -1318,8 +1318,7 @@ func (suite *GlideTestSuite) TestClusterClientGetName() {
 
 	response, err := client.ClientGetName(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
-	assert.True(t, response.SingleValue().IsNil())
+	assert.True(t, response.IsNil())
 }
 
 func (suite *GlideTestSuite) TestClusterClientGetNameWithRoute() {
@@ -1357,7 +1356,7 @@ func (suite *GlideTestSuite) TestClientSetGetName() {
 	client.ClientSetName(context.Background(), connectionName)
 	response, err := client.ClientGetName(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	assert.Equal(t, connectionName, response.Value())
 }
 
 func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
@@ -1368,8 +1367,7 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	opts := options.RouteOption{Route: nil}
 	connectionName := "ConnectionName-" + uuid.NewString()
 	response, err := client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	suite.verifyOK(response, err)
 	response2, err := client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	assert.True(t, response2.IsSingleValue())
@@ -1379,8 +1377,7 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	route := config.Route(config.RandomRoute)
 	opts = options.RouteOption{Route: route}
 	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	suite.verifyOK(response, err)
 	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	assert.True(t, response2.IsSingleValue())
@@ -1390,8 +1387,7 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	route = config.Route(config.AllPrimaries)
 	opts = options.RouteOption{Route: route}
 	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
-	assert.NoError(t, err)
-	assert.Equal(t, "OK", response.SingleValue())
+	suite.verifyOK(response, err)
 	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	for _, data := range response2.MultiValue() {

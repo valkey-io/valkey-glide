@@ -1154,16 +1154,16 @@ func (client *ClusterClient) ConfigGetWithOptions(ctx context.Context,
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName string) (models.ClusterValue[string], error) {
+func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName string) (string, error) {
 	response, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return data, nil
 }
 
 // Set the name of the current connection.
@@ -1183,21 +1183,25 @@ func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName s
 func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 	connectionName string,
 	opts options.RouteOption,
-) (models.ClusterValue[string], error) {
+) (string, error) {
 	response, err := client.executeCommandWithRoute(ctx, C.ClientSetName, []string{connectionName}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return data, nil
 }
 
 // Gets the name of the current connection.
 //
 // See [valkey.io] for details.
+//
+// Note:
+//
+//	The command will be routed to a random node
 //
 // Parameters:
 //
@@ -1205,19 +1209,20 @@ func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a models.Result[string].
+//	Otherwise, returns [models.CreateNilStringResult()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterValue[models.Result[string]], error) {
+func (client *ClusterClient) ClientGetName(ctx context.Context) (models.Result[string], error) {
 	response, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[models.Result[string]](), err
+		return models.CreateNilStringResult(), err
 	}
 	data, err := handleStringOrNilResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[models.Result[string]](), err
+		return models.CreateNilStringResult(), err
 	}
-	return models.CreateClusterSingleValue[models.Result[string]](data), nil
+	return data, nil
 }
 
 // Gets the name of the current connection.
@@ -1232,7 +1237,8 @@ func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterV
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a ClusterValue wrapped models.Result[string].
+//	Otherwise, returns [models.CreateEmptyClusterValue[models.Result[string]]()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *ClusterClient) ClientGetNameWithOptions(
