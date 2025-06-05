@@ -112,7 +112,6 @@ public class FTSearchOptions {
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(
                 @NonNull GlideString field, @NonNull GlideString alias) {
-            Map<GlideString, GlideString> updatedMap = new HashMap<>(this.identifiers$value);
             this.identifiers$value.put(field, alias);
             this.identifiers$set = true;
             return this;
