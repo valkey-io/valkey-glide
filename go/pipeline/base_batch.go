@@ -205,7 +205,7 @@ func (b *BaseBatch[T]) MGet(keys []string) *T {
 		keys,
 		reflect.Slice,
 		false,
-		internal.ConvertArrayOfStringOrNil,
+		internal.ConvertArrayOfNilOr[string],
 	)
 }
 
@@ -508,7 +508,7 @@ func (b *BaseBatch[T]) HGet(key string, field string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (b *BaseBatch[T]) HGetAll(key string) *T {
-	return b.addCmdAndTypeChecker(C.HGetAll, []string{key}, reflect.Map, false)
+	return b.addCmdAndConverter(C.HGetAll, []string{key}, reflect.Map, false, internal.ConvertMapOf[string])
 }
 
 // Returns the values associated with the specified fields in the hash stored at key.
@@ -533,7 +533,7 @@ func (b *BaseBatch[T]) HMGet(key string, fields []string) *T {
 		append([]string{key}, fields...),
 		reflect.Slice,
 		false,
-		internal.ConvertArrayOfStringOrNil,
+		internal.ConvertArrayOfNilOr[string],
 	)
 }
 
@@ -1110,7 +1110,7 @@ func (b *BaseBatch[T]) SUnionStore(destination string, keys []string) *T {
 //
 // Command Response:
 //
-//	A collection containing all members of the set.
+//	A `map[string]struct{}` containing all members of the set.
 //	Returns an empty collection if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/smembers/
@@ -1164,7 +1164,7 @@ func (b *BaseBatch[T]) SIsMember(key string, member string) *T {
 //
 // Command Response:
 //
-//	A collection representing the difference between the sets.
+//	A `map[string]struct{}` representing the difference between the sets.
 //	If a key does not exist, it is treated as an empty set.
 //
 // [valkey.io]: https://valkey.io/commands/sdiff/
@@ -1201,7 +1201,7 @@ func (b *BaseBatch[T]) SDiffStore(destination string, keys []string) *T {
 //
 // Command Response:
 //
-//	A collection containing members which are present in all given sets.
+//	A `map[string]struct{}` containing members which are present in all given sets.
 //	If one or more sets do not exist, an empty collection will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/sinter/
@@ -1398,7 +1398,7 @@ func (b *BaseBatch[T]) SMIsMember(key string, members []string) *T {
 //
 // Command Response:
 //
-//	A collection containing members which are present in at least one of the given sets.
+//	A `map[string]struct{}` containing members which are present in at least one of the given sets.
 //	If none of the sets exist, an empty collection will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/sunion/
@@ -1722,7 +1722,7 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 // Command Response:
 //
 //	A two-element array containing the key from which the element was popped and the value of the popped
-//	element, formatted as `[key, value]``.
+//	element, formatted as `[key, value]`.
 //	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
@@ -1810,7 +1810,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndTypeChecker(C.LMPop, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -1849,7 +1849,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndTypeChecker(C.LMPop, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
@@ -1894,7 +1894,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndTypeChecker(C.BLMPop, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list.
@@ -1940,7 +1940,7 @@ func (b *BaseBatch[T]) BLMPopCount(keys []string, listDirection constants.ListDi
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndTypeChecker(C.BLMPop, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
 }
 
 // Sets the list element at index to element.
@@ -2636,7 +2636,7 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 	if err != nil {
 		return b.addError("XReadWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.XRead, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.XRead, args, reflect.Map, true, internal.ConvertXReadResponse)
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -2686,7 +2686,7 @@ func (b *BaseBatch[T]) XReadGroupWithOptions(
 	if err != nil {
 		return b.addError("XReadGroupWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.XReadGroup, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.XReadGroup, args, reflect.Map, true, internal.ConvertXReadGroupResponse)
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
@@ -2845,7 +2845,7 @@ func (b *BaseBatch[T]) ZIncrBy(key string, increment float64, member string) *T 
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
 func (b *BaseBatch[T]) ZPopMin(key string) *T {
-	return b.addCmdAndTypeChecker(C.ZPopMin, []string{key}, reflect.Map, false)
+	return b.addCmdAndConverter(C.ZPopMin, []string{key}, reflect.Map, false, internal.ConvertMapOf[float64])
 }
 
 // Removes and returns multiple members with the lowest scores from the sorted set
@@ -2869,7 +2869,13 @@ func (b *BaseBatch[T]) ZPopMinWithOptions(key string, options options.ZPopOption
 	if err != nil {
 		return b.addError("ZPopMinWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZPopMin, append([]string{key}, optArgs...), reflect.Map, false)
+	return b.addCmdAndConverter(
+		C.ZPopMin,
+		append([]string{key}, optArgs...),
+		reflect.Map,
+		false,
+		internal.ConvertMapOf[float64],
+	)
 }
 
 // Removes and returns the member with the highest score from the sorted set stored at the
@@ -2888,7 +2894,7 @@ func (b *BaseBatch[T]) ZPopMinWithOptions(key string, options options.ZPopOption
 //
 // [valkey.io]: https://valkey.io/commands/zpopmax/
 func (b *BaseBatch[T]) ZPopMax(key string) *T {
-	return b.addCmdAndTypeChecker(C.ZPopMax, []string{key}, reflect.Map, false)
+	return b.addCmdAndConverter(C.ZPopMax, []string{key}, reflect.Map, false, internal.ConvertMapOf[float64])
 }
 
 // Removes and returns up to `count` members with the highest scores from the sorted set
@@ -2912,7 +2918,13 @@ func (b *BaseBatch[T]) ZPopMaxWithOptions(key string, options options.ZPopOption
 	if err != nil {
 		return b.addError("ZPopMaxWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZPopMax, append([]string{key}, optArgs...), reflect.Map, false)
+	return b.addCmdAndConverter(
+		C.ZPopMax,
+		append([]string{key}, optArgs...),
+		reflect.Map,
+		false,
+		internal.ConvertMapOf[float64],
+	)
 }
 
 // Removes the specified members from the sorted set stored at `key`.
@@ -3161,7 +3173,15 @@ func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQue
 	}
 	args = append(args, queryArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Map, false)
+
+	needsReverse := false
+	for _, arg := range args {
+		if arg == "REV" {
+			needsReverse = true
+			break
+		}
+	}
+	return b.addCmdAndConverter(C.ZRange, args, reflect.Map, false, internal.MakeConvertMapOfMemberAndScore(needsReverse))
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
@@ -4005,12 +4025,18 @@ func (b *BaseBatch[T]) ZRandMemberWithCountWithScores(key string, count int64) *
 //
 // Command Response:
 //
-//	An array of scores corresponding to members.
+//	An array of scores corresponding to `members`.
 //	If a member does not exist in the sorted set, the corresponding value in the list will be `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/zmscore/
 func (b *BaseBatch[T]) ZMScore(key string, members []string) *T {
-	return b.addCmdAndTypeChecker(C.ZMScore, append([]string{key}, members...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.ZMScore,
+		append([]string{key}, members...),
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOfNilOr[float64],
+	)
 }
 
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
@@ -4083,7 +4109,7 @@ func (b *BaseBatch[T]) ObjectRefCount(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/sort/
 func (b *BaseBatch[T]) Sort(key string) *T {
-	return b.addCmdAndConverter(C.Sort, []string{key}, reflect.Slice, false, internal.ConvertArrayOfStringOrNil)
+	return b.addCmdAndConverter(C.Sort, []string{key}, reflect.Slice, false, internal.ConvertArrayOfNilOr[string])
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
@@ -4118,7 +4144,7 @@ func (b *BaseBatch[T]) SortWithOptions(key string, options options.SortOptions) 
 		append([]string{key}, optionArgs...),
 		reflect.Slice,
 		false,
-		internal.ConvertArrayOfStringOrNil,
+		internal.ConvertArrayOfNilOr[string],
 	)
 }
 
@@ -4138,7 +4164,7 @@ func (b *BaseBatch[T]) SortWithOptions(key string, options options.SortOptions) 
 //
 // [valkey.io]: https://valkey.io/commands/sort_ro/
 func (b *BaseBatch[T]) SortReadOnly(key string) *T {
-	return b.addCmdAndConverter(C.SortReadOnly, []string{key}, reflect.Slice, false, internal.ConvertArrayOfStringOrNil)
+	return b.addCmdAndConverter(C.SortReadOnly, []string{key}, reflect.Slice, false, internal.ConvertArrayOfNilOr[string])
 }
 
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
@@ -4172,7 +4198,7 @@ func (b *BaseBatch[T]) SortReadOnlyWithOptions(key string, options options.SortO
 		append([]string{key}, optionArgs...),
 		reflect.Slice,
 		false,
-		internal.ConvertArrayOfStringOrNil,
+		internal.ConvertArrayOfNilOr[string],
 	)
 }
 
@@ -4493,7 +4519,7 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 		return b.addError("XClaimWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XClaim, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.XClaim, args, reflect.Map, false, internal.ConvertXClaimResponse)
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -4553,7 +4579,7 @@ func (b *BaseBatch[T]) XClaimJustIdWithOptions(
 	}
 	args = append(args, optionArgs...)
 	args = append(args, constants.JustIdKeyword)
-	return b.addCmdAndTypeChecker(C.XClaim, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XClaim, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the position of the first bit matching the given bit value.
@@ -4712,7 +4738,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4772,7 +4798,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Map, true)
+	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
 }
 
 // Returns information about the stream stored at `key`.
@@ -4830,11 +4856,18 @@ func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInf
 //
 // Command Response:
 //
-//	An array where each element contains the attributes of a consumer for the given consumer group.
+//	An array of [models.XInfoConsumerInfo], where each element contains the attributes
+//	of a consumer for the given consumer group of the stream at `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-consumers/
 func (b *BaseBatch[T]) XInfoConsumers(key string, group string) *T {
-	return b.addCmdAndTypeChecker(C.XInfoConsumers, []string{key, group}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.XInfoConsumers,
+		[]string{key, group},
+		reflect.Slice,
+		false,
+		internal.ConvertXInfoConsumersResponse,
+	)
 }
 
 // Returns the list of all consumer groups and their attributes for the stream stored at `key`.
@@ -4847,11 +4880,12 @@ func (b *BaseBatch[T]) XInfoConsumers(key string, group string) *T {
 //
 // Command Response:
 //
-//	An array where each element represents the attributes of a consumer group for the stream at `key`.
+//	An array of [models.XInfoGroupInfo], where each element represents the
+//	attributes of a consumer group for the stream at `key`.
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-groups/
 func (b *BaseBatch[T]) XInfoGroups(key string) *T {
-	return b.addCmdAndTypeChecker(C.XInfoGroups, []string{key}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.XInfoGroups, []string{key}, reflect.Slice, false, internal.ConvertXInfoGroupsResponse)
 }
 
 // Reads or modifies the array of bits representing the string that is held at key
@@ -4895,7 +4929,7 @@ func (b *BaseBatch[T]) BitField(key string, subCommands []options.BitFieldSubCom
 		args = append(args, cmdArgs...)
 	}
 
-	return b.addCmdAndTypeChecker(C.BitField, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.BitField, args, reflect.Slice, false, internal.ConvertArrayOfNilOr[int64])
 }
 
 // Reads the array of bits representing the string that is held at key
@@ -4929,7 +4963,7 @@ func (b *BaseBatch[T]) BitFieldRO(key string, subCommands []options.BitFieldROCo
 		args = append(args, cmdArgs...)
 	}
 
-	return b.addCmdAndTypeChecker(C.BitFieldReadOnly, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.BitFieldReadOnly, args, reflect.Slice, false, internal.ConvertArrayOfNilOr[int64])
 }
 
 // Returns the server time.
@@ -4944,7 +4978,7 @@ func (b *BaseBatch[T]) BitFieldRO(key string, subCommands []options.BitFieldROCo
 //
 // [valkey.io]: https://valkey.io/commands/time/
 func (b *BaseBatch[T]) Time() *T {
-	return b.addCmdAndTypeChecker(C.Time, []string{}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.Time, []string{}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the intersection of members from sorted sets specified by the given `keys`.
@@ -4966,7 +5000,7 @@ func (b *BaseBatch[T]) ZInter(keys options.KeyArray) *T {
 	if err != nil {
 		return b.addError("ZInter", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZInter, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the intersection of members and their scores from sorted sets specified by the given
@@ -5003,7 +5037,15 @@ func (b *BaseBatch[T]) ZInterWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Map, false)
+
+	needsReverse := false
+	for _, arg := range args {
+		if arg == "REV" {
+			needsReverse = true
+			break
+		}
+	}
+	return b.addCmdAndConverter(C.ZInter, args, reflect.Map, false, internal.MakeConvertMapOfMemberAndScore(needsReverse))
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -5093,7 +5135,7 @@ func (b *BaseBatch[T]) ZInterStoreWithOptions(
 func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
-	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZDiff, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
@@ -5119,7 +5161,7 @@ func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.ZDiff, args, reflect.Map, false, internal.MakeConvertMapOfMemberAndScore(false))
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -5173,7 +5215,7 @@ func (b *BaseBatch[T]) ZUnion(keys options.KeyArray) *T {
 	if err != nil {
 		return b.addError("ZUnion", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZUnion, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the union of members and their scores from sorted sets specified by the given
@@ -5213,7 +5255,7 @@ func (b *BaseBatch[T]) ZUnionWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.ZUnion, args, reflect.Map, false, internal.MakeConvertMapOfMemberAndScore(false))
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -5540,10 +5582,11 @@ func (b *BaseBatch[T]) GeoAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (b *BaseBatch[T]) GeoHash(key string, members []string) *T {
-	return b.addCmdAndTypeChecker(C.GeoHash,
+	return b.addCmdAndConverter(C.GeoHash,
 		append([]string{key}, members...),
 		reflect.Slice,
 		false,
+		internal.ConvertArrayOfNilOr[string],
 	)
 }
 
@@ -5566,7 +5609,7 @@ func (b *BaseBatch[T]) GeoHash(key string, members []string) *T {
 func (b *BaseBatch[T]) GeoPos(key string, members []string) *T {
 	args := []string{key}
 	args = append(args, members...)
-	return b.addCmdAndTypeChecker(C.GeoPos, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.GeoPos, args, reflect.Slice, false, internal.Convert2DArrayOfFloat)
 }
 
 // Returns the distance between `member1` and `member2` saved in the
@@ -5643,8 +5686,8 @@ func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 strin
 //
 // Command Response:
 //
-//	An array of arrays containing the following information:
-//	 - The coordinates.
+//	An array of [options.Location] containing the following information:
+//	 - The coordinates as a [options.GeospatialData] object.
 //	 - The member (location) name.
 //	 - The distance from the center as a `float64`, in the same unit specified for `searchByShape`.
 //	 - The geohash of the location as a `int64`.
@@ -5678,7 +5721,7 @@ func (b *BaseBatch[T]) GeoSearchWithFullOptions(
 		return b.addError("GeoSearchWithFullOptions", err)
 	}
 	args = append(args, resultOptionsArgs...)
-	return b.addCmdAndTypeChecker(C.GeoSearch, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.GeoSearch, args, reflect.Slice, false, internal.ConvertLocationArrayResponse)
 }
 
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
@@ -5762,7 +5805,7 @@ func (b *BaseBatch[T]) GeoSearchWithResultOptions(
 	}
 	args = append(args, resultOptionsArgs...)
 
-	return b.addCmdAndTypeChecker(C.GeoSearch, args, reflect.Slice, false)
+	return b.addCmdAndConverter(C.GeoSearch, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
@@ -6222,7 +6265,7 @@ func (b *BaseBatch[T]) FCallReadOnlyWithKeysAndArgs(function string, keys []stri
 //
 // [valkey.io]: https://valkey.io/commands/function-list/
 func (b *BaseBatch[T]) FunctionList(query models.FunctionListQuery) *T {
-	return b.addCmdAndTypeChecker(C.FunctionList, query.ToArgs(), reflect.Slice, false)
+	return b.addCmdAndConverter(C.FunctionList, query.ToArgs(), reflect.Slice, false, internal.ConvertFunctionListResponse)
 }
 
 // Returns the serialized payload of all loaded libraries.
@@ -6239,7 +6282,7 @@ func (b *BaseBatch[T]) FunctionList(query models.FunctionListQuery) *T {
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
 func (b *BaseBatch[T]) FunctionDump() *T {
-	return b.addCmdAndTypeChecker(C.FunctionDump, []string{}, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.FunctionDump, []string{}, reflect.String, false)
 }
 
 // Restores libraries from the serialized payload returned by [FunctionDump].
@@ -6295,7 +6338,7 @@ func (b *BaseBatch[T]) FunctionRestoreWithPolicy(payload string, policy constant
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (b *BaseBatch[T]) PubSubChannels() *T {
-	return b.addCmdAndTypeChecker(C.PubSubChannels, []string{}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.PubSubChannels, []string{}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Lists the currently active channels matching the specified pattern.
@@ -6317,7 +6360,7 @@ func (b *BaseBatch[T]) PubSubChannels() *T {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-channels
 func (b *BaseBatch[T]) PubSubChannelsWithPattern(pattern string) *T {
-	return b.addCmdAndTypeChecker(C.PubSubChannels, []string{pattern}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.PubSubChannels, []string{pattern}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns the number of patterns that are subscribed to by clients.
@@ -6353,7 +6396,7 @@ func (b *BaseBatch[T]) PubSubNumPat() *T {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-numsub
 func (b *BaseBatch[T]) PubSubNumSub(channels []string) *T {
-	return b.addCmdAndTypeChecker(C.PubSubNumSub, channels, reflect.Map, false)
+	return b.addCmdAndConverter(C.PubSubNumSub, channels, reflect.Map, false, internal.ConvertMapOf[int64])
 }
 
 // Kills a function that is currently executing.
@@ -6410,7 +6453,7 @@ func (b *BaseBatch[T]) Publish(channel string, message string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/script-exists
 func (b *BaseBatch[T]) ScriptExists(sha1s []string) *T {
-	return b.addCmdAndTypeChecker(C.ScriptExists, sha1s, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ScriptExists, sha1s, reflect.Slice, false, internal.ConvertArrayOf[bool])
 }
 
 // Removes all the scripts from the script cache.
@@ -6518,7 +6561,7 @@ func (b *BaseBatch[T]) ConfigSet(parameters map[string]string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (b *BaseBatch[T]) ConfigGet(args []string) *T {
-	return b.addCmdAndTypeChecker(C.ConfigGet, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.ConfigGet, args, reflect.Map, false, internal.ConvertMapOf[string])
 }
 
 // Gets information and statistics about the server.
@@ -6829,5 +6872,5 @@ func (b *BaseBatch[T]) RandomKey() *T {
 //
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (b *BaseBatch[T]) FunctionStats() *T {
-	return b.addCmdAndTypeChecker(C.FunctionStats, []string{}, reflect.Map, false)
+	return b.addCmdAndConverter(C.FunctionStats, []string{}, reflect.Map, false, internal.ConvertFunctionStatsResponse)
 }
