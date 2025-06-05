@@ -10102,11 +10102,16 @@ func (suite *GlideTestSuite) TestGeoHash() {
 
 		// Test getting geohash for multiple members
 		geoHashResults, err := client.GeoHash(context.Background(), key1, []string{"Palermo", "Catania"})
-		fmt.Println(geoHashResults)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(geoHashResults))
-		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
-		assert.Equal(t, geoHashResults[1], "sqdtr74hyu0")
+		assert.Equal(t, "sqc8b49rny0", geoHashResults[0].Value())
+		assert.Equal(t, "sqdtr74hyu0", geoHashResults[1].Value())
+
+		// Test getting geohash for non-existent members
+		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{"Gotham City"})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(geoHashResults))
+		assert.True(t, geoHashResults[0].IsNil())
 
 		// Test getting geohash for empty members
 		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{})
