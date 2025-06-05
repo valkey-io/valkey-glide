@@ -191,7 +191,7 @@ func (cbo ClusterBatchOptions) Convert() BatchOptions {
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
-	Errors   []string // errors processing command args, spotted while batch is filled
+	Errors   []error // errors processing command args, spotted while batch is filled
 }
 
 // BaseBatch is the base structure for both standalone and cluster batch implementations.
@@ -230,7 +230,7 @@ type ClusterBatch struct {
 
 func (b Batch) Convert(response []any) ([]any, error) {
 	if len(response) != len(b.Commands) {
-		return nil, fmt.Errorf("Response misaligned: received %d responses for %d commands", len(response), len(b.Commands))
+		return nil, fmt.Errorf("response misaligned: received %d responses for %d commands", len(response), len(b.Commands))
 	}
 	for i, res := range response {
 		response[i] = b.Commands[i].Converter(res)
@@ -281,7 +281,7 @@ func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 }
 
 func (b *BaseBatch[T]) addError(command string, err error) *T {
-	b.Errors = append(b.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
+	b.Errors = append(b.Errors, fmt.Errorf("error processing arguments for %d's command ('%s'): %w",
 		len(b.Commands)+len(b.Errors)+1, command, err))
 	return b.self
 }
@@ -309,7 +309,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 			if isNilable {
 				return nil
 			}
-			return fmt.Errorf("Unexpected return type from Glide: got nil, expected %v", expectedType)
+			return fmt.Errorf("unexpected return type from Glide: got nil, expected %v", expectedType)
 		}
 		if reflect.TypeOf(res).Kind() == expectedType {
 			return converter(res)
@@ -317,7 +317,7 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 		// data lost even though it was incorrect
 		// TODO maybe still return the data?
 		return fmt.Errorf(
-			"Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType,
+			"unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType,
 		)
 	}
 	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})

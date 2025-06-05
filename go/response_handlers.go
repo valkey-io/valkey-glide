@@ -238,7 +238,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, fmt.Errorf("Unexpected type received: nil, expected: map[string]%v", getType[T]())
+			return nil, fmt.Errorf("unexpected type received: nil, expected: map[string]%v", getType[T]())
 		}
 	}
 	result := make(map[string]T)
@@ -249,7 +249,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, fmt.Errorf("Unexpected type of map element: %T, expected: %v", value, getType[T]())
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", value, getType[T]())
 			}
 			result[key] = valueT
 		} else {
@@ -266,7 +266,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, fmt.Errorf("Unexpected type of map element: %T, expected: %v", val, getType[T]())
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", val, getType[T]())
 			}
 			result[key] = valueT
 		}
@@ -286,7 +286,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, fmt.Errorf("Unexpected type received: nil, expected: []%v", getType[T]())
+			return nil, fmt.Errorf("unexpected type received: nil, expected: []%v", getType[T]())
 		}
 	}
 	arrData := data.([]any)
@@ -295,7 +295,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, fmt.Errorf("Unexpected type of array element: %T, expected: %v", value, getType[T]())
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", value, getType[T]())
 			}
 			result = append(result, valueT)
 		} else {
@@ -310,7 +310,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, fmt.Errorf("Unexpected type of array element: %T, expected: %v", val, getType[T]())
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", val, getType[T]())
 			}
 			result = append(result, valueT)
 		}
@@ -1042,7 +1042,7 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	arr := slice.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return null, fmt.Errorf("Unexpected response array length: %d", len)
+		return null, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -1097,7 +1097,7 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	arr := slice.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return null, fmt.Errorf("Unexpected response array length: %d", len)
+		return null, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := arrayConverter[string]{
 		nil,
@@ -1424,7 +1424,7 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 	}
 	mapResult, ok := result.(map[string][]string)
 	if !ok {
-		return nil, fmt.Errorf("Unexpected conversion result type: %T", result)
+		return nil, fmt.Errorf("unexpected conversion result type: %T", result)
 	}
 
 	return mapResult, nil
@@ -1451,7 +1451,7 @@ func handleMapOfStringMapResponse(response *C.struct_CommandResponse) (map[strin
 	}
 	mapResult, ok := result.(map[string]map[string]string)
 	if !ok {
-		return nil, fmt.Errorf("Unexpected conversion result type: %T", result)
+		return nil, fmt.Errorf("unexpected conversion result type: %T", result)
 	}
 
 	return mapResult, nil
