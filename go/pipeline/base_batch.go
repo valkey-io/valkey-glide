@@ -5440,8 +5440,8 @@ func (b *BaseBatch[T]) GeoAddWithOptions(
 //
 // Command Response:
 //
-//	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	An array of GeoHash strings (of type models.Result[string]) representing the positions of the specified
+//	members stored at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
