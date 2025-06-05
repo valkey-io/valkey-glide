@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 

@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -77,7 +76,7 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	// MessageHandler is only configured when a subscription is defined
 	if client.getMessageHandler() == nil {
-		return nil, errors.New("No subscriptions configured for this client")
+		return nil, errors.New("no subscriptions configured for this client")
 	}
 	return client.getMessageHandler().GetQueue(), nil
 }
@@ -199,7 +198,7 @@ func (client *baseClient) Close() {
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
 	for channelPtr := range client.pending {
 		resultChannel := *(*chan payload)(channelPtr)
-		resultChannel <- payload{value: nil, error: NewClosingError("ExecuteCommand failed. The client is closed.")}
+		resultChannel <- payload{value: nil, error: NewClosingError("ExecuteCommand failed: the client is closed")}
 	}
 	client.pending = nil
 }
@@ -219,7 +218,7 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 	case config.SlotTypeReplica:
 		return protobuf.SlotTypes_Replica, nil
 	default:
-		return protobuf.SlotTypes_Primary, errors.New("Invalid slot type")
+		return protobuf.SlotTypes_Primary, errors.New("invalid slot type")
 	}
 }
 
@@ -236,7 +235,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			case config.RandomRoute:
 				simpleRoute = protobuf.SimpleRoutes_Random
 			default:
-				return nil, errors.New("Invalid simple node route")
+				return nil, errors.New("invalid simple node route")
 			}
 			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
 		}
@@ -282,7 +281,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			}, nil
 		}
 	default:
-		return nil, errors.New("Invalid route type")
+		return nil, errors.New("invalid route type")
 	}
 }
 
@@ -343,7 +342,7 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, NewClosingError("ExecuteCommand failed. The client is closed.")
+		return nil, NewClosingError("ExecuteCommand failed: the client is closed")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
@@ -421,8 +420,8 @@ func (client *baseClient) executeBatch(
 		// Continue with execution
 	}
 	if len(batch.Errors) > 0 {
-		return nil, fmt.Errorf("There were %d errors while preparing commands in this batch: %s",
-			len(batch.Errors), strings.Join(batch.Errors, ", "))
+		return nil, fmt.Errorf("there were %d errors while preparing commands in this batch: \n%s",
+			len(batch.Errors), ErrorsToString(batch.Errors))
 	}
 
 	// Create span if OpenTelemetry is enabled and sampling is configured

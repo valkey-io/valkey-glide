@@ -58,7 +58,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &glide.ConnectionError{}, err)
+	assert.ErrorAs(suite.T(), err, &glide.ConnectionError{})
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {

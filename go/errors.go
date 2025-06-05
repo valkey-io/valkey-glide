@@ -4,7 +4,11 @@ package glide
 
 // #include "lib.h"
 import "C"
-import "errors"
+
+import (
+	"errors"
+	"strings"
+)
 
 // ConnectionError is a client error that occurs when there is an error while connecting or when a connection
 // disconnects.
@@ -92,4 +96,15 @@ func GoError(cErrorType uint32, errorMessage string) error {
 	default:
 		return errors.New(errorMessage)
 	}
+}
+
+// ErrorsToString converts a slice of errors into a single string.
+func ErrorsToString(errors []error) string {
+	sb := strings.Builder{}
+	for _, err := range errors {
+		sb.WriteString("- ")
+		sb.WriteString(err.Error())
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
