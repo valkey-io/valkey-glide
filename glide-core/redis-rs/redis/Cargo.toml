@@ -156,7 +156,6 @@ tls = ["tls-native-tls"] # use "tls-native-tls" instead
 [dev-dependencies]
 rand = "0.9"
 socket2 = "0.5"
-assert_approx_eq = "1"
 fnv = "1"
 futures = "0.3"
 futures-time = "3"
@@ -172,10 +171,9 @@ tokio = { version = "1", features = [
 tempfile = "3"
 once_cell = "1"
 anyhow = "1"
-sscanf = "0.4"
 serial_test = "3"
 versions = "7"
-which = "7"
+which = "8"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [[test]]
