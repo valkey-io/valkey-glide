@@ -99,6 +99,7 @@
 * Go: `WATCH` and `UNWATCH` ([#4054](https://github.com/valkey-io/valkey-glide/pull/4054))
 * Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
 * Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
+* Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 
 #### Breaking Changes
 
