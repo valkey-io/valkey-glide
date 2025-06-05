@@ -40,7 +40,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&glideErrors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -55,7 +55,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&glideErrors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
