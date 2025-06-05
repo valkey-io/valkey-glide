@@ -5056,8 +5056,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     </code>.
      * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
      *     approximated cardinality is altered, then returns <code>true</code>. Otherwise, returns
-     *     <code>
-     *      false</code>.
+     *     <code>false</code>.
      */
     public <ArgType> T pfadd(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);

@@ -4281,9 +4281,9 @@ class BaseBatch:
 
         Commands response:
             bool: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns `true`.
+            altered, then returns `True`.
 
-            Otherwise, returns `false`.
+            Otherwise, returns `False`.
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
