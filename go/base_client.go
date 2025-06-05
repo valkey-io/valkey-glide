@@ -3016,7 +3016,7 @@ func (client *baseClient) LMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return nil, errors.New("Length overflow for the provided keys")
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -3070,7 +3070,7 @@ func (client *baseClient) LMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return nil, errors.New("Length overflow for the provided keys")
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -3126,7 +3126,7 @@ func (client *baseClient) BLMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return nil, errors.New("Length overflow for the provided keys")
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -3186,7 +3186,7 @@ func (client *baseClient) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return nil, errors.New("Length overflow for the provided keys")
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -4638,7 +4638,7 @@ func (client *baseClient) BZMPop(
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
 		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), errors.New(
-			"Length overflow for the provided keys",
+			"length overflow for the provided keys",
 		)
 	}
 
@@ -4702,7 +4702,7 @@ func (client *baseClient) BZMPopWithOptions(
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
 		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), errors.New(
-			"Length overflow for the provided keys",
+			"length overflow for the provided keys",
 		)
 	}
 
@@ -6400,7 +6400,7 @@ func (client *baseClient) BitOp(
 	}
 	result, err := client.executeCommand(ctx, C.BitOp, args)
 	if err != nil {
-		return models.DefaultIntResponse, errors.New("Bitop command execution failed")
+		return models.DefaultIntResponse, errors.New("bitop command execution failed")
 	}
 	return handleIntResponse(result)
 }

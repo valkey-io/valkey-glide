@@ -1745,7 +1745,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("LMPop", errors.New("Length overflow for the provided keys"))
+		return b.addError("LMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -1784,7 +1784,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("LMPopCount", errors.New("Length overflow for the provided keys"))
+		return b.addError("LMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -1829,7 +1829,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BLMPop", errors.New("Length overflow for the provided keys"))
+		return b.addError("BLMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -1880,7 +1880,7 @@ func (b *BaseBatch[T]) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BLMPopCount", errors.New("Length overflow for the provided keys"))
+		return b.addError("BLMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -2969,7 +2969,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BZMPop", errors.New("Length overflow for the provided keys"))
+		return b.addError("BZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -3024,7 +3024,7 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BZMPopWithOptions", errors.New("Length overflow for the provided keys"))
+		return b.addError("BZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -5216,7 +5216,7 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("ZMPop", errors.New("Length overflow for the provided keys"))
+		return b.addError("ZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -5254,7 +5254,7 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("ZMPopWithOptions", errors.New("Length overflow for the provided keys"))
+		return b.addError("ZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
