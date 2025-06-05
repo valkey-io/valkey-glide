@@ -24,7 +24,7 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 
 	if !isNilable && response == nil {
 		return fmt.Errorf(
-			"Unexpected return type from Valkey: got nil, expected %s",
+			"unexpected return type from Valkey: got nil, expected %s",
 			C.GoString(expectedTypeStr),
 		)
 	}
@@ -39,7 +39,7 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 
 	actualTypeStr := C.get_response_type_string(response.response_type)
 	return fmt.Errorf(
-		"Unexpected return type from Valkey: got %s, expected %s",
+		"unexpected return type from Valkey: got %s, expected %s",
 		C.GoString(actualTypeStr),
 		C.GoString(expectedTypeStr),
 	)
@@ -139,16 +139,16 @@ func parseInterface(response *C.struct_CommandResponse) (any, error) {
 	case C.Error:
 		errStr, err := parseString(response)
 		if err != nil {
-			return nil, errors.New("Cannot read error message")
+			return nil, errors.New("cannot read error message")
 		}
 		errStrString, ok := errStr.(string)
 		if !ok {
-			return nil, errors.New("Error message isn't a string")
+			return nil, errors.New("error message isn't a string")
 		}
 		return errors.New(errStrString), nil
 	}
 
-	return nil, errors.New("Unexpected return type from Valkey")
+	return nil, errors.New("unexpected return type from Valkey")
 }
 
 func parseString(response *C.struct_CommandResponse) (any, error) {

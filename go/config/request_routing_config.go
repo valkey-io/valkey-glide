@@ -3,7 +3,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -102,9 +101,7 @@ func NewByAddressRoute(host string, port int32) *ByAddressRoute {
 func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	split := strings.Split(host, ":")
 	if len(split) != 2 {
-		return nil, errors.New(
-			fmt.Sprintf("no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host),
-		)
+		return nil, fmt.Errorf("no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host)
 	}
 
 	port, err := strconv.ParseInt(split[1], 10, 32)

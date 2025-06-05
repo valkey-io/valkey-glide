@@ -176,7 +176,7 @@ func (client *ClusterClient) ExecWithOptions(
 	options pipeline.ClusterBatchOptions,
 ) ([]any, error) {
 	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
-		return nil, errors.New("Retry strategy is not supported for atomic batches (transactions).")
+		return nil, errors.New("retry strategy is not supported for atomic batches (transactions)")
 	}
 	converted := options.Convert()
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
