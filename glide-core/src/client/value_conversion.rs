@@ -1458,6 +1458,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         | b"SISMEMBER"
         | b"PERSIST"
         | b"SMOVE"
+        | b"PFADD"
         | b"RENAMENX"
         | b"MOVE"
         | b"COPY"
@@ -3164,6 +3165,14 @@ mod tests {
     fn convert_smove_to_bool() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("SMOVE").arg("key1").arg("key2").arg("elem")),
+            Some(ExpectedReturnType::Boolean)
+        ));
+    }
+
+    #[test]
+    fn convert_pfadd_to_bool() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("PFADD").arg("key1").arg("a").arg("b")),
             Some(ExpectedReturnType::Boolean)
         ));
     }
