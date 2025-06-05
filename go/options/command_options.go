@@ -109,7 +109,7 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 		case constants.KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = errors.New("Invalid expiry type")
+			err = errors.New("invalid expiry type")
 		}
 	}
 
@@ -147,7 +147,7 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 		case constants.Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = errors.New("Invalid expiry type")
+			err = errors.New("invalid expiry type")
 		}
 	}
 
