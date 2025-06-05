@@ -250,7 +250,7 @@ func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 }
 
 func (b *BaseBatch[T]) addError(command string, err error) *T {
-	b.Batch.Errors = append(b.Batch.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
+	b.Batch.Errors = append(b.Batch.Errors, fmt.Sprintf("Error processing arguments for %d'th command ('%s'): %s",
 		len(b.Batch.Commands)+len(b.Batch.Errors)+1, command, err))
 	return b.self
 }
@@ -400,7 +400,7 @@ func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
 func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.PubSubShardChannels, []string{}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns a list of all sharded channels that match the given pattern.
@@ -421,7 +421,13 @@ func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
 func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{pattern}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.PubSubShardChannels,
+		[]string{pattern},
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Returns the number of subscribers for a sharded channel.
@@ -442,5 +448,5 @@ func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBa
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
 func (b *ClusterBatch) PubSubShardNumSub(channels ...string) *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardNumSub, channels, reflect.Map, false)
+	return b.addCmdAndConverter(C.PubSubShardNumSub, channels, reflect.Map, false, internal.ConvertMapOf[int64])
 }

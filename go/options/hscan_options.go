@@ -14,11 +14,10 @@ func NewHashScanOptions() *HashScanOptions {
 	return &HashScanOptions{}
 }
 
-/*
-If this value is set to true, the HSCAN command will be called with NOVALUES option.
-In the NOVALUES option, values are not included in the response.
-*/
-func (hashScanOptions *HashScanOptions) SetNoValue(noValue bool) *HashScanOptions {
+// If this value is set to true, the HSCAN command will be called with NOVALUES option.
+// In the NOVALUES option, values are not included in the response.
+// Supported from Valkey 8.0.0 and above.
+func (hashScanOptions *HashScanOptions) SetNoValues(noValue bool) *HashScanOptions {
 	hashScanOptions.noValue = noValue
 	return hashScanOptions
 }
@@ -39,7 +38,7 @@ func (options *HashScanOptions) ToArgs() ([]string, error) {
 	args = append(args, baseArgs...)
 
 	if options.noValue {
-		args = append(args, constants.NoValueKeyword)
+		args = append(args, constants.NoValuesKeyword)
 	}
 	return args, err
 }

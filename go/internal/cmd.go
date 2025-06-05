@@ -8,11 +8,14 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 type Batch struct {
@@ -25,7 +28,7 @@ type Cmd struct {
 	RequestType uint32 // TODO why C.RequestType doesn't work?
 	Args        []string
 	// Response converter
-	Converter func(any) any
+	Converter   func(any) any
 }
 
 func MakeCmd(requestType uint32, args []string, converter func(any) any) Cmd {
@@ -167,18 +170,18 @@ func (node arrayConverter[T]) convert(data any) any {
 
 // ================================
 
-func ConvertArrayOfStringOrNil(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
-	res := make([]models.Result[string], 0, len(arr))
+func ConvertArrayOfNilOr[T any](data any) any {
+	arr := data.([]any)
+	res := make([]models.Result[T], 0, len(arr))
 
-	for _, str := range arr {
-		if str == nil {
-			res = append(res, models.CreateNilStringResult())
+	for _, value := range arr {
+		if value == nil {
+			res = append(res, models.CreateNilResultOf[T]())
 		} else {
-			if strr, ok := str.(string); ok {
-				res = append(res, models.CreateStringResult(strr))
+			if val, ok := value.(T); ok {
+				res = append(res, models.CreateResultOf[T](val))
 			} else {
-				res = append(res, models.CreateNilStringResult())
+				res = append(res, models.CreateNilResultOf[T]())
 			}
 		}
 	}
@@ -186,12 +189,10 @@ func ConvertArrayOfStringOrNil(data any) any {
 }
 
 func ConvertArrayOf[T any](data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
-
 	converted := arrayConverter[T]{
 		nil,
 		false,
-	}.convert(arr)
+	}.convert(data)
 	if err, ok := converted.(*errors.RequestError); ok {
 		return err
 	}
@@ -199,19 +200,21 @@ func ConvertArrayOf[T any](data any) any {
 	// actually returns a []T
 }
 
-func ConvertArrayOrNilOf[T any](data any) any {
-	if data == nil {
-		return nil
+func ConvertMapOf[T any](data any) any {
+	converted := mapConverter[T]{
+		nil,
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
 	}
-	return ConvertArrayOf[T](data)
+	return converted
+	// actually returns a map[string]T
 }
 
 // BZPOPMAX BZPOPMIN
 func ConvertKeyWithMemberAndScore(data any) any {
-	if data == nil {
-		return nil
-	}
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 	key := arr[0].(string)
 	member := arr[1].(string)
 	score := arr[2].(float64)
@@ -224,32 +227,47 @@ func ConvertKeyWithArrayOfMembersAndScores(data any) any {
 		return nil
 	}
 
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 	key := arr[0].(string)
-
-	converted := mapConverter[float64]{
-		nil,
-		false,
-	}.convert(arr[1])
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	res, ok := converted.(map[string]float64)
-
-	if !ok {
-		return &errors.RequestError{
-			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
-		}
-	}
-	memberAndScoreArray := make([]models.MemberAndScore, 0, len(res))
-
-	for k, v := range res {
-		memberAndScoreArray = append(memberAndScoreArray, models.MemberAndScore{Member: k, Score: v})
-	}
+	memberAndScoreArray := MakeConvertMapOfMemberAndScore(false)(arr[1]).([]models.MemberAndScore)
 
 	return models.CreateKeyWithArrayOfMembersAndScoresResult(
 		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: memberAndScoreArray},
 	)
+}
+
+// ZRangeWithScores ZInterWithScores ZDiffWithScores ZUnionWithScores
+func MakeConvertMapOfMemberAndScore(reverse bool) func(data any) any {
+	return func(data any) any {
+		converted := ConvertMapOf[float64](data)
+		if err, ok := converted.(*errors.RequestError); ok {
+			return err
+		}
+
+		res := converted.(map[string]float64)
+		memberAndScoreArray := make([]models.MemberAndScore, 0, len(res))
+
+		for k, v := range res {
+			memberAndScoreArray = append(memberAndScoreArray, models.MemberAndScore{Member: k, Score: v})
+		}
+		if !reverse {
+			sort.Slice(memberAndScoreArray, func(i, j int) bool {
+				if memberAndScoreArray[i].Score == memberAndScoreArray[j].Score {
+					return memberAndScoreArray[i].Member < memberAndScoreArray[j].Member
+				}
+				return memberAndScoreArray[i].Score < memberAndScoreArray[j].Score
+			})
+		} else {
+			sort.Slice(memberAndScoreArray, func(i, j int) bool {
+				if memberAndScoreArray[i].Score == memberAndScoreArray[j].Score {
+					return memberAndScoreArray[i].Member > memberAndScoreArray[j].Member
+				}
+				return memberAndScoreArray[i].Score > memberAndScoreArray[j].Score
+			})
+		}
+
+		return memberAndScoreArray
+	}
 }
 
 // ZRandMemberWithCountWithScores
@@ -280,7 +298,7 @@ func ConvertArrayOfMemberAndScore(data any) any {
 
 // XAutoClaim XAutoClaimWithOptions
 func ConvertXAutoClaimResponse(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
 		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
@@ -326,7 +344,7 @@ func ConvertXAutoClaimResponse(data any) any {
 
 // XAutoClaimJustId XAutoClaimJustIdWithOptions
 func ConvertXAutoClaimJustIdResponse(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
 		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
@@ -364,9 +382,84 @@ func ConvertXAutoClaimJustIdResponse(data any) any {
 	}
 }
 
+// XInfoConsumers
+func ConvertXInfoConsumersResponse(data any) any {
+	converted := arrayConverter[map[string]any]{
+		nil,
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	arr, ok := converted.([]map[string]any)
+	if !ok {
+		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]models.XInfoConsumerInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := models.XInfoConsumerInfo{
+			Name:    group["name"].(string),
+			Pending: group["pending"].(int64),
+			Idle:    group["idle"].(int64),
+		}
+		switch inactive := group["inactive"].(type) {
+		case int64:
+			info.Inactive = models.CreateInt64Result(inactive)
+		default:
+			info.Inactive = models.CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result
+}
+
+// XInfoGroups
+func ConvertXInfoGroupsResponse(data any) any {
+	converted := arrayConverter[map[string]any]{
+		nil,
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	arr, ok := converted.([]map[string]any)
+	if !ok {
+		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+	}
+
+	result := make([]models.XInfoGroupInfo, 0, len(arr))
+
+	for _, group := range arr {
+		info := models.XInfoGroupInfo{
+			Name:            group["name"].(string),
+			Consumers:       group["consumers"].(int64),
+			Pending:         group["pending"].(int64),
+			LastDeliveredId: group["last-delivered-id"].(string),
+		}
+		switch lag := group["lag"].(type) {
+		case int64:
+			info.Lag = models.CreateInt64Result(lag)
+		default:
+			info.Lag = models.CreateNilInt64Result()
+		}
+		switch entriesRead := group["entries-read"].(type) {
+		case int64:
+			info.EntriesRead = models.CreateInt64Result(entriesRead)
+		default:
+			info.EntriesRead = models.CreateNilInt64Result()
+		}
+		result = append(result, info)
+	}
+
+	return result
+}
+
 // XPending
 func ConvertXPendingResponse(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 
 	NumOfMessages := arr[0].(int64)
 	var StartId, EndId models.Result[string]
@@ -406,7 +499,7 @@ func ConvertXPendingResponse(data any) any {
 
 // XPendingWithOptions
 func ConvertXPendingWithOptionsResponse(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
+	arr := data.([]any)
 	pendingDetails := make([]models.XPendingDetail, 0, len(arr))
 
 	for _, message := range arr {
@@ -424,20 +517,251 @@ func ConvertXPendingWithOptionsResponse(data any) any {
 }
 
 func Convert2DArrayOfString(data any) any {
-	arr, _ := data.([]any) // OK is ignored, type assertion should be validated before
-
 	converted := arrayConverter[[]string]{
 		arrayConverter[string]{
 			nil,
 			false,
 		},
 		false,
-	}.convert(arr)
+	}.convert(data)
 	if err, ok := converted.(*errors.RequestError); ok {
 		return err
 	}
 	return converted
 	// actually returns a [][]string
+}
+
+// GeoPos
+func Convert2DArrayOfFloat(data any) any {
+	converted := arrayConverter[[]float64]{
+		arrayConverter[float64]{
+			nil,
+			true,
+		},
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
+	// actually returns a [][]float64
+}
+
+// GeoSearchWithFullOptions
+func ConvertLocationArrayResponse(data any) any {
+	converted := arrayConverter[[]any]{
+		arrayConverter[any]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+
+	result := make([]options.Location, 0, len(converted.([][]any)))
+	for _, responseArray := range converted.([][]any) {
+		location := options.Location{
+			Name: responseArray[0].(string),
+		}
+
+		additionalData := responseArray[1].([]any)
+		for _, value := range additionalData {
+			if v, ok := value.(float64); ok {
+				location.Dist = v
+			}
+			if v, ok := value.(int64); ok {
+				location.Hash = v
+			}
+			if coordArray, ok := value.([]any); ok {
+				location.Coord = options.GeospatialData{
+					Longitude: coordArray[0].(float64),
+					Latitude:  coordArray[1].(float64),
+				}
+			}
+		}
+		result = append(result, location)
+	}
+
+	return result
+}
+
+// FunctionList
+func ConvertFunctionListResponse(data any) any {
+	result := make([]models.LibraryInfo, 0, len(data.([]any)))
+	for _, item := range data.([]any) {
+		if itemMap, ok := item.(map[string]any); ok {
+			items := itemMap["functions"].([]any)
+			functionInfo := make([]models.FunctionInfo, 0, len(items))
+			for _, item := range items {
+				if function, ok := item.(map[string]any); ok {
+					// Handle nullable description
+					var description string
+					if desc, ok := function["description"].(string); ok {
+						description = desc
+					}
+
+					// Handle flags map
+					flags := make([]string, 0)
+					if flagsMap, ok := function["flags"].(map[string]struct{}); ok {
+						for flag := range flagsMap {
+							flags = append(flags, flag)
+						}
+					}
+
+					functionInfo = append(functionInfo, models.FunctionInfo{
+						Name:        function["name"].(string),
+						Description: description,
+						Flags:       flags,
+					})
+				}
+			}
+
+			libraryInfo := models.LibraryInfo{
+				Name:      itemMap["library_name"].(string),
+				Engine:    itemMap["engine"].(string),
+				Functions: functionInfo,
+			}
+			// Handle optional library_code field
+			if code, ok := itemMap["library_code"].(string); ok {
+				libraryInfo.Code = code
+			}
+			result = append(result, libraryInfo)
+		}
+	}
+	return result
+}
+
+func ConvertLMPopResponse(data any) any {
+	converted := mapConverter[[]string]{
+		arrayConverter[string]{},
+		false,
+	}.convert(data)
+
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
+	// actually returns a map[string][]string
+}
+
+func ConvertXReadResponse(data any) any {
+	converted := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{
+					nil,
+					false,
+				},
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(data)
+
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
+	// actually returns a map[string]map[string][][]string
+}
+
+func ConvertXReadGroupResponse(data any) any {
+	converted := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{
+					nil,
+					false,
+				},
+				true,
+			},
+			false,
+		},
+		false,
+	}.convert(data)
+
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
+	// actually returns a map[string]map[string][][]string
+}
+
+func ConvertXClaimResponse(data any) any {
+	converted := mapConverter[[][]string]{
+		arrayConverter[[]string]{
+			arrayConverter[string]{
+				nil,
+				false,
+			},
+			false,
+		},
+		false,
+	}.convert(data)
+
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	return converted
+	// actually returns a map[string][][]string
+}
+
+func ConvertXRangeResponse(data any) any {
+	converted := ConvertXClaimResponse(data)
+	if err, ok := converted.(*errors.RequestError); ok {
+		return err
+	}
+	claimedEntries := converted.(map[string][][]string)
+
+	result := make([]models.XRangeResponse, 0, len(claimedEntries))
+
+	for k, v := range claimedEntries {
+		result = append(result, models.XRangeResponse{StreamId: k, Entries: v})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].StreamId < result[j].StreamId
+	})
+	return result
+}
+
+func ConvertFunctionStatsResponse(data any) any {
+	nodeMap := data.(map[string]any)
+	// Process engines
+	engines := make(map[string]models.Engine)
+	if enginesMap, ok := nodeMap["engines"].(map[string]any); ok {
+		for engineName, engineData := range enginesMap {
+			if engineMap, ok := engineData.(map[string]any); ok {
+				engine := models.Engine{
+					Language:      engineName,
+					FunctionCount: engineMap["functions_count"].(int64),
+					LibraryCount:  engineMap["libraries_count"].(int64),
+				}
+				engines[engineName] = engine
+			}
+		}
+	}
+
+	// Process running script
+	var runningScript models.RunningScript
+	if scriptData := nodeMap["running_script"]; scriptData != nil {
+		if scriptMap, ok := scriptData.(map[string]any); ok {
+			runningScript = models.RunningScript{
+				Name:     scriptMap["name"].(string),
+				Cmd:      scriptMap["command"].(string),
+				Args:     scriptMap["arguments"].([]string),
+				Duration: time.Duration(scriptMap["duration_ms"].(int64)) * time.Millisecond,
+			}
+		}
+	}
+
+	return models.FunctionStatsResult{
+		Engines:       engines,
+		RunningScript: runningScript,
+	}
 }
 
 func TypeChecker(data any, expectedType reflect.Kind, isNilable bool) any {
@@ -455,6 +779,10 @@ func ConverterAndTypeChecker(data any, expectedType reflect.Kind, isNilable bool
 	}
 	if reflect.TypeOf(data).Kind() == expectedType {
 		return converter(data)
+	}
+	if reflect.TypeOf(data).Kind() == reflect.TypeOf(&errors.RequestError{}).Kind() {
+		// not converting a server error
+		return data
 	}
 	// data lost even though it was incorrect
 	// TODO maybe still return the data?

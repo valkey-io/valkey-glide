@@ -1363,7 +1363,7 @@ func (client *baseClient) HGet(ctx context.Context, key string, field string) (m
 //
 // Return value:
 //
-//	A map of all fields and their values as models.Result[string] in the hash, or an empty map when key does not exist.
+//	A map of all fields and their values in the hash, or an empty map when key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
@@ -2134,7 +2134,7 @@ func (client *baseClient) SUnionStore(ctx context.Context, destination string, k
 //
 // Return value:
 //
-//	A `map[string]struct{}` containing all members of the set.
+//	A collection containing all members of the set.
 //	Returns an empty collection if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/smembers/
