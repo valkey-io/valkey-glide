@@ -84,21 +84,28 @@ public class FTSearchOptions {
 
         void identifiers(Map<GlideString, GlideString> identifiers) {}
 
+        public FTSearchOptionsBuilder() {
+            this.identifiers$value = new HashMap<>();
+        }
+
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field) {
             this.identifiers$value.put(gs(field), null);
+            this.identifiers$set = true;
             return this;
         }
 
         /** Add a field with an alias to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull String field, @NonNull String alias) {
             this.identifiers$value.put(gs(field), gs(alias));
+            this.identifiers$set = true;
             return this;
         }
 
         /** Add a field to be returned. */
         public FTSearchOptionsBuilder addReturnField(@NonNull GlideString field) {
             this.identifiers$value.put(field, null);
+            this.identifiers$set = true;
             return this;
         }
 
@@ -106,6 +113,7 @@ public class FTSearchOptions {
         public FTSearchOptionsBuilder addReturnField(
                 @NonNull GlideString field, @NonNull GlideString alias) {
             this.identifiers$value.put(field, alias);
+            this.identifiers$set = true;
             return this;
         }
 

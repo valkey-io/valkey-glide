@@ -1,5 +1,6 @@
 #### Changes
 
+* Java: fix addReturnField method in FT module ([#4084]https://github.com/valkey-io/valkey-glide/pull/4084)
 * Python: Create openTelemetry span to measure command latency ([#3985](https://github.com/valkey-io/valkey-glide/pull/3985))
 * Go: Add client name and version identifiers ([#3903](https://github.com/valkey-io/valkey-glide/pull/3903))
 * Python: Add support for Trio ([#3465](https://github.com/valkey-io/valkey-glide/pull/3465))
