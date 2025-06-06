@@ -28,10 +28,10 @@ type Cmd struct {
 	RequestType uint32 // TODO why C.RequestType doesn't work?
 	Args        []string
 	// Response converter
-	Converter   func(any) any
+	Converter func(any) (any, error)
 }
 
-func MakeCmd(requestType uint32, args []string, converter func(any) any) Cmd {
+func MakeCmd(requestType uint32, args []string, converter func(any) (any, error)) Cmd {
 	return Cmd{RequestType: requestType, Args: args, Converter: converter}
 }
 
@@ -42,7 +42,13 @@ func (b Batch) Convert(response []any) ([]any, error) {
 		}
 	}
 	for i, res := range response {
-		response[i] = b.Commands[i].Converter(res)
+		converted, err := b.Commands[i].Converter(res)
+		if err != nil {
+			// TODO after merging with https://github.com/valkey-io/valkey-glide/pull/4090
+			// wrap the error and list in which command it failed
+			return nil, err
+		}
+		response[i] = converted
 	}
 	return response, nil
 }
@@ -65,7 +71,7 @@ func GetType[T any]() reflect.Type {
 // convert (typecast) untyped response into a typed value
 // for example, an arbitrary array `[]any` into `[]string`
 type responseConverter interface {
-	convert(data any) any
+	convert(data any) (any, error)
 }
 
 // convert maps, T - type of the value, key is string
@@ -83,12 +89,12 @@ type arrayConverter[T any] struct {
 // ================================
 
 // Converts an untyped map into a map[string]T
-func (node mapConverter[T]) convert(data any) any {
+func (node mapConverter[T]) convert(data any) (any, error) {
 	if data == nil {
 		if node.canBeNil {
-			return nil
+			return nil, nil
 		} else {
-			return &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: map[string]%v", GetType[T]())}
+			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: map[string]%v", GetType[T]())}
 		}
 	}
 	result := make(map[string]T)
@@ -99,16 +105,16 @@ func (node mapConverter[T]) convert(data any) any {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return &errors.RequestError{
+				return nil, &errors.RequestError{
 					Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, GetType[T]()),
 				}
 			}
 			result[key] = valueT
 		} else {
 			// nested iteration when there is a next converter
-			val := node.next.convert(value)
-			if err, ok := val.(errors.RequestError); ok {
-				return err
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
 			}
 			if val == nil {
 				var null T
@@ -118,22 +124,22 @@ func (node mapConverter[T]) convert(data any) any {
 			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
-				return &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, GetType[T]())}
+				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, GetType[T]())}
 			}
 			result[key] = valueT
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // Converts an untyped array into a []T
-func (node arrayConverter[T]) convert(data any) any {
+func (node arrayConverter[T]) convert(data any) (any, error) {
 	if data == nil {
 		if node.canBeNil {
-			return nil
+			return nil, nil
 		} else {
-			return &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: []%v", GetType[T]())}
+			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: []%v", GetType[T]())}
 		}
 	}
 	arrData := data.([]any)
@@ -142,15 +148,15 @@ func (node arrayConverter[T]) convert(data any) any {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return &errors.RequestError{
+				return nil, &errors.RequestError{
 					Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", value, GetType[T]()),
 				}
 			}
 			result = append(result, valueT)
 		} else {
-			val := node.next.convert(value)
-			if err, ok := val.(errors.RequestError); ok {
-				return err
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
 			}
 			if val == nil {
 				var null T
@@ -159,18 +165,18 @@ func (node arrayConverter[T]) convert(data any) any {
 			}
 			valueT, ok := val.(T)
 			if !ok {
-				return &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", val, GetType[T]())}
+				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", val, GetType[T]())}
 			}
 			result = append(result, valueT)
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // ================================
 
-func ConvertArrayOfNilOr[T any](data any) any {
+func ConvertArrayOfNilOr[T any](data any) (any, error) {
 	arr := data.([]any)
 	res := make([]models.Result[T], 0, len(arr))
 
@@ -181,67 +187,59 @@ func ConvertArrayOfNilOr[T any](data any) any {
 			if val, ok := value.(T); ok {
 				res = append(res, models.CreateResultOf[T](val))
 			} else {
-				res = append(res, models.CreateNilResultOf[T]())
+				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type: %T, expected: %v", val, GetType[T]())}
 			}
 		}
 	}
-	return any(res)
+	return any(res), nil
 }
 
-func ConvertArrayOf[T any](data any) any {
-	converted := arrayConverter[T]{
+func ConvertArrayOf[T any](data any) (any, error) {
+	return arrayConverter[T]{
 		nil,
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a []T
 }
 
-func ConvertMapOf[T any](data any) any {
-	converted := mapConverter[T]{
+func ConvertMapOf[T any](data any) (any, error) {
+	return mapConverter[T]{
 		nil,
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a map[string]T
 }
 
 // BZPOPMAX BZPOPMIN
-func ConvertKeyWithMemberAndScore(data any) any {
+func ConvertKeyWithMemberAndScore(data any) (any, error) {
 	arr := data.([]any)
 	key := arr[0].(string)
 	member := arr[1].(string)
 	score := arr[2].(float64)
-	return models.KeyWithMemberAndScore{Key: key, Member: member, Score: score}
+	return models.KeyWithMemberAndScore{Key: key, Member: member, Score: score}, nil
 }
 
 // ZMPOP BZMPOP
-func ConvertKeyWithArrayOfMembersAndScores(data any) any {
+func ConvertKeyWithArrayOfMembersAndScores(data any) (any, error) {
 	if data == nil {
-		return nil
+		return nil, nil
 	}
 
 	arr := data.([]any)
 	key := arr[0].(string)
-	memberAndScoreArray := MakeConvertMapOfMemberAndScore(false)(arr[1]).([]models.MemberAndScore)
+	memberAndScoreArray, err := MakeConvertMapOfMemberAndScore(false)(arr[1])
 
 	return models.CreateKeyWithArrayOfMembersAndScoresResult(
-		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: memberAndScoreArray},
-	)
+		models.KeyWithArrayOfMembersAndScores{Key: key, MembersAndScores: memberAndScoreArray.([]models.MemberAndScore)},
+	), err
 }
 
 // ZRangeWithScores ZInterWithScores ZDiffWithScores ZUnionWithScores
-func MakeConvertMapOfMemberAndScore(reverse bool) func(data any) any {
-	return func(data any) any {
-		converted := ConvertMapOf[float64](data)
-		if err, ok := converted.(*errors.RequestError); ok {
-			return err
+func MakeConvertMapOfMemberAndScore(reverse bool) func(data any) (any, error) {
+	return func(data any) (any, error) {
+		converted, err := ConvertMapOf[float64](data)
+		if err != nil {
+			return nil, err
 		}
 
 		res := converted.(map[string]float64)
@@ -266,26 +264,23 @@ func MakeConvertMapOfMemberAndScore(reverse bool) func(data any) any {
 			})
 		}
 
-		return memberAndScoreArray
+		return memberAndScoreArray, nil
 	}
 }
 
 // ZRandMemberWithCountWithScores
-func ConvertArrayOfMemberAndScore(data any) any {
-	converted := arrayConverter[[]any]{
+func ConvertArrayOfMemberAndScore(data any) (any, error) {
+	converted, err := arrayConverter[[]any]{
 		arrayConverter[any]{
 			nil,
 			false,
 		},
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	pairs, ok := converted.([][]any)
-	if !ok {
-		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of data: %T", converted)}
-	}
+	pairs := converted.([][]any)
 	memberAndScoreArray := make([]models.MemberAndScore, 0, len(pairs))
 	for _, pair := range pairs {
 		memberAndScoreArray = append(
@@ -293,17 +288,17 @@ func ConvertArrayOfMemberAndScore(data any) any {
 			models.MemberAndScore{Member: pair[0].(string), Score: pair[1].(float64)},
 		)
 	}
-	return memberAndScoreArray
+	return memberAndScoreArray, nil
 }
 
 // XAutoClaim XAutoClaimWithOptions
-func ConvertXAutoClaimResponse(data any) any {
+func ConvertXAutoClaimResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
 	}
-	converted := mapConverter[[][]string]{
+	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
 			arrayConverter[string]{
 				nil,
@@ -313,88 +308,73 @@ func ConvertXAutoClaimResponse(data any) any {
 		},
 		false,
 	}.convert(arr[1])
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
 
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
-	}
+	claimedEntries := converted.(map[string][][]string)
 	var deletedMessages []string = nil
 	if len == 3 {
-		converted = arrayConverter[string]{
+		converted, err = arrayConverter[string]{
 			nil,
 			false,
 		}.convert(arr[2])
-		if err, ok := converted.(*errors.RequestError); ok {
-			return err
+		if err != nil {
+			return nil, err
 		}
-		deletedMessages, ok = converted.([]string)
-		if !ok {
-			return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
-		}
+		deletedMessages = converted.([]string)
 	}
 	return models.XAutoClaimResponse{
 		NextEntry:       arr[0].(string),
 		ClaimedEntries:  claimedEntries,
 		DeletedMessages: deletedMessages,
-	}
+	}, nil
 }
 
 // XAutoClaimJustId XAutoClaimJustIdWithOptions
-func ConvertXAutoClaimJustIdResponse(data any) any {
+func ConvertXAutoClaimJustIdResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
 	}
-	converted := arrayConverter[string]{
+	converted, err := arrayConverter[string]{
 		nil,
 		false,
 	}.convert(arr[1])
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
 
-	claimedEntries, ok := converted.([]string)
-	if !ok {
-		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
-	}
+	claimedEntries := converted.([]string)
 	var deletedMessages []string = nil
 	if len == 3 {
-		converted = arrayConverter[string]{
+		converted, err = arrayConverter[string]{
 			nil,
 			false,
 		}.convert(arr[2])
-		if err, ok := converted.(*errors.RequestError); ok {
-			return err
+		if err != nil {
+			return nil, err
 		}
-		deletedMessages, ok = converted.([]string)
-		if !ok {
-			return &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
-		}
+		deletedMessages = converted.([]string)
 	}
 	return models.XAutoClaimJustIdResponse{
 		NextEntry:       arr[0].(string),
 		ClaimedEntries:  claimedEntries,
 		DeletedMessages: deletedMessages,
-	}
+	}, nil
 }
 
 // XInfoConsumers
-func ConvertXInfoConsumersResponse(data any) any {
-	converted := arrayConverter[map[string]any]{
+func ConvertXInfoConsumersResponse(data any) (any, error) {
+	converted, err := arrayConverter[map[string]any]{
 		nil,
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	arr, ok := converted.([]map[string]any)
-	if !ok {
-		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
-	}
+	arr := converted.([]map[string]any)
 
 	result := make([]models.XInfoConsumerInfo, 0, len(arr))
 
@@ -413,22 +393,19 @@ func ConvertXInfoConsumersResponse(data any) any {
 		result = append(result, info)
 	}
 
-	return result
+	return result, nil
 }
 
 // XInfoGroups
-func ConvertXInfoGroupsResponse(data any) any {
-	converted := arrayConverter[map[string]any]{
+func ConvertXInfoGroupsResponse(data any) (any, error) {
+	converted, err := arrayConverter[map[string]any]{
 		nil,
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	arr, ok := converted.([]map[string]any)
-	if !ok {
-		return &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
-	}
+	arr := converted.([]map[string]any)
 
 	result := make([]models.XInfoGroupInfo, 0, len(arr))
 
@@ -454,11 +431,11 @@ func ConvertXInfoGroupsResponse(data any) any {
 		result = append(result, info)
 	}
 
-	return result
+	return result, nil
 }
 
 // XPending
-func ConvertXPendingResponse(data any) any {
+func ConvertXPendingResponse(data any) (any, error) {
 	arr := data.([]any)
 
 	NumOfMessages := arr[0].(int64)
@@ -479,26 +456,27 @@ func ConvertXPendingResponse(data any) any {
 		for _, msg := range pendingMessages {
 			consumerMessage := msg.([]any)
 			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
-			if err == nil {
-				ConsumerPendingMessages = append(ConsumerPendingMessages, models.ConsumerPendingMessage{
-					ConsumerName: consumerMessage[0].(string),
-					MessageCount: count,
-				})
+			if err != nil {
+				return nil, err
 			}
+			ConsumerPendingMessages = append(ConsumerPendingMessages, models.ConsumerPendingMessage{
+				ConsumerName: consumerMessage[0].(string),
+				MessageCount: count,
+			})
 		}
 		return models.XPendingSummary{
 			NumOfMessages:    NumOfMessages,
 			StartId:          StartId,
 			EndId:            EndId,
 			ConsumerMessages: ConsumerPendingMessages,
-		}
+		}, nil
 	} else {
-		return models.XPendingSummary{NumOfMessages: NumOfMessages, StartId: StartId, EndId: EndId, ConsumerMessages: make([]models.ConsumerPendingMessage, 0)}
+		return models.XPendingSummary{NumOfMessages: NumOfMessages, StartId: StartId, EndId: EndId, ConsumerMessages: make([]models.ConsumerPendingMessage, 0)}, nil
 	}
 }
 
 // XPendingWithOptions
-func ConvertXPendingWithOptionsResponse(data any) any {
+func ConvertXPendingWithOptionsResponse(data any) (any, error) {
 	arr := data.([]any)
 	pendingDetails := make([]models.XPendingDetail, 0, len(arr))
 
@@ -513,51 +491,43 @@ func ConvertXPendingWithOptionsResponse(data any) any {
 		}
 		pendingDetails = append(pendingDetails, pDetail)
 	}
-	return pendingDetails
+	return pendingDetails, nil
 }
 
-func Convert2DArrayOfString(data any) any {
-	converted := arrayConverter[[]string]{
+func Convert2DArrayOfString(data any) (any, error) {
+	return arrayConverter[[]string]{
 		arrayConverter[string]{
 			nil,
 			false,
 		},
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a [][]string
 }
 
 // GeoPos
-func Convert2DArrayOfFloat(data any) any {
-	converted := arrayConverter[[]float64]{
+func Convert2DArrayOfFloat(data any) (any, error) {
+	return arrayConverter[[]float64]{
 		arrayConverter[float64]{
 			nil,
 			true,
 		},
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a [][]float64
 }
 
 // GeoSearchWithFullOptions
-func ConvertLocationArrayResponse(data any) any {
-	converted := arrayConverter[[]any]{
+func ConvertLocationArrayResponse(data any) (any, error) {
+	converted, err := arrayConverter[[]any]{
 		arrayConverter[any]{
 			nil,
 			false,
 		},
 		false,
 	}.convert(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+	if err != nil {
+		return nil, err
 	}
 
 	result := make([]options.Location, 0, len(converted.([][]any)))
@@ -584,11 +554,11 @@ func ConvertLocationArrayResponse(data any) any {
 		result = append(result, location)
 	}
 
-	return result
+	return result, nil
 }
 
 // FunctionList
-func ConvertFunctionListResponse(data any) any {
+func ConvertFunctionListResponse(data any) (any, error) {
 	result := make([]models.LibraryInfo, 0, len(data.([]any)))
 	for _, item := range data.([]any) {
 		if itemMap, ok := item.(map[string]any); ok {
@@ -630,24 +600,19 @@ func ConvertFunctionListResponse(data any) any {
 			result = append(result, libraryInfo)
 		}
 	}
-	return result
+	return result, nil
 }
 
-func ConvertLMPopResponse(data any) any {
-	converted := mapConverter[[]string]{
+func ConvertLMPopResponse(data any) (any, error) {
+	return mapConverter[[]string]{
 		arrayConverter[string]{},
 		false,
 	}.convert(data)
-
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a map[string][]string
 }
 
-func ConvertXReadResponse(data any) any {
-	converted := mapConverter[map[string][][]string]{
+func ConvertXReadResponse(data any) (any, error) {
+	return mapConverter[map[string][][]string]{
 		mapConverter[[][]string]{
 			arrayConverter[[]string]{
 				arrayConverter[string]{
@@ -660,16 +625,11 @@ func ConvertXReadResponse(data any) any {
 		},
 		false,
 	}.convert(data)
-
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a map[string]map[string][][]string
 }
 
-func ConvertXReadGroupResponse(data any) any {
-	converted := mapConverter[map[string][][]string]{
+func ConvertXReadGroupResponse(data any) (any, error) {
+	return mapConverter[map[string][][]string]{
 		mapConverter[[][]string]{
 			arrayConverter[[]string]{
 				arrayConverter[string]{
@@ -682,16 +642,11 @@ func ConvertXReadGroupResponse(data any) any {
 		},
 		false,
 	}.convert(data)
-
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a map[string]map[string][][]string
 }
 
-func ConvertXClaimResponse(data any) any {
-	converted := mapConverter[[][]string]{
+func ConvertXClaimResponse(data any) (any, error) {
+	return mapConverter[[][]string]{
 		arrayConverter[[]string]{
 			arrayConverter[string]{
 				nil,
@@ -701,18 +656,13 @@ func ConvertXClaimResponse(data any) any {
 		},
 		false,
 	}.convert(data)
-
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
-	}
-	return converted
 	// actually returns a map[string][][]string
 }
 
-func ConvertXRangeResponse(data any) any {
-	converted := ConvertXClaimResponse(data)
-	if err, ok := converted.(*errors.RequestError); ok {
-		return err
+func ConvertXRangeResponse(data any) (any, error) {
+	converted, err := ConvertXClaimResponse(data)
+	if err != nil {
+		return nil, err
 	}
 	claimedEntries := converted.(map[string][][]string)
 
@@ -725,10 +675,10 @@ func ConvertXRangeResponse(data any) any {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].StreamId < result[j].StreamId
 	})
-	return result
+	return result, nil
 }
 
-func ConvertFunctionStatsResponse(data any) any {
+func ConvertFunctionStatsResponse(data any) (any, error) {
 	nodeMap := data.(map[string]any)
 	// Process engines
 	engines := make(map[string]models.Engine)
@@ -761,19 +711,24 @@ func ConvertFunctionStatsResponse(data any) any {
 	return models.FunctionStatsResult{
 		Engines:       engines,
 		RunningScript: runningScript,
-	}
+	}, nil
 }
 
-func TypeChecker(data any, expectedType reflect.Kind, isNilable bool) any {
-	return ConverterAndTypeChecker(data, expectedType, isNilable, func(res any) any { return res })
-}
+// func TypeChecker(data any, expectedType reflect.Kind, isNilable bool) any {
+// 	return ConverterAndTypeChecker(data, expectedType, isNilable, func(res any) any { return res })
+// }
 
-func ConverterAndTypeChecker(data any, expectedType reflect.Kind, isNilable bool, converter func(res any) any) any {
+func ConverterAndTypeChecker(
+	data any,
+	expectedType reflect.Kind,
+	isNilable bool,
+	converter func(res any) (any, error),
+) (any, error) {
 	if data == nil {
 		if isNilable {
-			return nil
+			return nil, nil
 		}
-		return &errors.RequestError{
+		return nil, &errors.RequestError{
 			Msg: fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType),
 		}
 	}
@@ -782,11 +737,11 @@ func ConverterAndTypeChecker(data any, expectedType reflect.Kind, isNilable bool
 	}
 	if reflect.TypeOf(data).Kind() == reflect.TypeOf(&errors.RequestError{}).Kind() {
 		// not converting a server error
-		return data
+		return data, nil
 	}
 	// data lost even though it was incorrect
 	// TODO maybe still return the data?
-	return &errors.RequestError{
+	return nil, &errors.RequestError{
 		Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType),
 	}
 }

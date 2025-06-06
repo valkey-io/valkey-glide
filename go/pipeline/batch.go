@@ -245,7 +245,10 @@ func NewClusterBatch(isAtomic bool) *ClusterBatch {
 func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 	// b.Commands = append(b.Commands, internal.Cmd{RequestType: internal.RequestType(request), Args: args, Converter: func(res
 	// any) any { return res }})
-	b.Batch.Commands = append(b.Batch.Commands, internal.MakeCmd(uint32(request), args, func(res any) any { return res }))
+	b.Batch.Commands = append(
+		b.Batch.Commands,
+		internal.MakeCmd(uint32(request), args, func(res any) (any, error) { return res, nil }),
+	)
 	return b.self
 }
 
@@ -262,7 +265,7 @@ func (b *BaseBatch[T]) addCmdAndTypeChecker(
 	expectedType reflect.Kind,
 	isNilable bool,
 ) *T {
-	return b.addCmdAndConverter(request, args, expectedType, isNilable, func(res any) any { return res })
+	return b.addCmdAndConverter(request, args, expectedType, isNilable, func(res any) (any, error) { return res, nil })
 }
 
 // Add a cmd to batch with type checker and with response type conversion
@@ -271,9 +274,9 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	args []string,
 	expectedType reflect.Kind,
 	isNilable bool,
-	converter func(res any) any,
+	converter func(res any) (any, error),
 ) *T {
-	converterAndTypeChecker := func(res any) any {
+	converterAndTypeChecker := func(res any) (any, error) {
 		return internal.ConverterAndTypeChecker(res, expectedType, isNilable, converter)
 	}
 	b.Batch.Commands = append(b.Batch.Commands, internal.MakeCmd(uint32(request), args, converterAndTypeChecker))
