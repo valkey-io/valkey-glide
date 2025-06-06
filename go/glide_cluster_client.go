@@ -1196,12 +1196,9 @@ func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 }
 
 // Gets the name of the current connection.
+// The command will be routed to a random node.
 //
 // See [valkey.io] for details.
-//
-// Note:
-//
-//	The command will be routed to a random node
 //
 // Parameters:
 //
