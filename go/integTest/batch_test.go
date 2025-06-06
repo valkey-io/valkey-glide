@@ -35,7 +35,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
+			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100 * time.Millisecond)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
@@ -44,13 +44,13 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(1000)
+			opts.WithTimeout(1 * time.Second)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
+			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100 * time.Millisecond)
 			// Expect a timeout exception on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
@@ -59,7 +59,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(1000)
+			opts.WithTimeout(1 * time.Second)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
@@ -72,31 +72,15 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 		key1 := "{BatchRaiseOnError}" + uuid.NewString()
 		key2 := "{BatchRaiseOnError}" + uuid.NewString()
 
-		var res []any
-		var err1 error
-		var err2 error
+		batch := pipeline.NewClusterBatch(isAtomic).
+			Set(key1, "hello").
+			LPop(key1).
+			Del([]string{key1}).
+			Rename(key1, key2)
 
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic).
-				Set(key1, "hello").
-				CustomCommand([]string{"lpop", key1}).
-				CustomCommand([]string{"del", key1}).
-				CustomCommand([]string{"rename", key1, key2})
+		_, err1 := runBatchOnClient(client, batch, true, nil)
+		res, err2 := runBatchOnClient(client, batch, false, nil)
 
-			_, err1 = c.Exec(context.Background(), *batch, true)
-			res, err2 = c.Exec(context.Background(), *batch, false)
-
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				Set(key1, "hello").
-				CustomCommand([]string{"lpop", key1}).
-				CustomCommand([]string{"del", key1}).
-				CustomCommand([]string{"rename", key1, key2})
-
-			_, err1 = c.Exec(context.Background(), *batch, true)
-			res, err2 = c.Exec(context.Background(), *batch, false)
-		}
 		// First exception is raised, all data lost
 		suite.Error(err1)
 		suite.IsType(&errors.RequestError{}, err1)
@@ -120,9 +104,8 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		value := uuid.NewString()
 		ctx := context.Background()
 		suite.verifyOK(client1.Set(ctx, key1, value))
+
 		var client2 interfaces.BaseClientCommands
-		var transactionResult []any
-		var err error
 		switch client1.(type) {
 		case *glide.ClusterClient:
 			client2 = suite.defaultClusterClient()
@@ -137,14 +120,9 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		suite.NoError(err)
 		suite.Equal(value, res.Value())
 
-		switch client := client1.(type) {
-		case *glide.ClusterClient:
-			transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		case *glide.Client:
-			transaction := pipeline.NewStandaloneBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		}
+		transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+		transactionResult, err := runBatchOnClient(client1, transaction, true, nil)
+
 		suite.NoError(err)
 		suite.Equal([]any{value, "OK", nil}, transactionResult)
 
@@ -155,14 +133,9 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		suite.verifyOK(client1.Watch(ctx, []string{key1}))
 		suite.verifyOK(client2.Set(ctx, key1, uuid.NewString()))
 
-		switch client := client1.(type) {
-		case *glide.ClusterClient:
-			transaction := pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		case *glide.Client:
-			transaction := pipeline.NewStandaloneBatch(true).Set(key1, uuid.NewString())
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		}
+		transaction = pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
+		transactionResult, err = runBatchOnClient(client1, transaction, true, nil)
+
 		suite.NoError(err)
 		suite.Nil(transactionResult)
 
