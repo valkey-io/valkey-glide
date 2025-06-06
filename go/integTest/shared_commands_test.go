@@ -4117,7 +4117,7 @@ func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
 		key := uuid.New().String()
 		res, err := client.PfAdd(context.Background(), key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 	})
 }
 
@@ -4128,25 +4128,25 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 		// case : Add elements and add same elements again
 		res, err := client.PfAdd(context.Background(), key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		res2, err := client.PfAdd(context.Background(), key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2)
+		assert.False(suite.T(), res2)
 
 		// case : (mixed elements) add new elements with 1 duplicate elements
 		res1, err := client.PfAdd(context.Background(), key, []string{"f", "g", "h"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1)
+		assert.True(suite.T(), res1)
 
 		res2, err = client.PfAdd(context.Background(), key, []string{"i", "j", "g"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res2)
+		assert.True(suite.T(), res2)
 
 		// case : add empty array(no elements to the HyperLogLog)
 		res, err = client.PfAdd(context.Background(), key, []string{})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.False(suite.T(), res)
 	})
 }
 
@@ -4155,7 +4155,7 @@ func (suite *GlideTestSuite) TestPfCount_SingleKey() {
 		key := uuid.New().String()
 		res, err := client.PfAdd(context.Background(), key, []string{"i", "j", "g"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		resCount, err := client.PfCount(context.Background(), []string{key})
 		assert.Nil(suite.T(), err)
@@ -4170,11 +4170,11 @@ func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
 
 		res, err := client.PfAdd(context.Background(), key1, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		res, err = client.PfAdd(context.Background(), key2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		resCount, err := client.PfCount(context.Background(), []string{key1, key2})
 		assert.Nil(suite.T(), err)
@@ -4201,11 +4201,11 @@ func (suite *GlideTestSuite) TestPfMerge() {
 
 		res, err := client.PfAdd(context.Background(), source1, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		res, err = client.PfAdd(context.Background(), source2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		result, err := client.PfMerge(context.Background(), destination, []string{source1, source2})
 		assert.Nil(suite.T(), err)
@@ -4224,7 +4224,7 @@ func (suite *GlideTestSuite) TestPfMerge_SingleSource() {
 
 		res, err := client.PfAdd(context.Background(), source, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res)
+		assert.True(suite.T(), res)
 
 		result, err := client.PfMerge(context.Background(), destination, []string{source})
 		assert.Nil(suite.T(), err)

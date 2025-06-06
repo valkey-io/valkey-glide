@@ -3780,16 +3780,16 @@ func (client *baseClient) PTTL(ctx context.Context, key string) (int64, error) {
 // Return value:
 //
 //	If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-//	altered, then returns `1`. Otherwise, returns `0`.
+//	altered, then returns `true`. Otherwise, returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
-func (client *baseClient) PfAdd(ctx context.Context, key string, elements []string) (int64, error) {
+func (client *baseClient) PfAdd(ctx context.Context, key string, elements []string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.PfAdd, append([]string{key}, elements...))
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
-	return handleIntResponse(result)
+	return handleBoolResponse(result)
 }
 
 // Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or

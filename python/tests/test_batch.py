@@ -669,7 +669,7 @@ async def helper4(
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
-    args.append(1)
+    args.append(True)
     transaction.pfmerge(key10, [])
     args.append(OK)
     transaction.pfcount([key10])
