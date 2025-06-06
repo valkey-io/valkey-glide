@@ -8549,9 +8549,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			[]string{streamid_3.Value(), streamid_5.Value()},
 		)
 		assert.NoError(suite.T(), err)
-		expectedClaimResult := map[string][][]string{
-			streamid_3.Value(): {{"field3", "value3"}},
-			streamid_5.Value(): {{"field5", "value5"}},
+		expectedClaimResult := map[string]models.XClaimResponse{
+			streamid_3.Value(): {Fields: map[string]string{"field3": "value3"}},
+			streamid_5.Value(): {Fields: map[string]string{"field5": "value5"}},
 		}
 		assert.Equal(suite.T(), expectedClaimResult, claimResult)
 
@@ -8579,7 +8579,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string][][]string{streamid_6.Value(): {{"field6", "value6"}}}, claimResult)
+		assert.Equal(suite.T(), map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}}, claimResult)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,

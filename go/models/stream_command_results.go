@@ -14,3 +14,9 @@ type StreamResponse struct {
 	// The entries in the stream
 	Entries []StreamEntry
 }
+
+// XClaimResponse represents a claimed entry in a stream
+type XClaimResponse struct {
+	// The fields associated with the claimed entry
+	Fields map[string]string
+}
