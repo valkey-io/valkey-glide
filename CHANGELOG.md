@@ -114,6 +114,7 @@
 * Go: XRead and XReadGroup response update ([#4085](https://github.com/valkey-io/valkey-glide/pull/4085))
 * Go: XClaim and XClaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
 * Modify `PFADD` to return a boolean rather than an integer ([#4094](https://github.com/valkey-io/valkey-glide/pull/4094))
+* Go: Modify blocking commands to use type `time.Duration` for timeouts ([#4086](https://github.com/valkey-io/valkey-glide/pull/4086))
 
 #### Fixes
 

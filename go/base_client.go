@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -2879,7 +2880,7 @@ func (client *baseClient) LInsert(
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -2889,8 +2890,8 @@ func (client *baseClient) LInsert(
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BLPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -2912,18 +2913,18 @@ func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs 
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
 //	A two-element array containing the key from which the element was popped and the value of the popped
 //	element, formatted as [key, value].
-//	If no element could be popped and the timeoutSecs expired, returns `nil`.
+//	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BRPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -3105,7 +3106,7 @@ func (client *baseClient) LMPopCount(
 //	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3118,7 +3119,7 @@ func (client *baseClient) BLMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3132,7 +3133,7 @@ func (client *baseClient) BLMPop(
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3162,7 +3163,7 @@ func (client *baseClient) BLMPop(
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //
 // indefinitely.
 //
@@ -3178,7 +3179,7 @@ func (client *baseClient) BLMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3192,7 +3193,7 @@ func (client *baseClient) BLMPopCount(
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3295,7 +3296,7 @@ func (client *baseClient) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
@@ -3310,7 +3311,7 @@ func (client *baseClient) BLMove(
 	destination string,
 	whereFrom constants.ListDirection,
 	whereTo constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[string], error) {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
@@ -3323,7 +3324,7 @@ func (client *baseClient) BLMove(
 
 	result, err := client.executeCommand(ctx,
 		C.BLMove,
-		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 	)
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -4569,7 +4570,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
-//	timeout - The number of seconds to wait for a blocking operation to complete. A value of
+//	timeout - The duration to wait for a blocking operation to complete. A value of
 //	  `0` will block indefinitely.
 //
 // Return value:
@@ -4583,9 +4584,9 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return models.CreateNilKeyWithMemberAndScoreResult(), err
 	}
@@ -4613,7 +4614,7 @@ func (client *baseClient) BZPopMin(
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Return value:
@@ -4629,7 +4630,7 @@ func (client *baseClient) BZMPop(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
@@ -4645,7 +4646,7 @@ func (client *baseClient) BZMPop(
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	result, err := client.executeCommand(ctx, C.BZMPop, args)
@@ -4676,8 +4677,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-//
+//	timeout   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Return value:
@@ -4693,7 +4693,7 @@ func (client *baseClient) BZMPopWithOptions(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 	opts options.ZMPopOptions,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
@@ -4710,7 +4710,7 @@ func (client *baseClient) BZMPopWithOptions(
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	optionArgs, err := opts.ToArgs()
@@ -7638,7 +7638,7 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
-//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//	timeout - The maximum number of seconds to block (0 blocks indefinitely).
 //
 // Return value:
 //
@@ -7651,9 +7651,9 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 func (client *baseClient) BZPopMax(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	args := append(keys, utils.FloatToString(timeoutSecs))
+	args := append(keys, utils.FloatToString(timeout.Seconds()))
 
 	result, err := client.executeCommand(ctx, C.BZPopMax, args)
 	if err != nil {
