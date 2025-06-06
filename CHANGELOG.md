@@ -112,7 +112,7 @@
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
 * Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
 * Go: XRead and XReadGroup response update ([#4085](https://github.com/valkey-io/valkey-glide/pull/4085))
-* Go: xclaim and XclaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
+* Go: Xclaim and XclaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
 
 #### Fixes
 
