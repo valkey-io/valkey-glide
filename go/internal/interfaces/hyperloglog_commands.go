@@ -10,7 +10,7 @@ import "context"
 //
 // [valkey.io]: https://valkey.io/commands/#hyperloglog
 type HyperLogLogCommands interface {
-	PfAdd(ctx context.Context, key string, elements []string) (int64, error)
+	PfAdd(ctx context.Context, key string, elements []string) (bool, error)
 
 	PfCount(ctx context.Context, keys []string) (int64, error)
 
