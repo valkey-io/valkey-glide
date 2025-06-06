@@ -500,9 +500,7 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Set(atomicKey1, value1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
 	opts := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	batch.GetExWithOptions(atomicKey1, *opts)
 	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetExWithOptions(atomicKey1, opts)"})
 
