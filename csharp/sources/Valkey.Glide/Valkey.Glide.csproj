@@ -1,76 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>
+  <Import Project="$(MSBuildThisFileDirectory)../../props/common.props"/>
+
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net6.0</TargetFrameworks>
     <RootNamespace>Valkey.Glide</RootNamespace>
     <AssemblyName>Valkey.Glide</AssemblyName>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
-    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
-    <EnableNETAnalyzers>false</EnableNETAnalyzers>
-    <NuGetAudit>false</NuGetAudit>
-    <WarningLevel>0</WarningLevel>
-    <Configurations>Debug;Release;Lint</Configurations>
-  </PropertyGroup>
-
-  <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Lint'">
-    <LangVersion>preview</LangVersion>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <NuGetAudit>true</NuGetAudit>
-    <WarningLevel>4</WarningLevel>
-    <AnalysisLevel>latest</AnalysisLevel>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
-  <PropertyGroup>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Valkey.Glide.IntegrationTests" />
-    <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
-  </ItemGroup>
+    <!-- ToDo: For the final NuGet, we should include either _all_ assets or _none_
+               This could be done by integrating this into the pack target and changing the project references then eg.
+               Still need to discuss this, so this package, for now, will default to _none_ -->
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Condition="'$(Configuration)' == 'Debug'"
-          Command="cargo build"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
-    </Exec>
-    <Exec Condition="'$(Configuration)' == 'Release'"
-          Command="cargo build --release"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
-      <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
-    </Exec>
-  </Target>
-
-  <ItemGroup Condition="'$(Configuration)' != 'Lint'">
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/glide_rs.dll"
-             Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>lib%(FileName)%(Extension)</Link>
-    </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so"
-             Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
-    </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.dylib"
-             Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(FileName)%(Extension)</Link>
-    </Content>
+    <ProjectReference Condition="'$(OS)' == 'Windows_NT' And '$(Architecture)' == 'X86'" Include="..\..\assets\Valkey.Glide.Assets.Win32\Valkey.Glide.Assets.Win32.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Windows_NT' And '$(Architecture)' == 'X64'" Include="..\..\assets\Valkey.Glide.Assets.Win64\Valkey.Glide.Assets.Win64.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'OSX' And '$(Architecture)' == 'Arm64'" Include="..\..\assets\Valkey.Glide.Assets.MacOSArm64\Valkey.Glide.Assets.MacOSArm64.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Unix' And '$(Architecture)' == 'X64'" Include="..\..\assets\Valkey.Glide.Assets.Linux64Gnu\Valkey.Glide.Assets.Linux64Gnu.csproj"/>
+    <ProjectReference Condition="'$(OS)' == 'Unix' And '$(Architecture)' == 'Arm64'" Include="..\..\assets\Valkey.Glide.Assets.LinuArm64Gnu\Valkey.Glide.Assets.LinuArm64Gnu.csproj"/>
   </ItemGroup>
 
 </Project>
