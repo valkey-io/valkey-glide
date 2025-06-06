@@ -7,11 +7,11 @@ import "C"
 
 import (
 	"context"
+	"errors"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -101,8 +101,8 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -154,8 +154,8 @@ func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBat
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -176,7 +176,7 @@ func (client *ClusterClient) ExecWithOptions(
 	options pipeline.ClusterBatchOptions,
 ) ([]any, error) {
 	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
-		return nil, &errors.RequestError{Msg: "Retry strategy is not supported for atomic batches (transactions)."}
+		return nil, errors.New("retry strategy is not supported for atomic batches (transactions)")
 	}
 	converted := options.Convert()
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
@@ -636,7 +636,7 @@ func (client *ClusterClient) clusterScan(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
