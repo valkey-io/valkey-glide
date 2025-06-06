@@ -1557,8 +1557,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithRoute() {
 	// Flush all functions with SYNC option and all primaries route
 	route = options.RouteOption{Route: config.AllPrimaries}
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Load function with all primaries route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, false, route)
@@ -1675,8 +1674,7 @@ func (suite *GlideTestSuite) TestFunctionCommandsWithoutKeysAndWithoutRoute() {
 	suite.Equal("anotherLib", result)
 
 	deleteResult, err := client.FunctionDelete(context.Background(), "anotherLib")
-	suite.NoError(err)
-	suite.Equal("OK", deleteResult)
+	suite.verifyOK(deleteResult, err)
 
 	// delete missing lib returns a error
 	_, err = client.FunctionDelete(context.Background(), "anotherLib")
@@ -1691,8 +1689,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 
 	// Flush all functions with SYNC option
 	result, err := client.FunctionFlushSync(context.Background())
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Load first function
 	libName := "functionStats_without_route"
@@ -1736,8 +1733,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithoutRoute() {
 
 	// Flush all functions
 	result, err = client.FunctionFlushSync(context.Background())
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Check stats after flushing
 	stats, err = client.FunctionStats(context.Background())
@@ -1766,8 +1762,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 	// Flush all functions with SYNC option and single node route
 	route := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
 	result, err := client.FunctionFlushSyncWithRoute(context.Background(), route)
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Load function with single node route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, true, route)
@@ -1805,8 +1800,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 
 	// Flush all functions
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Check stats after flushing
 	stats, err = client.FunctionStatsWithRoute(context.Background(), route)
@@ -1828,8 +1822,7 @@ func (suite *GlideTestSuite) TestFunctionStatsWithRoute() {
 	// Flush all functions with SYNC option and all primaries route
 	route = options.RouteOption{Route: config.AllPrimaries}
 	result, err = client.FunctionFlushSyncWithRoute(context.Background(), route)
-	suite.NoError(err)
-	suite.Equal("OK", result)
+	suite.verifyOK(result, err)
 
 	// Load function with all primaries route
 	result, err = client.FunctionLoadWithRoute(context.Background(), code, true, route)
