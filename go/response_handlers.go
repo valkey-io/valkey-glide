@@ -916,7 +916,10 @@ func handleScanResponse(response *C.struct_CommandResponse) (string, []string, e
 
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {
 	defer C.free_command_response(response)
-
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
 	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
