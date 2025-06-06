@@ -10360,7 +10360,7 @@ func (suite *GlideTestSuite) TestGeoHash() {
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Run with a 5 second timeout
-		RunWithTimeout(suite.T(), 5, func(ctx context.Context) {
+		RunWithTimeout(suite.T(), 5*time.Second, func(ctx context.Context) {
 			key := suite.GenerateLargeUuid()
 			value := suite.GenerateLargeUuid()
 			suite.verifyOK(client.Set(ctx, key, value))
