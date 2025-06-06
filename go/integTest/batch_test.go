@@ -183,18 +183,142 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch_cross_slot() {
 }
 
 func (suite *GlideTestSuite) TestBatchCommandArgsError() {
-	suite.runWithDefaultClients(func(client1 interfaces.BaseClientCommands) {
-		key1 := "{prefix}" + uuid.NewString()
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := "{prefix}" + uuid.NewString()
 
 		opts := options.NewGetExOptions().SetExpiry(options.NewExpiry().SetType(constants.ExpiryType("pewpew")))
-		transaction := pipeline.NewClusterBatch(true).Get(key1).GetExWithOptions(key1, *opts).Get(key1).GetExWithOptions(key1, *opts)
+		transaction := pipeline.NewClusterBatch(true).
+			Get(key).
+			GetExWithOptions(key, *opts).
+			Get(key).
+			GetExWithOptions(key, *opts)
 
-		res, err := runBatchOnClient(client1, transaction, true, nil)
+		res, err := runBatchOnClient(client, transaction, true, nil)
 
 		suite.Error(err)
 		suite.Nil(res)
 		suite.Contains(err.Error(), "Error processing arguments for 2'th command ('GetExWithOptions')")
 		suite.Contains(err.Error(), "Error processing arguments for 2'th command ('GetExWithOptions')")
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key1 := "{prefix}" + uuid.NewString()
+		key2 := "{prefix}" + uuid.NewString()
+		suite.verifyOK(client.Set(context.Background(), key1, uuid.NewString()))
+		hset, err := client.HSet(context.Background(), key2, map[string]string{"a": "b"})
+		suite.Equal(int64(1), hset)
+		suite.NoError(err)
+
+		// Run all commands on a wrong key type - so they all return an error each.
+		// Commands' converters should return these errors intact.
+		// skipping blocking commands
+		transaction := pipeline.NewClusterBatch(true).
+			GeoHash(key1, []string{"A"}).
+			GeoPos(key1, []string{"A"}).
+			GeoDist(key1, "a", "b").
+			GeoDistWithUnit(key1, "a", "b", constants.GeoUnitFeet).
+			GeoSearch(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet)).
+			GeoSearchWithInfoOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchInfoOptions().SetWithDist(true)).
+			GeoSearchWithResultOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchResultOptions().SetCount(1)).
+			GeoSearchWithFullOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchResultOptions().SetCount(1), *options.NewGeoSearchInfoOptions().SetWithDist(true)).
+			HGet(key1, "f").
+			HGetAll(key1).
+			HMGet(key1, []string{"A"}).
+			HVals(key1).
+			HKeys(key1).
+			HScan(key1, "0").
+			HRandField(key1).
+			HRandFieldWithCount(key1, 1).
+			HRandFieldWithCountWithValues(key1, 1).
+			HScanWithOptions(key1, "0", *options.NewHashScanOptions().SetCount(42)).
+			LPop(key1).
+			LPopCount(key1, 2).
+			LPos(key1, "e").
+			LPosWithOptions(key1, "e", *options.NewLPosOptions().SetMaxLen(42)).
+			LPosCount(key1, "e", 42).
+			LPosCountWithOptions(key1, "e", 42, *options.NewLPosOptions().SetMaxLen(42)).
+			LRange(key1, 0, 1).
+			LIndex(key1, 2).
+			RPop(key1).
+			RPopCount(key1, 2).
+			LMPop([]string{key1}, constants.Left).
+			LMPopCount([]string{key1}, constants.Left, 42).
+			LMove(key1, key2, constants.Left, constants.Left).
+			SMembers(key1).
+			SRandMember(key1).
+			SRandMemberCount(key1, 2).
+			SPop(key1).
+			SMIsMember(key1, []string{"a"}).
+			SScan(key1, "0").
+			SScanWithOptions(key1, "0", *options.NewBaseScanOptions().SetMatch("abc")).
+			ZAddIncr(key1, "a", 2).
+			ZAddIncrWithOptions(key1, "a", 2, *options.NewZAddOptions().SetUpdateOptions(options.ScoreGreaterThanCurrent)).
+			ZPopMin(key1).
+			ZPopMinWithOptions(key1, *options.NewZPopOptions().SetCount(2)).
+			ZPopMax(key1).
+			ZPopMaxWithOptions(key1, *options.NewZPopOptions().SetCount(2)).
+			ZRange(key1, options.NewRangeByIndexQuery(0, 2)).
+			ZMPop([]string{key1}, constants.MAX).
+			ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
+			ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, 2)).
+			ZRank(key1, "d").
+			ZRankWithScore(key1, "d").
+			ZRevRank(key1, "d").
+			ZRevRankWithScore(key1, "d").
+			ZScore(key1, "d").
+			ZScan(key1, "0").
+			ZScanWithOptions(key1, "0", *options.NewZScanOptions().SetMatch("abc")).
+			ZDiff([]string{key1, key2}).
+			ZDiffWithScores([]string{key1, key2}).
+			ZRandMember(key1).
+			ZRandMemberWithCount(key1, 42).
+			ZRandMemberWithCount(key1, 42).
+			ZMScore(key1, []string{"a"}).
+			ZInter(options.KeyArray{Keys: []string{key1, key2}}).
+			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
+			ZUnion(options.KeyArray{Keys: []string{key1, key2}}).
+			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax)).
+			XAdd(key1, [][]string{{"a", "b"}}).
+			XAddWithOptions(key1, [][]string{{"a", "b"}}, *options.NewXAddOptions().SetId("0-1")).
+			XAutoClaim(key1, "g", "c", 2, "0-0").
+			XAutoClaimWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
+			XAutoClaimJustId(key1, "g", "c", 2, "0-0").
+			XAutoClaimJustIdWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
+			XReadGroup("g", "c", map[string]string{key1: "0-0"}).
+			XReadGroupWithOptions("g", "c", map[string]string{key1: "0-0"}, *options.NewXReadGroupOptions().SetNoAck()).
+			XRead(map[string]string{key1: "0-0"}).
+			XReadWithOptions(map[string]string{key1: "0-0"}, *options.NewXReadOptions().SetCount(2)).
+			XPending(key1, "g").
+			XPendingWithOptions(key1, "g", *options.NewXPendingOptions("0-0", "2-2", 3)).
+			XClaim(key1, "g", "c", 2, []string{"0-0"}).
+			XClaimWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
+			XClaimJustId(key1, "g", "c", 2, []string{"0-0"}).
+			XClaimJustIdWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
+			XInfoStream(key1).
+			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptionsOptions().SetCount(2)).
+			XInfoConsumers(key1, "g").
+			XInfoGroups(key1).
+			XRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
+			XRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2)).
+			XRevRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
+			XRevRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2))
+
+		res, err := runBatchOnClient(client, transaction, false, nil)
+		suite.NoError(err)
+		for i, resp := range res {
+			suite.Equal("WRONGTYPE: Operation against a key holding the wrong kind of value", resp.(error).Error(), i)
+		}
+
+		// LCS has another error message
+		transaction = pipeline.NewClusterBatch(true).
+			LCSWithOptions(key1, key2, *options.NewLCSIdxOptions().SetIdx(true).SetMinMatchLen(2).SetWithMatchLen(true))
+		res, err = runBatchOnClient(client, transaction, false, nil)
+		suite.NoError(err)
+		for i, resp := range res {
+			suite.Contains(resp.(error).Error(), "ResponseError", i)
+		}
 	})
 }
 
