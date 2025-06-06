@@ -1163,13 +1163,13 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	dest := atomicPrefix + "dest-" + uuid.NewString()
 
 	batch.PfAdd(key1, []string{"val"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PfAdd(key1, [val])"})
 
 	batch.PfCount([]string{key1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfCount([key1])"})
 
 	batch.PfAdd(key1, []string{"val2"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PfAdd(key2, [val2])"})
 	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
 
@@ -1973,14 +1973,20 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XINFO CONSUMERS command
 	batch.XInfoConsumers(streamKey1, groupName1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoConsumers(streamKey1, groupName1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoConsumers(streamKey1, groupName1)"},
+	)
 
 	// Create second group with makeStream option
 	batch.XGroupCreateWithOptions(streamKey1, groupName2, "0-0", *xgroupCreateOpts)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey1, groupName2, 0-0)"})
 
 	batch.XGroupCreateConsumer(streamKey1, groupName1, consumer1)
-	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "XGroupCreateConsumer(streamKey1, groupName1, consumer1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: true, TestName: "XGroupCreateConsumer(streamKey1, groupName1, consumer1)"},
+	)
 
 	batch.XGroupSetId(streamKey1, groupName1, "0-2")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey1, groupName1, 0-2)"})
@@ -2070,7 +2076,10 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 		// XGROUP DELCONSUMER command
 		batch.XGroupDelConsumer(streamKey1, groupName1, consumer1)
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "XGroupDelConsumer(streamKey1, groupName1, consumer1)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "XGroupDelConsumer(streamKey1, groupName1, consumer1)"},
+		)
 
 		// XGROUP DESTROY commands
 		batch.XGroupDestroy(streamKey1, groupName1)
@@ -2089,7 +2098,10 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey3, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey3, groupName3, "0")
-		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey3, groupName3, 0)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey3, groupName3, 0)"},
+		)
 
 		// XINFO GROUPS command
 		batch.XInfoGroups(streamKey1)
@@ -2103,11 +2115,17 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey2, groupName3, "0")
-		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey2, groupName3, 0)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: "OK", TestName: "XGroupCreate(streamKey2, groupName3, 0)"},
+		)
 
 		xgroupSetIdOpts2 := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(1)
 		batch.XGroupSetIdWithOptions(streamKey2, groupName3, "1-0", *xgroupSetIdOpts2)
-		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"},
+		)
 	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}

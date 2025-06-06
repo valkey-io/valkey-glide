@@ -71,7 +71,7 @@ type StreamCommands interface {
 		group string,
 		consumer string,
 		keysAndIds map[string]string,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
 	XReadGroupWithOptions(
 		ctx context.Context,
@@ -79,15 +79,15 @@ type StreamCommands interface {
 		consumer string,
 		keysAndIds map[string]string,
 		options options.XReadGroupOptions,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
-	XRead(ctx context.Context, keysAndIds map[string]string) (map[string]map[string][][]string, error)
+	XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error)
 
 	XReadWithOptions(
 		ctx context.Context,
 		keysAndIds map[string]string,
 		options options.XReadOptions,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
 	XDel(ctx context.Context, key string, ids []string) (int64, error)
 
@@ -135,7 +135,7 @@ type StreamCommands interface {
 		consumer string,
 		minIdleTime int64,
 		ids []string,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimWithOptions(
 		ctx context.Context,
@@ -145,7 +145,7 @@ type StreamCommands interface {
 		minIdleTime int64,
 		ids []string,
 		options options.XClaimOptions,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimJustId(
 		ctx context.Context,
