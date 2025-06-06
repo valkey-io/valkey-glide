@@ -1174,7 +1174,7 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
 }
 
-func handleXReadGroupResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
 	data, err := parseMap(response)
 	if err != nil {
@@ -1184,28 +1184,53 @@ func handleXReadGroupResponse(response *C.struct_CommandResponse) (map[string]ma
 		return nil, nil
 	}
 
-	converters := mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				true,
-			},
-			false,
-		},
-		false,
-	}
+	// Convert the raw response to the structured StreamResponse format
+	result := make(map[string]models.StreamResponse)
 
-	res, err := converters.convert(data)
-	if err != nil {
-		return nil, err
+	// Process the map data directly
+	streamMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
 	}
-	if result, ok := res.(map[string]map[string][][]string); ok {
-		return result, nil
+	for streamName, streamData := range streamMap {
+		streamResponse := models.StreamResponse{
+			Entries: make([]models.StreamEntry, 0),
+		}
+		// Process fields
+		for id, entriesArray := range streamData.(map[string]any) {
+			// Process stream entries
+			entriesData, ok := entriesArray.([]any)
+			if !ok {
+				entriesData = []any{}
+			}
+			fields := make(map[string]string)
+			for _, entryData := range entriesData {
+				fieldValuePairs, ok := entryData.([]any)
+				if !ok || len(fieldValuePairs) < 2 {
+					continue
+				}
+
+				if ok && len(fieldValuePairs) > 0 {
+					for i := 0; i < len(fieldValuePairs); i += 2 {
+						if i+1 < len(fieldValuePairs) {
+							fieldName, okField := fieldValuePairs[i].(string)
+							fieldValue, okValue := fieldValuePairs[i+1].(string)
+							if okField && okValue {
+								fields[fieldName] = fieldValue
+							}
+						}
+					}
+				}
+			}
+			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
+				ID:     id,
+				Fields: fields,
+			})
+		}
+
+		result[streamName] = streamResponse
 	}
-	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
+	return result, nil
 }
 
 func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (models.XPendingSummary, error) {
