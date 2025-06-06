@@ -2356,11 +2356,11 @@ func (b *BaseBatch[T]) PTTL(key string) *T {
 // Command Response:
 //
 //	If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-//	altered, then returns `1`. Otherwise, returns `0`.
+//	altered, then returns `true`. Otherwise, returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
 func (b *BaseBatch[T]) PfAdd(key string, elements []string) *T {
-	return b.addCmdAndTypeChecker(C.PfAdd, append([]string{key}, elements...), reflect.Int64, false)
+	return b.addCmdAndTypeChecker(C.PfAdd, append([]string{key}, elements...), reflect.Bool, false)
 }
 
 // Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
@@ -2575,8 +2575,8 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs
+//	mapped to an array entries or `nil` if a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {

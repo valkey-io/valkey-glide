@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,9 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&errors.TimeoutError{}, err)
+
+			time.Sleep(1 * time.Second)
+
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
@@ -53,6 +57,9 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
 			suite.IsType(&errors.TimeoutError{}, err)
+
+			time.Sleep(1 * time.Second)
+
 			// Retry with a longer timeout and expect [OK]
 			opts.WithTimeout(1000)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
@@ -1158,13 +1165,13 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	dest := atomicPrefix + "dest-" + uuid.NewString()
 
 	batch.PfAdd(key1, []string{"val"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key1, [val])"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PfAdd(key1, [val])"})
 
 	batch.PfCount([]string{key1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfCount([key1])"})
 
 	batch.PfAdd(key1, []string{"val2"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "PfAdd(key2, [val2])"})
+	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PfAdd(key2, [val2])"})
 	batch.PfMerge(prefix+dest, []string{prefix + key1, prefix + key2})
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "PfMerge(dest, [key1 key2])"})
 
