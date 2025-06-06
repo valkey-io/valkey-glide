@@ -243,8 +243,6 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			LIndex(key1, 2).
 			RPop(key1).
 			RPopCount(key1, 2).
-			LMPop([]string{key1}, constants.Left).
-			LMPopCount([]string{key1}, constants.Left, 42).
 			LMove(key1, key2, constants.Left, constants.Left).
 			SMembers(key1).
 			SRandMember(key1).
@@ -305,12 +303,21 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			XRevRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
 			XRevRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2))
 
+		if suite.serverVersion >= "7.0.0" {
+			transaction.
+				LMPop([]string{key1}, constants.Left).
+				LMPopCount([]string{key1}, constants.Left, 42)
+		}
+
 		res, err := runBatchOnClient(client, transaction, false, nil)
 		suite.NoError(err)
 		for i, resp := range res {
 			suite.Equal("WRONGTYPE: Operation against a key holding the wrong kind of value", resp.(error).Error(), i)
 		}
 
+		if suite.serverVersion >= "7.0.0" {
+			return
+		}
 		// LCS has another error message
 		transaction = pipeline.NewClusterBatch(true).
 			LCSWithOptions(key1, key2, *options.NewLCSIdxOptions().SetIdx(true).SetMinMatchLen(2).SetWithMatchLen(true))
@@ -2335,12 +2342,29 @@ func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	batch.ScriptExists([]string{"abc"})
 	testData = append(testData, CommandTestData{ExpectedResponse: []bool{false}, TestName: "ScriptExists([abc])"})
+	batch.ScriptFlush()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlush()"})
+	batch.ScriptFlushWithMode(options.SYNC)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlushWithMode()"})
+	batch.ScriptShow("abc")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "ScriptShow()"},
+	)
+	batch.ScriptKill()
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "ScriptKill()"},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Script commands"}
 }
 
 func CreateFunctionTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
 	testData := make([]CommandTestData, 0)
+	// adding a dummy command to avoid "empty pipeline" error on server < 7.0
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
 	if serverVer < "7.0.0" {
 		return BatchTestData{CommandTestData: testData, TestName: "Function commands"}
 	}
@@ -2475,7 +2499,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 
 				suite.T().Run(makeFullTestName(client, testData.TestName, isAtomic), func(t *testing.T) {
 					res, err := runBatchOnClient(client, batch, true, nil)
-					suite.NoError(err)
+					suite.NoError(err, testData.TestName)
 					suite.verifyBatchTestResult(res, testData.CommandTestData)
 				})
 			}
@@ -2485,7 +2509,7 @@ func (suite *GlideTestSuite) TestBatchCommandGroups() {
 
 				suite.T().Run(makeFullTestName(client, testData.TestName, isAtomic), func(t *testing.T) {
 					res, err := runBatchOnClient(client, batch, false, config.NewSlotIdRoute(config.SlotTypePrimary, 42))
-					suite.NoError(err)
+					suite.NoError(err, testData.TestName)
 					suite.verifyBatchTestResult(res, testData.CommandTestData)
 				})
 			}
