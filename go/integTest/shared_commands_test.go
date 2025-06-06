@@ -2435,8 +2435,7 @@ func (suite *GlideTestSuite) TestSPopCount_WrongType() {
 
 		// Try to pop from a key that's not a set
 		_, err := client.SPopCount(context.Background(), key, 3)
-		suite.Error(err)
-		suite.Contains(err.Error(), "WRONGTYPE")
+		suite.ErrorContains(err, "WRONGTYPE")
 	})
 }
 
@@ -8373,8 +8372,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		// non existent key causes a RequestError
 		claimOptions := options.NewXClaimOptions().SetIdleTime(1)
 		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
-		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
+		suite.ErrorContains(err, "NOGROUP")
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
@@ -8384,8 +8382,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
-		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
+		suite.ErrorContains(err, "NOGROUP")
 
 		_, err = client.XClaimJustId(
 			context.Background(),
@@ -8395,8 +8392,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			int64(1),
 			[]string{streamid_1.Value()},
 		)
-		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
+		suite.ErrorContains(err, "NOGROUP")
 
 		_, err = client.XClaimJustIdWithOptions(context.Background(),
 			stringKey,
@@ -8406,8 +8402,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
-		suite.Error(err)
-		suite.Contains(err.Error(), "NOGROUP")
+		suite.ErrorContains(err, "NOGROUP")
 
 		// key exists, but is not a stream
 		_, err = client.Set(context.Background(), stringKey, "test")

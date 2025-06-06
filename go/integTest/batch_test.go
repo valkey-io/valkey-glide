@@ -106,10 +106,8 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])
 		suite.Equal(int64(1), res[2])
-		suite.Error(glide.IsError(res[1]))
-		suite.Error(glide.IsError(res[3]))
-		suite.Contains(res[1].(error).Error(), "wrong kind of value")
-		suite.Contains(res[3].(error).Error(), "no such key")
+		suite.ErrorContains(glide.IsError(res[1]), "wrong kind of value")
+		suite.ErrorContains(glide.IsError(res[3]), "no such key")
 	})
 }
 
