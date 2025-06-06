@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
@@ -361,7 +362,7 @@ func ExampleClient_BZPopMin() {
 
 	zaddResult1, err := client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 1.5})
 	zaddResult2, err := client.ZAdd(context.Background(), "key2", map[string]float64{"c": 2.0})
-	result1, err := client.BZPopMin(context.Background(), []string{"key1", "key2"}, 0.5)
+	result1, err := client.BZPopMin(context.Background(), []string{"key1", "key2"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -380,7 +381,7 @@ func ExampleClusterClient_BZPopMin() {
 
 	zaddResult1, err := client.ZAdd(context.Background(), "{key}1", map[string]float64{"a": 1.0, "b": 1.5})
 	zaddResult2, err := client.ZAdd(context.Background(), "{key}2", map[string]float64{"c": 2.0})
-	result1, err := client.BZPopMin(context.Background(), []string{"{key}1", "{key}2"}, 0.5)
+	result1, err := client.BZPopMin(context.Background(), []string{"{key}1", "{key}2"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -974,7 +975,7 @@ func ExampleClient_BZMPop() {
 	var client *Client = getExampleClient() // example helper function
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, float64(0.5))
+	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -987,7 +988,7 @@ func ExampleClusterClient_BZMPop() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, float64(0.5))
+	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1005,7 +1006,7 @@ func ExampleClient_BZMPopWithOptions() {
 		context.Background(),
 		[]string{"key1"},
 		constants.MAX,
-		0.1,
+		100*time.Millisecond,
 		*options.NewZMPopOptions().SetCount(2),
 	)
 	if err != nil {
@@ -1038,7 +1039,7 @@ func ExampleClusterClient_BZMPopWithOptions() {
 		context.Background(),
 		[]string{"key1"},
 		constants.MAX,
-		0.1,
+		100*time.Millisecond,
 		*options.NewZMPopOptions().SetCount(1),
 	)
 	if err != nil {

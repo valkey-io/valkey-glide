@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -60,9 +61,9 @@ type ListCommands interface {
 		element string,
 	) (int64, error)
 
-	BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
+	BLPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error)
 
-	BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
+	BRPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error)
 
 	RPushX(ctx context.Context, key string, elements []string) (int64, error)
 
@@ -81,7 +82,7 @@ type ListCommands interface {
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
-		timeoutSecs float64,
+		timeout time.Duration,
 	) (map[string][]string, error)
 
 	BLMPopCount(
@@ -89,7 +90,7 @@ type ListCommands interface {
 		keys []string,
 		listDirection constants.ListDirection,
 		count int64,
-		timeoutSecs float64,
+		timeout time.Duration,
 	) (map[string][]string, error)
 
 	LSet(ctx context.Context, key string, index int64, element string) (string, error)
@@ -108,6 +109,6 @@ type ListCommands interface {
 		destination string,
 		whereFrom constants.ListDirection,
 		whereTo constants.ListDirection,
-		timeoutSecs float64,
+		timeout time.Duration,
 	) (models.Result[string], error)
 }
