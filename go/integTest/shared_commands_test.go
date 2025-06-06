@@ -125,7 +125,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
-			SetExpiry(options.NewExpiryIn(200 * time.Millisecond))
+			SetExpiry(options.NewExpiryIn(2000 * time.Millisecond))
 		result, err := client.SetWithOptions(context.Background(), key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())

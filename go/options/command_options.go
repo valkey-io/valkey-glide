@@ -181,8 +181,8 @@ func NewExpiryIn(duration time.Duration) *Expiry {
 	}
 }
 
-// NewExpireAt creates a new Expiry with a specific timestamp
-func NewExpireAt(timestamp time.Time) *Expiry {
+// NewExpiryAt creates a new Expiry with a specific timestamp
+func NewExpiryAt(timestamp time.Time) *Expiry {
 	expiryType := constants.UnixMilliseconds
 	if isExpiryTypeSeconds(time.Until(timestamp)) {
 		expiryType = constants.UnixSeconds
@@ -213,7 +213,7 @@ func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	return ex
 }
 
-// GetCount returns the count in the appropriate unit (seconds or milliseconds)
+// GetTime returns the time in the appropriate unit (seconds or milliseconds)
 func (ex *Expiry) GetTime() uint64 {
 	if ex.Type == constants.UnixSeconds {
 		return uint64(ex.Timestamp.Unix())

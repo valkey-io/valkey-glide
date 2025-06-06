@@ -111,6 +111,7 @@
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
 * Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
+* Go: Update options.Expiry to use time.Duration ([#4089](https://github.com/valkey-io/valkey-glide/pull/4089))
 
 
 #### Fixes
