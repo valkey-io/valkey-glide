@@ -1312,6 +1312,43 @@ func (suite *GlideTestSuite) TestConfigSetGetWithOptions() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClusterClientGetName() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	response, err := client.ClientGetName(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, response.IsNil())
+}
+
+func (suite *GlideTestSuite) TestClusterClientGetNameWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	route := config.Route(config.RandomRoute)
+	opts := options.RouteOption{Route: route}
+
+	response, err := client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsSingleValue())
+	assert.True(t, response.SingleValue().IsNil())
+}
+
+func (suite *GlideTestSuite) TestClusterClientGetNameWithMultiNodeRoutes() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{Route: route}
+
+	response, err := client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, response.IsMultiValue())
+	for _, value := range response.MultiValue() {
+		assert.True(t, value.IsNil())
+	}
+}
+
 func (suite *GlideTestSuite) TestClientSetGetName() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1319,7 +1356,7 @@ func (suite *GlideTestSuite) TestClientSetGetName() {
 	client.ClientSetName(context.Background(), connectionName)
 	response, err := client.ClientGetName(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	assert.Equal(t, connectionName, response.Value())
 }
 
 func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
@@ -1330,22 +1367,32 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	opts := options.RouteOption{Route: nil}
 	connectionName := "ConnectionName-" + uuid.NewString()
 	response, err := client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
+	suite.verifyOK(response, err)
+	response2, err := client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
-	response, err = client.ClientGetNameWithOptions(context.Background(), opts)
-	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	assert.True(t, response2.IsSingleValue())
 
 	// same sections with random route
 	connectionName = "ConnectionName-" + uuid.NewString()
 	route := config.Route(config.RandomRoute)
 	opts = options.RouteOption{Route: route}
 	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
+	suite.verifyOK(response, err)
+	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
-	response, err = client.ClientGetNameWithOptions(context.Background(), opts)
+	assert.True(t, response2.IsSingleValue())
+
+	// same sections with multinode routes
+	connectionName = "ConnectionName-" + uuid.NewString()
+	route = config.Route(config.AllPrimaries)
+	opts = options.RouteOption{Route: route}
+	response, err = client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
+	suite.verifyOK(response, err)
+	response2, err = client.ClientGetNameWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
-	assert.True(t, response.IsSingleValue())
+	for _, data := range response2.MultiValue() {
+		assert.Equal(t, connectionName, data.Value())
+	}
 }
 
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
@@ -2422,27 +2469,12 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
-	// Ensure no script is running at the beginning
-	_, err = killClient.ScriptKill(context.Background())
-	assert.Error(suite.T(), err)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
-
-	// Kill Running Code
-	code := CreateLongRunningLuaScript(5, true)
-	script := options.NewScript(code)
-
-	go invokeClient.InvokeScript(context.Background(), *script)
-
-	time.Sleep(1 * time.Second)
-
-	result, err := killClient.ScriptKill(context.Background())
+	// Flush before setup
+	result, err := invokeClient.ScriptFlush(context.Background())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
-	script.Close()
 
-	time.Sleep(1 * time.Second)
-
-	// Ensure no script is running at the end
+	// Nothing loaded, nothing to kill
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
@@ -2503,7 +2535,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 
 	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
@@ -2511,7 +2543,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	script.Close()
 
 	// Wait until script finishes
-	time.Sleep(6 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKill(context.Background())

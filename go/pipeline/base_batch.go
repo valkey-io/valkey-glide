@@ -1268,6 +1268,30 @@ func (b *BaseBatch[T]) SRandMember(key string) *T {
 	return b.addCmdAndTypeChecker(C.SRandMember, []string{key}, reflect.String, true)
 }
 
+// SRandMemberCount returns multiple random members from the set value stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key   - The key from which to retrieve the set members.
+//	count - The number of members to return.
+//	       If count is positive, returns unique elements (no repetition) up to count or the set size, whichever is smaller.
+//	       If count is negative, returns elements with possible repetition (the same element may be returned multiple times),
+//	       and the number of returned elements is the absolute value of count.
+//
+// Command Response:
+//
+//	An array of random elements from the set.
+//	When count is positive, the returned elements are unique (no repetitions).
+//	When count is negative, the returned elements may contain duplicates.
+//	If the set does not exist or is empty, an empty array is returned.
+//
+// [valkey.io]: https://valkey.io/commands/srandmember/
+func (b *BaseBatch[T]) SRandMemberCount(key string, count int64) *T {
+	return b.addCmdAndTypeChecker(C.SRandMember, []string{key, utils.IntToString(count)}, reflect.Slice, false)
+}
+
 // Removes and returns one random member from the set stored at key.
 //
 // See [valkey.io] for details.
@@ -1284,6 +1308,27 @@ func (b *BaseBatch[T]) SRandMember(key string) *T {
 // [valkey.io]: https://valkey.io/commands/spop/
 func (b *BaseBatch[T]) SPop(key string) *T {
 	return b.addCmdAndTypeChecker(C.SPop, []string{key}, reflect.String, true)
+}
+
+// SPopCount removes and returns up to count random members from the set stored at key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the set.
+//	count - The number of members to return.
+//		If count is positive, returns unique elements.
+//		If count is larger than the set's cardinality, returns the entire set.
+//
+// Command Response:
+//
+//	A `map[string]struct{}` of popped elements.
+//	If key does not exist, an empty collection will be returned.
+//
+// [valkey.io]: https://valkey.io/commands/spop/
+func (b *BaseBatch[T]) SPopCount(key string, count int64) *T {
+	return b.addCmdAndTypeChecker(C.SPop, []string{key, utils.IntToString(count)}, reflect.Map, false)
 }
 
 // Returns whether each member is a member of the set stored at key.
@@ -2305,11 +2350,11 @@ func (b *BaseBatch[T]) PTTL(key string) *T {
 // Command Response:
 //
 //	If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-//	altered, then returns `1`. Otherwise, returns `0`.
+//	altered, then returns `true`. Otherwise, returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
 func (b *BaseBatch[T]) PfAdd(key string, elements []string) *T {
-	return b.addCmdAndTypeChecker(C.PfAdd, append([]string{key}, elements...), reflect.Int64, false)
+	return b.addCmdAndTypeChecker(C.PfAdd, append([]string{key}, elements...), reflect.Bool, false)
 }
 
 // Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
@@ -2524,8 +2569,8 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs
+//	mapped to an array entries or `nil` if a key does not exist or does not contain requested entries.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {
@@ -3052,7 +3097,7 @@ func (b *BaseBatch[T]) ZRangeWithScores(key string, rangeQuery options.ZRangeQue
 	}
 	args = append(args, queryArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZRange, args, reflect.Map, false)
 }
 
 // Stores a specified range of elements from the sorted set at `key`, into a new
@@ -4531,7 +4576,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -4556,7 +4601,7 @@ func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end opti
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -4573,7 +4618,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.XRange, args, reflect.Map, true)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4617,9 +4662,8 @@ func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end o
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	A `Map` of key to stream entry data, where entry data is an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
-//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRangeWithOptions(
@@ -4634,7 +4678,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Slice, true)
+	return b.addCmdAndTypeChecker(C.XRevRange, args, reflect.Map, true)
 }
 
 // Returns information about the stream stored at `key`.
@@ -4865,7 +4909,7 @@ func (b *BaseBatch[T]) ZInterWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZInter, args, reflect.Map, false)
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -4972,16 +5016,16 @@ func (b *BaseBatch[T]) ZDiff(keys []string) *T {
 //
 // Command Response:
 //
-//	An array of elements and their scores representing the difference between the sorted sets.
+//	An map of elements and their scores representing the difference between the sorted sets.
 //	If the first `key` does not exist, it is treated as an empty sorted set, and the
-//	command returns an empty array.
+//	command returns an empty map.
 //
 // [valkey.io]: https://valkey.io/commands/zdiff/
 func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 	args := append([]string{}, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZDiff, args, reflect.Map, false)
 }
 
 // Calculates the difference between the first sorted set and all the successive sorted sets at
@@ -5075,7 +5119,7 @@ func (b *BaseBatch[T]) ZUnionWithScores(
 	}
 	args = append(args, optionsArgs...)
 	args = append(args, constants.WithScoresKeyword)
-	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Slice, false)
+	return b.addCmdAndTypeChecker(C.ZUnion, args, reflect.Map, false)
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -5984,7 +6028,7 @@ func (b *BaseBatch[T]) FunctionFlushAsync() *T {
 //
 // [valkey.io]: https://valkey.io/commands/fcall/
 func (b *BaseBatch[T]) FCall(function string) *T {
-	return b.addCmdAndTypeChecker(C.FCall, []string{function, "0"}, reflect.Interface, false)
+	return b.addCmd(C.FCall, []string{function, "0"})
 }
 
 // Invokes a previously loaded function.
@@ -6012,7 +6056,7 @@ func (b *BaseBatch[T]) FCallWithKeysAndArgs(function string, keys []string, args
 	commandArgs := []string{function, strconv.Itoa(len(keys))}
 	commandArgs = append(commandArgs, keys...)
 	commandArgs = append(commandArgs, args...)
-	return b.addCmdAndTypeChecker(C.FCall, commandArgs, reflect.Interface, false)
+	return b.addCmd(C.FCall, commandArgs)
 }
 
 // Invokes a previously loaded read-only function.
@@ -6035,7 +6079,7 @@ func (b *BaseBatch[T]) FCallWithKeysAndArgs(function string, keys []string, args
 //
 // [valkey.io]: https://valkey.io/commands/fcall_ro/
 func (b *BaseBatch[T]) FCallReadOnly(function string) *T {
-	return b.addCmdAndTypeChecker(C.FCallReadOnly, []string{function, "0"}, reflect.Interface, false)
+	return b.addCmd(C.FCallReadOnly, []string{function, "0"})
 }
 
 // Invokes a previously loaded read-only function.
@@ -6063,7 +6107,7 @@ func (b *BaseBatch[T]) FCallReadOnlyWithKeysAndArgs(function string, keys []stri
 	commandArgs := []string{function, strconv.Itoa(len(keys))}
 	commandArgs = append(commandArgs, keys...)
 	commandArgs = append(commandArgs, args...)
-	return b.addCmdAndTypeChecker(C.FCallReadOnly, commandArgs, reflect.Interface, false)
+	return b.addCmd(C.FCallReadOnly, commandArgs)
 }
 
 // Returns information about the functions and libraries.

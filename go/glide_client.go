@@ -566,15 +566,16 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a models.Result[string].
+//	Otherwise, returns [models.CreateNilStringResult()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *Client) ClientGetName(ctx context.Context) (string, error) {
+func (client *Client) ClientGetName(ctx context.Context) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
-		return models.DefaultStringResponse, err
+		return models.CreateNilStringResult(), err
 	}
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 // Set the name of the current connection.
@@ -947,4 +948,27 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 	}
 
 	return handleIntResponse(result)
+}
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *Client) Unwatch(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }
