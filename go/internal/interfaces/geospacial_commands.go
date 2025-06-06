@@ -26,7 +26,7 @@ type GeoSpatialCommands interface {
 		options options.GeoAddOptions,
 	) (int64, error)
 
-	GeoHash(ctx context.Context, key string, members []string) ([]string, error)
+	GeoHash(ctx context.Context, key string, members []string) ([]models.Result[string], error)
 
 	GeoPos(ctx context.Context, key string, members []string) ([][]float64, error)
 
