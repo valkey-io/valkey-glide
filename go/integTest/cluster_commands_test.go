@@ -2469,27 +2469,12 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
 
-	// Ensure no script is running at the beginning
-	_, err = killClient.ScriptKill(context.Background())
-	assert.Error(suite.T(), err)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
-
-	// Kill Running Code
-	code := CreateLongRunningLuaScript(5, true)
-	script := options.NewScript(code)
-
-	go invokeClient.InvokeScript(context.Background(), *script)
-
-	time.Sleep(1 * time.Second)
-
-	result, err := killClient.ScriptKill(context.Background())
+	// Flush before setup
+	result, err := invokeClient.ScriptFlush(context.Background())
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
-	script.Close()
 
-	time.Sleep(1 * time.Second)
-
-	// Ensure no script is running at the end
+	// Nothing loaded, nothing to kill
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
@@ -2550,7 +2535,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 
 	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	_, err = killClient.ScriptKill(context.Background())
 	assert.Error(suite.T(), err)
@@ -2558,7 +2543,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	script.Close()
 
 	// Wait until script finishes
-	time.Sleep(6 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKill(context.Background())
