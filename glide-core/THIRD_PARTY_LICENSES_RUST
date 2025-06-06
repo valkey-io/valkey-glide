@@ -3079,7 +3079,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.17.0
+Package: bumpalo:3.18.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11727,7 +11727,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hermit-abi:0.3.9
+Package: hermit-abi:0.5.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12947,7 +12947,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hyper-util:0.1.13
+Package: hyper-util:0.1.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19025,7 +19025,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: num_cpus:1.16.0
+Package: num_cpus:1.17.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26590,7 +26590,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: reqwest:0.12.18
+Package: reqwest:0.12.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33997,7 +33997,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tower-http:0.6.4
+Package: tower-http:0.6.6
 
 The following copyrights and licenses were found in the source code of this package:
 
