@@ -1705,7 +1705,7 @@ export async function batchTest(
     responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
     baseBatch.pfadd(key11, [one, two, three]);
-    responseData.push(["pfadd(key11, [one, two, three])", 1]);
+    responseData.push(["pfadd(key11, [one, two, three])", true]);
     baseBatch.pfmerge(key11, []);
     responseData.push(["pfmerge(key11, [])", "OK"]);
     baseBatch.pfcount([key11]);

@@ -3804,15 +3804,16 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull String key, @NonNull String[] elements) {
+    public CompletableFuture<Boolean> pfadd(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull GlideString key, @NonNull GlideString[] elements) {
+    public CompletableFuture<Boolean> pfadd(
+            @NonNull GlideString key, @NonNull GlideString[] elements) {
         GlideString[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override

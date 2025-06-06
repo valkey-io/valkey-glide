@@ -27,6 +27,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -145,6 +146,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	byteCount := len(msg)
 	requestBytes := C.CBytes(msg)
+	defer C.free(requestBytes)
 
 	clientType, err := buildAsyncClientType(
 		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
@@ -325,7 +327,9 @@ func (client *baseClient) executeCommandWithRoute(
 		}
 
 		routeBytesCount = C.uintptr_t(len(msg))
-		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+		routeCBytes := C.CBytes(msg)
+		defer C.free(routeCBytes)
+		routeBytesPtr = (*C.uchar)(routeCBytes)
 	}
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
@@ -622,10 +626,12 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
+	password_cstring := C.CString(password)
+	defer C.free(unsafe.Pointer(password_cstring))
 	C.update_connection_password(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
-		C.CString(password),
+		password_cstring,
 		C._Bool(immediateAuth),
 	)
 	client.mu.Unlock()
@@ -2872,7 +2878,7 @@ func (client *baseClient) LInsert(
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -2882,8 +2888,8 @@ func (client *baseClient) LInsert(
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BLPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -2905,18 +2911,18 @@ func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs 
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
 //	A two-element array containing the key from which the element was popped and the value of the popped
 //	element, formatted as [key, value].
-//	If no element could be popped and the timeoutSecs expired, returns `nil`.
+//	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BRPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -3098,7 +3104,7 @@ func (client *baseClient) LMPopCount(
 //	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3111,7 +3117,7 @@ func (client *baseClient) BLMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3125,7 +3131,7 @@ func (client *baseClient) BLMPop(
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3155,7 +3161,7 @@ func (client *baseClient) BLMPop(
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //
 // indefinitely.
 //
@@ -3171,7 +3177,7 @@ func (client *baseClient) BLMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3185,7 +3191,7 @@ func (client *baseClient) BLMPopCount(
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3288,7 +3294,7 @@ func (client *baseClient) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
@@ -3303,7 +3309,7 @@ func (client *baseClient) BLMove(
 	destination string,
 	whereFrom constants.ListDirection,
 	whereTo constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[string], error) {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
@@ -3316,7 +3322,7 @@ func (client *baseClient) BLMove(
 
 	result, err := client.executeCommand(ctx,
 		C.BLMove,
-		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 	)
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -3771,16 +3777,16 @@ func (client *baseClient) PTTL(ctx context.Context, key string) (int64, error) {
 // Return value:
 //
 //	If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-//	altered, then returns `1`. Otherwise, returns `0`.
+//	altered, then returns `true`. Otherwise, returns `false`.
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
-func (client *baseClient) PfAdd(ctx context.Context, key string, elements []string) (int64, error) {
+func (client *baseClient) PfAdd(ctx context.Context, key string, elements []string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.PfAdd, append([]string{key}, elements...))
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return models.DefaultBoolResponse, err
 	}
 
-	return handleIntResponse(result)
+	return handleBoolResponse(result)
 }
 
 // Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
@@ -4057,11 +4063,15 @@ func (client *baseClient) XAddWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
-func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]map[string][][]string, error) {
+func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
 	return client.XReadWithOptions(ctx, keysAndIds, *options.NewXReadOptions())
 }
 
@@ -4081,15 +4091,19 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
 	ctx context.Context,
 	keysAndIds map[string]string,
 	opts options.XReadOptions,
-) (map[string]map[string][][]string, error) {
+) (map[string]models.StreamResponse, error) {
 	args, err := internal.CreateStreamCommandArgs(make([]string, 0, 5+2*len(keysAndIds)), keysAndIds, &opts)
 	if err != nil {
 		return nil, err
@@ -4100,7 +4114,7 @@ func (client *baseClient) XReadWithOptions(
 		return nil, err
 	}
 
-	return handleXReadResponse(result)
+	return handleStreamResponse(result)
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -4120,8 +4134,12 @@ func (client *baseClient) XReadWithOptions(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroup(
@@ -4129,7 +4147,7 @@ func (client *baseClient) XReadGroup(
 	group string,
 	consumer string,
 	keysAndIds map[string]string,
-) (map[string]map[string][][]string, error) {
+) (map[string]models.StreamResponse, error) {
 	return client.XReadGroupWithOptions(ctx, group, consumer, keysAndIds, *options.NewXReadGroupOptions())
 }
 
@@ -4151,8 +4169,12 @@ func (client *baseClient) XReadGroup(
 //
 // Return value:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requiested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroupWithOptions(
@@ -4161,7 +4183,7 @@ func (client *baseClient) XReadGroupWithOptions(
 	consumer string,
 	keysAndIds map[string]string,
 	opts options.XReadGroupOptions,
-) (map[string]map[string][][]string, error) {
+) (map[string]models.StreamResponse, error) {
 	args, err := internal.CreateStreamCommandArgs([]string{constants.GroupKeyword, group, consumer}, keysAndIds, &opts)
 	if err != nil {
 		return nil, err
@@ -4172,7 +4194,7 @@ func (client *baseClient) XReadGroupWithOptions(
 		return nil, err
 	}
 
-	return handleXReadGroupResponse(result)
+	return handleStreamResponse(result)
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
@@ -4546,7 +4568,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
-//	timeout - The number of seconds to wait for a blocking operation to complete. A value of
+//	timeout - The duration to wait for a blocking operation to complete. A value of
 //	  `0` will block indefinitely.
 //
 // Return value:
@@ -4560,9 +4582,9 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return models.CreateNilKeyWithMemberAndScoreResult(), err
 	}
@@ -4590,7 +4612,7 @@ func (client *baseClient) BZPopMin(
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Return value:
@@ -4606,7 +4628,7 @@ func (client *baseClient) BZMPop(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
@@ -4622,7 +4644,7 @@ func (client *baseClient) BZMPop(
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	result, err := client.executeCommand(ctx, C.BZMPop, args)
@@ -4653,8 +4675,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-//
+//	timeout   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Return value:
@@ -4670,7 +4691,7 @@ func (client *baseClient) BZMPopWithOptions(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 	opts options.ZMPopOptions,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
@@ -4687,7 +4708,7 @@ func (client *baseClient) BZMPopWithOptions(
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	optionArgs, err := opts.ToArgs()
@@ -6432,8 +6453,10 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //
 // Return value:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: map[string]string of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6443,7 +6466,7 @@ func (client *baseClient) XClaim(
 	consumer string,
 	minIdleTime int64,
 	ids []string,
-) (map[string][][]string, error) {
+) (map[string]models.XClaimResponse, error) {
 	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
@@ -6463,8 +6486,10 @@ func (client *baseClient) XClaim(
 //
 // Return value:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: map[string]string of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6475,7 +6500,7 @@ func (client *baseClient) XClaimWithOptions(
 	minIdleTime int64,
 	ids []string,
 	opts options.XClaimOptions,
-) (map[string][][]string, error) {
+) (map[string]models.XClaimResponse, error) {
 	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6486,7 +6511,7 @@ func (client *baseClient) XClaimWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleMapOfArrayOfStringArrayResponse(result)
+	return handleXClaimResponse(result)
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -7611,7 +7636,7 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
-//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//	timeout - The maximum number of seconds to block (0 blocks indefinitely).
 //
 // Return value:
 //
@@ -7624,9 +7649,9 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 func (client *baseClient) BZPopMax(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	args := append(keys, utils.FloatToString(timeoutSecs))
+	args := append(keys, utils.FloatToString(timeout.Seconds()))
 
 	result, err := client.executeCommand(ctx, C.BZPopMax, args)
 	if err != nil {
@@ -8856,7 +8881,9 @@ func (client *baseClient) executeScriptWithRoute(
 		}
 
 		routeBytesCount = C.uintptr_t(len(msg))
-		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+		routeCBytes := C.CBytes(msg)
+		defer C.free(routeCBytes)
+		routeBytesPtr = (*C.uchar)(routeCBytes)
 	}
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
@@ -8873,10 +8900,12 @@ func (client *baseClient) executeScriptWithRoute(
 		return nil, NewClosingError("ExecuteScript failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
+	hash_cstring := C.CString(hash)
+	defer C.free(unsafe.Pointer(hash_cstring))
 	C.invoke_script(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
-		C.CString(hash),
+		hash_cstring,
 		C.size_t(len(keys)),
 		cKeysPtr,
 		keysLengthsPtr,

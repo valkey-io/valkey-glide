@@ -404,9 +404,19 @@ func ExampleClient_XReadGroup() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 0
 }
 
 func ExampleClusterClient_XReadGroup() {
@@ -428,9 +438,19 @@ func ExampleClusterClient_XReadGroup() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 0
 }
 
 func ExampleClient_XReadGroupWithOptions() {
@@ -453,9 +473,26 @@ func ExampleClient_XReadGroupWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-1
+	// Entry fields: map[entry1_field1:entry1_value1 entry1_field2:entry1_value2]
 }
 
 func ExampleClusterClient_XReadGroupWithOptions() {
@@ -478,9 +515,26 @@ func ExampleClusterClient_XReadGroupWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-1
+	// Entry fields: map[entry1_field1:entry1_value1 entry1_field2:entry1_value2]
 }
 
 func ExampleClient_XRead() {
@@ -498,9 +552,26 @@ func ExampleClient_XRead() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-1:[[field1 value1] [field2 value2]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-1
+	// Entry fields: map[field1:value1 field2:value2]
 }
 
 func ExampleClusterClient_XRead() {
@@ -518,9 +589,26 @@ func ExampleClusterClient_XRead() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-1:[[field1 value1] [field2 value2]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-1
+	// Entry fields: map[field1:value1 field2:value2]
 }
 
 func ExampleClient_XReadWithOptions() {
@@ -548,9 +636,26 @@ func ExampleClient_XReadWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-2:[[field3 value3] [field4 value4]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-2
+	// Entry fields: map[field3:value3 field4:value4]
 }
 
 func ExampleClusterClient_XReadWithOptions() {
@@ -578,9 +683,26 @@ func ExampleClusterClient_XReadWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(response)
 
-	// Output: map[12345:map[12345-2:[[field3 value3] [field4 value4]]]]
+	// Check that we have the stream with the correct name in the map
+	streamResponse, exists := response[key]
+	if exists {
+		fmt.Printf("Stream exists: %v\n", exists)
+		fmt.Printf("Number of entries: %d\n", len(streamResponse.Entries))
+		if len(streamResponse.Entries) > 0 {
+			entry := streamResponse.Entries[0]
+			fmt.Printf("Entry ID: %s\n", entry.ID)
+			fmt.Printf("Entry fields: %v\n", entry.Fields)
+		}
+	} else {
+		fmt.Println("Stream does not exist")
+	}
+
+	// Output:
+	// Stream exists: true
+	// Number of entries: 1
+	// Entry ID: 12345-2
+	// Entry fields: map[field3:value3 field4:value4]
 }
 
 func ExampleClient_XDel() {
@@ -1237,7 +1359,13 @@ func ExampleClient_XClaim() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s has %d fields\n", id, len(claimResponse.Fields))
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 has 2 fields
 }
 
 func ExampleClusterClient_XClaim() {
@@ -1276,7 +1404,13 @@ func ExampleClusterClient_XClaim() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s has %d fields\n", id, len(claimResponse.Fields))
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 has 2 fields
 }
 
 func ExampleClient_XClaimWithOptions() {
@@ -1324,7 +1458,21 @@ func ExampleClient_XClaimWithOptions() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
+		// Print a sample field if available
+		if len(claimResponse.Fields) > 0 {
+			for field, value := range claimResponse.Fields {
+				fmt.Printf("Field: %s, Value: %s\n", field, value)
+				break // Just print the first field as an example
+			}
+		}
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 with retry count: 3
+	// Field: entry1_field1, Value: entry1_value1
 }
 
 func ExampleClusterClient_XClaimWithOptions() {

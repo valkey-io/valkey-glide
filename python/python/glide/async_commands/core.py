@@ -6049,19 +6049,19 @@ class CoreCommands(Protocol):
             elements (List[TEncodable]): A list of members to add to the HyperLogLog stored at `key`.
 
         Returns:
-            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns 1.
+            bool: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns `True`.
 
-            Otherwise, returns 0.
+            Otherwise, returns `False`.
 
         Examples:
             >>> await client.pfadd("hll_1", ["a", "b", "c" ])
-                1 # A data structure was created or modified
+                True # A data structure was created or modified
             >>> await client.pfadd("hll_2", [])
-                1 # A new empty data structure was created
+                True # A new empty data structure was created
         """
         return cast(
-            int,
+            bool,
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 

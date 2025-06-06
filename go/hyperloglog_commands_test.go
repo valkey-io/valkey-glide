@@ -17,7 +17,7 @@ func ExampleClient_PfAdd() {
 	}
 	fmt.Println(result)
 
-	// Output: 1
+	// Output: true
 }
 
 func ExampleClusterClient_PfAdd() {
@@ -28,7 +28,7 @@ func ExampleClusterClient_PfAdd() {
 	}
 	fmt.Println(result)
 
-	// Output: 1
+	// Output: true
 }
 
 func ExampleClient_PfCount() {
@@ -43,7 +43,7 @@ func ExampleClient_PfCount() {
 	fmt.Println(result1)
 
 	// Output:
-	// 1
+	// true
 	// 3
 }
 
@@ -59,7 +59,7 @@ func ExampleClusterClient_PfCount() {
 	fmt.Println(result1)
 
 	// Output:
-	// 1
+	// true
 	// 3
 }
 

@@ -906,7 +906,7 @@ public class BatchTestUtilities {
                 .pfcount(new String[] {hllKey3});
 
         return new Object[] {
-            1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
+            true, // pfadd(hllKey1, new String[] {"a", "b", "c"})
             3L, // pfcount(new String[] { hllKey1, hllKey2 })
             OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
             3L, // pfcount(new String[] { hllKey3 })

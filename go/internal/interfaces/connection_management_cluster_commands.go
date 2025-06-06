@@ -27,15 +27,18 @@ type ConnectionManagementClusterCommands interface {
 
 	ClientIdWithOptions(ctx context.Context, routeOptions options.RouteOption) (models.ClusterValue[int64], error)
 
-	ClientSetName(ctx context.Context, connectionName string) (models.ClusterValue[string], error)
+	ClientSetName(ctx context.Context, connectionName string) (string, error)
 
 	ClientSetNameWithOptions(
 		ctx context.Context,
 		connectionName string,
 		routeOptions options.RouteOption,
-	) (models.ClusterValue[string], error)
+	) (string, error)
 
-	ClientGetName(ctx context.Context) (models.ClusterValue[string], error)
+	ClientGetName(ctx context.Context) (models.Result[string], error)
 
-	ClientGetNameWithOptions(ctx context.Context, routeOptions options.RouteOption) (models.ClusterValue[string], error)
+	ClientGetNameWithOptions(
+		ctx context.Context,
+		routeOptions options.RouteOption,
+	) (models.ClusterValue[models.Result[string]], error)
 }
