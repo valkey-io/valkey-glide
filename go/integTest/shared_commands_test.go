@@ -7742,13 +7742,13 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 
 		infoSmall, err := client.XInfoStream(context.Background(), key)
 		assert.NoError(suite.T(), err)
-		
+
 		// Check the structured response
 		assert.Equal(suite.T(), int64(1), infoSmall.Length)
 		assert.Equal(suite.T(), int64(1), infoSmall.Groups)
 		assert.Equal(suite.T(), "1-0", infoSmall.FirstEntry.ID)
 		assert.Equal(suite.T(), "1-0", infoSmall.LastEntry.ID)
-		
+
 		// Check the fields in the first/last entry
 		assert.Equal(suite.T(), "b", infoSmall.FirstEntry.Fields["a"])
 		assert.Equal(suite.T(), "d", infoSmall.FirstEntry.Fields["c"])
@@ -8586,7 +8586,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}}, claimResult)
+		assert.Equal(
+			suite.T(),
+			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			claimResult,
+		)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,

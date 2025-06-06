@@ -1757,19 +1757,21 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if typeErr != nil {
 		return models.XInfoStreamResponse{}, typeErr
 	}
-	
+
 	result, err := parseMap(response)
 	if err != nil {
 		return models.XInfoStreamResponse{}, err
 	}
-	
+
 	infoMap, ok := result.(map[string]any)
 	if !ok {
-		return models.XInfoStreamResponse{}, &errors.RequestError{Msg: fmt.Sprintf("unexpected type for stream info: %T", result)}
+		return models.XInfoStreamResponse{}, &errors.RequestError{
+			Msg: fmt.Sprintf("unexpected type for stream info: %T", result),
+		}
 	}
-	
+
 	streamInfo := models.XInfoStreamResponse{}
-	
+
 	// Parse integer fields
 	if val, ok := infoMap["length"].(int64); ok {
 		streamInfo.Length = val
@@ -1786,7 +1788,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if val, ok := infoMap["entries-added"].(int64); ok {
 		streamInfo.EntriesAdded = val
 	}
-	
+
 	// Parse string fields
 	if val, ok := infoMap["last-generated-id"].(string); ok {
 		streamInfo.LastGeneratedID = val
@@ -1794,7 +1796,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
 		streamInfo.MaxDeletedEntryID = val
 	}
-	
+
 	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
 	if firstEntryArray, ok := infoMap["first-entry"].([]any); ok && len(firstEntryArray) >= 2 {
 		// First element is the ID
@@ -1803,7 +1805,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 				ID:     id,
 				Fields: make(map[string]string),
 			}
-			
+
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
@@ -1819,7 +1821,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 			}
 		}
 	}
-	
+
 	// Parse last-entry - it's an array where first element is ID and second is array of field-value pairs
 	if lastEntryArray, ok := infoMap["last-entry"].([]any); ok && len(lastEntryArray) >= 2 {
 		// First element is the ID
@@ -1828,7 +1830,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 				ID:     id,
 				Fields: make(map[string]string),
 			}
-			
+
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
@@ -1844,6 +1846,6 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 			}
 		}
 	}
-	
+
 	return streamInfo, nil
 }
