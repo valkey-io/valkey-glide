@@ -146,6 +146,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 
 	byteCount := len(msg)
 	requestBytes := C.CBytes(msg)
+	defer C.free(requestBytes)
 
 	clientType, err := buildAsyncClientType(
 		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
@@ -326,7 +327,9 @@ func (client *baseClient) executeCommandWithRoute(
 		}
 
 		routeBytesCount = C.uintptr_t(len(msg))
-		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+		routeCBytes := C.CBytes(msg)
+		defer C.free(routeCBytes)
+		routeBytesPtr = (*C.uchar)(routeCBytes)
 	}
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
@@ -626,10 +629,12 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
+	password_cstring := C.CString(password)
+	defer C.free(unsafe.Pointer(password_cstring))
 	C.update_connection_password(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
-		C.CString(password),
+		password_cstring,
 		C._Bool(immediateAuth),
 	)
 	client.mu.Unlock()
@@ -8876,7 +8881,9 @@ func (client *baseClient) executeScriptWithRoute(
 		}
 
 		routeBytesCount = C.uintptr_t(len(msg))
-		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+		routeCBytes := C.CBytes(msg)
+		defer C.free(routeCBytes)
+		routeBytesPtr = (*C.uchar)(routeCBytes)
 	}
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
@@ -8893,10 +8900,12 @@ func (client *baseClient) executeScriptWithRoute(
 		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
 	}
 	client.pending[resultChannelPtr] = struct{}{}
+	hash_cstring := C.CString(hash)
+	defer C.free(unsafe.Pointer(hash_cstring))
 	C.invoke_script(
 		client.coreClient,
 		C.uintptr_t(pinnedChannelPtr),
-		C.CString(hash),
+		hash_cstring,
 		C.size_t(len(keys)),
 		cKeysPtr,
 		keysLengthsPtr,
