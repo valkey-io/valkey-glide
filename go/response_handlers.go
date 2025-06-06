@@ -924,9 +924,6 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
-		return nil, nil
-	}
 
 	// Convert the raw response to the structured XClaimResponse format
 	result := make(map[string]models.XClaimResponse)
