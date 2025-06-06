@@ -2990,7 +2990,7 @@ func (suite *GlideTestSuite) TestBLPop() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res1)
 
-		res2, err := client.BLPop(context.Background(), []string{listKey1, listKey2}, 500*time.Millisecond)
+		res2, err := client.BLPop(context.Background(), []string{listKey1, listKey2}, 500 * time.Millisecond)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []string{listKey1, "value2"}, res2)
 
