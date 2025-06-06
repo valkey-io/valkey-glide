@@ -22,7 +22,6 @@ type XClaimResponse struct {
 }
 
 // StreamEntryInfo represents a stream entry in XInfoStream response
-// StreamEntryInfo represents a stream entry in XInfoStream response
 type StreamEntryInfo struct {
 	// The ID of the entry
 	ID string

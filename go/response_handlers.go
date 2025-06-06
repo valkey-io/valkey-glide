@@ -742,6 +742,33 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[st
 	return result, nil
 }
 
+func handleStringToStringOrNilMapResponse(response *C.struct_CommandResponse) (map[string]models.Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	aMap := data.(map[string]any)
+	result := map[string]models.Result[string]{}
+
+	// Transform into Result[string]
+	for nodeAddr, nodeData := range aMap {
+		if nodeData == nil {
+			result[nodeAddr] = models.CreateNilStringResult()
+			continue
+		}
+		result[nodeAddr] = models.CreateStringResult(nodeData.(string))
+	}
+
+	return result, nil
+}
+
 func handleStringToStringArrayMapOrNilResponse(
 	response *C.struct_CommandResponse,
 ) (map[string][]string, error) {
@@ -917,12 +944,13 @@ func handleScanResponse(response *C.struct_CommandResponse) (string, []string, e
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {
 	defer C.free_command_response(response)
 
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
 	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
-	}
-	if data == nil {
-		return nil, nil
 	}
 
 	// Convert the raw response to the structured XClaimResponse format
