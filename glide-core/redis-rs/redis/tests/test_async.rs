@@ -906,7 +906,6 @@ mod basic_async {
         .unwrap();
     }
 
-    #[cfg(feature = "tls-rustls")]
     mod mtls_test {
         use super::*;
 

@@ -1370,17 +1370,12 @@ mod cluster_async {
                 for server in env.cluster.iter_servers() {
                     let addr = server.client_addr();
 
-                    #[cfg(feature = "tls-rustls")]
                     let client = build_single_client(
                         server.connection_info(),
                         &server.tls_paths,
                         _mtls_enabled,
                     )
                     .unwrap_or_else(|e| panic!("Failed to connect to '{addr}': {e}"));
-
-                    #[cfg(not(feature = "tls-rustls"))]
-                    let client = redis::Client::open(server.connection_info())
-                        .unwrap_or_else(|e| panic!("Failed to connect to '{addr}': {e}"));
 
                     let mut conn = client
                         .get_multiplexed_async_connection(GlideConnectionOptions::default())
@@ -6150,7 +6145,6 @@ mod cluster_async {
         assert_eq!(request_counter.load(Ordering::Relaxed), 1);
     }
 
-    #[cfg(feature = "tls-rustls")]
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
