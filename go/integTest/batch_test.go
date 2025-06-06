@@ -715,30 +715,30 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.Exists([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "Exists([slotHashedKey1])"})
 
-	batch.Expire(slotHashedKey1, 1)
+	batch.Expire(slotHashedKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "Expire(slotHashedKey1, 1)"})
-	batch.Expire(singleNodeKey1, 1)
+	batch.Expire(singleNodeKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(singleNodeKey1, 1)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.ExpireAt(slotHashedKey1, 0)
+	batch.ExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAt(slotHashedKey1, 0)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpire(slotHashedKey1, int64(5*1000))
+	batch.PExpire(slotHashedKey1, 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpire(slotHashedKey1, 5000)"})
-	batch.PExpire(prefix+"nonExistentKey", int64(5*1000))
+	batch.PExpire(prefix+"nonExistentKey", 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "PExpire(badkey, 5000)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpireAt(slotHashedKey1, 0)
+	batch.PExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(slotHashedKey1, 0)"})
 
 	if serverVer >= "7.0.0" {
-		batch.ExpireWithOptions(singleNodeKey1, 1, constants.HasExistingExpiry)
+		batch.ExpireWithOptions(singleNodeKey1, 1*time.Second, constants.HasExistingExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(singleNodeKey1, 1, HasExistingExpiry)"},
@@ -746,7 +746,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.ExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.ExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -754,7 +754,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireWithOptions(slotHashedKey1, int64(5*1000), constants.HasNoExpiry)
+		batch.PExpireWithOptions(slotHashedKey1, 5000*time.Millisecond, constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(slotHashedKey1, 5000, HasNoExpiry)"},
@@ -762,7 +762,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.PExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -823,7 +823,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 	batch.Set(slotHashedKey1, "value1")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
-	batch.Expire(slotHashedKey1, 100)
+	batch.Expire(slotHashedKey1, 100*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(slotHashedKey1, 100)"})
 	batch.Persist(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Persist(slotHashedKey1)"})
