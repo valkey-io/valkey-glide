@@ -3553,7 +3553,7 @@ func (client *baseClient) ExpireAtWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	expireTime - Duration for the key to expire
+//	expireTime - Duration for the key to expire.
 //
 // Return value:
 //
