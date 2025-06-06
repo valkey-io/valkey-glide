@@ -3155,7 +3155,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the HyperLogLog data structure to add elements into.
      * @param elements - An array of members to add to the HyperLogLog stored at `key`.
      * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-     *     altered, then returns `1`. Otherwise, returns `0`.
+     *     altered, then returns `true`. Otherwise, returns `false`.
      */
     public pfadd(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createPfAdd(key, elements));

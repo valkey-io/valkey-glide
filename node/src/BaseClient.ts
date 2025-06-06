@@ -6571,19 +6571,19 @@ export class BaseClient {
      * @param key - The key of the HyperLogLog data structure to add elements into.
      * @param elements - An array of members to add to the HyperLogLog stored at `key`.
      * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-     *     altered, then returns `1`. Otherwise, returns `0`.
+     *     altered, then returns `true`. Otherwise, returns `false`.
      * @example
      * ```typescript
      * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
-     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
+     * console.log(result); // Output: true - Indicates that a data structure was created or modified
      * const result = await client.pfadd("hll_2", []);
-     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
+     * console.log(result); // Output: true - Indicates that a new empty data structure was created
      * ```
      */
     public async pfadd(
         key: GlideString,
         elements: GlideString[],
-    ): Promise<number> {
+    ): Promise<boolean> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
 

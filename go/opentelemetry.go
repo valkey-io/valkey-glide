@@ -172,9 +172,10 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	defer p.Unpin()
 
 	if openTelemetryConfig.Traces != nil {
-		endpoint := C.CString(openTelemetryConfig.Traces.Endpoint)
+		tracesEndpoint := C.CString(openTelemetryConfig.Traces.Endpoint)
+		defer C.free(unsafe.Pointer(tracesEndpoint))
 		tracesConfig = &C.OpenTelemetryTracesConfig{
-			endpoint:              endpoint,
+			endpoint:              tracesEndpoint,
 			has_sample_percentage: true,
 			sample_percentage:     C.uint32_t(openTelemetryConfig.Traces.SamplePercentage),
 		}
@@ -183,9 +184,10 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	}
 
 	if openTelemetryConfig.Metrics != nil {
-		endpoint := C.CString(openTelemetryConfig.Metrics.Endpoint)
+		metricsEndpoint := C.CString(openTelemetryConfig.Metrics.Endpoint)
+		defer C.free(unsafe.Pointer(metricsEndpoint))
 		metricsConfig = &C.OpenTelemetryMetricsConfig{
-			endpoint: endpoint,
+			endpoint: metricsEndpoint,
 		}
 		p.Pin(unsafe.Pointer(metricsConfig))
 		cConfig.metrics = metricsConfig
