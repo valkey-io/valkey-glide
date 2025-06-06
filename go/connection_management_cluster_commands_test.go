@@ -94,7 +94,7 @@ func ExampleClusterClient_ClientSetName() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.SingleValue())
+	fmt.Println(result)
 
 	// Output: OK
 }
@@ -107,7 +107,7 @@ func ExampleClusterClient_ClientGetName() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.SingleValue() == connectionName)
+	fmt.Println(result.Value() == connectionName)
 
 	// Output: true
 }
@@ -120,7 +120,7 @@ func ExampleClusterClient_ClientSetNameWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.SingleValue())
+	fmt.Println(result)
 
 	// Output: OK
 }
@@ -134,7 +134,7 @@ func ExampleClusterClient_ClientGetNameWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result.SingleValue() == connectionName)
+	fmt.Println(result.SingleValue().Value() == connectionName)
 
 	// Output: true
 }
