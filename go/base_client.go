@@ -6882,15 +6882,24 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A stream information for the given `key`. See the example for a sample response.
+//	A models.XInfoStreamResponse containing information about the stream stored at key:
+//	- Length: the number of entries in the stream
+//	- RadixTreeKeys: the number of keys in the underlying radix data structure
+//	- RadixTreeNodes: the number of nodes in the underlying radix data structure
+//	- Groups: the number of consumer groups defined for the stream
+//	- LastGeneratedID: the ID of the least-recently entry that was added to the stream
+//	- MaxDeletedEntryID: the maximal entry ID that was deleted from the stream
+//	- EntriesAdded: the count of all entries added to the stream during its lifetime
+//	- FirstEntry: the ID and field-value tuples of the first entry in the stream
+//	- LastEntry: the ID and field-value tuples of the last entry in the stream
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[string]any, error) {
+func (client *baseClient) XInfoStream(ctx context.Context, key string) (models.XInfoStreamResponse, error) {
 	result, err := client.executeCommand(ctx, C.XInfoStream, []string{key})
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamResponse(result)
 }
 
 // Returns detailed information about the stream stored at `key`.

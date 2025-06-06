@@ -7742,11 +7742,18 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 
 		infoSmall, err := client.XInfoStream(context.Background(), key)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), infoSmall["length"])
-		assert.Equal(suite.T(), int64(1), infoSmall["groups"])
-		expectedEntry := []any{"1-0", []any{"a", "b", "c", "d"}}
-		assert.Equal(suite.T(), expectedEntry, infoSmall["first-entry"])
-		assert.Equal(suite.T(), expectedEntry, infoSmall["last-entry"])
+		
+		// Check the structured response
+		assert.Equal(suite.T(), int64(1), infoSmall.Length)
+		assert.Equal(suite.T(), int64(1), infoSmall.Groups)
+		assert.Equal(suite.T(), "1-0", infoSmall.FirstEntry.ID)
+		assert.Equal(suite.T(), "1-0", infoSmall.LastEntry.ID)
+		
+		// Check the fields in the first/last entry
+		assert.Equal(suite.T(), "b", infoSmall.FirstEntry.Fields["a"])
+		assert.Equal(suite.T(), "d", infoSmall.FirstEntry.Fields["c"])
+		assert.Equal(suite.T(), "b", infoSmall.LastEntry.Fields["a"])
+		assert.Equal(suite.T(), "d", infoSmall.LastEntry.Fields["c"])
 
 		xadd, err = client.XAddWithOptions(
 			context.Background(),

@@ -166,7 +166,7 @@ type StreamCommands interface {
 		options options.XClaimOptions,
 	) ([]string, error)
 
-	XInfoStream(ctx context.Context, key string) (map[string]any, error)
+	XInfoStream(ctx context.Context, key string) (models.XInfoStreamResponse, error)
 
 	XInfoStreamFullWithOptions(ctx context.Context, key string, options *options.XInfoStreamOptions) (map[string]any, error)
 

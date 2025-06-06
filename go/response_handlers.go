@@ -1749,3 +1749,101 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 
 	return zRangeResponseArray, nil
 }
+
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return models.XInfoStreamResponse{}, typeErr
+	}
+	
+	result, err := parseMap(response)
+	if err != nil {
+		return models.XInfoStreamResponse{}, err
+	}
+	
+	infoMap, ok := result.(map[string]any)
+	if !ok {
+		return models.XInfoStreamResponse{}, &errors.RequestError{Msg: fmt.Sprintf("unexpected type for stream info: %T", result)}
+	}
+	
+	streamInfo := models.XInfoStreamResponse{}
+	
+	// Parse integer fields
+	if val, ok := infoMap["length"].(int64); ok {
+		streamInfo.Length = val
+	}
+	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
+		streamInfo.RadixTreeKeys = val
+	}
+	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
+		streamInfo.RadixTreeNodes = val
+	}
+	if val, ok := infoMap["groups"].(int64); ok {
+		streamInfo.Groups = val
+	}
+	if val, ok := infoMap["entries-added"].(int64); ok {
+		streamInfo.EntriesAdded = val
+	}
+	
+	// Parse string fields
+	if val, ok := infoMap["last-generated-id"].(string); ok {
+		streamInfo.LastGeneratedID = val
+	}
+	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
+		streamInfo.MaxDeletedEntryID = val
+	}
+	
+	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
+	if firstEntryArray, ok := infoMap["first-entry"].([]any); ok && len(firstEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := firstEntryArray[0].(string); ok {
+			streamInfo.FirstEntry = models.StreamEntryInfo{
+				ID:     id,
+				Fields: make(map[string]string),
+			}
+			
+			// Second element is an array of field-value pairs
+			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
+				// Process field-value pairs (they come as alternating field, value, field, value...)
+				for i := 0; i < len(fieldValueArray); i += 2 {
+					if i+1 < len(fieldValueArray) {
+						if field, ok := fieldValueArray[i].(string); ok {
+							if value, ok := fieldValueArray[i+1].(string); ok {
+								streamInfo.FirstEntry.Fields[field] = value
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Parse last-entry - it's an array where first element is ID and second is array of field-value pairs
+	if lastEntryArray, ok := infoMap["last-entry"].([]any); ok && len(lastEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := lastEntryArray[0].(string); ok {
+			streamInfo.LastEntry = models.StreamEntryInfo{
+				ID:     id,
+				Fields: make(map[string]string),
+			}
+			
+			// Second element is an array of field-value pairs
+			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
+				// Process field-value pairs (they come as alternating field, value, field, value...)
+				for i := 0; i < len(fieldValueArray); i += 2 {
+					if i+1 < len(fieldValueArray) {
+						if field, ok := fieldValueArray[i].(string); ok {
+							if value, ok := fieldValueArray[i+1].(string); ok {
+								streamInfo.LastEntry.Fields[field] = value
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return streamInfo, nil
+}
