@@ -941,36 +941,60 @@ func handleScanResponse(response *C.struct_CommandResponse) (string, []string, e
 	return "", nil, err
 }
 
-func handleMapOfArrayOfStringArrayResponse(response *C.struct_CommandResponse) (map[string][][]string, error) {
+func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {
 	defer C.free_command_response(response)
-
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return nil, typeErr
 	}
-	mapData, err := parseMap(response)
+	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
 	}
 
-	return claimedEntries, nil
+	// Convert the raw response to the structured XClaimResponse format
+	result := make(map[string]models.XClaimResponse)
+
+	// Process the map data directly
+	claimMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+	}
+
+	for id, entriesArray := range claimMap {
+		// Process fields
+		fields := make(map[string]string)
+
+		entriesData, ok := entriesArray.([]any)
+		if !ok {
+			entriesData = []any{}
+		}
+
+		for _, entryData := range entriesData {
+			fieldValuePairs, ok := entryData.([]any)
+			if !ok || len(fieldValuePairs) < 2 {
+				continue
+			}
+
+			if ok && len(fieldValuePairs) > 0 {
+				for i := 0; i < len(fieldValuePairs); i += 2 {
+					if i+1 < len(fieldValuePairs) {
+						fieldName, okField := fieldValuePairs[i].(string)
+						fieldValue, okValue := fieldValuePairs[i+1].(string)
+						if okField && okValue {
+							fields[fieldName] = fieldValue
+						}
+					}
+				}
+			}
+		}
+
+		result[id] = models.XClaimResponse{
+			Fields: fields,
+		}
+	}
+
+	return result, nil
 }
 
 func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
