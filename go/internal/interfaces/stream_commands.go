@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -33,7 +34,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 	) (models.XAutoClaimResponse, error)
 
@@ -42,7 +43,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 		options options.XAutoClaimOptions,
 	) (models.XAutoClaimResponse, error)
@@ -52,7 +53,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 	) (models.XAutoClaimJustIdResponse, error)
 
@@ -61,7 +62,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 		options options.XAutoClaimOptions,
 	) (models.XAutoClaimJustIdResponse, error)
@@ -133,7 +134,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 	) (map[string]models.XClaimResponse, error)
 
@@ -142,7 +143,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 		options options.XClaimOptions,
 	) (map[string]models.XClaimResponse, error)
@@ -152,7 +153,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 	) ([]string, error)
 
@@ -161,7 +162,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 		options options.XClaimOptions,
 	) ([]string, error)

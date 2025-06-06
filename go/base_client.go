@@ -3402,7 +3402,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3411,7 +3411,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire
+//	expireTime - Duration for the key to expire
 //
 // Return value:
 //
@@ -3419,8 +3419,8 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *baseClient) Expire(ctx context.Context, key string, seconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds)})
+func (client *baseClient) Expire(ctx context.Context, key string, expireTime time.Duration) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.FloatToString(expireTime.Seconds())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3431,7 +3431,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3440,7 +3440,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire.
+//	expireTime - Duration for the key to expire
 //	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
@@ -3452,14 +3452,14 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 func (client *baseClient) ExpireWithOptions(
 	ctx context.Context,
 	key string,
-	seconds int64,
+	expireTime time.Duration,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr})
+	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.FloatToString(expireTime.Seconds()), expireConditionStr})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3472,7 +3472,7 @@ func (client *baseClient) ExpireWithOptions(
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3481,7 +3481,7 @@ func (client *baseClient) ExpireWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp
+//	expireTime - The timestamp for expiry.
 //
 // Return value:
 //
@@ -3489,8 +3489,8 @@ func (client *baseClient) ExpireWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
-func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
+func (client *baseClient) ExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error) {
+	result, err := client.executeCommand(ctx, C.ExpireAt, []string{key, utils.IntToString(expireTime.Unix())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3504,7 +3504,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3513,7 +3513,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry - see [options.ExpireCondition].
 //
 // Return value:
@@ -3525,7 +3525,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 func (client *baseClient) ExpireAtWithOptions(
 	ctx context.Context,
 	key string,
-	unixTimestampInSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
@@ -3534,7 +3534,7 @@ func (client *baseClient) ExpireAtWithOptions(
 	}
 	result, err := client.executeCommand(ctx,
 		C.ExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.Unix()), expireConditionStr},
 	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
@@ -3544,7 +3544,7 @@ func (client *baseClient) ExpireAtWithOptions(
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3553,7 +3553,7 @@ func (client *baseClient) ExpireAtWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire
 //
 // Return value:
 //
@@ -3561,8 +3561,8 @@ func (client *baseClient) ExpireAtWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
-func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds)})
+func (client *baseClient) PExpire(ctx context.Context, key string, expireTime time.Duration) (bool, error) {
+	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(expireTime.Milliseconds())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3571,7 +3571,7 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3580,7 +3580,7 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire
 //	option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
@@ -3592,14 +3592,14 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 func (client *baseClient) PExpireWithOptions(
 	ctx context.Context,
 	key string,
-	milliseconds int64,
+	expireTime time.Duration,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds), expireConditionStr})
+	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(expireTime.Milliseconds()), expireConditionStr})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3618,7 +3618,7 @@ func (client *baseClient) PExpireWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //
 // Return value:
 //
@@ -3626,8 +3626,8 @@ func (client *baseClient) PExpireWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
-func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
+func (client *baseClient) PExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error) {
+	result, err := client.executeCommand(ctx, C.PExpireAt, []string{key, utils.IntToString(expireTime.UnixMilli())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3646,7 +3646,7 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
@@ -3658,7 +3658,7 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 func (client *baseClient) PExpireAtWithOptions(
 	ctx context.Context,
 	key string,
-	unixTimestampInMilliSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
@@ -3667,7 +3667,7 @@ func (client *baseClient) PExpireAtWithOptions(
 	}
 	result, err := client.executeCommand(ctx,
 		C.PExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.UnixMilli()), expireConditionStr},
 	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
@@ -4679,7 +4679,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeout   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Return value:
@@ -5110,7 +5110,7 @@ func (client *baseClient) XAutoClaim(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimResponse, error) {
 	return client.XAutoClaimWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
@@ -5151,11 +5151,11 @@ func (client *baseClient) XAutoClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	options options.XAutoClaimOptions,
 ) (models.XAutoClaimResponse, error) {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := options.ToArgs()
 	if err != nil {
 		return models.XAutoClaimResponse{}, err
@@ -5202,7 +5202,7 @@ func (client *baseClient) XAutoClaimJustId(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimJustIdResponse, error) {
 	return client.XAutoClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
@@ -5243,11 +5243,11 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	opts options.XAutoClaimOptions,
 ) (models.XAutoClaimJustIdResponse, error) {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return models.XAutoClaimJustIdResponse{}, err
@@ -5507,7 +5507,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	ttl - The expiry time. If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //
 // Return value:
@@ -5515,7 +5515,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, value string) (string, error) {
+func (client *baseClient) Restore(ctx context.Context, key string, ttl time.Duration, value string) (string, error) {
 	return client.RestoreWithOptions(ctx, key, ttl, value, *options.NewRestoreOptions())
 }
 
@@ -5526,7 +5526,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, va
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	ttl - The expiry time. If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency.
 //
@@ -5535,7 +5535,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, va
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, ttl int64,
+func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, ttl time.Duration,
 	value string, options options.RestoreOptions,
 ) (string, error) {
 	optionArgs, err := options.ToArgs()
@@ -5544,7 +5544,7 @@ func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, tt
 	}
 	result, err := client.executeCommand(ctx, C.Restore, append([]string{
 		key,
-		utils.IntToString(ttl), value,
+		utils.IntToString(ttl.Milliseconds()), value,
 	}, optionArgs...))
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -6325,19 +6325,18 @@ func (client *baseClient) GetBit(ctx context.Context, key string, offset int64) 
 //
 //	ctx - The context for controlling the command execution.
 //	numberOfReplicas - The number of replicas to reach.
-//	timeout - The timeout value specified in milliseconds. A value of `0` will
-//	block indefinitely.
+//	timeout - The timeout value. A value of `0` will block indefinitely.
 //
 // Return value:
 //
 //	The number of replicas reached by all the writes performed in the context of the current connection.
 //
 // [valkey.io]: https://valkey.io/commands/wait/
-func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, timeout int64) (int64, error) {
+func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, timeout time.Duration) (int64, error) {
 	result, err := client.executeCommand(
 		ctx,
 		C.Wait,
-		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)},
+		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout.Milliseconds())},
 	)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -6452,7 +6451,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //
 // Return value:
@@ -6468,7 +6467,7 @@ func (client *baseClient) XClaim(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 ) (map[string]models.XClaimResponse, error) {
 	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
@@ -6484,7 +6483,7 @@ func (client *baseClient) XClaim(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6501,11 +6500,11 @@ func (client *baseClient) XClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) (map[string]models.XClaimResponse, error) {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6529,7 +6528,7 @@ func (client *baseClient) XClaimWithOptions(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6543,7 +6542,7 @@ func (client *baseClient) XClaimJustId(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 ) ([]string, error) {
 	return client.XClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
@@ -6560,7 +6559,7 @@ func (client *baseClient) XClaimJustId(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6574,11 +6573,11 @@ func (client *baseClient) XClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) ([]string, error) {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
