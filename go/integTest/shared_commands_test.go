@@ -1373,7 +1373,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewHashScanOptions().SetNoValue(true)
+			opts = options.NewHashScanOptions().SetNoValues(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
 			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)
@@ -8606,7 +8606,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}}, claimResult)
+		assert.Equal(
+			suite.T(),
+			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			claimResult,
+		)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,

@@ -87,6 +87,14 @@ func CreateNilFloat64Result() Result[float64] {
 	return Result[float64]{val: 0, isNil: true}
 }
 
+func CreateResultOf[T any](val T) Result[T] {
+	return Result[T]{val: val, isNil: false}
+}
+
+func CreateNilResultOf[T any]() Result[T] {
+	return Result[T]{isNil: true}
+}
+
 func CreateKeyWithMemberAndScoreResult(kmsVal KeyWithMemberAndScore) Result[KeyWithMemberAndScore] {
 	return Result[KeyWithMemberAndScore]{val: kmsVal, isNil: false}
 }
