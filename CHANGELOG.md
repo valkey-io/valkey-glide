@@ -111,6 +111,7 @@
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
 * Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
+* Go: Update options.Expiry to use time.Duration ([#4089](https://github.com/valkey-io/valkey-glide/pull/4089))
 * Go: XRead and XReadGroup response update ([#4085](https://github.com/valkey-io/valkey-glide/pull/4085))
 * Go: XClaim and XClaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
 * Modify `PFADD` to return a boolean rather than an integer ([#4094](https://github.com/valkey-io/valkey-glide/pull/4094))
@@ -121,6 +122,7 @@
 * Add support for Intel MAC (x86_64/amd64) ([#3482](https://github.com/valkey-io/valkey-glide/pull/3482))
 * Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
 * Java: Bump `netty` version ([#3804](https://github.com/valkey-io/valkey-glide/pull/3804))
+* Go: Fix `GeoHash`'s return type to allow for both strings and null ([#4098](https://github.com/valkey-io/valkey-glide/pull/4098))
 * Go: `ClientGetName` returns a nullable string ([#4088](https://github.com/valkey-io/valkey-glide/pull/4088))
 
 #### Operational Enhancements

@@ -7842,12 +7842,12 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // Returns value:
 //
-//	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	An array of GeoHash strings (of type models.Result[string]) representing the positions of the specified
+//	members stored at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
-func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]string, error) {
+func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx,
 		C.GeoHash,
 		append([]string{key}, members...),
@@ -7855,7 +7855,7 @@ func (client *baseClient) GeoHash(ctx context.Context, key string, members []str
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 // Returns the positions (longitude,latitude) of all the specified members of the

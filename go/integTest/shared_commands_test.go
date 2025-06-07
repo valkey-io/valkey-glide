@@ -125,7 +125,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
-			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(2000)))
+			SetExpiry(options.NewExpiryIn(2000 * time.Millisecond))
 		result, err := client.SetWithOptions(context.Background(), key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -134,7 +134,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		opts = options.NewSetOptions().SetExpiry(options.NewExpiry().SetType(constants.KeepExisting))
+		opts = options.NewSetOptions().SetExpiry(options.NewExpiryKeepExisting())
 		result, err = client.SetWithOptions(context.Background(), key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -156,7 +156,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		opts := options.NewSetOptions().
-			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(100500)))
+			SetExpiry(options.NewExpiryIn(100500 * time.Millisecond))
 		result, err := client.SetWithOptions(context.Background(), key, initialValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -166,7 +166,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 		assert.Equal(suite.T(), initialValue, result.Value())
 
 		opts = options.NewSetOptions().
-			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(2000)))
+			SetExpiry(options.NewExpiryIn(2000 * time.Millisecond))
 		result, err = client.SetWithOptions(context.Background(), key, anotherValue, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "OK", result.Value())
@@ -229,7 +229,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 		suite.verifyOK(client.Set(context.Background(), key, initialValue))
 
 		opts := options.NewGetExOptions().
-			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(2000)))
+			SetExpiry(options.NewExpiryIn(2000 * time.Millisecond))
 		result, err := client.GetExWithOptions(context.Background(), key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -240,7 +240,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 
 		time.Sleep(1000 * time.Millisecond)
 
-		opts = options.NewGetExOptions().SetExpiry(options.NewExpiry().SetType(constants.Persist))
+		opts = options.NewGetExOptions().SetExpiry(options.NewExpiryPersist())
 		result, err = client.GetExWithOptions(context.Background(), key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -253,7 +253,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 		suite.verifyOK(client.Set(context.Background(), key, initialValue))
 
 		opts := options.NewGetExOptions().
-			SetExpiry(options.NewExpiry().SetType(constants.Milliseconds).SetCount(uint64(2000)))
+			SetExpiry(options.NewExpiryIn(2000 * time.Millisecond))
 		result, err := client.GetExWithOptions(context.Background(), key, *opts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
@@ -10340,11 +10340,16 @@ func (suite *GlideTestSuite) TestGeoHash() {
 
 		// Test getting geohash for multiple members
 		geoHashResults, err := client.GeoHash(context.Background(), key1, []string{"Palermo", "Catania"})
-		fmt.Println(geoHashResults)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(geoHashResults))
-		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
-		assert.Equal(t, geoHashResults[1], "sqdtr74hyu0")
+		assert.Equal(t, "sqc8b49rny0", geoHashResults[0].Value())
+		assert.Equal(t, "sqdtr74hyu0", geoHashResults[1].Value())
+
+		// Test getting geohash for non-existent members
+		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{"Gotham City"})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(geoHashResults))
+		assert.True(t, geoHashResults[0].IsNil())
 
 		// Test getting geohash for empty members
 		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{})
@@ -10364,7 +10369,7 @@ func (suite *GlideTestSuite) TestGeoHash() {
 func (suite *GlideTestSuite) TestGetSet_SendLargeValues() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Run with a 5 second timeout
-		RunWithTimeout(suite.T(), 5, func(ctx context.Context) {
+		RunWithTimeout(suite.T(), 5*time.Second, func(ctx context.Context) {
 			key := suite.GenerateLargeUuid()
 			value := suite.GenerateLargeUuid()
 			suite.verifyOK(client.Set(ctx, key, value))
