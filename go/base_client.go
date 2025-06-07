@@ -4939,6 +4939,10 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 // Returns the rank of `member` in the sorted set stored at `key` with its
 // score, where scores are ordered from the lowest to highest, starting from `0`.
 //
+// Since:
+//
+//	Valkey 7.2.0 and above.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -4997,6 +5001,10 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
 // To get the rank of `member` with its score, see [ZRevRankWithScore].
+//
+// Since:
+//
+//	Valkey 7.2.0 and above.
 //
 // See [valkey.io] for details.
 //

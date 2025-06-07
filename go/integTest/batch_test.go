@@ -234,9 +234,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZRange(key1, options.NewRangeByIndexQuery(0, 2)).
 			ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, 2)).
 			ZRank(key1, "d").
-			ZRankWithScore(key1, "d").
 			ZRevRank(key1, "d").
-			ZRevRankWithScore(key1, "d").
 			ZScore(key1, "d").
 			ZScan(key1, "0").
 			ZScanWithOptions(key1, "0", *options.NewZScanOptions().SetMatch("abc")).
@@ -281,6 +279,11 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 				ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
 				LMPop([]string{key1}, constants.Left).
 				LMPopCount([]string{key1}, constants.Left, 42)
+		}
+		if suite.serverVersion >= "7.2.0" {
+			transaction.
+				ZRankWithScore(key1, "d").
+				ZRevRankWithScore(key1, "d")
 		}
 
 		res, err := runBatchOnClient(client, transaction, false, nil)

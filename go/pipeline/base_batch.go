@@ -3288,6 +3288,10 @@ func (b *BaseBatch[T]) ZRank(key string, member string) *T {
 // Returns the rank of `member` in the sorted set stored at `key` with its
 // score, where scores are ordered from the lowest to highest, starting from `0`.
 //
+// Since:
+//
+//	Valkey 7.2.0 and above.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -3329,6 +3333,10 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
 // To get the rank of `member` with its score, see [ZRevRankWithScore].
+//
+// Since:
+//
+//	Valkey 7.2.0 and above.
 //
 // See [valkey.io] for details.
 //
