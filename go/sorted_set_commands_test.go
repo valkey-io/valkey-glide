@@ -1457,7 +1457,7 @@ func ExampleClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1481,7 +1481,7 @@ func ExampleClusterClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1562,7 +1562,7 @@ func ExampleClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1591,7 +1591,7 @@ func ExampleClusterClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1648,7 +1648,7 @@ func ExampleClient_ZInterCardWithOptions() {
 
 	res, err := client.ZInterCardWithOptions(context.Background(),
 		[]string{key1, key2},
-		options.NewZInterCardOptions().SetLimit(5),
+		*options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1669,7 +1669,7 @@ func ExampleClusterClient_ZInterCardWithOptions() {
 
 	res, err := client.ZInterCardWithOptions(context.Background(),
 		[]string{key1, key2},
-		options.NewZInterCardOptions().SetLimit(5),
+		*options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1686,7 +1686,7 @@ func ExampleClient_ZLexCount() {
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
 	result, err := client.ZLexCount(context.Background(), "key1",
-		options.NewRangeByLexQuery(
+		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),
 		),
@@ -1706,7 +1706,7 @@ func ExampleClusterClient_ZLexCount() {
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
 	result, err := client.ZLexCount(context.Background(), "key1",
-		options.NewRangeByLexQuery(
+		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),
 		),
