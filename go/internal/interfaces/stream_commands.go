@@ -168,7 +168,7 @@ type StreamCommands interface {
 
 	XInfoStream(ctx context.Context, key string) (map[string]any, error)
 
-	XInfoStreamFullWithOptions(ctx context.Context, key string, options *options.XInfoStreamOptions) (map[string]any, error)
+	XInfoStreamFullWithOptions(ctx context.Context, key string, options options.XInfoStreamOptions) (map[string]any, error)
 
 	XInfoConsumers(ctx context.Context, key string, group string) ([]models.XInfoConsumerInfo, error)
 

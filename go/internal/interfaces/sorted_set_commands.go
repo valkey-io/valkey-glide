@@ -150,7 +150,7 @@ type SortedSetCommands interface {
 	ZUnionWithScores(
 		ctx context.Context,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
-		options *options.ZUnionOptions,
+		options options.ZUnionOptions,
 	) ([]models.MemberAndScore, error)
 
 	ZUnionStore(ctx context.Context, destination string, keysOrWeightedKeys options.KeysOrWeightedKeys) (int64, error)
@@ -159,12 +159,12 @@ type SortedSetCommands interface {
 		ctx context.Context,
 		destination string,
 		keysOrWeightedKeys options.KeysOrWeightedKeys,
-		zUnionOptions *options.ZUnionOptions,
+		zUnionOptions options.ZUnionOptions,
 	) (int64, error)
 
 	ZInterCard(ctx context.Context, keys []string) (int64, error)
 
-	ZInterCardWithOptions(ctx context.Context, keys []string, options *options.ZInterCardOptions) (int64, error)
+	ZInterCardWithOptions(ctx context.Context, keys []string, options options.ZInterCardOptions) (int64, error)
 
-	ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error)
+	ZLexCount(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error)
 }

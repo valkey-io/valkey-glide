@@ -6916,16 +6916,14 @@ func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[stri
 func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
-	opts *options.XInfoStreamOptions,
+	opts options.XInfoStreamOptions,
 ) (map[string]any, error) {
 	args := []string{key, constants.FullKeyword}
-	if opts != nil {
-		optionArgs, err := opts.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
 		return nil, err
@@ -7428,7 +7426,7 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 func (client *baseClient) ZUnionWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
@@ -7475,7 +7473,7 @@ func (client *baseClient) ZUnionStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, nil)
+	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZUnionOptionsBuilder())
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -7508,20 +7506,18 @@ func (client *baseClient) ZUnionStoreWithOptions(
 	ctx context.Context,
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) (int64, error) {
 	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
 	args := append([]string{destination}, keysArgs...)
-	if zUnionOptions != nil {
-		optionsArgs, err := zUnionOptions.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7552,7 +7548,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64, error) {
-	return client.ZInterCardWithOptions(ctx, keys, nil)
+	return client.ZInterCardWithOptions(ctx, keys, *options.NewZInterCardOptions())
 }
 
 // Returns the cardinality of the intersection of the sorted sets specified by `keys`.
@@ -7583,16 +7579,14 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 func (client *baseClient) ZInterCardWithOptions(
 	ctx context.Context,
 	keys []string,
-	options *options.ZInterCardOptions,
+	options options.ZInterCardOptions,
 ) (int64, error) {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
-	if options != nil {
-		optionsArgs, err := options.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZInterCard, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7615,7 +7609,7 @@ func (client *baseClient) ZInterCardWithOptions(
 //	The number of elements in the sorted set at key with a value between min and max.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
-func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error) {
+func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error) {
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(ctx, C.ZLexCount, args)
