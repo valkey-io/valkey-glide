@@ -231,8 +231,6 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZPopMax(key1).
 			ZPopMaxWithOptions(key1, *options.NewZPopOptions().SetCount(2)).
 			ZRange(key1, options.NewRangeByIndexQuery(0, 2)).
-			ZMPop([]string{key1}, constants.MAX).
-			ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
 			ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, 2)).
 			ZRank(key1, "d").
 			ZRankWithScore(key1, "d").
@@ -245,7 +243,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZDiffWithScores([]string{key1, key2}).
 			ZRandMember(key1).
 			ZRandMemberWithCount(key1, 42).
-			ZRandMemberWithCount(key1, 42).
+			ZRandMemberWithCountWithScores(key1, 42).
 			ZMScore(key1, []string{"a"}).
 			ZInter(options.KeyArray{Keys: []string{key1, key2}}).
 			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
@@ -278,6 +276,8 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 
 		if suite.serverVersion >= "7.0.0" {
 			transaction.
+				ZMPop([]string{key1}, constants.MAX).
+				ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
 				LMPop([]string{key1}, constants.Left).
 				LMPopCount([]string{key1}, constants.Left, 42)
 		}
@@ -288,7 +288,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			suite.Equal("WRONGTYPE: Operation against a key holding the wrong kind of value", resp.(error).Error(), i)
 		}
 
-		if suite.serverVersion >= "7.0.0" {
+		if suite.serverVersion < "7.0.0" {
 			return
 		}
 		// LCS has another error message
