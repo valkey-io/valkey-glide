@@ -37,9 +37,6 @@ on:
                 type: boolean
                 default: true
 
-    schedule:
-        - cron: "0 3 * * *"
-
 concurrency:
     group: nightly-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
