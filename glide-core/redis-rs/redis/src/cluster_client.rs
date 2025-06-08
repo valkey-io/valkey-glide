@@ -12,16 +12,11 @@ use rand::Rng;
 use std::ops::Add;
 use std::time::Duration;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
-
-#[cfg(not(feature = "tls-rustls"))]
-use crate::connection::TlsConnParams;
 
 #[cfg(feature = "cluster-async")]
 use crate::cluster_async;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::{retrieve_tls_certificates, TlsCertificates};
 
 use tokio::sync::mpsc;
@@ -35,7 +30,6 @@ struct BuilderParams {
     username: Option<String>,
     read_from_replicas: ReadFromReplicaStrategy,
     tls: Option<TlsMode>,
-    #[cfg(feature = "tls-rustls")]
     certs: Option<TlsCertificates>,
     retries_configuration: RetryParams,
     connection_timeout: Option<Duration>,
@@ -154,10 +148,6 @@ pub struct ClusterParams {
 
 impl ClusterParams {
     fn from(value: BuilderParams) -> RedisResult<Self> {
-        #[cfg(not(feature = "tls-rustls"))]
-        let tls_params = None;
-
-        #[cfg(feature = "tls-rustls")]
         let tls_params = {
             let retrieved_tls_params = value.certs.clone().map(retrieve_tls_certificates);
 
@@ -353,7 +343,6 @@ impl ClusterClientBuilder {
     /// Sets TLS mode for the new ClusterClient.
     ///
     /// It is extracted from the first node of initial_nodes if not set.
-    #[cfg(any(feature = "tls-native-tls", feature = "tls-rustls"))]
     pub fn tls(mut self, tls: TlsMode) -> ClusterClientBuilder {
         self.builder_params.tls = Some(tls);
         self
@@ -374,7 +363,6 @@ impl ClusterClientBuilder {
     ///
     /// If `ClientTlsConfig` ( cert+key pair ) is not provided, then client-side authentication is not enabled.
     /// If `root_cert` is not provided, then system root certificates are used instead.
-    #[cfg(feature = "tls-rustls")]
     pub fn certs(mut self, certificates: TlsCertificates) -> ClusterClientBuilder {
         self.builder_params.tls = Some(TlsMode::Secure);
         self.builder_params.certs = Some(certificates);
