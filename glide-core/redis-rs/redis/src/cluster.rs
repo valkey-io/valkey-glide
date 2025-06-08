@@ -65,11 +65,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
-
-#[cfg(not(feature = "tls-rustls"))]
-use crate::connection::TlsConnParams;
 
 #[derive(Clone)]
 enum Input<'a> {

@@ -18,11 +18,7 @@ use std::path::Path;
 use std::pin::Pin;
 use std::time::Duration;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
-
-#[cfg(all(feature = "tls-native-tls", not(feature = "tls-rustls")))]
-use crate::connection::TlsConnParams;
 
 /// Enables the tokio compatibility
 #[cfg(feature = "tokio-comp")]
@@ -36,7 +32,6 @@ pub(crate) trait RedisRuntime: AsyncStream + Send + Sync + Sized + 'static {
     async fn connect_tcp(socket_addr: SocketAddr) -> RedisResult<Self>;
 
     // Performs a TCP TLS connection
-    #[cfg(any(feature = "tls-native-tls", feature = "tls-rustls"))]
     async fn connect_tcp_tls(
         hostname: &str,
         socket_addr: SocketAddr,
