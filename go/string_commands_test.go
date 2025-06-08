@@ -5,8 +5,7 @@ package glide
 import (
 	"context"
 	"fmt"
-
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -39,9 +38,7 @@ func ExampleClient_SetWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewSetOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -55,9 +52,7 @@ func ExampleClusterClient_SetWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewSetOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(uint64(5)))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -156,9 +151,7 @@ func ExampleClient_GetExWithOptions() {
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -177,9 +170,7 @@ func ExampleClusterClient_GetExWithOptions() {
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(uint64(5)))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
