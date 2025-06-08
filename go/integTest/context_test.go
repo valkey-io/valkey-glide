@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -33,15 +34,14 @@ func (suite *GlideTestSuite) TestContext_CancelBeforeExecution() {
 func (suite *GlideTestSuite) TestContext_CancelDuringExecution() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create a context with a short timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		// Start a long-running command (BLPOP) that will block for a while
-		_, err := client.BLPop(ctx, []string{"testList"}, 10.0)
+		_, err := client.BLPop(ctx, []string{"testList"}, 10*time.Second)
 
 		// Verify that the command fails with context deadline exceeded error
-		assert.Error(suite.T(), err)
-		assert.Contains(suite.T(), err.Error(), "context deadline exceeded")
+		suite.ErrorContains(err, "context deadline exceeded")
 	})
 }
 
@@ -84,7 +84,7 @@ func (suite *GlideTestSuite) TestContext_CancelWithScan() {
 		cancel() // Cancel immediately
 
 		// Create a new cluster scan cursor
-		cursor := options.NewClusterScanCursor()
+		cursor := models.NewClusterScanCursor()
 
 		// Try to perform a scan with cancelled context
 		scanOpts := options.NewClusterScanOptions().
@@ -92,7 +92,7 @@ func (suite *GlideTestSuite) TestContext_CancelWithScan() {
 			SetCount(10)
 
 		// Use the correct API
-		_, _, err := clusterClient.ScanWithOptions(ctx, *cursor, *scanOpts)
+		_, err := clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
 
 		// Verify that the command fails with context cancellation error
 		assert.Error(suite.T(), err)

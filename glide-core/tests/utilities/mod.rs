@@ -661,6 +661,7 @@ pub fn create_connection_request(
     if let Some(client_az) = &configuration.client_az {
         connection_request.client_az = client_az.deref().into();
     }
+    connection_request.lazy_connect = configuration.lazy_connect;
 
     connection_request
 }
@@ -678,6 +679,7 @@ pub struct TestConfiguration {
     pub client_name: Option<String>,
     pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
+    pub lazy_connect: bool,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
