@@ -17,7 +17,6 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::{inner_build_with_tls, TlsCertificates};
 
 /// The client type.
@@ -537,7 +536,6 @@ impl Client {
     ///     Ok(())
     /// }
     /// ```
-    #[cfg(feature = "tls-rustls")]
     pub fn build_with_tls<C: IntoConnectionInfo>(
         conn_info: C,
         tls_certs: TlsCertificates,
