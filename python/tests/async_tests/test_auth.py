@@ -4,7 +4,7 @@
 import anyio
 import pytest
 
-from glide.glide_client import TGlideClient
+from glide.async_.glide_client import TGlideClient
 from glide.shared.config import ProtocolVersion
 from glide.shared.constants import OK
 from glide.shared.exceptions import RequestError

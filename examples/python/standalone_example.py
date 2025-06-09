@@ -13,6 +13,7 @@ from glide import (
     TimeoutError as GlideTimeoutError
 )
 
+from glide import GlideClientConfiguration
 
 async def create_client(
     nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]

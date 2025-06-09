@@ -28,8 +28,8 @@ from glide.glide import (
     start_socket_listener_external,
     value_from_pointer,
 )
-from glide.logger import Level as LogLevel
-from glide.logger import Logger as ClientLogger
+from glide.shared.logger import Level as LogLevel
+from glide.shared.logger import Logger as ClientLogger
 from glide.shared.commands.async_commands.cluster_commands import ClusterCommands
 from glide.shared.commands.async_commands.core import CoreCommands
 from glide.shared.commands.async_commands.standalone_commands import StandaloneCommands

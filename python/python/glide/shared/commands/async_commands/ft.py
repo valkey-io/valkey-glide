@@ -5,7 +5,6 @@ module for `vector search` commands.
 
 from typing import List, Mapping, Optional, cast
 
-from glide.glide_client import TGlideClient
 from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
 )
@@ -30,6 +29,7 @@ from glide.shared.constants import (
     FtProfileResponse,
     FtSearchResponse,
     TEncodable,
+    TAsyncGlideClient as TGlideClient
 )
 
 

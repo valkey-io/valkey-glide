@@ -7,8 +7,8 @@ from typing import List, Optional, Union, cast
 
 import pytest
 
-from glide import RequestError, TimeoutError
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.async_.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.shared import RequestError, TimeoutError
 from glide.shared.commands.batch import (
     BaseBatch,
     Batch,
