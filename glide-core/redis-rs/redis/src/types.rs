@@ -645,6 +645,29 @@ impl Value {
         }
     }
 
+    /// Checks if the value is an error and returns it as a `RedisResult<()>`.
+    ///
+    /// Unlike `extract_error`, this method does not search for errors in nested structures.
+    pub fn peak_error(self) -> RedisResult<Self> {
+        match self {
+            Value::ServerError(err) => Err(err.into()),
+            Value::Array(_)
+            | Value::BigNumber(_)
+            | Value::Boolean(_)
+            | Value::BulkString(_)
+            | Value::Double(_)
+            | Value::Int(_)
+            | Value::Nil
+            | Value::Okay
+            | Value::SimpleString(_)
+            | Value::VerbatimString { .. }
+            | Value::Map(_)
+            | Value::Attribute { .. }
+            | Value::Set(_)
+            | Value::Push { .. } => Ok(self),
+        }
+    }
+
     /// Extract an error from vec of Values
     pub fn extract_error_vec(vec: Vec<Self>) -> RedisResult<Vec<Self>> {
         vec.into_iter()
