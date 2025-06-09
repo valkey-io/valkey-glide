@@ -43,6 +43,10 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
+            run-modules-tests:
+                description: "Run modules tests"
+                type: boolean
+                default: false
 
     workflow_call:
 
@@ -303,7 +307,7 @@ jobs:
               name: lint java rust
 
     test-modules:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
         environment: AWS_ACTIONS
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64, persistent]
