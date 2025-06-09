@@ -1604,18 +1604,18 @@ where
     /// 2. **Policy Dispatch**:
     ///    - **OneSucceeded**: Waits for the first successful (non‐error) reply, returning it and dropping others.
     ///    - **FirstSucceededNonEmptyOrAllEmpty**: As replies arrive:
-    ///        • Returns the first non‐Nil value immediately.
-    ///        • If all replies are `Ok(Value::Nil)`, returns `Value::Nil`.
-    ///        • If any node errors (and no non‐Nil value has been returned), returns the last error seen.
+    ///      • Returns the first non‐Nil value immediately.
+    ///      • If all replies are `Ok(Value::Nil)`, returns `Value::Nil`.
+    ///      • If any node errors (and no non‐Nil value has been returned), returns the last error seen.
     ///    - **All other policies** (e.g., AllSucceeded, Aggregate, CombineArrays, CombineMaps, Special, None):
-    ///        • Waits for all node replies to complete (or error at the channel level).
-    ///        • Converts each `Response` into a `Value` (extracting `Response::Single`).
-    ///        • Delegates to `aggregate_resolved_results` for final interpretation.
+    ///      • Waits for all node replies to complete (or error at the channel level).
+    ///      • Converts each `Response` into a `Value` (extracting `Response::Single`).
+    ///      • Delegates to `aggregate_resolved_results` for final interpretation.
     ///
     /// # Arguments
     ///
     /// * `receivers`: A list of `(node_address, oneshot::Receiver<RedisResult<Response>>)` pairs.
-    ///    Each receiver will yield exactly one `Response` (or error) from its node.
+    ///   Each receiver will yield exactly one `Response` (or error) from its node.
     /// * `routing` – The routing information of the command (e.g., multi‐slot, `AllNodes`, `AllPrimaries`).
     /// * `response_policy` – An `Option<ResponsePolicy>` that dictates how to aggregate the results from the different nodes.
     ///
@@ -1625,27 +1625,27 @@ where
     ///
     /// - **OneSucceeded**: Returns the very first successful `Value` or an error, if all failed.
     /// - **FirstSucceededNonEmptyOrAllEmpty**:
-    ///     • Returns the first non‐`Nil` reply, if any.
-    ///     • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
-    ///     • Otherwise, returns the last error encountered.
+    ///   • Returns the first non‐`Nil` reply, if any.
+    ///   • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
+    ///   • Otherwise, returns the last error encountered.
     /// - **AllSucceeded**:
-    ///     • Fails on any `ServerError`.
-    ///     • Otherwise returns the last `Value` in the collected list.
+    ///   • Fails on any `ServerError`.
+    ///   • Otherwise returns the last `Value` in the collected list.
     /// - **Aggregate / AggregateLogical**:
-    ///     • Fails on any `ServerError`.
-    ///     • Otherwise calls `cluster_routing::aggregate(all_values, op)` or
-    ///       `cluster_routing::logical_aggregate(all_values, op)`.
+    ///   • Fails on any `ServerError`.
+    ///   • Otherwise calls `cluster_routing::aggregate(all_values, op)` or
+    ///   `cluster_routing::logical_aggregate(all_values, op)`.
     /// - **CombineArrays**:
-    ///     • Fails on any `ServerError`.
-    ///     • Collects all node replies into a `Vec<Value>`.
-    ///     • If `routing` is `MultiSlot`, calls `combine_and_sort_array_results` to handle per‐slot arrays and reorder them.
-    ///     • Otherwise, calls `combine_array_results` to concatenate arrays.
+    ///   • Fails on any `ServerError`.
+    ///   • Collects all node replies into a `Vec<Value>`.
+    ///   • If `routing` is `MultiSlot`, calls `combine_and_sort_array_results` to handle per‐slot arrays and reorder them.
+    ///   • Otherwise, calls `combine_array_results` to concatenate arrays.
     /// - **CombineMaps**:
-    ///     • Fails on any `ServerError`.
-    ///     • Otherwise calls `combine_map_results` to merge multiple maps into one.
+    ///   • Fails on any `ServerError`.
+    ///   • Otherwise calls `combine_map_results` to merge multiple maps into one.
     /// - **Special / None**:
-    ///     • Fails on any `ServerError`.
-    ///     • Builds a `Value::Map` where each entry is `(Value::BulkString(node_address), value)`.
+    ///   • Fails on any `ServerError`.
+    ///   • Builds a `Value::Map` where each entry is `(Value::BulkString(node_address), value)`.
     pub async fn aggregate_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         routing: &MultipleNodeRoutingInfo,
@@ -1813,10 +1813,10 @@ where
     /// * **OneSucceeded**:  
     ///     - Returns the last non-error `Value` in the resolved list.  
     /// * **FirstSucceededNonEmptyOrAllEmpty**:  
-    ///     - Iterates through `resolved` in order:  
-    ///     • Returns the first non‐`Nil` reply, if any.
-    ///     • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
-    ///     • Otherwise, returns the last error encountered.
+    ///  - Iterates through `resolved` in order:  
+    ///    • Returns the first non‐`Nil` reply, if any.
+    ///    • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
+    ///    • Otherwise, returns the last error encountered.
     fn aggregate_resolved_results(
         resolved: Vec<(Option<String>, Value)>,
         routing: &MultipleNodeRoutingInfo,
@@ -1853,7 +1853,7 @@ where
             // ——————————————————————————————————————————
             Some(ResponsePolicy::AllSucceeded) => resolved
                 .into_iter()
-                .last()
+                .next_back()
                 .map(|(_, val)| val)
                 .ok_or_else(|| {
                     RedisError::from((
