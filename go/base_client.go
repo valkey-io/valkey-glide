@@ -319,7 +319,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, errors.New("ExecuteCommand failed due to invalid route")
+			return nil, errors.New("executeCommand failed due to invalid route")
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -342,7 +342,7 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, NewClosingError("ExecuteCommand failed: the client is closed")
+		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
