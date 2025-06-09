@@ -46,7 +46,6 @@ func (route SimpleNodeRoute) IsMultiNode() bool { return route != SimpleNodeRout
 func (route SimpleSingleNodeRoute) IsMultiNode() bool { return false }
 func (route SimpleMultiNodeRoute) IsMultiNode() bool  { return true }
 func (route SimpleSingleNodeRoute) dummy()            {}
-func (route SimpleMultiNodeRoute) dummy()             {}
 
 func (snr SimpleSingleNodeRoute) ToPtr() *Route {
 	a := Route(snr)
