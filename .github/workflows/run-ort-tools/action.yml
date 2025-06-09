@@ -13,13 +13,21 @@ runs:
           working-directory: ./ort/
           shell: bash
           env:
-              FOLDER_PATH: ${{ inputs.folder_path }}
+              FOLDER: ${{ inputs.folder_path }}
           run: |
-              echo "Running ORT tools for $FOLDER_PATH"
-              FOLDER="$FOLDER_PATH"
+              echo "Running ORT tools for $FOLDER"
               mkdir $FOLDER/ort_results
               # Analyzer (analyzer-result.json)
-              ./gradlew cli:run --args="analyze -i $FOLDER -o $FOLDER/ort_results -f JSON"
+              ./gradlew cli:run --args="--info analyze -i $FOLDER -o $FOLDER/ort_results -f JSON"
 
               # NOTICE DEFAULT
-              ./gradlew cli:run --args="report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate"
+              ./gradlew cli:run --args="--info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate"
+
+        - name: Upload ORT results
+          if: always()
+          continue-on-error: true
+          uses: actions/upload-artifact@v4
+          with:
+              name: ort_results-${{ inputs.folder_path }}
+              path: |
+                  ${{ inputs.folder_path }}/ort_results/**
