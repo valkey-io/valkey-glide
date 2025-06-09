@@ -17,7 +17,7 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
-        "languages": ["python", "node", "java", "go", "dotnet"]
+        "languages": ["python", "node", "java", "go"]
     },
     {
         "OS": "macos",
@@ -70,6 +70,14 @@
         "TARGET": "x86_64-unknown-linux-gnu",
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
-        "languages": ["python", "node", "java", "go", "dotnet"]
+        "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "RUNNER": "windows-latest",
+        "languages": ["dotnet"]
     }
 ]

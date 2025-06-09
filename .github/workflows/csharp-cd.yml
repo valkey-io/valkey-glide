@@ -1,0 +1,472 @@
+name: C# - Continuous Deployment
+
+on:
+    pull_request:
+        paths:
+            - .github/workflows/csharp-cd.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/workflows/install-rust-and-protoc/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
+            - .github/workflows/create-test-matrices/action.yml
+    push:
+        tags:
+            - "v*.*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
+                required: true
+            publish:
+                description: "Publish"
+                required: true
+                type: boolean
+                default: false
+
+permissions:
+    id-token: write
+
+jobs:
+    #start-self-hosted-runner:
+    #    if: github.repository_owner == 'valkey-io'
+    #    runs-on: ubuntu-latest
+    #    environment: AWS_ACTIONS
+    #    steps:
+    #        - name: Checkout
+    #          uses: actions/checkout@v4
+    #          with:
+    #              fetch-depth: 0
+    #        - name: Start self hosted EC2 runner
+    #          uses: ./.github/workflows/start-self-hosted-runner
+    #          with:
+    #              role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+    #              aws-region: ${{ secrets.AWS_REGION }}
+    #              ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
+    load-platform-matrix:
+        name: Load Platform Matrix
+        runs-on: ubuntu-latest
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Load build matrix JSON
+              id: load-matrix
+              run: |
+                  echo "Reading .github/json_matrices/build-matrix.json..."
+                  MATRIX_JSON=$(jq -c '[.[] | select(.languages | index("dotnet"))]' .github/json_matrices/build-matrix.json)
+                  echo "Loaded matrix: $MATRIX_JSON"
+
+                  # Set it as step output (must be single-line JSON string)
+                  echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+    publish-assets:
+        # needs: [start-self-hosted-runner, load-platform-matrix]
+        needs: [load-platform-matrix]
+        # if: github.repository_owner == 'valkey-io'
+        name: Publish assets to NuGet
+        runs-on: ${{ matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
+        steps:
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.build.languages, 'csharp') && contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            # For MUSL on X64 we need to install git since we use the checkout action
+            - name: Install git for musl
+              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
+              run: |
+                  apk update
+                  apk add git
+
+            - name: Checkout
+              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+                  fetch-depth: 0
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
+            - name: Check that the release version dont have typo init
+              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
+              run: |
+                  echo "The release version "${RELEASE_VERSION}" contains a typo, please fix it"
+                  echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                  exit 1
+
+            - name: Update version in csharp/props/version.props - Bash
+              shell: bash
+              if: ${{ matrix.build.TARGET != 'x86_64-pc-windows-msvc' }}
+              run: |
+                  VERSION="${RELEASE_VERSION:-}"
+
+                  if [[ -z "$VERSION" ]]; then
+                      echo "::error::RELEASE_VERSION environment variable not set"
+                      exit 1
+                  fi
+
+                  echo "Setting VersionPrefix=$VERSION in csharp/props/version.props"
+
+                  # Use safe escaping for VERSION (handles dots, +, etc.)
+                  ESCAPED_VERSION=$(printf '%s\n' "$VERSION" | sed 's/[&/\]/\\&/g')
+
+                  # Portable sed -i for both GNU and BSD sed:
+                  if sed --version >/dev/null 2>&1; then
+                      # GNU sed
+                      sed -i "s#<VersionPrefix>.*</VersionPrefix>#<VersionPrefix>$ESCAPED_VERSION</VersionPrefix>#" csharp/props/version.props
+                  else
+                      # BSD sed (macOS)
+                      sed -i '' "s#<VersionPrefix>.*</VersionPrefix>#<VersionPrefix>$ESCAPED_VERSION</VersionPrefix>#" csharp/props/version.props
+                  fi
+
+                  echo "Updated csharp/props/version.props:"
+                  cat csharp/props/version.props
+
+            - name: Update version in csharp/props/version.props - Powershell
+              if: ${{ matrix.build.TARGET == 'x86_64-pc-windows-msvc' }}
+              shell: pwsh
+              run: |
+                  $VERSION = $env:RELEASE_VERSION
+                  if (-not $VERSION) {
+                      Write-Error "RELEASE_VERSION environment variable not set"
+                      exit 1
+                  }
+
+                  Write-Host "Setting VersionPrefix=$VERSION in csharp/props/version.props"
+
+                  $content = Get-Content csharp/props/version.props -Raw
+                  $newContent = $content -replace '<VersionPrefix>.*</VersionPrefix>', "<VersionPrefix>$VERSION</VersionPrefix>"
+                  Set-Content -Path csharp/props/version.props -Value $newContent
+
+                  Write-Host "Updated csharp/props/version.props:"
+                  Get-Content csharp/props/version.props
+
+            - name: Select project
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  TARGET="${{ matrix.build.TARGET }}"
+                  echo "Searching for TARGET=$TARGET"
+
+                  found=0
+
+                  while IFS= read -r csproj_file; do
+                      rust_tuple=$(cat "$csproj_file" | grep -o '<RustTuple>[^<]*</RustTuple>' | sed 's/<[^>]*>//g' || true)
+
+                      if [[ -z "$rust_tuple" ]]; then
+                          echo "Skipping: $csproj_file"
+                          continue
+                      fi
+
+                      echo "Checking $csproj_file : RustTuple=$rust_tuple"
+
+                      if [[ "$rust_tuple" == "$TARGET" ]]; then
+                          echo "Match found: $csproj_file"
+                          echo "DOTNET_PROJECT_PATH=$csproj_file" >> "$GITHUB_ENV"
+                          found=1
+                          break
+                      fi
+                  done < <(find ./csharp/assets/ -type f -name "*.csproj")
+
+                  if [[ "$found" -eq 0 ]]; then
+                      echo "No matching project found for TARGET=$TARGET"
+                      exit 1
+                  fi
+
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  arch: ${{ matrix.build.ARCH }}
+
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
+
+            - name: Update package version in config.toml
+              uses: ./.github/workflows/update-glide-version
+              with:
+                  folder_path: "${{ github.workspace }}/csharp/rust/.cargo"
+                  named_os: ${{ matrix.build.NAMED_OS }}
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.TARGET }}-csharp
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
+            - name: Setup NuGet.exe for use with actions
+              uses: NuGet/setup-nuget@v1.0.5
+              with:
+                  nuget-version: latest
+
+            - name: Restore dependencies - Bash
+              if: ${{ matrix.build.TARGET != 'x86_64-pc-windows-msvc' }}
+              shell: bash
+              run: |
+                  dotnet restore $DOTNET_PROJECT_PATH
+
+            - name: Restore dependencies - Powershell
+              if: ${{ matrix.build.TARGET == 'x86_64-pc-windows-msvc' }}
+              shell: pwsh
+              run: |
+                  dotnet restore $env:DOTNET_PROJECT_PATH
+
+            - name: Build - Bash
+              if: ${{ matrix.build.TARGET != 'x86_64-pc-windows-msvc' }}
+              shell: bash
+              run: dotnet build --no-restore --configuration Release $DOTNET_PROJECT_PATH
+
+            - name: Build - Powershell
+              if: ${{ matrix.build.TARGET == 'x86_64-pc-windows-msvc' }}
+              shell: pwsh
+              run: dotnet build --no-restore --configuration Release $env:DOTNET_PROJECT_PATH
+
+            - name: Pack - Bash
+              if: ${{ matrix.build.TARGET != 'x86_64-pc-windows-msvc' }}
+              shell: bash
+              run: dotnet pack --no-build --configuration Release $DOTNET_PROJECT_PATH
+
+            - name: Pack - Powershell
+              if: ${{ matrix.build.TARGET == 'x86_64-pc-windows-msvc' }}
+              shell: pwsh
+              run: dotnet pack --no-build --configuration Release $env:DOTNET_PROJECT_PATH
+
+            - name: Prepare file matrix for upload
+              id: set-artifact-matrix
+              shell: bash
+              run: |
+                  # Initialize an empty array for JSON objects
+                  declare -a json_objects=()
+
+                  # Loop through .nupkg files
+                  for file in csharp/**/*.nupkg csharp/**/*.snupkg; do
+                    # Check if file exists (to handle case when no matches are found)
+                    if [ -f "$file" ]; then
+                      filename=$(basename "$file")
+                      json_objects+=("{\"file\":\"$file\",\"filename\":\"$filename\"}")
+                    fi
+                  done
+
+                  # Combine all JSON objects into an array and save to output
+                  if [ ${#json_objects[@]} -eq 0 ]; then
+                    echo "files=[]" >> "$GITHUB_OUTPUT"
+                  else
+                    json_array="[$(IFS=,; echo "${json_objects[*]}")]"
+                    echo "files=$json_array" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: Asset - ${{ matrix.build.TARGET }}
+                  path: |
+                      csharp/**/*.nupkg
+                      csharp/**/*.snupkg
+
+            - name: Upload packages to NuGet
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              run: |
+                  dotnet nuget push $DOTNET_PROJECT_PATH/bin/Release/*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+
+    publish-all-assets-nuget:
+        name: Publish All Assets Package to NuGet
+        needs: publish-assets
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Set up dotnet
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: |
+                      9
+                      8.0.x
+
+            - name: Setup NuGet.exe for use with actions
+              uses: NuGet/setup-nuget@v1.0.5
+              with:
+                  nuget-version: latest
+
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` variable
+              run: echo "VALKEY_SKIP_BUILD_ASSETS=TRUE" >> $GITHUB_ENV
+
+            - name: Restore "All Assets"
+              # We run --no-build here as the All package is only linking the other asset packages.
+              run: dotnet restore csharp/assets/Valkey.Glide.Assets.All/Valkey.Glide.Assets.All.csproj
+
+            - name: Pack "All Assets"
+              # We run --no-build here as the All package is only linking the other asset packages.
+              run: dotnet pack --no-build --configuration Release csharp/assets/Valkey.Glide.Assets.All/Valkey.Glide.Assets.All.csproj
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: All Assets link
+                  path: |
+                      csharp/assets/Valkey.Glide.Assets.All/bin/Release/*.nupkg
+                      csharp/assets/Valkey.Glide.Assets.All/bin/Release/*.snupkg
+
+            - name: Upload packages to NuGet
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              run: dotnet nuget push csharp/assets/Valkey.Glide.Assets.All/bin/Release/*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+
+    publish-dotnet-projects-nuget:
+        name: Publish normal packages to NuGet
+        needs: publish-assets
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      9
+                      ${{ matrix.dotnet }}
+
+            - name: Setup NuGet.exe for use with actions
+              uses: NuGet/setup-nuget@v1.0.5
+              with:
+                  nuget-version: latest
+
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.IMAGE }}-csharp
+                  restore-keys: ${{ matrix.host.IMAGE }}
+
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` variable
+              run: echo "VALKEY_SKIP_BUILD_ASSETS=TRUE" >> $GITHUB_ENV
+
+            - name: Find source projects
+              id: find-projects
+              shell: bash
+              run: |
+                  projects=$(find ./csharp/sources -name "*.csproj" -type f)
+                  echo "Found projects: $projects"
+                  echo "DOTNET_PROJECTS=$projects" >> $GITHUB_ENV
+
+            - name: Restore dependencies
+              shell: bash
+              run: |
+                  for project in $DOTNET_PROJECTS; do
+                      echo "Restoring $project"
+                      dotnet restore "$project"
+                  done
+
+            - name: Build
+              shell: bash
+              run: |
+                  for project in $DOTNET_PROJECTS; do
+                      echo "Building $project"
+                      dotnet build --no-restore --configuration Release "$project"
+                  done
+
+            - name: Pack
+              shell: bash
+              run: |
+                  for project in $DOTNET_PROJECTS; do
+                      echo "Packing $project"
+                      dotnet pack --no-build --configuration Release "$project"
+                  done
+              # run: dotnet pack --configuration Release --version-suffix ${{ github.sha }} $DOTNET_PROJECT_PATH
+
+            - name: Prepare file matrix for upload
+              id: set-artifact-matrix
+              shell: bash
+              run: |
+                  # Initialize an empty array for JSON objects
+                  declare -a json_objects=()
+
+                  # Loop through .nupkg files
+                  for file in csharp/**/*.nupkg csharp/**/*.snupkg; do
+                    # Check if file exists (to handle case when no matches are found)
+                    if [ -f "$file" ]; then
+                      filename=$(basename "$file")
+                      json_objects+=("{\"file\":\"$file\",\"filename\":\"$filename\"}")
+                    fi
+                  done
+
+                  # Combine all JSON objects into an array and save to output
+                  if [ ${#json_objects[@]} -eq 0 ]; then
+                    echo "files=[]" >> "$GITHUB_OUTPUT"
+                  else
+                    json_array="[$(IFS=,; echo "${json_objects[*]}")]"
+                    echo "files=$json_array" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: NuGet Packages
+                  path: |
+                      csharp/**/*.nupkg
+                      csharp/**/*.snupkg
+
+            - name: Upload packages to NuGet
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              shell: bash
+              run: |
+                  for project in $DOTNET_PROJECTS; do
+                      project_dir=$(dirname "$project")
+                      echo "Publishing packages from $project_dir/bin/Release"
+                      for package in "$project_dir"/bin/Release/*.{nupkg,snupkg}; do
+                          if [ -f "$package" ]; then
+                              dotnet nuget push "$package" -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+                          fi
+                      done
+                  done

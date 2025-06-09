@@ -7,6 +7,7 @@
     <Platform>x64</Platform>
     <PlatformTarget>x64</PlatformTarget>
     <RustTuple>x86_64-pc-windows-msvc</RustTuple>
+    <LibraryExtension>.dll</LibraryExtension>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>

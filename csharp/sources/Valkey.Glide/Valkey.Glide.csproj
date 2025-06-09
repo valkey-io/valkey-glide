@@ -8,7 +8,7 @@
     <AssemblyName>Valkey.Glide</AssemblyName>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="$(VALKEY_SKIP_BUILD_ASSETS) == ''">
     <!-- ToDo: For the final NuGet, we should include either _all_ assets or _none_
                This could be done by integrating this into the pack target and changing the project references then eg.
                Still need to discuss this, so this package, for now, will default to _none_ -->
