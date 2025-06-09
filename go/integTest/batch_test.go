@@ -172,7 +172,7 @@ func (suite *GlideTestSuite) TestBatchCommandArgsError() {
 		suite.Error(err)
 		suite.Nil(res)
 		suite.Contains(err.Error(), "Error processing arguments for 2'th command ('GetExWithOptions')")
-		suite.Contains(err.Error(), "Error processing arguments for 2'th command ('GetExWithOptions')")
+		suite.Contains(err.Error(), "Error processing arguments for 4'th command ('GetExWithOptions')")
 	})
 }
 
