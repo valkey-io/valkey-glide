@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".files", ".files", "{1F0580
 		.gitignore = .gitignore
 		DEVELOPER.md = DEVELOPER.md
 		..\.github\workflows\csharp.yml = ..\.github\workflows\csharp.yml
+		..\.github\workflows\csharp-cd.yml = ..\.github\workflows\csharp-cd.yml
+		..\.github\json_matrices\build-matrix.json = ..\.github\json_matrices\build-matrix.json
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{9C73AD22-2B57-455C-B623-C30EE8F77B44}"
