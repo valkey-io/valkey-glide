@@ -36,7 +36,6 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	if response.response_type == expectedTypeInt {
 		return nil
 	}
-
 	actualTypeStr := C.get_response_type_string(response.response_type)
 	return fmt.Errorf(
 		"unexpected return type from Valkey: got %s, expected %s",
@@ -1216,10 +1215,10 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 			if !ok {
 				entriesData = []any{}
 			}
-			
+
 			// Create a slice to hold field-value pairs
 			fieldInfos := make([]models.FieldInfo, 0)
-			
+
 			for _, entryData := range entriesData {
 				fieldValuePairs, ok := entryData.([]any)
 				if !ok || len(fieldValuePairs) < 2 {
@@ -1761,9 +1760,8 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 
 	infoMap, ok := result.(map[string]any)
 	if !ok {
-		return models.XInfoStreamResponse{}, &errors.RequestError{
-			Msg: fmt.Sprintf("unexpected type for stream info: %T", result),
-		}
+		return models.XInfoStreamResponse{},
+		 errors.New(fmt.Sprintf("unexpected type for stream info: %T", result))
 	}
 
 	streamInfo := models.XInfoStreamResponse{}
@@ -1802,7 +1800,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 				ID:     id,
 				Fields: make([]models.FieldInfo, 0),
 			}
-			
+
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
@@ -1832,7 +1830,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 				ID:     id,
 				Fields: make([]models.FieldInfo, 0),
 			}
-			
+
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
