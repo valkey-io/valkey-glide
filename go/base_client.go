@@ -22,18 +22,18 @@ import "C"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -76,7 +76,7 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	// MessageHandler is only configured when a subscription is defined
 	if client.getMessageHandler() == nil {
-		return nil, &errors.RequestError{Msg: "No subscriptions configured for this client"}
+		return nil, errors.New("no subscriptions configured for this client")
 	}
 	return client.getMessageHandler().GetQueue(), nil
 }
@@ -153,7 +153,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
 	)
 	if err != nil {
-		return nil, &errors.ClosingError{Msg: err.Error()}
+		return nil, NewClosingError(err.Error())
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
 
@@ -169,7 +169,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
-		return nil, &errors.ConnectionError{Msg: message}
+		return nil, NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
@@ -198,7 +198,7 @@ func (client *baseClient) Close() {
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
 	for channelPtr := range client.pending {
 		resultChannel := *(*chan payload)(channelPtr)
-		resultChannel <- payload{value: nil, error: &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}}
+		resultChannel <- payload{value: nil, error: NewClosingError("ExecuteCommand failed: the client is closed")}
 	}
 	client.pending = nil
 }
@@ -218,7 +218,7 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 	case config.SlotTypeReplica:
 		return protobuf.SlotTypes_Replica, nil
 	default:
-		return protobuf.SlotTypes_Primary, &errors.RequestError{Msg: "Invalid slot type"}
+		return protobuf.SlotTypes_Primary, errors.New("invalid slot type")
 	}
 }
 
@@ -235,7 +235,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			case config.RandomRoute:
 				simpleRoute = protobuf.SimpleRoutes_Random
 			default:
-				return nil, &errors.RequestError{Msg: "Invalid simple node route"}
+				return nil, errors.New("invalid simple node route")
 			}
 			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
 		}
@@ -281,7 +281,7 @@ func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 			}, nil
 		}
 	default:
-		return nil, &errors.RequestError{Msg: "Invalid route type"}
+		return nil, errors.New("invalid route type")
 	}
 }
 
@@ -319,7 +319,7 @@ func (client *baseClient) executeCommandWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, &errors.RequestError{Msg: "ExecuteCommand failed due to invalid route"}
+			return nil, errors.New("executeCommand failed due to invalid route")
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -342,7 +342,7 @@ func (client *baseClient) executeCommandWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteCommand failed. The client is closed."}
+		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	C.command(
@@ -420,10 +420,7 @@ func (client *baseClient) executeBatch(
 		// Continue with execution
 	}
 	if len(batch.Errors) > 0 {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf("There were %d errors while preparing commands in this batch: %s",
-				len(batch.Errors), strings.Join(batch.Errors, ", ")),
-		}
+		return nil, NewBatchError(batch.Errors)
 	}
 
 	// Create span if OpenTelemetry is enabled and sampling is configured
@@ -447,7 +444,7 @@ func (client *baseClient) executeBatch(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteBatch failed. The client is closed."}
+		return nil, NewClosingError("ExecuteBatch failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -625,7 +622,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return models.DefaultStringResponse, &errors.ClosingError{Msg: "UpdatePassword failed. The client is closed."}
+		return models.DefaultStringResponse, NewClosingError("UpdatePassword failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -2881,7 +2878,7 @@ func (client *baseClient) LInsert(
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -2891,8 +2888,8 @@ func (client *baseClient) LInsert(
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BLPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BLPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -2914,18 +2911,18 @@ func (client *baseClient) BLPop(ctx context.Context, keys []string, timeoutSecs 
 //
 //	ctx         - The context for controlling the command execution.
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
 //	A two-element array containing the key from which the element was popped and the value of the popped
 //	element, formatted as [key, value].
-//	If no element could be popped and the timeoutSecs expired, returns `nil`.
+//	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *baseClient) BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
+func (client *baseClient) BRPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.BRPop, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return nil, err
 	}
@@ -3019,7 +3016,7 @@ func (client *baseClient) LMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -3073,7 +3070,7 @@ func (client *baseClient) LMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -3107,7 +3104,7 @@ func (client *baseClient) LMPopCount(
 //	ctx           - The context for controlling the command execution.
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 //
 // Return value:
 //
@@ -3120,7 +3117,7 @@ func (client *baseClient) BLMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3129,12 +3126,12 @@ func (client *baseClient) BLMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3164,7 +3161,7 @@ func (client *baseClient) BLMPop(
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [options.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //
 // indefinitely.
 //
@@ -3180,7 +3177,7 @@ func (client *baseClient) BLMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -3189,12 +3186,12 @@ func (client *baseClient) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return nil, &errors.RequestError{Msg: "Length overflow for the provided keys"}
+		return nil, errors.New("length overflow for the provided keys")
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(ctx, C.BLMPop, args)
@@ -3297,7 +3294,7 @@ func (client *baseClient) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
@@ -3312,7 +3309,7 @@ func (client *baseClient) BLMove(
 	destination string,
 	whereFrom constants.ListDirection,
 	whereTo constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[string], error) {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
@@ -3325,7 +3322,7 @@ func (client *baseClient) BLMove(
 
 	result, err := client.executeCommand(ctx,
 		C.BLMove,
-		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 	)
 	if err != nil {
 		return models.CreateNilStringResult(), err
@@ -4571,7 +4568,7 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - The keys of the sorted sets.
-//	timeout - The number of seconds to wait for a blocking operation to complete. A value of
+//	timeout - The duration to wait for a blocking operation to complete. A value of
 //	  `0` will block indefinitely.
 //
 // Return value:
@@ -4585,9 +4582,9 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 func (client *baseClient) BZPopMin(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	result, err := client.executeCommand(ctx, C.BZPopMin, append(keys, utils.FloatToString(timeout.Seconds())))
 	if err != nil {
 		return models.CreateNilKeyWithMemberAndScoreResult(), err
 	}
@@ -4615,7 +4612,7 @@ func (client *baseClient) BZPopMin(
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Return value:
@@ -4631,7 +4628,7 @@ func (client *baseClient) BZMPop(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
@@ -4640,14 +4637,14 @@ func (client *baseClient) BZMPop(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		}
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), errors.New(
+			"length overflow for the provided keys",
+		)
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	result, err := client.executeCommand(ctx, C.BZMPop, args)
@@ -4678,8 +4675,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-//
+//	timeout   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Return value:
@@ -4695,7 +4691,7 @@ func (client *baseClient) BZMPopWithOptions(
 	ctx context.Context,
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 	opts options.ZMPopOptions,
 ) (models.Result[models.KeyWithArrayOfMembersAndScores], error) {
 	scoreFilterStr, err := scoreFilter.ToString()
@@ -4705,14 +4701,14 @@ func (client *baseClient) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		}
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), errors.New(
+			"length overflow for the provided keys",
+		)
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	optionArgs, err := opts.ToArgs()
@@ -6404,7 +6400,7 @@ func (client *baseClient) BitOp(
 	}
 	result, err := client.executeCommand(ctx, C.BitOp, args)
 	if err != nil {
-		return models.DefaultIntResponse, &errors.RequestError{Msg: "Bitop command execution failed"}
+		return models.DefaultIntResponse, errors.New("bitop command execution failed")
 	}
 	return handleIntResponse(result)
 }
@@ -7649,7 +7645,7 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 //
 //	ctx - The context for controlling the command execution.
 //	keys - An array of keys to check for elements.
-//	timeoutSecs - The maximum number of seconds to block (0 blocks indefinitely).
+//	timeout - The maximum number of seconds to block (0 blocks indefinitely).
 //
 // Return value:
 //
@@ -7662,9 +7658,9 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 func (client *baseClient) BZPopMax(
 	ctx context.Context,
 	keys []string,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) (models.Result[models.KeyWithMemberAndScore], error) {
-	args := append(keys, utils.FloatToString(timeoutSecs))
+	args := append(keys, utils.FloatToString(timeout.Seconds()))
 
 	result, err := client.executeCommand(ctx, C.BZPopMax, args)
 	if err != nil {
@@ -7853,12 +7849,12 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // Returns value:
 //
-//	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	An array of GeoHash strings (of type models.Result[string]) representing the positions of the specified
+//	members stored at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
-func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]string, error) {
+func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]models.Result[string], error) {
 	result, err := client.executeCommand(ctx,
 		C.GeoHash,
 		append([]string{key}, members...),
@@ -7866,7 +7862,7 @@ func (client *baseClient) GeoHash(ctx context.Context, key string, members []str
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 // Returns the positions (longitude,latitude) of all the specified members of the
@@ -8886,7 +8882,7 @@ func (client *baseClient) executeScriptWithRoute(
 	if route != nil {
 		routeProto, err := routeToProtobuf(route)
 		if err != nil {
-			return nil, &errors.RequestError{Msg: "ExecuteScript failed due to invalid route"}
+			return nil, errors.New("ExecuteScript failed due to invalid route")
 		}
 		msg, err := proto.Marshal(routeProto)
 		if err != nil {
@@ -8910,7 +8906,7 @@ func (client *baseClient) executeScriptWithRoute(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "ExecuteScript failed. The client is closed."}
+		return nil, NewClosingError("ExecuteScript failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 	hash_cstring := C.CString(hash)

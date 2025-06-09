@@ -152,7 +152,7 @@ func CreateLongRunningLuaScript(timeout int, readonly bool) string {
 func RunWithTimeout(t assert.TestingT, requestedTimeout time.Duration, longTest contextFn) {
 	done := make(chan bool)
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestedTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), requestedTimeout)
 	defer cancel()
 
 	go func() {

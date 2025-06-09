@@ -15,7 +15,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -38,10 +37,10 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -53,10 +52,10 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -99,19 +98,16 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 			_, err1 = c.Exec(context.Background(), *batch, true)
 			res, err2 = c.Exec(context.Background(), *batch, false)
 		}
-		// First exception is raised, all data lost
+		// First error is raised, all data lost
 		suite.Error(err1)
-		suite.IsType(&errors.RequestError{}, err1)
 
-		// Exceptions aren't raised, but stored in the result set
+		// Errors aren't raised, but stored in the result set
 		suite.NoError(err2)
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])
 		suite.Equal(int64(1), res[2])
-		suite.IsType(&errors.RequestError{}, res[1])
-		suite.IsType(&errors.RequestError{}, res[3])
-		suite.Contains(res[1].(*errors.RequestError).Error(), "wrong kind of value")
-		suite.Contains(res[3].(*errors.RequestError).Error(), "no such key")
+		suite.ErrorContains(glide.IsError(res[1]), "wrong kind of value")
+		suite.ErrorContains(glide.IsError(res[3]), "no such key")
 	})
 }
 
@@ -172,7 +168,7 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 
 		// WATCH errors if no keys are given
 		_, err = client1.Watch(ctx, []string{})
-		suite.IsType(&errors.RequestError{}, err)
+		suite.Error(err)
 	})
 }
 
@@ -311,7 +307,7 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
 
 			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		case *glide.Client:
 			// Just test that they run
 			batch := pipeline.NewStandaloneBatch(isAtomic).
@@ -325,12 +321,13 @@ func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
 			}
 
 			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err)
 		}
-		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
+
+		suite.Error(res[0].(error))
+		suite.Error(res[1].(error))
+		suite.Error(res[2].(error))
+		suite.Error(res[3].(error))
 	})
 }
 
@@ -454,9 +451,9 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 				suite.Equal(map[string]any{}, res[3])
 			} else {
 				// In 6.2.0, errors are raised instead
-				suite.IsType(&errors.RequestError{}, res[1])
-				suite.IsType(&errors.RequestError{}, res[2])
-				suite.IsType(&errors.RequestError{}, res[3])
+				suite.Error(glide.IsError(res[1]))
+				suite.Error(glide.IsError(res[2]))
+				suite.Error(glide.IsError(res[3]))
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
@@ -500,9 +497,7 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Set(atomicKey1, value1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
 	opts := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	batch.GetExWithOptions(atomicKey1, *opts)
 	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetExWithOptions(atomicKey1, opts)"})
 

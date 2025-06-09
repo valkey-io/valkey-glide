@@ -6,17 +6,18 @@ package pipeline
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
@@ -1638,7 +1639,7 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 // Parameters:
 //
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1648,8 +1649,8 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+func (b *BaseBatch[T]) BLPop(keys []string, timeout time.Duration) *T {
+	return b.addCmdAndTypeChecker(C.BLPop, append(keys, utils.FloatToString(timeout.Seconds())), reflect.Slice, true)
 }
 
 // Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
@@ -1665,7 +1666,7 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 // Parameters:
 //
 //	keys        - The keys of the lists to pop from.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1675,8 +1676,8 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeoutSecs float64) *T {
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BRPop(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+func (b *BaseBatch[T]) BRPop(keys []string, timeout time.Duration) *T {
+	return b.addCmdAndTypeChecker(C.BRPop, append(keys, utils.FloatToString(timeout.Seconds())), reflect.Slice, true)
 }
 
 // Inserts all the specified values at the tail of the list stored at `key`, only if key exists and holds a list. If key is
@@ -1744,7 +1745,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("LMPop", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("LMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -1783,7 +1784,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("LMPopCount", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("LMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -1811,7 +1812,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [constants.ListDirection].
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1820,7 +1821,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirection, timeoutSecs float64) *T {
+func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirection, timeout time.Duration) *T {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return b.addError("BLMPop", err)
@@ -1828,12 +1829,12 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BLMPop", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("BLMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
 	return b.addCmdAndTypeChecker(C.BLMPop, args, reflect.Map, true)
@@ -1857,7 +1858,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //	keys          - An array of keys to lists.
 //	listDirection - The direction based on which elements are popped from - see [constants.ListDirection].
 //	count         - The maximum number of popped elements.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1866,7 +1867,12 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BLMPopCount(keys []string, listDirection constants.ListDirection, count int64, timeoutSecs float64) *T {
+func (b *BaseBatch[T]) BLMPopCount(
+	keys []string,
+	listDirection constants.ListDirection,
+	count int64,
+	timeout time.Duration,
+) *T {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return b.addError("BLMPopCount", err)
@@ -1874,12 +1880,12 @@ func (b *BaseBatch[T]) BLMPopCount(keys []string, listDirection constants.ListDi
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BLMPopCount", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("BLMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
 	return b.addCmdAndTypeChecker(C.BLMPop, args, reflect.Map, true)
@@ -1962,7 +1968,7 @@ func (b *BaseBatch[T]) LMove(
 //	destination - The key to the destination list.
 //	wherefrom   - The ListDirection the element should be removed from.
 //	whereto     - The ListDirection the element should be added to.
-//	timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
@@ -1975,7 +1981,7 @@ func (b *BaseBatch[T]) BLMove(
 	destination string,
 	whereFrom constants.ListDirection,
 	whereTo constants.ListDirection,
-	timeoutSecs float64,
+	timeout time.Duration,
 ) *T {
 	whereFromStr, err := whereFrom.ToString()
 	if err != nil {
@@ -1987,7 +1993,7 @@ func (b *BaseBatch[T]) BLMove(
 	}
 	return b.addCmdAndTypeChecker(
 		C.BLMove,
-		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 		reflect.String,
 		true,
 	)
@@ -2909,7 +2915,7 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 // Parameters:
 //
 //	keys - The keys of the sorted sets.
-//	timeout - The number of seconds to wait for a blocking operation to complete. A value of
+//	timeout - The duration to wait for a blocking operation to complete. A value of
 //	  `0` will block indefinitely.
 //
 // Command Response:
@@ -2920,8 +2926,8 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
 // [Blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
-	return b.addCmdAndTypeChecker(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)), reflect.Slice, true)
+func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
+	return b.addCmdAndTypeChecker(C.BZPopMin, append(keys, utils.FloatToString(timeout.Seconds())), reflect.Slice, true)
 }
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
@@ -2943,7 +2949,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block
 //					indefinitely.
 //
 // Command Response:
@@ -2955,7 +2961,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeoutSecs float64) *T {
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, timeoutSecs float64) *T {
+func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, timeout time.Duration) *T {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
 		return b.addError("BZMPop", err)
@@ -2963,14 +2969,12 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BZMPop", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("BZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	return b.addCmdAndTypeChecker(C.BZMPop, args, reflect.Slice, true)
@@ -2995,7 +2999,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //	keys          - An array of keys to lists.
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
-//	timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Command Response:
@@ -3010,7 +3014,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 func (b *BaseBatch[T]) BZMPopWithOptions(
 	keys []string,
 	scoreFilter constants.ScoreFilter,
-	timeoutSecs float64,
+	timeout time.Duration,
 	opts options.ZMPopOptions,
 ) *T {
 	scoreFilterStr, err := scoreFilter.ToString()
@@ -3020,14 +3024,12 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BZMPopWithOptions", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("BZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, scoreFilterStr)
 	optionArgs, err := opts.ToArgs()
@@ -5214,9 +5216,7 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("ZMPop", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("ZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -5254,9 +5254,7 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("ZMPopWithOptions", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("ZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -5358,7 +5356,7 @@ func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 // Parameters:
 //
 //	keys - An array of keys to check for elements.
-//	timeoutSecs - The maximum number of seconds to block (`0` blocks indefinitely).
+//	timeout - The maximum duration to block (`0` blocks indefinitely).
 //
 // Command Response:
 //
@@ -5367,8 +5365,8 @@ func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmax/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (b *BaseBatch[T]) BZPopMax(keys []string, timeoutSecs float64) *T {
-	args := append(keys, utils.FloatToString(timeoutSecs))
+func (b *BaseBatch[T]) BZPopMax(keys []string, timeout time.Duration) *T {
+	args := append(keys, utils.FloatToString(timeout.Seconds()))
 	return b.addCmdAndTypeChecker(C.BZPopMax, args, reflect.Slice, true)
 }
 
@@ -5440,8 +5438,8 @@ func (b *BaseBatch[T]) GeoAddWithOptions(
 //
 // Command Response:
 //
-//	An array of GeoHash strings representing the positions of the specified members stored
-//	at key. If a member does not exist in the sorted set, a `nil` value is returned
+//	An array of GeoHash strings (of type models.Result[string]) representing the positions of the specified
+//	members stored at key. If a member does not exist in the sorted set, a `nil` value is returned
 //	for that member.
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
