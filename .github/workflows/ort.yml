@@ -108,7 +108,7 @@ jobs:
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: node
+                  folder_path: "${{ github.workspace }}/node"
 
               ### Python ###
             - name: Set up Python 3.10
@@ -125,19 +125,19 @@ jobs:
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: python
+                  folder_path: "${{ github.workspace }}/python"
 
               ### Rust glide-core ###
             - name: Run ORT tools for glide-core
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: glide-core
+                  folder_path: "${{ github.workspace }}/glide-core"
 
               ### Rust FFI ###
             - name: Run ORT tools for FFI
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: ffi
+                  folder_path: "${{ github.workspace }}/ffi"
 
               ### Java ###
             - name: Set up JDK 11
@@ -160,7 +160,7 @@ jobs:
             - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: java
+                  folder_path: "${{ github.workspace }}/java"
 
               ### GO ###
             - name: Set up GO
@@ -177,7 +177,7 @@ jobs:
             - name: Run ORT tools for Go
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: go
+                  folder_path: "${{ github.workspace }}/go"
 
               ### Get licenses ###
             - name: Retrieve licenses list
