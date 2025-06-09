@@ -8606,7 +8606,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}}, claimResult)
+		assert.Equal(
+			suite.T(),
+			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			claimResult,
+		)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,

@@ -225,21 +225,13 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 
 func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 	switch route := route.(type) {
+	// enum variants have the same ordinals
 	case config.SimpleNodeRoute:
-		{
-			var simpleRoute protobuf.SimpleRoutes
-			switch route {
-			case config.AllNodes:
-				simpleRoute = protobuf.SimpleRoutes_AllNodes
-			case config.AllPrimaries:
-				simpleRoute = protobuf.SimpleRoutes_AllPrimaries
-			case config.RandomRoute:
-				simpleRoute = protobuf.SimpleRoutes_Random
-			default:
-				return nil, &errors.RequestError{Msg: "Invalid simple node route"}
-			}
-			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
-		}
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
+	case config.SimpleMultiNodeRoute:
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
+	case config.SimpleSingleNodeRoute:
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
 	case *config.SlotIdRoute:
 		{
 			slotType, err := slotTypeToProtobuf(route.SlotType)
@@ -525,7 +517,7 @@ func createBatchOptionsInfo(pinner pinner, options pipeline.BatchOptions) C.Batc
 		info.has_timeout = C._Bool(false)
 	}
 	if options.Route != nil {
-		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, *options.Route))))
+		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, options.Route))))
 	} else {
 		info.route_info = nil
 	}
@@ -537,6 +529,10 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	if route != nil {
 		routeInfo := C.RouteInfo{}
 		switch r := route.(type) {
+		case config.SimpleSingleNodeRoute:
+			routeInfo.route_type = (uint32)(r)
+		case config.SimpleMultiNodeRoute:
+			routeInfo.route_type = (uint32)(r)
 		case config.SimpleNodeRoute:
 			// enum variants have the same ordinals
 			routeInfo.route_type = (uint32)(r)
