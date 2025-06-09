@@ -11,8 +11,8 @@ from typing import Any, Dict, List, Mapping, Optional, Union, cast
 import anyio
 import pytest
 
-from glide import ClosingError, RequestError, Script
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.async_ import GlideClient, GlideClusterClient, TGlideClient, Script
+from glide.shared import ClosingError, RequestError 
 from glide.shared.commands.batch import Batch, ClusterBatch
 from glide.shared.commands.bitmap import (
     BitFieldGet,

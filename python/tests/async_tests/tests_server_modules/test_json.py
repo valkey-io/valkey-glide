@@ -8,12 +8,12 @@ from typing import List, Optional
 
 import pytest
 
-from glide.glide_client import GlideClusterClient, TGlideClient
+from glide.async_.glide_client import GlideClusterClient, TGlideClient
 from glide.shared.commands.batch import ClusterBatch
 from glide.shared.commands.core_options import ConditionalChange
-from glide.shared.commands.server_modules import glide_json as json
+from glide.shared.commands.async_commands import glide_json as json
 from glide.shared.commands.server_modules import json_batch
-from glide.shared.commands.server_modules.glide_json import (
+from glide.shared.commands.server_modules.json_options import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,

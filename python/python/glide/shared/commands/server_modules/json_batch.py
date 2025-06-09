@@ -24,7 +24,7 @@ from typing import List, Optional, Union
 
 from glide.shared.commands.batch import TBatch
 from glide.shared.commands.core_options import ConditionalChange
-from glide.shared.commands.server_modules.glide_json import (
+from glide.shared.commands.server_modules.json_options import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,

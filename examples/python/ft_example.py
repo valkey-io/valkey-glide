@@ -3,9 +3,9 @@ import json
 import uuid
 from typing import List, Optional, Tuple
 
-from glide import AllNodes, ClosingError
-from glide import ConnectionError as GlideConnectionError
-from glide import (
+from glide.shared import AllNodes, ClosingError
+from glide.shared import ConnectionError as GlideConnectionError
+from glide.shared import (
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -15,13 +15,13 @@ from glide import (
     RequestError,
 )
 from glide import TimeoutError as GlideTimeoutError
-from glide.shared.commands.server_modules import ft, glide_json
-from glide.shared.commands.server_modules.ft_options.ft_create_options import (
+from glide import ft, glide_json
+from glide import (
     DataType,
     FtCreateOptions,
     NumericField,
 )
-from glide.shared.commands.server_modules.ft_options.ft_search_options import (
+from glide import (
     FtSearchOptions,
     ReturnField,
 )

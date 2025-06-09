@@ -9,18 +9,19 @@ authors = ["Valkey GLIDE Maintainers"]
 [lib]
 name = "glide"
 crate-type = ["cdylib"]
+path = "../../../src/lib.rs"
 
 [dependencies]
 pyo3 = { version = "^0.24", features = ["extension-module", "num-bigint"] }
 bytes = { version = "^1.8" }
-redis = { path = "../glide-core/redis-rs/redis", features = [
+redis = { path = "../../../../glide-core/redis-rs/redis", features = [
     "aio",
     "tokio-comp",
     "connection-manager",
     "tokio-rustls-comp",
 ] }
-glide-core = { path = "../glide-core", features = ["socket-layer"] }
-logger_core = { path = "../logger_core" }
+glide-core = { path = "../../../../glide-core", features = ["socket-layer"] }
+logger_core = { path = "../../../../logger_core" }
 
 [profile.release]
 lto = true

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 import anyio
 import pytest
 
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.async_.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.shared.commands.core_options import PubSubMsg
 from glide.shared.config import (
     GlideClientConfiguration,

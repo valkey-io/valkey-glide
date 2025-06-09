@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "cffi>=1.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-valkey-glide-sync"
+version = "0.1.2"
+description = "Valkey GLIDE Sync client (CFFI-based)"
+requires-python = ">=3.9"
+dependencies = [
+    "cffi>=1.0.0",
+    "protobuf>=6.20",
+]
+
+[tool.setuptools]
+package-dir = {"" = "../../"}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"glide.sync" = ["*.so", "*.pyd", "*.dll", "*.pyi", "py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["../../"]
+include = [
+    "glide.sync*",
+    "glide.shared*",
+    "glide.protobuf*"
+]
+exclude = ["glide", "glide/__init__.py", "glide.shared.commands.async_*", "glide.async_*"]  # <– exclude top-level glide, async, etc.
