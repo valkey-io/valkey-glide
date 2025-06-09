@@ -38,7 +38,10 @@ jobs:
                             owner: context.repo.owner,
                             repo: context.repo.repo,
                             workflow_id: workflowFile,
-                            ref: branch // The branch where workflow_dispatch is triggered
+                            ref: branch, // The branch where workflow_dispatch is triggered
+                            inputs: {
+                              'run-modules-tests': 'false' // Dont run modules tests
+                            }
                           });
                           console.log(`Successfully triggered workflow for branch: ${branch}`);
                         } catch (error) {

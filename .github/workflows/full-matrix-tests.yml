@@ -7,6 +7,10 @@ on:
                 description: "Run the full engine and host matrix"
                 type: boolean
                 default: true
+            run-modules-tests:
+                description: "Run modules tests"
+                type: boolean
+                default: true
             # GHA supports up to 10 inputs, there is no option for multi-choice
             core:
                 description: "Test GLIDE core"
