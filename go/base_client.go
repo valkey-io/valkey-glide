@@ -3997,8 +3997,12 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error) {
-	return client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
+func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (string, error) {
+	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return result.Value(), nil
 }
 
 // Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.

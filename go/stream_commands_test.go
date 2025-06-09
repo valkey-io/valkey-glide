@@ -29,7 +29,7 @@ func ExampleClient_XAdd() {
 	}
 	matches, _ := regexp.Match(
 		`^\d{13}-0$`,
-		[]byte(result.Value()),
+		[]byte(result),
 	) // matches a number that is 13 digits long followed by "-0"
 	fmt.Println(matches)
 
@@ -48,7 +48,7 @@ func ExampleClusterClient_XAdd() {
 	}
 	matches, _ := regexp.Match(
 		`^\d{13}-0$`,
-		[]byte(result.Value()),
+		[]byte(result),
 	) // matches a number that is 13 digits long followed by "-0"
 	fmt.Println(matches)
 
@@ -1285,7 +1285,7 @@ func ExampleClient_XAck() {
 		context.Background(),
 		key,
 		group,
-		[]string{streamId.Value()},
+		[]string{streamId},
 	) // ack the message and remove it from the pending list
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1313,7 +1313,7 @@ func ExampleClusterClient_XAck() {
 		context.Background(),
 		key,
 		group,
-		[]string{streamId.Value()},
+		[]string{streamId},
 	) // ack the message and remove it from the pending list
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1755,8 +1755,8 @@ func ExampleClient_XRangeWithOptions() {
 	streamId2, _ := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRangeWithOptions(context.Background(), key,
-		options.NewStreamBoundary(streamId1.Value(), true),
-		options.NewStreamBoundary(streamId2.Value(), true),
+		options.NewStreamBoundary(streamId1, true),
+		options.NewStreamBoundary(streamId2, true),
 		*options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1774,8 +1774,8 @@ func ExampleClusterClient_XRangeWithOptions() {
 	streamId2, _ := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
 
 	response, err := client.XRangeWithOptions(context.Background(), key,
-		options.NewStreamBoundary(streamId1.Value(), true),
-		options.NewStreamBoundary(streamId2.Value(), true),
+		options.NewStreamBoundary(streamId1, true),
+		options.NewStreamBoundary(streamId2, true),
 		*options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
