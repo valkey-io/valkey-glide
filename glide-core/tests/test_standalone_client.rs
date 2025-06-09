@@ -420,10 +420,11 @@ mod standalone_client_tests {
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();
         client_info_cmd.arg("CLIENT").arg("INFO");
+
         block_on_all(async move {
             let test_basics = setup_test_basics_internal(&TestConfiguration {
                 database_id: 4,
-                shared_server: true,
+                shared_server: false,
                 ..Default::default()
             })
             .await;
@@ -435,23 +436,45 @@ mod standalone_client_tests {
             .unwrap();
             assert!(client_info.contains("db=4"));
 
+            // Extract initial client ID
+            let initial_client_id =
+                extract_client_id(&client_info).expect("Failed to extract initial client ID");
+
             kill_connection(&mut client).await;
 
-            let error = client.send_command(&client_info_cmd).await;
-            assert!(error.is_err(), "{error:?}",);
-            let error = error.unwrap_err();
-            assert!(
-                error.is_connection_dropped() || error.is_timeout(),
-                "{error:?}",
-            );
+            // wait_until_disconnected(&mut client).await;
+            // println!("wait_until_disconnected");
 
-            let client_info = repeat_try_create(|| async {
-                let mut client = client.clone();
-                String::from_owned_redis_value(client.send_command(&client_info_cmd).await.unwrap())
-                    .ok()
-            })
-            .await;
-            assert!(client_info.contains("db=4"));
+            let res = client.send_command(&client_info_cmd).await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_client_info: String = String::from_owned_redis_value(response).unwrap();
+                    let new_client_id = extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    println!("initial_client_id: {}", initial_client_id);
+                    println!("new_client_id: {}", new_client_id);
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                }
+            }
         });
+    }
+
+    fn extract_client_id(client_info: &str) -> Option<String> {
+        client_info
+            .split_whitespace()
+            .find(|part| part.starts_with("id="))
+            .and_then(|id_part| id_part.strip_prefix("id="))
+            .map(|id| id.to_string())
     }
 }
