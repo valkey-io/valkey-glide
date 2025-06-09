@@ -1192,40 +1192,6 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	}, nil
 }
 
-func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
-	defer C.free_command_response(response)
-	data, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	if data == nil {
-		return nil, nil
-	}
-
-	converters := mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				false,
-			},
-			false,
-		},
-		false,
-	}
-
-	res, err := converters.convert(data)
-	if err != nil {
-		return nil, err
-	}
-	if result, ok := res.(map[string]map[string][][]string); ok {
-		return result, nil
-	}
-	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
-}
-
 func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
 	data, err := parseMap(response)
@@ -1255,7 +1221,10 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 			if !ok {
 				entriesData = []any{}
 			}
-			fields := make(map[string]string)
+			
+			// Create a slice to hold field-value pairs
+			fieldInfos := make([]models.FieldInfo, 0)
+			
 			for _, entryData := range entriesData {
 				fieldValuePairs, ok := entryData.([]any)
 				if !ok || len(fieldValuePairs) < 2 {
@@ -1268,7 +1237,11 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 							fieldName, okField := fieldValuePairs[i].(string)
 							fieldValue, okValue := fieldValuePairs[i+1].(string)
 							if okField && okValue {
-								fields[fieldName] = fieldValue
+								// Add field-value pair to the slice
+								fieldInfos = append(fieldInfos, models.FieldInfo{
+									FieldName: fieldName,
+									Value:     fieldValue,
+								})
 							}
 						}
 					}
@@ -1276,7 +1249,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 			}
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
-				Fields: fields,
+				Fields: fieldInfos,
 			})
 		}
 
@@ -1829,11 +1802,12 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if firstEntryArray, ok := infoMap["first-entry"].([]any); ok && len(firstEntryArray) >= 2 {
 		// First element is the ID
 		if id, ok := firstEntryArray[0].(string); ok {
-			streamInfo.FirstEntry = models.StreamEntryInfo{
+			// Create a StreamEntry with the ID
+			streamInfo.FirstEntry = models.StreamEntry{
 				ID:     id,
-				Fields: make(map[string]string),
+				Fields: make([]models.FieldInfo, 0),
 			}
-
+			
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
@@ -1841,7 +1815,11 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 					if i+1 < len(fieldValueArray) {
 						if field, ok := fieldValueArray[i].(string); ok {
 							if value, ok := fieldValueArray[i+1].(string); ok {
-								streamInfo.FirstEntry.Fields[field] = value
+								// Add field-value pair to the Fields slice
+								streamInfo.FirstEntry.Fields = append(streamInfo.FirstEntry.Fields, models.FieldInfo{
+									FieldName: field,
+									Value:     value,
+								})
 							}
 						}
 					}
@@ -1854,11 +1832,12 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if lastEntryArray, ok := infoMap["last-entry"].([]any); ok && len(lastEntryArray) >= 2 {
 		// First element is the ID
 		if id, ok := lastEntryArray[0].(string); ok {
-			streamInfo.LastEntry = models.StreamEntryInfo{
+			// Create a StreamEntry with the ID
+			streamInfo.LastEntry = models.StreamEntry{
 				ID:     id,
-				Fields: make(map[string]string),
+				Fields: make([]models.FieldInfo, 0),
 			}
-
+			
 			// Second element is an array of field-value pairs
 			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
 				// Process field-value pairs (they come as alternating field, value, field, value...)
@@ -1866,7 +1845,11 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 					if i+1 < len(fieldValueArray) {
 						if field, ok := fieldValueArray[i].(string); ok {
 							if value, ok := fieldValueArray[i+1].(string); ok {
-								streamInfo.LastEntry.Fields[field] = value
+								// Add field-value pair to the Fields slice
+								streamInfo.LastEntry.Fields = append(streamInfo.LastEntry.Fields, models.FieldInfo{
+									FieldName: field,
+									Value:     value,
+								})
 							}
 						}
 					}

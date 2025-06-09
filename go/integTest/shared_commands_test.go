@@ -4767,21 +4767,39 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
-		assert.Equal(
-			suite.T(),
-			map[string]string{"entry1_field1": "entry1_value1", "entry1_field2": "entry1_value2"},
-			entryMap["0-1"],
-		)
+		
+		// Check for fields in entry 0-1
+		foundEntry1Field1 := false
+		foundEntry1Field2 := false
+		for _, field := range entryMap["0-1"] {
+			if field.FieldName == "entry1_field1" && field.Value == "entry1_value1" {
+				foundEntry1Field1 = true
+			}
+			if field.FieldName == "entry1_field2" && field.Value == "entry1_value2" {
+				foundEntry1Field2 = true
+			}
+		}
+		assert.True(suite.T(), foundEntry1Field1, "Field 'entry1_field1' with value 'entry1_value1' not found in entry 0-1")
+		assert.True(suite.T(), foundEntry1Field2, "Field 'entry1_field2' with value 'entry1_value2' not found in entry 0-1")
 
 		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"entry2_field1": "entry2_value1"}, entryMap["0-2"])
+		
+		// Check for field in entry 0-2
+		foundEntry2Field1 := false
+		for _, field := range entryMap["0-2"] {
+			if field.FieldName == "entry2_field1" && field.Value == "entry2_value1" {
+				foundEntry2Field1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundEntry2Field1, "Field 'entry2_field1' with value 'entry2_value1' not found in entry 0-2")
 
 		opts := options.NewXAutoClaimOptions().SetCount(1)
 		xautoclaim, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-0", *opts)
@@ -4897,18 +4915,36 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entry1 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry1.Value())
-		assert.Equal(suite.T(), map[string]string{"a": "b"}, entryMap[entry1.Value()])
+		
+		// Check for field "a" with value "b" in entry1
+		foundFieldA := false
+		for _, field := range entryMap[entry1.Value()] {
+			if field.FieldName == "a" && field.Value == "b" {
+				foundFieldA = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldA, "Field 'a' with value 'b' not found in entry1")
 
 		// Verify entry2 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
+		
+		// Check for field "c" with value "d" in entry2
+		foundFieldC := false
+		for _, field := range entryMap[entry2.Value()] {
+			if field.FieldName == "c" && field.Value == "d" {
+				foundFieldC = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in entry2")
 
 		// delete one of the entries
 		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1.Value()}, "Can't send XDEL as a custom command")
@@ -4923,7 +4959,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap = make(map[string]map[string]string)
+		entryMap = make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -4934,7 +4970,16 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Verify entry2 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
+		
+		// Check for field "c" with value "d" in entry2
+		foundFieldC = false
+		for _, field := range entryMap[entry2.Value()] {
+			if field.FieldName == "c" && field.Value == "d" {
+				foundFieldC = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in entry2")
 
 		// try to read new messages only
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4956,7 +5001,16 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		// Check that we have one entry with the correct ID and fields
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), entry3.Value(), streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"e": "f"}, streamResponse.Entries[0].Fields)
+		
+		// Check for field "e" with value "f" in the entry
+		foundFieldE := false
+		for _, field := range streamResponse.Entries[0].Fields {
+			if field.FieldName == "e" && field.Value == "f" {
+				foundFieldE = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldE, "Field 'e' with value 'f' not found in entry")
 
 		// add second key with a group and a consumer, but no messages
 		sendWithCustomCommand(
@@ -4985,7 +5039,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 3, len(streamResponse1.Entries))
 
 		// Create a map of entry IDs to their fields for key1
-		entryMap1 := make(map[string]map[string]string)
+		entryMap1 := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse1.Entries {
 			entryMap1[entry.ID] = entry.Fields
 		}
@@ -4995,10 +5049,28 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Empty(suite.T(), entryMap1[entry1.Value()])
 
 		assert.Contains(suite.T(), entryMap1, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap1[entry2.Value()])
+		
+		// Check for field "c" with value "d" in entry2
+		foundFieldC = false
+		for _, field := range entryMap1[entry2.Value()] {
+			if field.FieldName == "c" && field.Value == "d" {
+				foundFieldC = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in entry2")
 
 		assert.Contains(suite.T(), entryMap1, entry3.Value())
-		assert.Equal(suite.T(), map[string]string{"e": "f"}, entryMap1[entry3.Value()])
+		
+		// Check for field "e" with value "f" in entry3
+		foundFieldE = false
+		for _, field := range entryMap1[entry3.Value()] {
+			if field.FieldName == "e" && field.Value == "f" {
+				foundFieldE = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundFieldE, "Field 'e' with value 'f' not found in entry3")
 
 		// Check key2 stream (should be empty)
 		streamResponse2, exists := res[key2]
@@ -5085,14 +5157,32 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse1.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse1.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"k1_field1": "k1_value2"}, streamResponse1.Entries[0].Fields)
+		
+		// Check fields in the entry
+		foundK1Field1 := false
+		for _, field := range streamResponse1.Entries[0].Fields {
+			if field.FieldName == "k1_field1" && field.Value == "k1_value2" {
+				foundK1Field1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundK1Field1, "Field k1_field1 with value k1_value2 not found")
 
 		// Check key2 stream
 		streamResponse2, exists := read[key2]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse2.Entries))
 		assert.Equal(suite.T(), "2-0", streamResponse2.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"k2_field1": "k2_value1"}, streamResponse2.Entries[0].Fields)
+		
+		// Check fields in the entry
+		foundK2Field1 := false
+		for _, field := range streamResponse2.Entries[0].Fields {
+			if field.FieldName == "k2_field1" && field.Value == "k2_value1" {
+				foundK2Field1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundK2Field1, "Field k2_field1 with value k2_value1 not found")
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
@@ -5187,20 +5277,47 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
-		assert.Equal(suite.T(), map[string]string{"f0": "v0"}, entryMap["1-0"])
+		
+		// Check for field "f0" with value "v0" in entry 1-0
+		foundF0 := false
+		for _, field := range entryMap["1-0"] {
+			if field.FieldName == "f0" && field.Value == "v0" {
+				foundF0 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundF0, "Field 'f0' with value 'v0' not found in entry 1-0")
 
 		assert.Contains(suite.T(), entryMap, "1-1")
-		assert.Equal(suite.T(), map[string]string{"f1": "v1"}, entryMap["1-1"])
+		
+		// Check for field "f1" with value "v1" in entry 1-1
+		foundF1 := false
+		for _, field := range entryMap["1-1"] {
+			if field.FieldName == "f1" && field.Value == "v1" {
+				foundF1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundF1, "Field 'f1' with value 'v1' not found in entry 1-1")
 
 		assert.Contains(suite.T(), entryMap, "1-2")
-		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, entryMap["1-2"])
+		
+		// Check for field "f2" with value "v2" in entry 1-2
+		foundF2 := false
+		for _, field := range entryMap["1-2"] {
+			if field.FieldName == "f2" && field.Value == "v2" {
+				foundF2 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundF2, "Field 'f2' with value 'v2' not found in entry 1-2")
 
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
@@ -5228,7 +5345,16 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Check entries
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "1-2", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, streamResponse.Entries[0].Fields)
+		
+		// Check for field "f2" with value "v2" in the entry
+		foundF2 = false
+		for _, field := range streamResponse.Entries[0].Fields {
+			if field.FieldName == "f2" && field.Value == "v2" {
+				foundF2 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundF2, "Field 'f2' with value 'v2' not found in entry")
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
@@ -7626,17 +7752,35 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, streamId1.Value())
-		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamId1.Value()])
+		
+		// Check for field "field1" with value "value1" in entry
+		foundField1 := false
+		for _, field := range entryMap[streamId1.Value()] {
+			if field.FieldName == "field1" && field.Value == "value1" {
+				foundField1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
 
 		assert.Contains(suite.T(), entryMap, streamId2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
+		
+		// Check for field "field2" with value "value2" in entry
+		foundField2 := false
+		for _, field := range entryMap[streamId2.Value()] {
+			if field.FieldName == "field2" && field.Value == "value2" {
+				foundField2 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(context.Background(), key, []string{streamId1.Value()})
@@ -7653,7 +7797,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap = make(map[string]map[string]string)
+		entryMap = make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7663,7 +7807,16 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Empty(suite.T(), entryMap[streamId1.Value()])
 
 		assert.Contains(suite.T(), entryMap, streamId2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
+		
+		// Check for field "field2" with value "value2" in entry
+		foundField2 = false
+		for _, field := range entryMap[streamId2.Value()] {
+			if field.FieldName == "field2" && field.Value == "value2" {
+				foundField2 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -7750,10 +7903,34 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(suite.T(), "1-0", infoSmall.LastEntry.ID)
 
 		// Check the fields in the first/last entry
-		assert.Equal(suite.T(), "b", infoSmall.FirstEntry.Fields["a"])
-		assert.Equal(suite.T(), "d", infoSmall.FirstEntry.Fields["c"])
-		assert.Equal(suite.T(), "b", infoSmall.LastEntry.Fields["a"])
-		assert.Equal(suite.T(), "d", infoSmall.LastEntry.Fields["c"])
+		// Find field "a" in FirstEntry
+		var firstEntryFieldA string
+		var firstEntryFieldC string
+		for _, field := range infoSmall.FirstEntry.Fields {
+			if field.FieldName == "a" {
+				firstEntryFieldA = field.Value
+			}
+			if field.FieldName == "c" {
+				firstEntryFieldC = field.Value
+			}
+		}
+		
+		// Find field "a" in LastEntry
+		var lastEntryFieldA string
+		var lastEntryFieldC string
+		for _, field := range infoSmall.LastEntry.Fields {
+			if field.FieldName == "a" {
+				lastEntryFieldA = field.Value
+			}
+			if field.FieldName == "c" {
+				lastEntryFieldC = field.Value
+			}
+		}
+		
+		assert.Equal(suite.T(), "b", firstEntryFieldA)
+		assert.Equal(suite.T(), "d", firstEntryFieldC)
+		assert.Equal(suite.T(), "b", lastEntryFieldA)
+		assert.Equal(suite.T(), "d", lastEntryFieldC)
 
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
@@ -7840,7 +8017,20 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		// Check that we have one entry with the correct ID and fields
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, streamResponse.Entries[0].Fields)
+		
+		// Check for fields in the entry
+		foundE1F1 := false
+		foundE1F2 := false
+		for _, field := range streamResponse.Entries[0].Fields {
+			if field.FieldName == "e1_f1" && field.Value == "e1_v1" {
+				foundE1F1 = true
+			}
+			if field.FieldName == "e1_f2" && field.Value == "e1_v2" {
+				foundE1F2 = true
+			}
+		}
+		assert.True(suite.T(), foundE1F1, "Field 'e1_f1' with value 'e1_v1' not found in entry")
+		assert.True(suite.T(), foundE1F2, "Field 'e1_f2' with value 'e1_v2' not found in entry")
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
 		time.Sleep(2000 * time.Millisecond)
@@ -7873,17 +8063,39 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
+		
+		// Check for fields in entry 0-2
+		foundE2F1 := false
+		foundE2F2 := false
+		for _, field := range entryMap["0-2"] {
+			if field.FieldName == "e2_f1" && field.Value == "e2_v1" {
+				foundE2F1 = true
+			}
+			if field.FieldName == "e2_f2" && field.Value == "e2_v2" {
+				foundE2F2 = true
+			}
+		}
+		assert.True(suite.T(), foundE2F1, "Field 'e2_f1' with value 'e2_v1' not found in entry 0-2")
+		assert.True(suite.T(), foundE2F2, "Field 'e2_f2' with value 'e2_v2' not found in entry 0-2")
 
 		assert.Contains(suite.T(), entryMap, "0-3")
-		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
+		
+		// Check for field in entry 0-3
+		foundE3F1 := false
+		for _, field := range entryMap["0-3"] {
+			if field.FieldName == "e3_f1" && field.Value == "e3_v1" {
+				foundE3F1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundE3F1, "Field 'e3_f1' with value 'e3_v1' not found in entry 0-3")
 
 		// Verify that xinfo_consumers contains info for 2 consumers now
 		info, err = client.XInfoConsumers(context.Background(), key, group)
@@ -8020,14 +8232,27 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.Equal(suite.T(), 3, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
-		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, entryMap["0-1"])
+		
+		// Check for fields in entry 0-1
+		foundE1F1 := false
+		foundE1F2 := false
+		for _, field := range entryMap["0-1"] {
+			if field.FieldName == "e1_f1" && field.Value == "e1_v1" {
+				foundE1F1 = true
+			}
+			if field.FieldName == "e1_f2" && field.Value == "e1_v2" {
+				foundE1F2 = true
+			}
+		}
+		assert.True(suite.T(), foundE1F1, "Field 'e1_f1' with value 'e1_v1' not found in entry 0-1")
+		assert.True(suite.T(), foundE1F2, "Field 'e1_f2' with value 'e1_v2' not found in entry 0-1")
 
 		assert.Contains(suite.T(), entryMap, "0-2")
 		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
@@ -8450,17 +8675,35 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, streamid_1.Value())
-		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamid_1.Value()])
+		
+		// Check for field "field1" with value "value1" in entry
+		foundField1 := false
+		for _, field := range entryMap[streamid_1.Value()] {
+			if field.FieldName == "field1" && field.Value == "value1" {
+				foundField1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
 
 		assert.Contains(suite.T(), entryMap, streamid_2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamid_2.Value()])
+		
+		// Check for field "field2" with value "value2" in entry
+		foundField2 := false
+		for _, field := range entryMap[streamid_2.Value()] {
+			if field.FieldName == "field2" && field.Value == "value2" {
+				foundField2 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -8483,17 +8726,35 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 3, len(streamResponse2.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap2 := make(map[string]map[string]string)
+		entryMap2 := make(map[string][]models.FieldInfo)
 		for _, entry := range streamResponse2.Entries {
 			entryMap2[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap2, streamid_3.Value())
-		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, entryMap2[streamid_3.Value()])
+		
+		// Check for field "field3" with value "value3" in entry
+		foundField3 := false
+		for _, field := range entryMap2[streamid_3.Value()] {
+			if field.FieldName == "field3" && field.Value == "value3" {
+				foundField3 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
 
 		assert.Contains(suite.T(), entryMap2, streamid_4.Value())
-		assert.Equal(suite.T(), map[string]string{"field4": "value4"}, entryMap2[streamid_4.Value()])
+		
+		// Check for field "field4" with value "value4" in entry
+		foundField4 := false
+		for _, field := range entryMap2[streamid_4.Value()] {
+			if field.FieldName == "field4" && field.Value == "value4" {
+				foundField4 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField4, "Field 'field4' with value 'value4' not found in entry")
 
 		assert.Contains(suite.T(), entryMap2, streamid_5.Value())
 		assert.Equal(suite.T(), map[string]string{"field5": "value5"}, entryMap2[streamid_5.Value()])

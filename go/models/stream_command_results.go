@@ -6,7 +6,15 @@ type StreamEntry struct {
 	// The unique identifier of the entry
 	ID string
 	// The fields associated with the entry
-	Fields map[string]string
+	Fields []FieldInfo
+}
+
+// FieldInfo represents the Field-value pairs added to the entry
+type FieldInfo struct {
+	// The name of the field
+	FieldName string
+	// The value of the field
+	Value string
 }
 
 // StreamResponse represents a stream with its entries
@@ -18,14 +26,6 @@ type StreamResponse struct {
 // XClaimResponse represents a claimed entry in a stream
 type XClaimResponse struct {
 	// The fields associated with the claimed entry
-	Fields map[string]string
-}
-
-// StreamEntryInfo represents a stream entry in XInfoStream response
-type StreamEntryInfo struct {
-	// The ID of the entry
-	ID string
-	// The fields associated with the entry
 	Fields map[string]string
 }
 
@@ -46,7 +46,7 @@ type XInfoStreamResponse struct {
 	// The count of all entries added to the stream during its lifetime
 	EntriesAdded int64
 	// The ID and field-value tuples of the first entry in the stream
-	FirstEntry StreamEntryInfo
+	FirstEntry StreamEntry
 	// The ID and field-value tuples of the last entry in the stream
-	LastEntry StreamEntryInfo
+	LastEntry StreamEntry
 }
