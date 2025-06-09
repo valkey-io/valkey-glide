@@ -4467,7 +4467,8 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// source exists but is not a list type key
 		suite.verifyOK(client.Set(context.Background(), nonListKey, "value"))
 
-		res11, err := client.BLMove(
+		res11, _ := client.BLMove(
+			context.Background(),
 			nonListKey,
 			key1,
 			constants.Left,
@@ -4479,7 +4480,8 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// destination exists but is not a list type key
 		suite.verifyOK(client.Set(context.Background(), nonListKey, "value"))
 
-		res12, err := client.BLMove(
+		res12, _ := client.BLMove(
+			context.Background(),
 			key1,
 			nonListKey,
 			constants.Left,
@@ -7547,10 +7549,10 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 
 		// read the stream for the consumer and mark messages as pending
 		actualGroup, err := client.XReadGroup(context.Background(), groupName, consumerName, map[string]string{key: ">"})
-		suite.NoError(err)
+		assert.NoError(suite.T(), err)
 
 		// Check that we have the stream with the correct name in the map
-		assert.True(suite.T(), reflect.DeepEqual(expectedGroup, actualGroup),
+		assert.Equal(suite.T(), 1, len(actualGroup))
 		streamResponse, exists := actualGroup[key]
 		assert.True(suite.T(), exists)
 
@@ -7585,7 +7587,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		assert.Equal(suite.T(), map[string]map[string][][]string{
+		entryMap = make(map[string]map[string]string)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7622,7 +7624,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.NoError(err)
 
 		// Check that we have one stream with entries
-		assert.Equal(suite.T(), 1, len(resp[key]))
+		assert.Equal(suite.T(), 1, len(resp))
 		streamResponse, exists = resp[key]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
@@ -8509,7 +8511,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}}, claimResult)
+		assert.Equal(
+			suite.T(),
+			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			claimResult,
+		)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,
@@ -10201,14 +10207,14 @@ func (suite *GlideTestSuite) TestGeoHash() {
 		geoHashResults, err := client.GeoHash(context.Background(), key1, []string{"Palermo", "Catania"})
 		suite.NoError(err)
 		suite.Equal(2, len(geoHashResults))
-		assert.Equal(t, geoHashResults[0], "sqc8b49rny0")
-		assert.Equal(t, geoHashResults[1], "sqdtr74hyu0")
+		suite.Equal(geoHashResults[0], "sqc8b49rny0")
+		suite.Equal(geoHashResults[1], "sqdtr74hyu0")
 
 		// Test getting geohash for non-existent members
 		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{"Gotham City"})
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(geoHashResults))
-		assert.True(t, geoHashResults[0].IsNil())
+		suite.NoError(err)
+		suite.Equal(1, len(geoHashResults))
+		suite.True(geoHashResults[0].IsNil())
 
 		// Test getting geohash for empty members
 		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{})
