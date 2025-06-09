@@ -26,7 +26,7 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 		return fmt.Errorf(
 			"unexpected return type from Valkey: got nil, expected %s",
 			C.GoString(expectedTypeStr),
-		}
+		)
 	}
 
 	if isNilable && (response == nil || response.response_type == uint32(C.Null)) {
@@ -42,7 +42,7 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 		"unexpected return type from Valkey: got %s, expected %s",
 		C.GoString(actualTypeStr),
 		C.GoString(expectedTypeStr),
-	}
+	)
 }
 
 func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool) (models.Result[string], error) {
@@ -950,7 +950,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	claimMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 
 	for id, entriesArray := range claimMap {
@@ -1233,7 +1233,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	streamMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 	for streamName, streamData := range streamMap {
 		streamResponse := models.StreamResponse{
