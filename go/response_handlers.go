@@ -964,7 +964,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 
 	for id, entriesArray := range claimMap {
 		// Process fields
-		fields := make(map[string]string)
+		fieldInfos := make([]models.FieldInfo, 0)
 
 		entriesData, ok := entriesArray.([]any)
 		if !ok {
@@ -983,7 +983,10 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 						fieldName, okField := fieldValuePairs[i].(string)
 						fieldValue, okValue := fieldValuePairs[i+1].(string)
 						if okField && okValue {
-							fields[fieldName] = fieldValue
+							fieldInfos = append(fieldInfos, models.FieldInfo{
+								FieldName: fieldName,
+								Value:     fieldValue,
+							})
 						}
 					}
 				}
@@ -991,7 +994,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 		}
 
 		result[id] = models.XClaimResponse{
-			Fields: fields,
+			Fields: fieldInfos,
 		}
 	}
 

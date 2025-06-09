@@ -8818,8 +8818,16 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		)
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
-			streamid_3.Value(): {Fields: map[string]string{"field3": "value3"}},
-			streamid_5.Value(): {Fields: map[string]string{"field5": "value5"}},
+			streamid_3.Value(): {
+				Fields: []models.FieldInfo{
+					{FieldName: "field3", Value: "value3"},
+				},
+			},
+			streamid_5.Value(): {
+				Fields: []models.FieldInfo{
+					{FieldName: "field5", Value: "value5"},
+				},
+			},
 		}
 		assert.Equal(suite.T(), expectedClaimResult, claimResult)
 
@@ -8849,7 +8857,13 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			map[string]models.XClaimResponse{
+				streamid_6.Value(): {
+					Fields: []models.FieldInfo{
+						{FieldName: "field6", Value: "value6"},
+					},
+				},
+			},
 			claimResult,
 		)
 

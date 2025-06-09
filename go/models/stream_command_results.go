@@ -26,7 +26,7 @@ type StreamResponse struct {
 // XClaimResponse represents a claimed entry in a stream
 type XClaimResponse struct {
 	// The fields associated with the claimed entry
-	Fields map[string]string
+	Fields []FieldInfo
 }
 
 // XInfoStreamResponse represents the information about a stream
