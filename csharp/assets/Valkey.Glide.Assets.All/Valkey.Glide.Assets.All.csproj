@@ -22,6 +22,7 @@
 <!--    <ProjectReference Include="..\Valkey.Glide.Assets.LinuxArm64Gnu\Valkey.Glide.Assets.LinuxArm64Gnu.csproj" />-->
 <!--    <ProjectReference Include="..\Valkey.Glide.Assets.LinuxArm64Musl\Valkey.Glide.Assets.LinuxArm64Musl.csproj" />-->
     <ProjectReference Include="..\Valkey.Glide.Assets.MacOSArm64\Valkey.Glide.Assets.MacOSArm64.csproj" />
+    <ProjectReference Include="..\Valkey.Glide.Assets.MacOSIntel64\Valkey.Glide.Assets.MacOSIntel64.csproj" />
 <!--    <ProjectReference Include="..\Valkey.Glide.Assets.Win32\Valkey.Glide.Assets.Win32.csproj" />-->
     <ProjectReference Include="..\Valkey.Glide.Assets.Win64\Valkey.Glide.Assets.Win64.csproj" />
   </ItemGroup>

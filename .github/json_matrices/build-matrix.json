@@ -35,7 +35,7 @@
         "CD_RUNNER": "macos-15",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "dotnet"],
         "languages": [],
         "comment": "Tests for all clients (CI) are skipped for that platform due to instability, but CD pipelines still run on it. See PR #3482 for details."
     },
