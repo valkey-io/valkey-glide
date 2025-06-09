@@ -3401,7 +3401,7 @@ func (suite *GlideTestSuite) TestExpire() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		result, err := client.Expire(context.Background(), key, 1)
+		result, err := client.Expire(context.Background(), key, 1*time.Second)
 		assert.Nil(suite.T(), err, "Expected no error from Expire command")
 		assert.True(suite.T(), result, "Expire command should return true when expiry is set")
 
@@ -3417,7 +3417,7 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		// Trying to set an expiry on a non-existent key
-		result, err := client.Expire(context.Background(), key, 1)
+		result, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.False(suite.T(), result)
 	})
@@ -3431,7 +3431,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		result, err := client.ExpireWithOptions(context.Background(), key, 2, constants.HasNoExpiry)
+		result, err := client.ExpireWithOptions(context.Background(), key, 2*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), result)
 
@@ -3441,7 +3441,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), "", resultGet.Value())
 
-		result, err = client.ExpireWithOptions(context.Background(), key, 1, constants.HasNoExpiry)
+		result, err = client.ExpireWithOptions(context.Background(), key, 1*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.False(suite.T(), result)
 	})
@@ -3455,11 +3455,11 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resexp, err := client.ExpireWithOptions(context.Background(), key, 20, constants.HasNoExpiry)
+		resexp, err := client.ExpireWithOptions(context.Background(), key, 20*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resexp)
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 1, constants.HasExistingExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 1*time.Second, constants.HasExistingExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
@@ -3479,11 +3479,16 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 2, constants.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 2*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 5, constants.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			5*time.Second,
+			constants.NewExpiryGreaterThanCurrent,
+		)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 		time.Sleep(6 * time.Second)
@@ -3501,16 +3506,26 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 10, constants.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 10*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 5, constants.NewExpiryLessThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			5*time.Second,
+			constants.NewExpiryLessThanCurrent,
+		)
 		suite.NoError(err)
 
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 15, constants.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			15*time.Second,
+			constants.NewExpiryGreaterThanCurrent,
+		)
 		suite.NoError(err)
 
 		assert.True(suite.T(), resultExpire)
@@ -3529,7 +3544,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 
 		resultExpire, err := client.ExpireAtWithOptions(context.Background(), key, futureTimestamp, constants.HasNoExpiry)
 		suite.NoError(err)
@@ -3540,7 +3555,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
-			futureTimestamp+10,
+			futureTimestamp.Add(10),
 			constants.HasNoExpiry,
 		)
 		suite.NoError(err)
@@ -3555,7 +3570,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
@@ -3563,7 +3578,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
-			futureTimestamp+10,
+			futureTimestamp.Add(10),
 			constants.HasExistingExpiry,
 		)
 		suite.NoError(err)
@@ -3579,12 +3594,12 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
 
-		newFutureTimestamp := time.Now().Add(20 * time.Second).Unix()
+		newFutureTimestamp := time.Now().Add(20 * time.Second)
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(context.Background(),
 			key,
 			newFutureTimestamp,
@@ -3603,12 +3618,12 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
 
-		newFutureTimestamp := time.Now().Add(5 * time.Second).Unix()
+		newFutureTimestamp := time.Now().Add(5 * time.Second)
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
@@ -3652,17 +3667,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 1000
+		newExpire := 1000 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.HasExistingExpiry,
 		)
 		suite.NoError(err)
@@ -3683,12 +3697,12 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		newExpire := 500
+		newExpire := 500 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.HasNoExpiry,
 		)
 		suite.NoError(err)
@@ -3709,17 +3723,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 1000
+		newExpire := 1000 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.NewExpiryGreaterThanCurrent,
 		)
 		suite.NoError(err)
@@ -3740,17 +3753,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 200
+		newExpire := 200 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.NewExpiryLessThanCurrent,
 		)
 		suite.NoError(err)
@@ -3769,7 +3781,7 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		expireAfterMilliseconds := time.Now().Unix() * 1000
+		expireAfterMilliseconds := time.Now().Add(1000 * time.Millisecond)
 		resultPExpireAt, err := client.PExpireAt(context.Background(), key, expireAfterMilliseconds)
 		suite.NoError(err)
 
@@ -3791,7 +3803,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		timestamp := time.Now().Unix() * 1000
+		timestamp := time.Now().Add(1000 * time.Millisecond)
 		result, err := client.PExpireAtWithOptions(context.Background(), key, timestamp, constants.HasNoExpiry)
 
 		suite.NoError(err)
@@ -3811,11 +3823,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 		value := uuid.New().String()
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
-		newExpire := time.Now().Unix()*1000 + 1000
+		newExpire := time.Now().Add(1000 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3841,12 +3852,12 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := time.Now().UnixMilli() + 1000
+		initialExpire := time.Now().Add(1000 * time.Millisecond)
 		resultExpire, err := client.PExpireAt(context.Background(), key, initialExpire)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := time.Now().UnixMilli() + 2000
+		newExpire := time.Now().Add(2000 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3872,12 +3883,11 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 1000
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 1000*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := time.Now().Unix()*1000 + 500
+		newExpire := time.Now().Add(500 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3908,14 +3918,14 @@ func (suite *GlideTestSuite) TestExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), value, result.Value())
 
-		expireTime := time.Now().Unix() + 3
+		expireTime := time.Now().Add(3 * time.Second)
 		resultExpAt, err := client.ExpireAt(context.Background(), key, expireTime)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpAt)
 
 		resexptime, err := client.ExpireTime(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), expireTime, resexptime)
+		assert.Equal(suite.T(), expireTime.Unix(), resexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -3949,14 +3959,14 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), value, result.Value())
 
-		pexpireTime := time.Now().UnixMilli() + 3000
+		pexpireTime := time.Now().Add(3000 * time.Millisecond)
 		resultExpAt, err := client.PExpireAt(context.Background(), key, pexpireTime)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpAt)
 
 		respexptime, err := client.PExpireTime(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), pexpireTime, respexptime)
+		assert.Equal(suite.T(), pexpireTime.UnixMilli(), respexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -4011,7 +4021,7 @@ func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 		resTTL, err := client.TTL(context.Background(), key)
@@ -4026,7 +4036,7 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -4044,7 +4054,7 @@ func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -4060,7 +4070,7 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -5869,7 +5879,7 @@ func (suite *GlideTestSuite) TestPersist() {
 		keyName := "{keyName}" + uuid.NewString()
 		t := suite.T()
 		suite.verifyOK(client.Set(context.Background(), keyName, initialValue))
-		resultExpire, err := client.Expire(context.Background(), keyName, 300)
+		resultExpire, err := client.Expire(context.Background(), keyName, 300*time.Second)
 		assert.Nil(t, err)
 		assert.True(t, resultExpire)
 		resultPersist, err := client.Persist(context.Background(), keyName)
@@ -6953,7 +6963,7 @@ func (suite *GlideTestSuite) TestDumpRestore() {
 		deletedCount, err := client.Del(context.Background(), []string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
-		result_test1, err := client.Restore(context.Background(), key, int64(0), resultDump.Value())
+		result_test1, err := client.Restore(context.Background(), key, 0, resultDump.Value())
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(context.Background(), key)
@@ -6984,7 +6994,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
 		optsReplace := options.NewRestoreOptions().SetReplace()
-		result_test1, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *optsReplace)
+		result_test1, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *optsReplace)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(context.Background(), key)
@@ -6996,7 +7006,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test2)
 		opts_test2 := options.NewRestoreOptions().SetABSTTL()
-		result_test2, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test2)
+		result_test2, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test2)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test2)
 		resultGet_test2, err := client.Get(context.Background(), key)
@@ -7008,7 +7018,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test3)
 		opts_test3 := options.NewRestoreOptions().SetEviction(constants.FREQ, 10)
-		result_test3, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test3)
+		result_test3, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test3)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test3)
 		resultGet_test3, err := client.Get(context.Background(), key)
@@ -7020,7 +7030,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test4)
 		opts_test4 := options.NewRestoreOptions().SetEviction(constants.IDLETIME, 10)
-		result_test4, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test4)
+		result_test4, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test4)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test4)
 		resultGet_test4, err := client.Get(context.Background(), key)
@@ -8095,12 +8105,12 @@ func (suite *GlideTestSuite) TestWait() {
 		key := uuid.New().String()
 		client.Set(context.Background(), key, "test")
 		// Test 1:  numberOfReplicas (2)
-		resultInt64, err := client.Wait(context.Background(), 2, 2000)
+		resultInt64, err := client.Wait(context.Background(), 2, 2000*time.Millisecond)
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), resultInt64 >= 2)
 
 		// Test 2: Invalid timeout (negative)
-		_, err = client.Wait(context.Background(), 2, -1)
+		_, err = client.Wait(context.Background(), 2, -1*time.Millisecond)
 
 		// Assert error and message for invalid timeout
 		assert.NotNil(suite.T(), err)
@@ -8477,7 +8487,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
+			0,
 			[]string{streamid_3.Value(), streamid_5.Value()},
 		)
 		assert.NoError(suite.T(), err)
@@ -8491,7 +8501,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
+			0,
 			[]string{streamid_3.Value(), streamid_5.Value()},
 		)
 		assert.NoError(suite.T(), err)
@@ -8506,7 +8516,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
+			0,
 			[]string{streamid_6.Value()},
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
@@ -8597,24 +8607,45 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.NotNil(suite.T(), readGroupResult)
 
 		// claim with invalid stream entry IDs
-		_, err = client.XClaimJustId(context.Background(), key, groupName, consumer1, int64(1), []string{"invalid-stream-id"})
-		suite.Error(err)
+		_, err = client.XClaimJustId(
+			context.Background(),
+			key,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{"invalid-stream-id"},
+		)
+		assert.Error(suite.T(), err)
 
 		// claim with empty stream entry IDs returns empty map
-		claimResult, err := client.XClaimJustId(context.Background(), key, groupName, consumer1, int64(1), []string{})
-		suite.NoError(err)
-		suite.Equal([]string{}, claimResult)
+		claimResult, err := client.XClaimJustId(
+			context.Background(),
+			key,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{},
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{}, claimResult)
 
 		// non existent key causes a RequestError
 		claimOptions := options.NewXClaimOptions().SetIdleTime(1)
-		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		_, err = client.XClaim(
+			context.Background(),
+			stringKey,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{streamid_1.Value()},
+		)
 		suite.ErrorContains(err, "NOGROUP")
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
@@ -8625,7 +8656,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 		)
 		suite.ErrorContains(err, "NOGROUP")
@@ -8634,7 +8665,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
@@ -8642,15 +8673,22 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 
 		// key exists, but is not a stream
 		_, err = client.Set(context.Background(), stringKey, "test")
-		suite.NoError(err)
-		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
-		suite.Error(err)
+		assert.NoError(suite.T(), err)
+		_, err = client.XClaim(
+			context.Background(),
+			stringKey,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{streamid_1.Value()},
+		)
+		assert.Error(suite.T(), err)
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
@@ -8661,7 +8699,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 		)
 		suite.Error(err)
@@ -8670,7 +8708,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
+			1*time.Millisecond,
 			[]string{streamid_1.Value()},
 			*claimOptions,
 		)
