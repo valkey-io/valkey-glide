@@ -10489,8 +10489,8 @@ func (suite *GlideTestSuite) TestGeoHash() {
 		geoHashResults, err := client.GeoHash(context.Background(), key1, []string{"Palermo", "Catania"})
 		suite.NoError(err)
 		suite.Equal(2, len(geoHashResults))
-		suite.Equal(geoHashResults[0], "sqc8b49rny0")
-		suite.Equal(geoHashResults[1], "sqdtr74hyu0")
+		suite.Equal(geoHashResults[0].Value(), "sqc8b49rny0")
+		suite.Equal(geoHashResults[1].Value(), "sqdtr74hyu0")
 
 		// Test getting geohash for non-existent members
 		geoHashResults, err = client.GeoHash(context.Background(), key1, []string{"Gotham City"})
