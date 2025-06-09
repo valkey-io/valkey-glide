@@ -2766,13 +2766,6 @@ where
         for (index, mut responses) in pipeline_responses.into_iter().enumerate() {
             // If the first policy in the sorted vector matches the current command index, use it.
             if let Some(&(ref routing_info, response_policy)) = response_policies.get(&index) {
-                // let resolved = responses
-                //     .into_iter()
-                //     .map(|(value, address)| {
-                //         // This `?` will convert the `RedisResult<Value>` to a `Result<(Option<String>, Value), RedisError>`
-                //         (Some(address), value)
-                //     })
-                //     .collect::<Vec<(Option<String>, Value)>>();
                 let aggregated_response = match Self::aggregate_resolved_results(
                     responses,
                     routing_info,
