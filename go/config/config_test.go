@@ -249,50 +249,50 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 		WithRequestTimeout(-1 * time.Hour)
 
 	_, err := config.ToProtobuf()
-	assert.EqualError(t, err, "invalid duration was specified")
+	assert.EqualError(t, err, "setting request timeout returned an error: invalid duration was specified")
 
 	config2 := NewClusterClientConfiguration().
 		WithRequestTimeout(-1 * time.Hour)
 
 	_, err2 := config2.ToProtobuf()
-	assert.EqualError(t, err2, "invalid duration was specified")
+	assert.EqualError(t, err2, "setting request timeout returned an error: invalid duration was specified")
 
 	// RequestTimeout 50 days
 	config3 := NewClientConfiguration().
 		WithRequestTimeout(1200 * time.Hour)
 
 	_, err3 := config3.ToProtobuf()
-	assert.EqualError(t, err3, "invalid duration was specified")
+	assert.EqualError(t, err3, "setting request timeout returned an error: invalid duration was specified")
 
 	config4 := NewClusterClientConfiguration().
 		WithRequestTimeout(1200 * time.Hour)
 
 	_, err4 := config4.ToProtobuf()
-	assert.EqualError(t, err4, "invalid duration was specified")
+	assert.EqualError(t, err4, "setting request timeout returned an error: invalid duration was specified")
 
 	// ConnectionTimeout Negative duration
 	config5 := NewClientConfiguration().
 		WithAdvancedConfiguration(NewAdvancedClientConfiguration().WithConnectionTimeout(-1 * time.Hour))
 
 	_, err5 := config5.ToProtobuf()
-	assert.EqualError(t, err5, "invalid duration was specified")
+	assert.EqualError(t, err5, "setting connection timeout returned an error: invalid duration was specified")
 
 	config6 := NewClusterClientConfiguration().
 		WithAdvancedConfiguration(NewAdvancedClusterClientConfiguration().WithConnectionTimeout(-1 * time.Hour))
 
 	_, err6 := config6.ToProtobuf()
-	assert.EqualError(t, err6, "invalid duration was specified")
+	assert.EqualError(t, err6, "setting connection timeout returned an error: invalid duration was specified")
 
 	// ConnectionTimeout 50 days
 	config7 := NewClientConfiguration().
 		WithAdvancedConfiguration(NewAdvancedClientConfiguration().WithConnectionTimeout(1200 * time.Hour))
 
 	_, err7 := config7.ToProtobuf()
-	assert.EqualError(t, err7, "invalid duration was specified")
+	assert.EqualError(t, err7, "setting connection timeout returned an error: invalid duration was specified")
 
 	config8 := NewClusterClientConfiguration().
 		WithAdvancedConfiguration(NewAdvancedClusterClientConfiguration().WithConnectionTimeout(1200 * time.Hour))
 
 	_, err8 := config8.ToProtobuf()
-	assert.EqualError(t, err8, "invalid duration was specified")
+	assert.EqualError(t, err8, "setting connection timeout returned an error: invalid duration was specified")
 }
