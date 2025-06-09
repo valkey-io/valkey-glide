@@ -7,6 +7,7 @@
     <Platform>x86</Platform>
     <PlatformTarget>x86</PlatformTarget>
     <RustTuple>i686-pc-windows-msvc</RustTuple>
+    <LibraryExtension>.dll</LibraryExtension>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)../../props/version.props"/>

@@ -124,10 +124,19 @@ jobs:
               working-directory: csharp
               run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
 
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` to true
+              # We temporarily do this to prevent benchmark from rebuilding cargo,
+              # both fixing a parallel-only cargo clean problem and speeding up the benchmark
+              run: echo "VALKEY_SKIP_BUILD_ASSETS=TRUE" >> $GITHUB_ENV
+
             - uses: ./.github/workflows/test-benchmark
               if: ${{ contains(matrix.host.RUNNER, 'ubuntu') }}
               with:
                   language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
+
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` to false
+              # Clear variable again, after the test-benchmark step is done
+              run: echo '"'VALKEY_SKIP_BUILD_ASSETS=""' >> $GITHUB_ENV
 
             - name: Upload test reports
               if: always()

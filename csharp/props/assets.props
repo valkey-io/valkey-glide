@@ -20,7 +20,7 @@
     </PropertyGroup>
 
 
-    <Target Name="PreClean" BeforeTargets="Clean">
+    <Target Name="PreClean" BeforeTargets="Clean" Condition="$(VALKEY_SKIP_BUILD_ASSETS) == ''">
         <Exec Command="cargo clean --target $(RustTuple)"
               EnvironmentVariables="CARGO_TERM_COLOR=always"
               ConsoleToMsBuild="true"
@@ -30,8 +30,7 @@
         </Exec>
     </Target>
 
-    <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-        <Exec Command="echo $(Configuration)" ConsoleToMsBuild="true"/>
+    <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition="$(VALKEY_SKIP_BUILD_ASSETS) == ''">
         <Exec Condition="'$(Configuration)' == 'Debug'"
               Command="cargo build --target $(RustTuple)"
               EnvironmentVariables="CARGO_TERM_COLOR=always"
@@ -48,10 +47,10 @@
         </Exec>
     </Target>
 
-    <ItemGroup>
+    <ItemGroup Condition="$(VALKEY_SKIP_BUILD_ASSETS) == ''">
         <!-- Debug -->
-        <None Condition="'$(Configuration)' == 'Debug' And '$(OS)' == 'Windows_NT'"
-              Include="$(RustDir)target/$(RustTuple)/debug/glide_rs.dll"
+        <None Condition="'$(Configuration)' == 'Debug'"
+              Include="$(RustDir)target/$(RustTuple)/debug/*glide_rs$(LibraryExtension)"
               Link="/$(RustLibPrefix)%(Filename)%(Extension)"
               PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
               Pack="True">
@@ -64,17 +63,10 @@
               Pack="True">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Condition="'$(Configuration)' == 'Debug' And '$(OS)' != 'Windows_NT'"
-              Include="$(RustDir)target/$(RustTuple)/debug/libglide_rs.so"
-              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
-              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
-              Pack="True">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
 
         <!-- Release -->
-        <None Condition="'$(Configuration)' == 'Release' And '$(OS)' == 'Windows_NT'"
-              Include="$(RustDir)target/$(RustTuple)/release/glide_rs.dll"
+        <None Condition="'$(Configuration)' == 'Release'"
+              Include="$(RustDir)target/$(RustTuple)/release/*glide_rs$(LibraryExtension)"
               Link="/$(RustLibPrefix)%(Filename)%(Extension)"
               PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
               Pack="True">
@@ -89,12 +81,5 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         -->
-        <None Condition="'$(Configuration)' == 'Release' And '$(OS)' != 'Windows_NT'"
-              Include="$(RustDir)target/$(RustTuple)/release/libglide_rs.so"
-              Link="/$(RustLibPrefix)%(Filename)%(Extension)"
-              PackagePath="/runtimes/$(RuntimeIdentifier)/native/$(RustLibPrefix)%(Filename)%(Extension)"
-              Pack="True">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
     </ItemGroup>
 </Project>
