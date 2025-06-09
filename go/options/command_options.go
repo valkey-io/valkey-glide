@@ -3,12 +3,12 @@
 package options
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
@@ -110,7 +110,7 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 		case constants.KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &errors.RequestError{Msg: "Invalid expiry type"}
+			err = errors.New("invalid expiry type")
 		}
 	}
 
@@ -148,7 +148,7 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 		case constants.Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &errors.RequestError{Msg: "Invalid expiry type"}
+			err = errors.New("invalid expiry type")
 		}
 	}
 

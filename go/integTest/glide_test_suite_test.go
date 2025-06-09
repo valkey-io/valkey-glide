@@ -473,7 +473,7 @@ func (suite *GlideTestSuite) runParallelizedWithClients(
 }
 
 func (suite *GlideTestSuite) verifyOK(result string, err error) {
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.Equal(suite.T(), glide.OK, result)
 }
 

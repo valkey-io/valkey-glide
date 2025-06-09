@@ -21,7 +21,7 @@ func (suite *GlideTestSuite) TestModuleVerifyVssLoaded() {
 		},
 	)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	for _, value := range result.MultiValue() {
 		assert.True(suite.T(), strings.Contains(value, "# search_index_stats"))
 	}
