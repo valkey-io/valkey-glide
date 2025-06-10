@@ -1856,11 +1856,15 @@ where
             // ——————————————————————————————————————————
             Some(ResponsePolicy::Special) | None => {
                 let mut pairs: Vec<(Value, Value)> = Vec::with_capacity(total);
-                for (addr_opt, r) in resolved {
-                    let key_bytes = addr_opt
-                        .expect("Address must be Some(_) in the default branch")
-                        .into_bytes();
-                    pairs.push((Value::BulkString(key_bytes), r));
+                for (addr_opt, value) in resolved {
+                    let key_bytes = match addr_opt {
+                        Some(addr) => addr.into_bytes(),
+                        None => return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "No address provided for response in Special or None response policy",
+                        ))),
+                    };
+                    pairs.push((Value::BulkString(key_bytes), value));
                 }
                 Ok(Value::Map(pairs))
             }

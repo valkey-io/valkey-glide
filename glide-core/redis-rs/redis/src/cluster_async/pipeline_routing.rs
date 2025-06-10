@@ -493,7 +493,7 @@ fn add_pipeline_result(
                     responses.resize(
                         inner_index + 1,
                         (
-                            Some("".to_string()),
+                            None,
                             Value::ServerError(ServerError::ExtensionError {
                                 code: "PipelineNoResponse".to_string(),
                                 detail: (Some("no response from node".to_string())), // we initialize it with an error, but it should be overwritten
