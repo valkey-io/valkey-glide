@@ -182,7 +182,12 @@ func ExampleClusterClient_ExpireAt() {
 func ExampleClient_ExpireAtWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
-	result1, err := client.ExpireAtWithOptions(context.Background(), "key", time.Now().Add(1*time.Second), constants.HasNoExpiry)
+	result1, err := client.ExpireAtWithOptions(
+		context.Background(),
+		"key",
+		time.Now().Add(1*time.Second),
+		constants.HasNoExpiry,
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -197,7 +202,12 @@ func ExampleClient_ExpireAtWithOptions() {
 func ExampleClusterClient_ExpireAtWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
-	result1, err := client.ExpireAtWithOptions(context.Background(), "key", time.Now().Add(1*time.Second), constants.HasNoExpiry)
+	result1, err := client.ExpireAtWithOptions(
+		context.Background(),
+		"key",
+		time.Now().Add(1*time.Second),
+		constants.HasNoExpiry,
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -302,7 +312,12 @@ func ExampleClusterClient_PExpireAt() {
 func ExampleClient_PExpireAtWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
-	result1, err := client.PExpireAtWithOptions(context.Background(), "key", time.Now().Add(10000*time.Millisecond), constants.HasNoExpiry)
+	result1, err := client.PExpireAtWithOptions(
+		context.Background(),
+		"key",
+		time.Now().Add(10000*time.Millisecond),
+		constants.HasNoExpiry,
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -317,7 +332,12 @@ func ExampleClient_PExpireAtWithOptions() {
 func ExampleClusterClient_PExpireAtWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
-	result1, err := client.PExpireAtWithOptions(context.Background(), "key", time.Now().Add(10000*time.Millisecond), constants.HasNoExpiry)
+	result1, err := client.PExpireAtWithOptions(
+		context.Background(),
+		"key",
+		time.Now().Add(10000*time.Millisecond),
+		constants.HasNoExpiry,
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -413,7 +433,11 @@ func ExampleClient_TTL() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
 	result1, err := client.TTL(context.Background(), "key")
-	_, err = client.ExpireAt(context.Background(), "key", time.Now().Add(10*time.Second)) // TTL("key") returns proper TTL in seconds
+	_, err = client.ExpireAt(
+		context.Background(),
+		"key",
+		time.Now().Add(10*time.Second),
+	) // TTL("key") returns proper TTL in seconds
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -429,7 +453,11 @@ func ExampleClusterClient_TTL() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.Set(context.Background(), "key", "someValue")
 	result1, err := client.TTL(context.Background(), "key")
-	_, err = client.ExpireAt(context.Background(), "key", time.Now().Add(10*time.Second)) // TTL("key") returns proper TTL in seconds
+	_, err = client.ExpireAt(
+		context.Background(),
+		"key",
+		time.Now().Add(10*time.Second),
+	) // TTL("key") returns proper TTL in seconds
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

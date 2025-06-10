@@ -23,7 +23,12 @@ type GenericBaseCommands interface {
 
 	Expire(ctx context.Context, key string, expireTime time.Duration) (bool, error)
 
-	ExpireWithOptions(ctx context.Context, key string, expireTime time.Duration, expireCondition constants.ExpireCondition) (bool, error)
+	ExpireWithOptions(
+		ctx context.Context,
+		key string,
+		expireTime time.Duration,
+		expireCondition constants.ExpireCondition,
+	) (bool, error)
 
 	ExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error)
 
@@ -74,7 +79,13 @@ type GenericBaseCommands interface {
 
 	Restore(ctx context.Context, key string, ttl time.Duration, value string) (string, error)
 
-	RestoreWithOptions(ctx context.Context, key string, ttl time.Duration, value string, option options.RestoreOptions) (string, error)
+	RestoreWithOptions(
+		ctx context.Context,
+		key string,
+		ttl time.Duration,
+		value string,
+		option options.RestoreOptions,
+	) (string, error)
 
 	ObjectEncoding(ctx context.Context, key string) (models.Result[string], error)
 

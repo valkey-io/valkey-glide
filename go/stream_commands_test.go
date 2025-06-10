@@ -1353,7 +1353,14 @@ func ExampleClient_XClaim() {
 		return
 	}
 
-	response, err := client.XClaim(context.Background(), key, group, consumer2, time.Duration(result[0].IdleTime)*time.Millisecond, []string{result[0].Id})
+	response, err := client.XClaim(
+		context.Background(),
+		key,
+		group,
+		consumer2,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
+		[]string{result[0].Id},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1398,7 +1405,14 @@ func ExampleClusterClient_XClaim() {
 		return
 	}
 
-	response, err := client.XClaim(context.Background(), key, group, consumer2, time.Duration(result[0].IdleTime)*time.Millisecond, []string{result[0].Id})
+	response, err := client.XClaim(
+		context.Background(),
+		key,
+		group,
+		consumer2,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
+		[]string{result[0].Id},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

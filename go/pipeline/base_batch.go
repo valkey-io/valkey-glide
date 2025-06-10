@@ -6,6 +6,7 @@ package pipeline
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -17,7 +18,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
@@ -1745,7 +1745,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("LMPop", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("LMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -1784,7 +1784,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("LMPopCount", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("LMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
@@ -1829,7 +1829,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BLMPop", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("BLMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -1880,7 +1880,7 @@ func (b *BaseBatch[T]) BLMPopCount(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BLMPopCount", &errors.RequestError{Msg: "Length overflow for the provided keys"})
+		return b.addError("BLMPopCount", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -2081,7 +2081,12 @@ func (b *BaseBatch[T]) ExpireWithOptions(key string, expireTime time.Duration, e
 	if err != nil {
 		return b.addError("ExpireWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.Expire, []string{key, utils.FloatToString(expireTime.Seconds()), expireConditionStr}, reflect.Bool, false)
+	return b.addCmdAndTypeChecker(
+		C.Expire,
+		[]string{key, utils.FloatToString(expireTime.Seconds()), expireConditionStr},
+		reflect.Bool,
+		false,
+	)
 }
 
 // Sets a timeout on key using an absolute Unix timestamp. It takes an absolute Unix timestamp (seconds since January 1, 1970)
@@ -2969,9 +2974,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-3 {
-		return b.addError("BZMPop", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("BZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 3 more arguments with the keys provided.
@@ -3026,9 +3029,7 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-5 {
-		return b.addError("BZMPopWithOptions", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("BZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 5 more arguments with the keys provided.
@@ -3408,7 +3409,13 @@ func (b *BaseBatch[T]) XAutoClaimWithOptions(
 //	    These IDs are deleted from the Pending Entries List.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
-func (b *BaseBatch[T]) XAutoClaimJustId(key string, group string, consumer string, minIdleTime time.Duration, start string) *T {
+func (b *BaseBatch[T]) XAutoClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime time.Duration,
+	start string,
+) *T {
 	return b.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
@@ -3669,7 +3676,12 @@ func (b *BaseBatch[T]) Restore(key string, ttl time.Duration, value string) *T {
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (b *BaseBatch[T]) RestoreWithOptions(key string, ttl time.Duration, value string, restoreOptions options.RestoreOptions) *T {
+func (b *BaseBatch[T]) RestoreWithOptions(
+	key string,
+	ttl time.Duration,
+	value string,
+	restoreOptions options.RestoreOptions,
+) *T {
 	optionArgs, err := restoreOptions.ToArgs()
 	if err != nil {
 		return b.addError("RestoreWithOptions", err)
@@ -5220,9 +5232,7 @@ func (b *BaseBatch[T]) ZMPop(keys []string, scoreFilter constants.ScoreFilter) *
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-2 {
-		return b.addError("ZMPop", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("ZMPop", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 2 more arguments with the keys provided.
@@ -5260,9 +5270,7 @@ func (b *BaseBatch[T]) ZMPopWithOptions(keys []string, scoreFilter constants.Sco
 
 	// Check for potential length overflow.
 	if len(keys) > math.MaxInt-4 {
-		return b.addError("ZMPopWithOptions", &errors.RequestError{
-			Msg: "Length overflow for the provided keys",
-		})
+		return b.addError("ZMPopWithOptions", errors.New("length overflow for the provided keys"))
 	}
 
 	// args slice will have 4 more arguments with the keys provided.
