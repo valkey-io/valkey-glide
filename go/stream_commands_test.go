@@ -1353,7 +1353,7 @@ func ExampleClient_XClaim() {
 		return
 	}
 
-	response, err := client.XClaim(context.Background(), key, group, consumer2, result[0].IdleTime, []string{result[0].Id})
+	response, err := client.XClaim(context.Background(), key, group, consumer2, time.Duration(result[0].IdleTime)*time.Millisecond, []string{result[0].Id})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1398,7 +1398,7 @@ func ExampleClusterClient_XClaim() {
 		return
 	}
 
-	response, err := client.XClaim(context.Background(), key, group, consumer2, result[0].IdleTime, []string{result[0].Id})
+	response, err := client.XClaim(context.Background(), key, group, consumer2, time.Duration(result[0].IdleTime)*time.Millisecond, []string{result[0].Id})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1449,7 +1449,7 @@ func ExampleClient_XClaimWithOptions() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 		*opts,
 	)
@@ -1510,7 +1510,7 @@ func ExampleClusterClient_XClaimWithOptions() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 		*opts,
 	)
@@ -1557,7 +1557,7 @@ func ExampleClient_XClaimJustId() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 	)
 	if err != nil {
@@ -1603,7 +1603,7 @@ func ExampleClusterClient_XClaimJustId() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 	)
 	if err != nil {
@@ -1650,7 +1650,7 @@ func ExampleClient_XClaimJustIdWithOptions() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 		*opts,
 	)
@@ -1698,7 +1698,7 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 		key,
 		group,
 		consumer2,
-		result[0].IdleTime,
+		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
 		*opts,
 	)
