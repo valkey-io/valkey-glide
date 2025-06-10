@@ -420,11 +420,10 @@ mod standalone_client_tests {
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();
         client_info_cmd.arg("CLIENT").arg("INFO");
-
         block_on_all(async move {
             let test_basics = setup_test_basics_internal(&TestConfiguration {
                 database_id: 4,
-                shared_server: false,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
@@ -442,9 +441,6 @@ mod standalone_client_tests {
 
             kill_connection(&mut client).await;
 
-            // wait_until_disconnected(&mut client).await;
-            // println!("wait_until_disconnected");
-
             let res = client.send_command(&client_info_cmd).await;
             match res {
                 Err(err) => {
@@ -453,18 +449,27 @@ mod standalone_client_tests {
                         err.is_connection_dropped() || err.is_timeout(),
                         "Expected connection dropped or timeout error, got: {err:?}",
                     );
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = client.clone();
+                        String::from_owned_redis_value(
+                            client.send_command(&client_info_cmd).await.unwrap(),
+                        )
+                        .ok()
+                    })
+                    .await;
+                    assert!(client_info.contains("db=4"));
                 }
                 Ok(response) => {
                     // Command succeeded, extract new client ID and compare
                     let new_client_info: String = String::from_owned_redis_value(response).unwrap();
                     let new_client_id = extract_client_id(&new_client_info)
                         .expect("Failed to extract new client ID");
-                    println!("initial_client_id: {}", initial_client_id);
-                    println!("new_client_id: {}", new_client_id);
                     assert_ne!(
                         initial_client_id, new_client_id,
                         "Client ID should change after reconnection if command succeeds"
                     );
+                    // Check that the database ID is still 4
+                    assert!(new_client_info.contains("db=4"));
                 }
             }
         });

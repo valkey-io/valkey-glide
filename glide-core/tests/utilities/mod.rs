@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 use futures::Future;
 use glide_core::{
-    client::{Client, GlideClientForTests, StandaloneClient},
+    client::{Client, StandaloneClient},
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
 use once_cell::sync::Lazy;
@@ -150,7 +150,7 @@ impl RedisServer {
         modules: &[Module],
         spawner: F,
     ) -> RedisServer {
-        let mut redis_cmd = process::Command::new("valkey-server");
+        let mut redis_cmd = process::Command::new("redis-server");
 
         for module in modules {
             match module {
@@ -733,7 +733,7 @@ fn init() {
         rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
 }
 
-pub async fn kill_connection(client: &mut impl GlideClientForTests) {
+pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientForTests) {
     let mut client_kill_cmd = redis::cmd("CLIENT");
     client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
 
@@ -749,7 +749,10 @@ pub async fn kill_connection(client: &mut impl GlideClientForTests) {
         .unwrap();
 }
 
-pub async fn kill_connection_for_route(client: &mut impl GlideClientForTests, route: RoutingInfo) {
+pub async fn kill_connection_for_route(
+    client: &mut impl glide_core::client::GlideClientForTests,
+    route: RoutingInfo,
+) {
     let mut client_kill_cmd = redis::cmd("CLIENT");
     client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
 
