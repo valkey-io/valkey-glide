@@ -5,8 +5,6 @@ package internal
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 )
 
 // get type of T
@@ -43,7 +41,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: map[string]%v", GetType[T]())}
+			return nil, fmt.Errorf("unexpected type received: nil, expected: map[string]%v", GetType[T]())
 		}
 	}
 	result := make(map[string]T)
@@ -54,9 +52,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &errors.RequestError{
-					Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, GetType[T]()),
-				}
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", value, GetType[T]())
 			}
 			result[key] = valueT
 		} else {
@@ -73,7 +69,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, GetType[T]())}
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", val, GetType[T]())
 			}
 			result[key] = valueT
 		}
@@ -88,7 +84,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: []%v", GetType[T]())}
+			return nil, fmt.Errorf("unexpected type received: nil, expected: []%v", GetType[T]())
 		}
 	}
 	arrData := data.([]any)
@@ -97,9 +93,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &errors.RequestError{
-					Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", value, GetType[T]()),
-				}
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", value, GetType[T]())
 			}
 			result = append(result, valueT)
 		} else {
@@ -114,7 +108,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", val, GetType[T]())}
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", val, GetType[T]())
 			}
 			result = append(result, valueT)
 		}

@@ -3,13 +3,13 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
 	"time"
 
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -25,7 +25,7 @@ func ConvertArrayOfNilOr[T any](data any) (any, error) {
 			if val, ok := value.(T); ok {
 				res = append(res, models.CreateResultOf[T](val))
 			} else {
-				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type: %T, expected: %v", val, GetType[T]())}
+				return nil, fmt.Errorf("Unexpected type: %T, expected: %v", val, GetType[T]())
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return nil, fmt.Errorf("Unexpected response array length: %d", len)
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -174,7 +174,7 @@ func ConvertXAutoClaimJustIdResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return nil, fmt.Errorf("Unexpected response array length: %d", len)
 	}
 	converted, err := arrayConverter[string]{
 		nil,
@@ -566,20 +566,16 @@ func ConverterAndTypeChecker(
 		if isNilable {
 			return nil, nil
 		}
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType),
-		}
+		return nil, fmt.Errorf("unexpected return type from Glide: got nil, expected %v", expectedType)
 	}
 	if reflect.TypeOf(data).Kind() == expectedType {
 		return converter(data)
 	}
-	if reflect.TypeOf(data).Kind() == reflect.TypeOf(&errors.RequestError{}).Kind() {
+	if reflect.TypeOf(data) == reflect.TypeOf(errors.New("")) {
 		// not converting a server error
 		return data, nil
 	}
 	// data lost even though it was incorrect
 	// TODO maybe still return the data?
-	return nil, &errors.RequestError{
-		Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType),
-	}
+	return nil, fmt.Errorf("unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType)
 }

@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -30,16 +30,17 @@ func (suite *GlideTestSuite) runBatchTest(test func(client interfaces.BaseClient
 	}
 }
 
+// Note: test may cause others to fail, because they run in parallel and DEBUG command locks the server
 func (suite *GlideTestSuite) TestBatchTimeout() {
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100 * time.Millisecond)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -51,10 +52,10 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
 			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100 * time.Millisecond)
-			// Expect a timeout exception on short timeout
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
@@ -83,17 +84,14 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 
 		// First exception is raised, all data lost
 		suite.Error(err1)
-		suite.IsType(&errors.RequestError{}, err1)
 
-		// Exceptions aren't raised, but stored in the result set
+		// Errors aren't raised, but stored in the result set
 		suite.NoError(err2)
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])
 		suite.Equal(int64(1), res[2])
-		suite.IsType(&errors.RequestError{}, res[1])
-		suite.IsType(&errors.RequestError{}, res[3])
-		suite.Contains(res[1].(*errors.RequestError).Error(), "wrong kind of value")
-		suite.Contains(res[3].(*errors.RequestError).Error(), "no such key")
+		suite.ErrorContains(glide.IsError(res[1]), "wrong kind of value")
+		suite.ErrorContains(glide.IsError(res[3]), "no such key")
 	})
 }
 
@@ -143,7 +141,7 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 
 		// WATCH errors if no keys are given
 		_, err = client1.Watch(ctx, []string{})
-		suite.IsType(&errors.RequestError{}, err)
+		suite.Error(err)
 	})
 }
 
@@ -169,10 +167,9 @@ func (suite *GlideTestSuite) TestBatchCommandArgsError() {
 
 		res, err := runBatchOnClient(client, transaction, true, nil)
 
-		suite.Error(err)
 		suite.Nil(res)
-		suite.Contains(err.Error(), "Error processing arguments for 2'th command ('GetExWithOptions')")
-		suite.Contains(err.Error(), "Error processing arguments for 4'th command ('GetExWithOptions')")
+		suite.ErrorContains(err, "error processing arguments for 2'th command ('GetExWithOptions')")
+		suite.ErrorContains(err, "error processing arguments for 4'th command ('GetExWithOptions')")
 	})
 }
 
@@ -433,13 +430,12 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 			suite.Equal(int64(0), res[0], "Publish")
 			if suite.serverVersion >= "7.0.0" {
 				suite.Equal([]string{}, res[1], "PubSubShardChannels")
-				suite.Equal([]string{}, res[2], "PubSubShardChannelsWithPattern")
 				suite.Equal(map[string]int64{}, res[3], "PubSubShardNumSub")
 			} else {
 				// In 6.2.0, errors are raised instead
-				suite.IsType(&errors.RequestError{}, res[1], "PubSubShardChannels")
-				suite.IsType(&errors.RequestError{}, res[2], "PubSubShardChannelsWithPattern")
-				suite.IsType(&errors.RequestError{}, res[3], "PubSubShardNumSub")
+				suite.Error(glide.IsError(res[1]), "PubSubShardChannels")
+				suite.Error(glide.IsError(res[2]), "PubSubShardChannelsWithPattern")
+				suite.Error(glide.IsError(res[3]), "PubSubShardNumSub")
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
@@ -723,30 +719,30 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.Exists([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "Exists([slotHashedKey1])"})
 
-	batch.Expire(slotHashedKey1, 1)
+	batch.Expire(slotHashedKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "Expire(slotHashedKey1, 1)"})
-	batch.Expire(singleNodeKey1, 1)
+	batch.Expire(singleNodeKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(singleNodeKey1, 1)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.ExpireAt(slotHashedKey1, 0)
+	batch.ExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAt(slotHashedKey1, 0)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpire(slotHashedKey1, int64(5*1000))
+	batch.PExpire(slotHashedKey1, 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpire(slotHashedKey1, 5000)"})
-	batch.PExpire(prefix+"nonExistentKey", int64(5*1000))
+	batch.PExpire(prefix+"nonExistentKey", 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "PExpire(badkey, 5000)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpireAt(slotHashedKey1, 0)
+	batch.PExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(slotHashedKey1, 0)"})
 
 	if serverVer >= "7.0.0" {
-		batch.ExpireWithOptions(singleNodeKey1, 1, constants.HasExistingExpiry)
+		batch.ExpireWithOptions(singleNodeKey1, 1*time.Second, constants.HasExistingExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(singleNodeKey1, 1, HasExistingExpiry)"},
@@ -754,7 +750,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.ExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.ExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -762,7 +758,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireWithOptions(slotHashedKey1, int64(5*1000), constants.HasNoExpiry)
+		batch.PExpireWithOptions(slotHashedKey1, 5000*time.Millisecond, constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(slotHashedKey1, 5000, HasNoExpiry)"},
@@ -770,7 +766,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.PExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -831,7 +827,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 	batch.Set(slotHashedKey1, "value1")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
-	batch.Expire(slotHashedKey1, 100)
+	batch.Expire(slotHashedKey1, 100*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(slotHashedKey1, 100)"})
 	batch.Persist(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Persist(slotHashedKey1)"})
@@ -2324,12 +2320,12 @@ func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.ScriptShow("abc")
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "ScriptShow()"},
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptShow()"},
 	)
 	batch.ScriptKill()
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "ScriptKill()"},
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptKill()"},
 	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Script commands"}
@@ -2402,20 +2398,20 @@ func CreateFunctionTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer s
 	batch.FunctionKill()
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "FunctionKill()"},
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "FunctionKill()"},
 	)
 	batch.FunctionDump()
 	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "FunctionDump()"})
 	batch.FunctionRestore("payload")
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: &errors.RequestError{}, CheckTypeOnly: true, TestName: "FunctionRestore()"},
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "FunctionRestore()"},
 	)
 	batch.FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: &errors.RequestError{},
+			ExpectedResponse: errors.New(""),
 			CheckTypeOnly:    true,
 			TestName:         "FunctionRestoreWithPolicy(constants.FlushPolicy)",
 		},

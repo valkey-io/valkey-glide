@@ -9,20 +9,18 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 )
 
 type Batch struct {
 	Commands []Cmd
 	IsAtomic bool
-	Errors   []string // errors processing command args, spotted while batch is filled
+	Errors   []error // errors processing command args, spotted while batch is filled
 }
 
 type Cmd struct {
-	RequestType uint32 // TODO why C.RequestType doesn't work?
+	RequestType uint32
 	Args        []string
-	// Response converter
-	Converter func(any) (any, error)
+	Converter   func(any) (any, error) // Response converter
 }
 
 func MakeCmd(requestType uint32, args []string, converter func(any) (any, error)) Cmd {
@@ -31,16 +29,12 @@ func MakeCmd(requestType uint32, args []string, converter func(any) (any, error)
 
 func (b Batch) Convert(response []any) ([]any, error) {
 	if len(response) != len(b.Commands) {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf("Response misaligned: received %d responses for %d commands", len(response), len(b.Commands)),
-		}
+		return nil, fmt.Errorf("response misaligned: received %d responses for %d commands", len(response), len(b.Commands))
 	}
 	for i, res := range response {
 		converted, err := b.Commands[i].Converter(res)
 		if err != nil {
-			// TODO after merging with https://github.com/valkey-io/valkey-glide/pull/4090
-			// wrap the error and list in which command it failed
-			return nil, err
+			return nil, fmt.Errorf("failed to process response for %d'th command: %w", i, err)
 		}
 		response[i] = converted
 	}

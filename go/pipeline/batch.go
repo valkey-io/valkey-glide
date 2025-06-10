@@ -94,7 +94,7 @@ func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
 }
 
 func (b *BaseBatch[T]) addError(command string, err error) *T {
-	b.Batch.Errors = append(b.Batch.Errors, fmt.Sprintf("Error processing arguments for %d'th command ('%s'): %s",
+	b.Batch.Errors = append(b.Batch.Errors, fmt.Errorf("error processing arguments for %d'th command ('%s'): %w",
 		len(b.Batch.Commands)+len(b.Batch.Errors)+1, command, err))
 	return b.self
 }

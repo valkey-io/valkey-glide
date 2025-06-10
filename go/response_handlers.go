@@ -6,6 +6,7 @@ package glide
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -14,7 +15,6 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -24,12 +24,10 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
 
 	if !isNilable && response == nil {
-		return &errors.RequestError{
-			Msg: fmt.Sprintf(
-				"Unexpected return type from Valkey: got nil, expected %s",
-				C.GoString(expectedTypeStr),
-			),
-		}
+		return fmt.Errorf(
+			"unexpected return type from Valkey: got nil, expected %s",
+			C.GoString(expectedTypeStr),
+		)
 	}
 
 	if isNilable && (response == nil || response.response_type == uint32(C.Null)) {
@@ -41,13 +39,11 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 
 	actualTypeStr := C.get_response_type_string(response.response_type)
-	return &errors.RequestError{
-		Msg: fmt.Sprintf(
-			"Unexpected return type from Valkey: got %s, expected %s",
-			C.GoString(actualTypeStr),
-			C.GoString(expectedTypeStr),
-		),
-	}
+	return fmt.Errorf(
+		"unexpected return type from Valkey: got %s, expected %s",
+		C.GoString(actualTypeStr),
+		C.GoString(expectedTypeStr),
+	)
 }
 
 func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool) (models.Result[string], error) {
@@ -144,16 +140,16 @@ func parseInterface(response *C.struct_CommandResponse) (any, error) {
 	case C.Error:
 		errStr, err := parseString(response)
 		if err != nil {
-			return &errors.RequestError{Msg: "Cannot read error message"}, nil
+			return nil, errors.New("cannot read error message")
 		}
 		errStrString, ok := errStr.(string)
 		if !ok {
-			return &errors.RequestError{Msg: "Error message isn't a string"}, nil
+			return nil, errors.New("error message isn't a string")
 		}
-		return &errors.RequestError{Msg: errStrString}, nil
+		return errors.New(errStrString), nil
 	}
 
-	return nil, &errors.RequestError{Msg: "Unexpected return type from Valkey"}
+	return nil, errors.New("unexpected return type from Valkey")
 }
 
 func parseString(response *C.struct_CommandResponse) (any, error) {
@@ -237,7 +233,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: map[string]%v", internal.GetType[T]())}
+			return nil, fmt.Errorf("unexpected type received: nil, expected: map[string]%v", internal.GetType[T]())
 		}
 	}
 	result := make(map[string]T)
@@ -248,9 +244,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &errors.RequestError{
-					Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, internal.GetType[T]()),
-				}
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", value, internal.GetType[T]())
 			}
 			result[key] = valueT
 		} else {
@@ -267,7 +261,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, internal.GetType[T]())}
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", val, internal.GetType[T]())
 			}
 			result[key] = valueT
 		}
@@ -287,7 +281,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type received: nil, expected: []%v", internal.GetType[T]())}
+			return nil, fmt.Errorf("unexpected type received: nil, expected: []%v", internal.GetType[T]())
 		}
 	}
 	arrData := data.([]any)
@@ -296,9 +290,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &errors.RequestError{
-					Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", value, internal.GetType[T]()),
-				}
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", value, internal.GetType[T]())
 			}
 			result = append(result, valueT)
 		} else {
@@ -313,7 +305,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &errors.RequestError{Msg: fmt.Sprintf("Unexpected type of array element: %T, expected: %v", val, internal.GetType[T]())}
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", val, internal.GetType[T]())
 			}
 			result = append(result, valueT)
 		}
@@ -406,7 +398,7 @@ func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string
 	}
 	res, ok := converted.([][]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+		return nil, fmt.Errorf("unexpected type: %T", converted)
 	}
 	return res, nil
 }
@@ -433,7 +425,7 @@ func handle2DFloat64OrNullArrayResponse(response *C.struct_CommandResponse) ([][
 	}
 	res, ok := converted.([][]float64)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+		return nil, fmt.Errorf("unexpected type: %T", converted)
 	}
 	return res, nil
 }
@@ -703,7 +695,7 @@ func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[stri
 	}
 	result, ok := converted.(map[string]float64)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of map: %T", converted)
 	}
 	return result, nil
 }
@@ -730,7 +722,7 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[st
 	}
 	result, ok := converted.(map[string]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of map: %T", converted)
 	}
 	return result, nil
 }
@@ -794,7 +786,7 @@ func handleStringToStringArrayMapOrNilResponse(
 		return result, nil
 	}
 
-	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
+	return nil, fmt.Errorf("unexpected type received: %T", res)
 }
 
 func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]struct{}, error) {
@@ -874,9 +866,9 @@ func handleKeyWithArrayOfMembersAndScoresResponse(
 	res, ok := converted.(map[string]float64)
 
 	if !ok {
-		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), &errors.RequestError{
-			Msg: fmt.Sprintf("unexpected type of second element: %T", converted),
-		}
+		return models.CreateNilKeyWithArrayOfMembersAndScoresResult(), fmt.Errorf(
+			"unexpected type of second element: %T", converted,
+		)
 	}
 	MemberAndScoreArray := make([]models.MemberAndScore, 0, len(res))
 
@@ -951,7 +943,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	claimMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 
 	for id, entriesArray := range claimMap {
@@ -1020,7 +1012,7 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
 	}
 
 	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
@@ -1065,7 +1057,7 @@ func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]models.XRang
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
 	}
 
 	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
@@ -1094,7 +1086,7 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	arr := slice.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return null, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return null, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -1111,7 +1103,7 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return null, fmt.Errorf("unexpected type of second element: %T", converted)
 	}
 	var deletedMessages []string
 	deletedMessages = nil
@@ -1125,7 +1117,7 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 		}
 		deletedMessages, ok = converted.([]string)
 		if !ok {
-			return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
+			return null, fmt.Errorf("unexpected type of third element: %T", converted)
 		}
 	}
 	return models.XAutoClaimResponse{
@@ -1149,7 +1141,7 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	arr := slice.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return null, &errors.RequestError{Msg: fmt.Sprintf("Unexpected response array length: %d", len)}
+		return null, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := arrayConverter[string]{
 		nil,
@@ -1160,7 +1152,7 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	}
 	claimedEntries, ok := converted.([]string)
 	if !ok {
-		return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return null, fmt.Errorf("unexpected type of second element: %T", converted)
 	}
 	var deletedMessages []string
 	deletedMessages = nil
@@ -1174,7 +1166,7 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 		}
 		deletedMessages, ok = converted.([]string)
 		if !ok {
-			return null, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of third element: %T", converted)}
+			return null, fmt.Errorf("unexpected type of third element: %T", converted)
 		}
 	}
 	return models.XAutoClaimJustIdResponse{
@@ -1215,7 +1207,7 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 	if result, ok := res.(map[string]map[string][][]string); ok {
 		return result, nil
 	}
-	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
+	return nil, fmt.Errorf("unexpected type received: %T", res)
 }
 
 func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
@@ -1234,7 +1226,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	streamMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 	for streamName, streamData := range streamMap {
 		streamResponse := models.StreamResponse{
@@ -1393,7 +1385,7 @@ func handleXInfoConsumersResponse(response *C.struct_CommandResponse) ([]models.
 	}
 	arr, ok := converted.([]map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+		return nil, fmt.Errorf("unexpected type: %T", converted)
 	}
 
 	result := make([]models.XInfoConsumerInfo, 0, len(arr))
@@ -1436,7 +1428,7 @@ func handleXInfoGroupsResponse(response *C.struct_CommandResponse) ([]models.XIn
 	}
 	arr, ok := converted.([]map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type: %T", converted)}
+		return nil, fmt.Errorf("unexpected type: %T", converted)
 	}
 
 	result := make([]models.XInfoGroupInfo, 0, len(arr))
@@ -1501,7 +1493,7 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 	}
 	mapResult, ok := result.(map[string][]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+		return nil, fmt.Errorf("unexpected conversion result type: %T", result)
 	}
 
 	return mapResult, nil
@@ -1528,7 +1520,7 @@ func handleMapOfStringMapResponse(response *C.struct_CommandResponse) (map[strin
 	}
 	mapResult, ok := result.(map[string]map[string]string)
 	if !ok {
-		return nil, &errors.RequestError{Msg: "Unexpected conversion result type"}
+		return nil, fmt.Errorf("unexpected conversion result type: %T", result)
 	}
 
 	return mapResult, nil
@@ -1578,7 +1570,7 @@ func handleStringIntMapResponse(response *C.struct_CommandResponse) (map[string]
 	}
 	result, ok := converted.(map[string]int64)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of map: %T", converted)
 	}
 	return result, nil
 }
@@ -1742,7 +1734,7 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	}
 	result, ok := converted.(map[string]float64)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", converted)}
+		return nil, fmt.Errorf("unexpected type of map: %T", converted)
 	}
 
 	zRangeResponseArray := make([]models.MemberAndScore, 0, len(result))
