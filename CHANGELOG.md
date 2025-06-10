@@ -100,6 +100,7 @@
 * Go: `WATCH` and `UNWATCH` ([#4054](https://github.com/valkey-io/valkey-glide/pull/4054))
 * Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
 * Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
+* Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 
 #### Breaking Changes
 
@@ -117,6 +118,7 @@
 * Go: XClaim and XClaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
 * Modify `PFADD` to return a boolean rather than an integer ([#4094](https://github.com/valkey-io/valkey-glide/pull/4094))
 * Go: Modify blocking commands to use type `time.Duration` for timeouts ([#4086](https://github.com/valkey-io/valkey-glide/pull/4086))
+* Go: Modify most commands to use type `time.Duration` (check PR for list of commands modified) ([#4105](https://github.com/valkey-io/valkey-glide/pull/4105))
 
 #### Fixes
 

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 )
 
 // Request routing basic interface. Please use one of the following:
@@ -118,20 +116,12 @@ func NewByAddressRoute(host string, port int32) *ByAddressRoute {
 func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	split := strings.Split(host, ":")
 	if len(split) != 2 {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf(
-				"no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host,
-			),
-		}
+		return nil, fmt.Errorf("no port provided, or host is not in the expected format 'hostname:port'. Received: %s", host)
 	}
 
 	port, err := strconv.ParseInt(split[1], 10, 32)
 	if err != nil {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf(
-				"port must be a valid integer. Received: %s", split[1],
-			),
-		}
+		return nil, fmt.Errorf("port must be a valid integer. Received: %s", split[1])
 	}
 
 	return &ByAddressRoute{Host: split[0], Port: int32(port)}, nil
