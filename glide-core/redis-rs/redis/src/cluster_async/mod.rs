@@ -1597,20 +1597,8 @@ where
 
     /// Asynchronously collects and aggregates responses from multiple cluster nodes according to a specified policy.
     ///
-    /// This function drives the fan‐out of a multi‐node command, awaiting individual node replies (via `oneshot::Receiver`)
+    /// This function drives the fan‐out of a multi‐node command, awaiting individual node replies
     /// and combining or selecting results based on `response_policy`. It covers these high‐level steps:
-    ///
-    /// 1. **Validation**: If no receivers are provided, returns a client‐error immediately.
-    /// 2. **Policy Dispatch**:
-    ///    - **OneSucceeded**: Waits for the first successful (non‐error) reply, returning it and dropping others.
-    ///    - **FirstSucceededNonEmptyOrAllEmpty**: As replies arrive:
-    ///      • Returns the first non‐Nil value immediately.
-    ///      • If all replies are `Ok(Value::Nil)`, returns `Value::Nil`.
-    ///      • If any node errors (and no non‐Nil value has been returned), returns the last error seen.
-    ///    - **All other policies** (e.g., AllSucceeded, Aggregate, CombineArrays, CombineMaps, Special, None):
-    ///      • Waits for all node replies to complete (or error at the channel level).
-    ///      • Converts each `Response` into a `Value` (extracting `Response::Single`).
-    ///      • Delegates to `aggregate_resolved_results` for final interpretation.
     ///
     /// # Arguments
     ///
@@ -1621,31 +1609,7 @@ where
     ///
     /// # Returns
     ///
-    /// A `RedisResult<Value>` representing the aggregated outcome:
-    ///
-    /// - **OneSucceeded**: Returns the very first successful `Value` or an error, if all failed.
-    /// - **FirstSucceededNonEmptyOrAllEmpty**:
-    ///   • Returns the first non‐`Nil` reply, if any.
-    ///   • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
-    ///   • Otherwise, returns the last error encountered.
-    /// - **AllSucceeded**:
-    ///   • Fails on any `ServerError`.
-    ///   • Otherwise returns the last `Value` in the collected list.
-    /// - **Aggregate / AggregateLogical**:
-    ///   • Fails on any `ServerError`.
-    ///   • Otherwise calls `cluster_routing::aggregate(all_values, op)` or
-    ///   `cluster_routing::logical_aggregate(all_values, op)`.
-    /// - **CombineArrays**:
-    ///   • Fails on any `ServerError`.
-    ///   • Collects all node replies into a `Vec<Value>`.
-    ///   • If `routing` is `MultiSlot`, calls `combine_and_sort_array_results` to handle per‐slot arrays and reorder them.
-    ///   • Otherwise, calls `combine_array_results` to concatenate arrays.
-    /// - **CombineMaps**:
-    ///   • Fails on any `ServerError`.
-    ///   • Otherwise calls `combine_map_results` to merge multiple maps into one.
-    /// - **Special / None**:
-    ///   • Fails on any `ServerError`.
-    ///   • Builds a `Value::Map` where each entry is `(Value::BulkString(node_address), value)`.
+    /// A `RedisResult<Value>` representing the aggregated result.
     pub async fn aggregate_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         routing: &MultipleNodeRoutingInfo,
@@ -1688,12 +1652,19 @@ where
             // ────────────────────────────────────────────────────────────────
             Some(ResponsePolicy::OneSucceeded) => {
                 return future::select_ok(receivers.into_iter().map(|tuple| {
-                    // Each future in `receivers` represents a single response from a node.
-                    // If an error occurs, the value will be a `ServerError` directly, not a structure
-                    // like `Value::Array`  or `Value::Map` containing a `ServerError` inside.
-                    // Therefore, calling `peak_error()` is sufficient—we do not need to check for nested errors within
-                    // composite values.
-                    Box::pin(get_receiver(tuple).map(|res| res.map(|val| val.peak_error())))
+                    Box::pin(get_receiver(tuple).map(|res| {
+                        res.map(|val| {
+                            // Each future in `receivers` represents a single response from a node.
+                            // If an error occurs, the value will be a `ServerError` directly, not a structure
+                            // like `Value::Array`  or `Value::Map` containing a `ServerError` inside.
+                            // Therefore, checking that val is a `ServerError` is sufficient—we do not need to check for nested errors within
+                            // composite values.
+                            if let Value::ServerError(err) = val {
+                                return Err(err.into());
+                            }
+                            Ok(val)
+                        })
+                    }))
                 }))
                 .await
                 .map(|(result, _)| result)?;
@@ -1709,7 +1680,7 @@ where
                 // We want to see each response as it arrives, and:
                 //  • If we see `Ok(Value::Nil)`, increment a counter.
                 //  • If we see `Ok(other_value)`, return it immediately.
-                //  • If we see `Err(e)`, remember it as `last_err`.
+                //  • If we see `Err(e)` or `Ok(Value::ServerError)`, remember it as `last_err`.
                 //
                 // Once the stream is exhausted:
                 //  – if all successes were Nil → return Value::Nil (indicates that all shards are empty).
@@ -1726,10 +1697,12 @@ where
                 while let Some(result) = futures.next().await {
                     match result {
                         Ok(Value::Nil) => nil_counter += 1,
+                        // If the value is a `ServerError` → the command failed for this node.
                         Ok(Value::ServerError(err)) => {
                             last_err = Some(err.into());
                         }
                         Ok(val) => return Ok(val),
+                        // If we received a RedisError, it means that this receiver returned a RecvError
                         Err(e) => last_err = Some(e),
                     }
                 }
@@ -1777,7 +1750,7 @@ where
     /// This helper is called after all node replies have been received and converted to `(addr, Value)`.
     /// Each policy’s logic is applied to that vector of resolved results, returning a single `Value` or error.
     ///
-    /// This function is used to handle the results of multi‐node commands, where the replies from multiple nodes are not collected using `oneshot::Receiver`,
+    /// This function is used to handle the results of multi‐node commands, where the replies from multiple nodes are not collected using receivers,
     /// but rather already collected into a vector of `(Option<String>, Value)` pairs (e.g. within a pipeline).
     ///
     /// # Arguments
@@ -1790,33 +1763,7 @@ where
     ///
     /// # Returns
     ///
-    /// * **AllSucceeded**:  
-    ///     - Fails on any `ServerError`.
-    ///     - Returns the last `Value` in the list.  
-    /// * **Aggregate(op)**:  
-    ///     - Fails on any `ServerError`.  
-    ///     - Calls `cluster_routing::aggregate(all_values, op)`.  
-    /// * **AggregateLogical(op)**:  
-    ///     - Fails on any `ServerError`.  
-    ///     - Calls `cluster_routing::logical_aggregate(all_values, op)`.  
-    /// * **CombineArrays**:  
-    ///     - Fails on any `ServerError`.
-    ///     - Gathers all `Value` into a `Vec<Value>`.  
-    ///     - If `routing` is `MultiSlot`, dispatches to `combine_and_sort_array_results` to reorder values across slots.  
-    ///     - Otherwise calls `combine_array_results` to concatenate simple arrays.  
-    /// * **CombineMaps**:  
-    ///     - Fails on any `ServerError`.  
-    ///     - Calls `combine_map_results(all_values)`.  
-    /// * **Special / None**:  
-    ///     - Fails on any `ServerError`.
-    ///     - Builds a `Value::Map`, using each node’s `addr` (as a `BulkString`) as the key, and the node’s `Value` as the map value.  
-    /// * **OneSucceeded**:  
-    ///     - Returns the last non-error `Value` in the resolved list.  
-    /// * **FirstSucceededNonEmptyOrAllEmpty**:  
-    ///  - Iterates through `resolved` in order:  
-    ///    • Returns the first non‐`Nil` reply, if any.
-    ///    • If every node replies `Ok(Value::Nil)`, returns `Ok(Value::Nil)`.
-    ///    • Otherwise, returns the last error encountered.
+    /// A `RedisResult<Value>` representing the aggregated result.
     fn aggregate_resolved_results(
         resolved: Vec<(Option<String>, Value)>,
         routing: &MultipleNodeRoutingInfo,
@@ -1956,9 +1903,9 @@ where
             // ────────────────────────────────────────────────────────────────
             Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => {
                 // We want to see each response as it arrives, and:
-                //  • If we see `Ok(Value::Nil)`, increment a counter.
-                //  • If we see `Ok(other_value)`, return it immediately.
-                //  • If we see `Err(e)`, remember it as `last_err`.
+                //  • If we see `Value::Nil`, increment a counter.
+                //  • If we see `Value::ServerError`, remember it as `last_err`.
+                //  • If we see `other_value`, return it immediately.
                 //
                 // Once the stream is exhausted:
                 //  – if all successes were Nil → return Value::Nil (indicates that all shards are empty).
