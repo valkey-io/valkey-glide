@@ -119,7 +119,7 @@
 * Modify `PFADD` to return a boolean rather than an integer ([#4094](https://github.com/valkey-io/valkey-glide/pull/4094))
 * Go: Modify blocking commands to use type `time.Duration` for timeouts ([#4086](https://github.com/valkey-io/valkey-glide/pull/4086))
 * Go: Modify most commands to use type `time.Duration` (check PR for list of commands modified) ([#4105](https://github.com/valkey-io/valkey-glide/pull/4105))
-* Go: Update return type for `XAdd` without optional arguments ([#4129](https://github.com/valkey-io/valkey-glide/pull/4129))
+* Go: Update return type for `XAdd` without optional arguments ([#4141](https://github.com/valkey-io/valkey-glide/pull/4141))
 
 #### Fixes
 
