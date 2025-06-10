@@ -7792,7 +7792,16 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), streamId3.Value(), streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, streamResponse.Entries[0].Fields)
+
+		// Check for field "field3" with value "value3" in entry
+		foundField3 := false
+		for _, field := range streamResponse.Entries[0].Fields {
+			if field.FieldName == "field3" && field.Value == "value3" {
+				foundField3 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})
