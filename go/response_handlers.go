@@ -943,6 +943,7 @@ func handleScanResponse(response *C.struct_CommandResponse) (string, []string, e
 
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {
 	defer C.free_command_response(response)
+
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -958,12 +959,12 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	claimMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 
 	for id, entriesArray := range claimMap {
 		// Process fields
-		fields := make(map[string]string)
+		fieldInfos := make([]models.FieldInfo, 0)
 
 		entriesData, ok := entriesArray.([]any)
 		if !ok {
@@ -982,7 +983,10 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 						fieldName, okField := fieldValuePairs[i].(string)
 						fieldValue, okValue := fieldValuePairs[i+1].(string)
 						if okField && okValue {
-							fields[fieldName] = fieldValue
+							fieldInfos = append(fieldInfos, models.FieldInfo{
+								FieldName: fieldName,
+								Value:     fieldValue,
+							})
 						}
 					}
 				}
@@ -990,7 +994,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 		}
 
 		result[id] = models.XClaimResponse{
-			Fields: fields,
+			Fields: fieldInfos,
 		}
 	}
 
@@ -1191,40 +1195,6 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	}, nil
 }
 
-func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
-	defer C.free_command_response(response)
-	data, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	if data == nil {
-		return nil, nil
-	}
-
-	converters := mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				false,
-			},
-			false,
-		},
-		false,
-	}
-
-	res, err := converters.convert(data)
-	if err != nil {
-		return nil, err
-	}
-	if result, ok := res.(map[string]map[string][][]string); ok {
-		return result, nil
-	}
-	return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", res)}
-}
-
 func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
 	data, err := parseMap(response)
@@ -1241,7 +1211,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 	// Process the map data directly
 	streamMap, ok := data.(map[string]any)
 	if !ok {
-		return nil, &errors.RequestError{Msg: fmt.Sprintf("unexpected type received: %T", data)}
+		return nil, fmt.Errorf("unexpected type received: %T", data)
 	}
 	for streamName, streamData := range streamMap {
 		streamResponse := models.StreamResponse{
@@ -1254,7 +1224,10 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 			if !ok {
 				entriesData = []any{}
 			}
-			fields := make(map[string]string)
+
+			// Create a slice to hold field-value pairs
+			fieldInfos := make([]models.FieldInfo, 0)
+
 			for _, entryData := range entriesData {
 				fieldValuePairs, ok := entryData.([]any)
 				if !ok || len(fieldValuePairs) < 2 {
@@ -1267,7 +1240,11 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 							fieldName, okField := fieldValuePairs[i].(string)
 							fieldValue, okValue := fieldValuePairs[i+1].(string)
 							if okField && okValue {
-								fields[fieldName] = fieldValue
+								// Add field-value pair to the slice
+								fieldInfos = append(fieldInfos, models.FieldInfo{
+									FieldName: fieldName,
+									Value:     fieldValue,
+								})
 							}
 						}
 					}
@@ -1275,7 +1252,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 			}
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
-				Fields: fields,
+				Fields: fieldInfos,
 			})
 		}
 
@@ -1775,4 +1752,113 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	}
 
 	return zRangeResponseArray, nil
+}
+
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return models.XInfoStreamResponse{}, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return models.XInfoStreamResponse{}, err
+	}
+
+	infoMap, ok := result.(map[string]any)
+	if !ok {
+		return models.XInfoStreamResponse{},
+			&errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", result)}
+	}
+
+	streamInfo := models.XInfoStreamResponse{}
+
+	// Parse integer fields
+	if val, ok := infoMap["length"].(int64); ok {
+		streamInfo.Length = val
+	}
+	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
+		streamInfo.RadixTreeKeys = val
+	}
+	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
+		streamInfo.RadixTreeNodes = val
+	}
+	if val, ok := infoMap["groups"].(int64); ok {
+		streamInfo.Groups = val
+	}
+	if val, ok := infoMap["entries-added"].(int64); ok {
+		streamInfo.EntriesAdded = val
+	}
+
+	// Parse string fields
+	if val, ok := infoMap["last-generated-id"].(string); ok {
+		streamInfo.LastGeneratedID = val
+	}
+	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
+		streamInfo.MaxDeletedEntryID = val
+	}
+
+	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
+	if firstEntryArray, ok := infoMap["first-entry"].([]any); ok && len(firstEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := firstEntryArray[0].(string); ok {
+			// Create a StreamEntry with the ID
+			streamInfo.FirstEntry = models.StreamEntry{
+				ID:     id,
+				Fields: make([]models.FieldInfo, 0),
+			}
+
+			// Second element is an array of field-value pairs
+			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
+				// Process field-value pairs (they come as alternating field, value, field, value...)
+				for i := 0; i < len(fieldValueArray); i += 2 {
+					if i+1 < len(fieldValueArray) {
+						if field, ok := fieldValueArray[i].(string); ok {
+							if value, ok := fieldValueArray[i+1].(string); ok {
+								// Add field-value pair to the Fields slice
+								streamInfo.FirstEntry.Fields = append(streamInfo.FirstEntry.Fields, models.FieldInfo{
+									FieldName: field,
+									Value:     value,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Parse last-entry - it's an array where first element is ID and second is array of field-value pairs
+	if lastEntryArray, ok := infoMap["last-entry"].([]any); ok && len(lastEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := lastEntryArray[0].(string); ok {
+			// Create a StreamEntry with the ID
+			streamInfo.LastEntry = models.StreamEntry{
+				ID:     id,
+				Fields: make([]models.FieldInfo, 0),
+			}
+
+			// Second element is an array of field-value pairs
+			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
+				// Process field-value pairs (they come as alternating field, value, field, value...)
+				for i := 0; i < len(fieldValueArray); i += 2 {
+					if i+1 < len(fieldValueArray) {
+						if field, ok := fieldValueArray[i].(string); ok {
+							if value, ok := fieldValueArray[i+1].(string); ok {
+								// Add field-value pair to the Fields slice
+								streamInfo.LastEntry.Fields = append(streamInfo.LastEntry.Fields, models.FieldInfo{
+									FieldName: field,
+									Value:     value,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return streamInfo, nil
 }
