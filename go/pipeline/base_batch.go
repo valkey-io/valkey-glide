@@ -2036,7 +2036,7 @@ func (b *BaseBatch[T]) Exists(keys []string) *T {
 // Sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2044,7 +2044,7 @@ func (b *BaseBatch[T]) Exists(keys []string) *T {
 // Parameters:
 //
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire
+//	expireTime - Duration for the key to expire
 //
 // Command Response:
 //
@@ -2052,14 +2052,14 @@ func (b *BaseBatch[T]) Exists(keys []string) *T {
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (b *BaseBatch[T]) Expire(key string, seconds int64) *T {
-	return b.addCmdAndTypeChecker(C.Expire, []string{key, utils.IntToString(seconds)}, reflect.Bool, false)
+func (b *BaseBatch[T]) Expire(key string, expireTime time.Duration) *T {
+	return b.addCmdAndTypeChecker(C.Expire, []string{key, utils.FloatToString(expireTime.Seconds())}, reflect.Bool, false)
 }
 
 // Sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2067,7 +2067,7 @@ func (b *BaseBatch[T]) Expire(key string, seconds int64) *T {
 // Parameters:
 //
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire.
+//	expireTime - Duration for the key to expire.
 //	expireCondition - The option to set expiry, see [constants.ExpireCondition].
 //
 // Command Response:
@@ -2076,12 +2076,12 @@ func (b *BaseBatch[T]) Expire(key string, seconds int64) *T {
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (b *BaseBatch[T]) ExpireWithOptions(key string, seconds int64, expireCondition constants.ExpireCondition) *T {
+func (b *BaseBatch[T]) ExpireWithOptions(key string, expireTime time.Duration, expireCondition constants.ExpireCondition) *T {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return b.addError("ExpireWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr}, reflect.Bool, false)
+	return b.addCmdAndTypeChecker(C.Expire, []string{key, utils.FloatToString(expireTime.Seconds()), expireConditionStr}, reflect.Bool, false)
 }
 
 // Sets a timeout on key using an absolute Unix timestamp. It takes an absolute Unix timestamp (seconds since January 1, 1970)
@@ -2090,7 +2090,7 @@ func (b *BaseBatch[T]) ExpireWithOptions(key string, seconds int64, expireCondit
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2098,7 +2098,7 @@ func (b *BaseBatch[T]) ExpireWithOptions(key string, seconds int64, expireCondit
 // Parameters:
 //
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp
+//	expireTime - The timestamp for expiry.
 //
 // Command Response:
 //
@@ -2106,8 +2106,8 @@ func (b *BaseBatch[T]) ExpireWithOptions(key string, seconds int64, expireCondit
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
-func (b *BaseBatch[T]) ExpireAt(key string, unixTimestampInSeconds int64) *T {
-	return b.addCmdAndTypeChecker(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)}, reflect.Bool, false)
+func (b *BaseBatch[T]) ExpireAt(key string, expireTime time.Time) *T {
+	return b.addCmdAndTypeChecker(C.ExpireAt, []string{key, utils.IntToString(expireTime.Unix())}, reflect.Bool, false)
 }
 
 // Sets a timeout on key using an absolute Unix timestamp. It takes an absolute Unix timestamp (seconds since January 1, 1970)
@@ -2116,7 +2116,7 @@ func (b *BaseBatch[T]) ExpireAt(key string, unixTimestampInSeconds int64) *T {
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2124,7 +2124,7 @@ func (b *BaseBatch[T]) ExpireAt(key string, unixTimestampInSeconds int64) *T {
 // Parameters:
 //
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry - see [constants.ExpireCondition].
 //
 // Command Response:
@@ -2135,7 +2135,7 @@ func (b *BaseBatch[T]) ExpireAt(key string, unixTimestampInSeconds int64) *T {
 // [valkey.io]: https://valkey.io/commands/expireat/
 func (b *BaseBatch[T]) ExpireAtWithOptions(
 	key string,
-	unixTimestampInSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) *T {
 	expireConditionStr, err := expireCondition.ToString()
@@ -2144,7 +2144,7 @@ func (b *BaseBatch[T]) ExpireAtWithOptions(
 	}
 	return b.addCmdAndTypeChecker(
 		C.ExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.Unix()), expireConditionStr},
 		reflect.Bool,
 		false,
 	)
@@ -2152,7 +2152,7 @@ func (b *BaseBatch[T]) ExpireAtWithOptions(
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2160,7 +2160,7 @@ func (b *BaseBatch[T]) ExpireAtWithOptions(
 // Parameters:
 //
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire.
 //
 // Command Response:
 //
@@ -2168,13 +2168,13 @@ func (b *BaseBatch[T]) ExpireAtWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
-func (b *BaseBatch[T]) PExpire(key string, milliseconds int64) *T {
-	return b.addCmdAndTypeChecker(C.PExpire, []string{key, utils.IntToString(milliseconds)}, reflect.Bool, false)
+func (b *BaseBatch[T]) PExpire(key string, expireTime time.Duration) *T {
+	return b.addCmdAndTypeChecker(C.PExpire, []string{key, utils.IntToString(expireTime.Milliseconds())}, reflect.Bool, false)
 }
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -2182,7 +2182,7 @@ func (b *BaseBatch[T]) PExpire(key string, milliseconds int64) *T {
 // Parameters:
 //
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire.
 //	expireCondition - The option to set expiry, see [constants.ExpireCondition].
 //
 // Command Response:
@@ -2191,14 +2191,14 @@ func (b *BaseBatch[T]) PExpire(key string, milliseconds int64) *T {
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
-func (b *BaseBatch[T]) PExpireWithOptions(key string, milliseconds int64, expireCondition constants.ExpireCondition) *T {
+func (b *BaseBatch[T]) PExpireWithOptions(key string, expireTime time.Duration, expireCondition constants.ExpireCondition) *T {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return b.addError("PExpireWithOptions", err)
 	}
 	return b.addCmdAndTypeChecker(
 		C.PExpire,
-		[]string{key, utils.IntToString(milliseconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.Milliseconds()), expireConditionStr},
 		reflect.Bool,
 		false,
 	)
@@ -2215,7 +2215,7 @@ func (b *BaseBatch[T]) PExpireWithOptions(key string, milliseconds int64, expire
 // Parameters:
 //
 //	key - The key to set timeout on it.
-//	unixTimestampInMilliSeconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //
 // Command Response:
 //
@@ -2223,10 +2223,10 @@ func (b *BaseBatch[T]) PExpireWithOptions(key string, milliseconds int64, expire
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
-func (b *BaseBatch[T]) PExpireAt(key string, unixTimestampInMilliSeconds int64) *T {
+func (b *BaseBatch[T]) PExpireAt(key string, expireTime time.Time) *T {
 	return b.addCmdAndTypeChecker(
 		C.PExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInMilliSeconds)},
+		[]string{key, utils.IntToString(expireTime.UnixMilli())},
 		reflect.Bool,
 		false,
 	)
@@ -2243,7 +2243,7 @@ func (b *BaseBatch[T]) PExpireAt(key string, unixTimestampInMilliSeconds int64) 
 // Parameters:
 //
 //	key - The key to set timeout on it.
-//	unixTimestampInMilliSeconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry, see [constants.ExpireCondition].
 //
 // Command Response:
@@ -2254,7 +2254,7 @@ func (b *BaseBatch[T]) PExpireAt(key string, unixTimestampInMilliSeconds int64) 
 // [valkey.io]: https://valkey.io/commands/pexpireat/
 func (b *BaseBatch[T]) PExpireAtWithOptions(
 	key string,
-	unixTimestampInMilliSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) *T {
 	expireConditionStr, err := expireCondition.ToString()
@@ -2263,7 +2263,7 @@ func (b *BaseBatch[T]) PExpireAtWithOptions(
 	}
 	return b.addCmdAndTypeChecker(
 		C.PExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.UnixMilli()), expireConditionStr},
 		reflect.Bool,
 		false,
 	)
@@ -3330,7 +3330,7 @@ func (b *BaseBatch[T]) XLen(key string) *T {
 //	    These IDs are deleted from the Pending Entries List.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
-func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, minIdleTime int64, start string) *T {
+func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, minIdleTime time.Duration, start string) *T {
 	return b.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
@@ -3367,11 +3367,11 @@ func (b *BaseBatch[T]) XAutoClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	options options.XAutoClaimOptions,
 ) *T {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := options.ToArgs()
 	if err != nil {
 		return b.addError("XAutoClaimWithOptions", err)
@@ -3408,7 +3408,7 @@ func (b *BaseBatch[T]) XAutoClaimWithOptions(
 //	    These IDs are deleted from the Pending Entries List.
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
-func (b *BaseBatch[T]) XAutoClaimJustId(key string, group string, consumer string, minIdleTime int64, start string) *T {
+func (b *BaseBatch[T]) XAutoClaimJustId(key string, group string, consumer string, minIdleTime time.Duration, start string) *T {
 	return b.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
 }
 
@@ -3445,11 +3445,11 @@ func (b *BaseBatch[T]) XAutoClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	options options.XAutoClaimOptions,
 ) *T {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := options.ToArgs()
 	if err != nil {
 		return b.addError("XAutoClaimJustIdWithOptions", err)
@@ -3640,7 +3640,7 @@ func (b *BaseBatch[T]) XGroupCreateWithOptions(key string, group string, id stri
 // Parameters:
 //
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If `0`, the key will persist.
+//	ttl - The expiry time. If `0`, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //
 // Command Response:
@@ -3648,7 +3648,7 @@ func (b *BaseBatch[T]) XGroupCreateWithOptions(key string, group string, id stri
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (b *BaseBatch[T]) Restore(key string, ttl int64, value string) *T {
+func (b *BaseBatch[T]) Restore(key string, ttl time.Duration, value string) *T {
 	return b.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
 }
 
@@ -3660,7 +3660,7 @@ func (b *BaseBatch[T]) Restore(key string, ttl int64, value string) *T {
 // Parameters:
 //
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If `0`, the key will persist.
+//	ttl - The expiry time. If `0`, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency.
 //
@@ -3669,14 +3669,14 @@ func (b *BaseBatch[T]) Restore(key string, ttl int64, value string) *T {
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (b *BaseBatch[T]) RestoreWithOptions(key string, ttl int64, value string, restoreOptions options.RestoreOptions) *T {
+func (b *BaseBatch[T]) RestoreWithOptions(key string, ttl time.Duration, value string, restoreOptions options.RestoreOptions) *T {
 	optionArgs, err := restoreOptions.ToArgs()
 	if err != nil {
 		return b.addError("RestoreWithOptions", err)
 	}
 	return b.addCmdAndTypeChecker(C.Restore, append([]string{
 		key,
-		utils.IntToString(ttl), value,
+		utils.IntToString(ttl.Milliseconds()), value,
 	}, optionArgs...), reflect.String, false)
 }
 
@@ -4262,17 +4262,17 @@ func (b *BaseBatch[T]) GetBit(key string, offset int64) *T {
 // Parameters:
 //
 //	numberOfReplicas - The number of replicas to reach.
-//	timeout - The timeout value specified in milliseconds. A value of `0` will block indefinitely.
+//	timeout - The timeout value. A value of `0` will block indefinitely.
 //
 // Command Response:
 //
 //	The number of replicas reached by all the writes performed in the context of the current connection.
 //
 // [valkey.io]: https://valkey.io/commands/wait/
-func (b *BaseBatch[T]) Wait(numberOfReplicas int64, timeout int64) *T {
+func (b *BaseBatch[T]) Wait(numberOfReplicas int64, timeout time.Duration) *T {
 	return b.addCmdAndTypeChecker(
 		C.Wait,
-		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)},
+		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout.Milliseconds())},
 		reflect.Int64,
 		false,
 	)
@@ -4369,7 +4369,7 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //	the consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
-func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime int64, ids []string) *T {
+func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
 	return b.XClaimWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
@@ -4395,11 +4395,11 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) *T {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return b.addError("XClaimWithOptions", err)
@@ -4427,7 +4427,7 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 //	the consumer.
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
-func (b *BaseBatch[T]) XClaimJustId(key string, group string, consumer string, minIdleTime int64, ids []string) *T {
+func (b *BaseBatch[T]) XClaimJustId(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
 	return b.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
 }
 
@@ -4454,11 +4454,11 @@ func (b *BaseBatch[T]) XClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) *T {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return b.addError("XClaimJustIdWithOptions", err)
