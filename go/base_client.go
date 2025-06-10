@@ -2131,7 +2131,7 @@ func (client *baseClient) SUnionStore(ctx context.Context, destination string, k
 //
 // Return value:
 //
-//	A collection containing all members of the set.
+//	A `map[string]struct{}` containing all members of the set.
 //	Returns an empty collection if key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/smembers/

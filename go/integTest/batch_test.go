@@ -298,7 +298,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 		res, err = runBatchOnClient(client, transaction, false, nil)
 		suite.NoError(err)
 		for i, resp := range res {
-			suite.Contains(resp.(error).Error(), "ResponseError", i)
+			suite.ErrorContains(glide.IsError(resp), "ResponseError", i)
 		}
 	})
 }
@@ -405,12 +405,14 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 		suite.Contains(geoSearch, "Messina")
 
 		// Verify search with info results
-		geoSearchInfo := res[6].([]options.Location)
+		geoSearchInfo := res[6]
 		suite.Len(geoSearchInfo, 3)
+		suite.IsType([]options.Location{}, geoSearchInfo)
 
 		// Verify full search results
 		geoSearchFull := res[7]
 		suite.Len(geoSearchFull, 1)
+		suite.IsType([]options.Location{}, geoSearchFull)
 	})
 }
 
@@ -623,7 +625,7 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData,
 		CommandTestData{
 			ExpectedResponse: []models.Result[int64]{models.CreateInt64Result(0)},
-			TestName:         "BitField(key, bfcommands)",
+			TestName:         "BitField(bitfieldkey2, bfcommands)",
 		},
 	)
 	commands2 := []options.BitFieldROCommands{
@@ -634,7 +636,7 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData,
 		CommandTestData{
 			ExpectedResponse: []models.Result[int64]{models.CreateInt64Result(24)},
-			TestName:         "BitFieldRO(key, commands2)",
+			TestName:         "BitFieldRO(bitfieldkey2, commands2)",
 		},
 	)
 
@@ -1120,7 +1122,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		testData,
 		CommandTestData{
 			ExpectedResponse: []models.Result[string]{models.CreateStringResult("value"), models.CreateNilStringResult()},
-			TestName:         "HMGet(k1, k2)",
+			TestName:         "HMGet(key, [k1, k2])",
 		},
 	)
 

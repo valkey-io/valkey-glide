@@ -25,7 +25,7 @@ func ConvertArrayOfNilOr[T any](data any) (any, error) {
 			if val, ok := value.(T); ok {
 				res = append(res, models.CreateResultOf[T](val))
 			} else {
-				return nil, fmt.Errorf("Unexpected type: %T, expected: %v", val, GetType[T]())
+				return nil, fmt.Errorf("unexpected type: %T, expected: %v", val, GetType[T]())
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, fmt.Errorf("Unexpected response array length: %d", len)
+		return nil, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -174,7 +174,7 @@ func ConvertXAutoClaimJustIdResponse(data any) (any, error) {
 	arr := data.([]any)
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, fmt.Errorf("Unexpected response array length: %d", len)
+		return nil, fmt.Errorf("unexpected response array length: %d", len)
 	}
 	converted, err := arrayConverter[string]{
 		nil,
@@ -343,7 +343,7 @@ func Convert2DArrayOfString(data any) (any, error) {
 	// actually returns a [][]string
 }
 
-// GeoPos
+// GeoPos - array of ([]float64 or nil)
 func Convert2DArrayOfFloat(data any) (any, error) {
 	return arrayConverter[[]float64]{
 		arrayConverter[float64]{
@@ -551,10 +551,6 @@ func ConvertFunctionStatsResponse(data any) (any, error) {
 		RunningScript: runningScript,
 	}, nil
 }
-
-// func TypeChecker(data any, expectedType reflect.Kind, isNilable bool) any {
-// 	return ConverterAndTypeChecker(data, expectedType, isNilable, func(res any) any { return res })
-// }
 
 func ConverterAndTypeChecker(
 	data any,

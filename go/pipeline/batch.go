@@ -84,8 +84,6 @@ func NewClusterBatch(isAtomic bool) *ClusterBatch {
 
 // Add a cmd to batch without response type checking nor conversion
 func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
-	// b.Commands = append(b.Commands, internal.Cmd{RequestType: internal.RequestType(request), Args: args, Converter: func(res
-	// any) any { return res }})
 	b.Batch.Commands = append(
 		b.Batch.Commands,
 		internal.MakeCmd(uint32(request), args, func(res any) (any, error) { return res, nil }),
