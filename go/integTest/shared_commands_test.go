@@ -8698,7 +8698,16 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.True(suite.T(), foundField4, "Field 'field4' with value 'value4' not found in entry")
 
 		assert.Contains(suite.T(), entryMap2, streamid_5.Value())
-		assert.Equal(suite.T(), map[string]string{"field5": "value5"}, entryMap2[streamid_5.Value()])
+
+		// Check for field "field5" with value "value5" in entry
+		foundField5 := false
+		for _, field := range entryMap2[streamid_5.Value()] {
+			if field.FieldName == "field5" && field.Value == "value5" {
+				foundField5 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundField5, "Field 'field5' with value 'value5' not found in entry")
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
