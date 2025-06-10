@@ -3086,12 +3086,12 @@ export class BaseClient {
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
-     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
-     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      *
      * @param key - The key of the list.
      * @param count - The count of the occurrences of elements equal to `element` to remove.
+     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
+     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
+     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      * @param element - The element to remove from the list.
      * @returns the number of the removed elements.
      * If `key` does not exist, 0 is returned.

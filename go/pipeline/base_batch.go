@@ -1539,10 +1539,6 @@ func (b *BaseBatch[T]) LLen(key string) *T {
 }
 
 // Removes the first `count` occurrences of elements equal to `element` from the list stored at key.
-// If `count` is positive: Removes elements equal to `element` moving from head to tail.
-// If `count` is negative: Removes elements equal to `element` moving from tail to head.
-// If `count` is `0` or `count` is greater than the occurrences of elements equal to element, it removes all elements equal to
-// `element`.
 //
 // See [valkey.io] for details.
 //
@@ -1550,6 +1546,10 @@ func (b *BaseBatch[T]) LLen(key string) *T {
 //
 //	key     - The key of the list.
 //	count   - The count of the occurrences of elements equal to element to remove.
+//			  If count is positive: Removes elements equal to element moving from head to tail.
+//			  If count is negative: Removes elements equal to element moving from tail to head.
+//			  If count is 0 or count is greater than the occurrences of elements equal to element,
+//			  it removes all elements equal to element.
 //	element - The element to remove from the list.
 //
 // Command Response:
