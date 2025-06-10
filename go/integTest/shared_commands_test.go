@@ -8205,10 +8205,32 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.True(suite.T(), foundE1F1, "Field 'e1_f1' with value 'e1_v1' not found in entry 0-1")
 		assert.True(suite.T(), foundE1F2, "Field 'e1_f2' with value 'e1_v2' not found in entry 0-1")
 		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
+
+		// Check for fields in entry 0-2
+		foundE2F1 := false
+		foundE2F2 := false
+		for _, field := range entryMap["0-2"] {
+			if field.FieldName == "e2_f1" && field.Value == "e2_v1" {
+				foundE2F1 = true
+			}
+			if field.FieldName == "e2_f2" && field.Value == "e2_v2" {
+				foundE2F2 = true
+			}
+		}
+		assert.True(suite.T(), foundE2F1, "Field 'e2_f1' with value 'e2_v1' not found in entry 0-2")
+		assert.True(suite.T(), foundE2F2, "Field 'e2_f2' with value 'e2_v2' not found in entry 0-2")
 
 		assert.Contains(suite.T(), entryMap, "0-3")
-		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
+
+		// Check for field in entry 0-3
+		foundE3F1 := false
+		for _, field := range entryMap["0-3"] {
+			if field.FieldName == "e3_f1" && field.Value == "e3_v1" {
+				foundE3F1 = true
+				break
+			}
+		}
+		assert.True(suite.T(), foundE3F1, "Field 'e3_f1' with value 'e3_v1' not found in entry 0-3")
 
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(context.Background(), key)
