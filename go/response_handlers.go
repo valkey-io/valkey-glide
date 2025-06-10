@@ -1762,7 +1762,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	infoMap, ok := result.(map[string]any)
 	if !ok {
 		return models.XInfoStreamResponse{},
-			&errors.RequestError{Msg: fmt.Sprintf("unexpected type of map: %T", result)}
+			errors.New(fmt.Sprintf("unexpected type of map: %T", result))
 	}
 
 	streamInfo := models.XInfoStreamResponse{}
