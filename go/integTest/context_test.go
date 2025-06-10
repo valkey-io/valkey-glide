@@ -33,15 +33,14 @@ func (suite *GlideTestSuite) TestContext_CancelBeforeExecution() {
 func (suite *GlideTestSuite) TestContext_CancelDuringExecution() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create a context with a short timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		// Start a long-running command (BLPOP) that will block for a while
-		_, err := client.BLPop(ctx, []string{"testList"}, 10.0)
+		_, err := client.BLPop(ctx, []string{"testList"}, 10)
 
 		// Verify that the command fails with context deadline exceeded error
-		assert.Error(suite.T(), err)
-		assert.Contains(suite.T(), err.Error(), "context deadline exceeded")
+		assert.ErrorContains(suite.T(), err, "context deadline exceeded")
 	})
 }
 
