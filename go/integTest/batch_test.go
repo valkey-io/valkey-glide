@@ -319,70 +319,36 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			"Messina": {Longitude: 15.556349, Latitude: 38.194136},
 		}
 
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic)
+		batch := pipeline.NewClusterBatch(isAtomic)
 
-			key = prefix + key
+		key = prefix + key
 
-			batch.GeoAdd(key, membersToGeospatialData)
+		batch.GeoAdd(key, membersToGeospatialData)
 
-			geoAddOptions := options.GeoAddOptions{}
-			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
-			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+		geoAddOptions := options.GeoAddOptions{}
+		geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+		batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
 
-			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+		batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
 
-			batch.GeoDist(key, "Palermo", "Catania")
+		batch.GeoDist(key, "Palermo", "Catania")
 
-			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+		batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
 
-			searchFrom := &options.GeoCoordOrigin{
-				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
-			}
-			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
-			batch.GeoSearch(key, searchFrom, *searchByShape)
-
-			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
-			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
-
-			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
-			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
-
-			res, err = c.Exec(context.Background(), *batch, true)
-			suite.NoError(err)
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic)
-
-			batch.GeoAdd(key, membersToGeospatialData)
-
-			geoAddOptions := options.GeoAddOptions{}
-			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
-			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
-
-			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
-
-			batch.GeoDist(key, "Palermo", "Catania")
-
-			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
-
-			searchFrom := &options.GeoCoordOrigin{
-				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
-			}
-			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
-			batch.GeoSearch(key, searchFrom, *searchByShape)
-
-			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
-			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
-
-			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
-			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
-
-			res, err = c.Exec(context.Background(), *batch, true)
-			suite.NoError(err)
+		searchFrom := &options.GeoCoordOrigin{
+			GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
 		}
+		searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+		batch.GeoSearch(key, searchFrom, *searchByShape)
+
+		infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+		batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+
+		resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+		batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+
+		res, err := runBatchOnClient(client, batch, true, nil)
+		suite.NoError(err)
 
 		// Verify GeoPos results
 		geoPos := res[2].([][]float64)
