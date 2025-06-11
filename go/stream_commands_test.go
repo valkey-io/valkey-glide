@@ -1963,14 +1963,10 @@ func ExampleClient_XInfoStream() {
 	// }
 
 	// Output a few entries from the return object.
-	fmt.Print("Entries Added: ")
-	fmt.Println(response.EntriesAdded)
-	fmt.Print("Groups: ")
-	fmt.Println(response.Groups)
-	fmt.Print("Last generated Id: ")
-	fmt.Println(response.LastGeneratedID)
-	fmt.Print("Length: ")
-	fmt.Println(response.Length)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Length: %d\n", response.Length)
 
 	// Output:
 	// Entries Added: 1
@@ -2022,14 +2018,10 @@ func ExampleClusterClient_XInfoStream() {
 	// }
 
 	// Output a few entries from the return object.
-	fmt.Print("Entries Added: ")
-	fmt.Println(response.EntriesAdded)
-	fmt.Print("Groups: ")
-	fmt.Println(response.Groups)
-	fmt.Print("Last generated Id: ")
-	fmt.Println(response.LastGeneratedID)
-	fmt.Print("Length: ")
-	fmt.Println(response.Length)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Length: %d\n", response.Length)
 
 	// Output:
 	// Entries Added: 1
