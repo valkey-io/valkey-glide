@@ -384,7 +384,7 @@ public abstract class BaseClient
                 // Store config for later use
                 connectionManager.storeConfigForLazyConnection(config);
             } else {
-                // Connect eagerly as before
+                // Connect eagerly
                 connectionFuture = connectionManager.connectToValkey(config);
             }
 
