@@ -5827,7 +5827,7 @@ export class BaseClient {
     public async xpending(
         key: GlideString,
         group: GlideString,
-    ): Promise<XPendingDataType> {
+    ): Promise<[number, GlideString, GlideString, [GlideString, number][]]> {
         return this.createWritePromise(createXPending(key, group));
     }
 

@@ -11032,15 +11032,41 @@ export function runBaseTests(config: {
                 );
                 expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: [
-                        {id: streamId1, fields: [
-                            {field: "entry1_field1", value: "entry1_value1"},
-                            {field: "entry1_field2", value: "entry1_value2"},
-                        ]},
-                        {id: streamId2, fields: [
-                            {field: "entry2_field1", value: "entry2_value1"},
-                            {field: "entry2_field2", value: "entry2_value2"},
-                        ]},
-                        {id: streamId3, fields: [{field: "entry3_field1", value: "entry3_value1"}]},
+                        {
+                            id: streamId1,
+                            fields: [
+                                {
+                                    field: "entry1_field1",
+                                    value: "entry1_value1",
+                                },
+                                {
+                                    field: "entry1_field2",
+                                    value: "entry1_value2",
+                                },
+                            ],
+                        },
+                        {
+                            id: streamId2,
+                            fields: [
+                                {
+                                    field: "entry2_field1",
+                                    value: "entry2_value1",
+                                },
+                                {
+                                    field: "entry2_field2",
+                                    value: "entry2_value2",
+                                },
+                            ],
+                        },
+                        {
+                            id: streamId3,
+                            fields: [
+                                {
+                                    field: "entry3_field1",
+                                    value: "entry3_value1",
+                                },
+                            ],
+                        },
                     ],
                 });
                 // after reading, `lag` is reset, and `pending`, consumer count and last ID are set
@@ -11552,11 +11578,28 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual({
                     [key]: [
-                        {id: "0-1", fields: [
-                            {field: "entry1_field1", value: "entry1_value1"},
-                            {field: "entry1_field2", value: "entry1_value2"},
-                        ]},
-                        {id: "0-2", fields: [{field: "entry2_field1", value: "entry2_value1"}]},
+                        {
+                            id: "0-1",
+                            fields: [
+                                {
+                                    field: "entry1_field1",
+                                    value: "entry1_value1",
+                                },
+                                {
+                                    field: "entry1_field2",
+                                    value: "entry1_value2",
+                                },
+                            ],
+                        },
+                        {
+                            id: "0-2",
+                            fields: [
+                                {
+                                    field: "entry2_field1",
+                                    value: "entry2_value1",
+                                },
+                            ],
+                        },
                     ],
                 });
 
@@ -11675,8 +11718,14 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual({
                     [key]: [
-                        {id: stream_id1_0, fields: [{field: "f0", value: "v0"}]},
-                        {id: stream_id1_1, fields: [{field: "f1", value: "v1"}]},
+                        {
+                            id: stream_id1_0,
+                            fields: [{ field: "f0", value: "v0" }],
+                        },
+                        {
+                            id: stream_id1_1,
+                            fields: [{ field: "f1", value: "v1" }],
+                        },
                     ],
                 });
 
@@ -12034,8 +12083,14 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual({
                     [key]: [
-                        {id: streamid1 as string, fields: [{field: "field1", value: "value1"}]},
-                        {id: streamid2 as string, fields: [{field: "field2", value: "value2"}]},
+                        {
+                            id: streamid1 as string,
+                            fields: [{ field: "field1", value: "value1" }],
+                        },
+                        {
+                            id: streamid2 as string,
+                            fields: [{ field: "field2", value: "value2" }],
+                        },
                     ],
                 });
 
