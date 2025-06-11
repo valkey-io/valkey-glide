@@ -174,7 +174,7 @@ jobs:
                   git commit -m "Automated commit from GitHub Actions"
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go@$RELEASE_VERSION
+                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION
 
     extra-post-commit-test:
         needs:
