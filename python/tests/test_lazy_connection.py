@@ -8,6 +8,7 @@ import pytest
 from glide.config import ProtocolVersion
 from glide.glide_client import GlideClient, GlideClusterClient
 from glide.routes import AllNodes
+from glide.config import NodeAddress
 from tests.conftest import create_client
 
 
@@ -22,32 +23,40 @@ async def get_client_list_output_count(output: Union[bytes, str, None]) -> int:
     return len([line for line in stripped_text.split("\n") if line.strip()])
 
 
-async def get_standalone_client_count(client: GlideClient) -> int:
-    """Gets client count for a standalone server."""
-    result: Any = await client.custom_command(["CLIENT", "LIST"])
-    return await get_client_list_output_count(cast(Union[bytes, str, None], result))
+async def get_client_count(client: Union[GlideClient, GlideClusterClient]) -> int:
+    """Get client connection count for either standalone or cluster client."""
+
+    if isinstance(client, GlideClusterClient):
+        # For cluster client, execute CLIENT LIST on all nodes
+        result: Any = await client.custom_command(["CLIENT", "LIST"], route=AllNodes())
+
+        # Result will be a dict with node addresses as keys and CLIENT LIST output as values
+        total_count = 0
+        for node_output in result.values():
+            total_count += await get_client_list_output_count(
+                cast(Union[bytes, str, None], node_output)
+            )
+
+        return total_count
+    else:
+        # For standalone client, execute CLIENT LIST directly
+        result: Any = await client.custom_command(["CLIENT", "LIST"])
+        return await get_client_list_output_count(cast(Union[bytes, str, None], result))
 
 
-async def get_cluster_client_count(client: GlideClusterClient) -> int:
-    """Gets total client count across all nodes in the cluster."""
+async def get_expected_new_connections(
+    client: Union[GlideClient, GlideClusterClient]
+) -> int:
+    """Get the expected number of new connections when a lazy client is initialized."""
 
-    # Execute CLIENT LIST on all nodes in the cluster
-    result: Any = await client.custom_command(["CLIENT", "LIST"], route=AllNodes())
-
-    # Result will be a dict with node addresses as keys and CLIENT LIST output as values
-    total_count = 0
-    for node_output in result.values():
-        total_count += await get_client_list_output_count(node_output)
-
-    return total_count
-
-
-async def get_cluster_node_count(client: GlideClusterClient) -> int:
-    """Gets the number of nodes in the cluster."""
-    # CLUSTER NODES returns details about all nodes
-    result = await client.custom_command(["CLUSTER", "NODES"])
-    nodes_info = result.decode().strip().split("\n")
-    return len(nodes_info)
+    if isinstance(client, GlideClusterClient):
+        # For cluster, get node count and multiply by 2 (2 connections per node)
+        result = await client.custom_command(["CLUSTER", "NODES"])
+        nodes_info = result.decode().strip().split("\n")
+        return len(nodes_info) * 2
+    else:
+        # For standalone, always expect 1 new connection
+        return 1
 
 
 @pytest.mark.anyio
@@ -77,6 +86,7 @@ class TestLazyConnection:
                 request_timeout=3000,
                 connection_timeout=3000,
             )
+
             if cluster_mode:
                 assert isinstance(monitoring_client, GlideClusterClient)
             else:
@@ -84,14 +94,7 @@ class TestLazyConnection:
             await monitoring_client.ping()
 
             # 2. Get initial client count
-            if not cluster_mode:
-                clients_before_lazy_init = await get_standalone_client_count(
-                    cast(GlideClient, monitoring_client)
-                )
-            else:
-                clients_before_lazy_init = await get_cluster_client_count(
-                    cast(GlideClusterClient, monitoring_client)
-                )
+            clients_before_lazy_init = await get_client_count(monitoring_client)
 
             # 3. Create the "lazy" client
             lazy_glide_client = await create_client(
@@ -104,14 +107,7 @@ class TestLazyConnection:
             )
 
             # 4. Check count (should not change)
-            if not cluster_mode:
-                clients_after_lazy_init = await get_standalone_client_count(
-                    cast(GlideClient, monitoring_client)
-                )
-            else:
-                clients_after_lazy_init = await get_cluster_client_count(
-                    cast(GlideClusterClient, monitoring_client)
-                )
+            clients_after_lazy_init = await get_client_count(monitoring_client)
             assert clients_after_lazy_init == clients_before_lazy_init, (
                 f"Lazy client ({mode_str.lower()}, {protocol}) should not connect before the first command. "
                 f"Before: {clients_before_lazy_init}, After: {clients_after_lazy_init}"
@@ -153,29 +149,19 @@ class TestLazyConnection:
                 ), f"PING response was not 'PONG': {decoded_ping_response}"
 
             # 6. Check client count after the first command
-            if not cluster_mode:
-                clients_after_first_command = await get_standalone_client_count(
-                    cast(GlideClient, monitoring_client)
-                )
-                assert clients_after_first_command == clients_before_lazy_init + 1, (
-                    f"Lazy client (standalone, {protocol}) should establish one new connection after the first command. "
-                    f"Before: {clients_before_lazy_init}, After first command: {clients_after_first_command}"
-                )
-            else:
-                clients_after_first_command = await get_cluster_client_count(
-                    cast(GlideClusterClient, monitoring_client)
-                )
-                node_count = await get_cluster_node_count(
-                    cast(GlideClusterClient, monitoring_client)
-                )
-                expected_new_connections = 2 * node_count  # 2 connections per node
-                assert (
-                    clients_after_first_command
-                    == clients_before_lazy_init + expected_new_connections
-                ), (
-                    f"Lazy client (cluster, {protocol}) should establish 2 new connection after the first command. "
-                    f"Before: {clients_before_lazy_init}, After first command: {clients_after_first_command}"
-                )
+            clients_after_first_command = await get_client_count(monitoring_client)
+            expected_new_connections = await get_expected_new_connections(
+                monitoring_client
+            )
+
+            assert (
+                clients_after_first_command
+                == clients_before_lazy_init + expected_new_connections
+            ), (
+                f"Lazy client ({mode_str.lower()}, {protocol}) should establish {expected_new_connections} "
+                f"new connection(s) after the first command. "
+                f"Before: {clients_before_lazy_init}, After first command: {clients_after_first_command}"
+            )
 
         finally:
             if monitoring_client:
