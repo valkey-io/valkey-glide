@@ -44,9 +44,9 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"])))
                       | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -125,6 +125,11 @@ jobs:
               run: |
                   make install-build-tools
                   make build GLIDE_VERSION="${RELEASE_VERSION}"
+            - name: Move FFI artifacts on linux
+              if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
+              run: |
+                  mkdir -p $GITHUB_WORKSPACE/ffi/target/release
+                  cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@v4
@@ -133,7 +138,7 @@ jobs:
                   path: |
                       ffi/target/release/libglide_ffi.a
                       go/lib.h
-                      go/protobuf/
+                      go/internal/protobuf/
 
     commit-auto-gen-files-with-tag:
         if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
@@ -152,19 +157,20 @@ jobs:
                   for dir in */; do
                     target_name=${dir%/}
                     mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
-                    cp ${target_name}/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
+                    cp ${target_name}/ffi/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
                   done
                   # TODO: move generation of protobuf and header file to a non-matrix step
                   cd x86_64-unknown-linux-gnu
-                  cp lib.h $GITHUB_WORKSPACE/go/
-                  mkdir -p $GITHUB_WORKSPACE/go/protobuf
-                  cp protobuf/* $GITHUB_WORKSPACE/go/protobuf/
+                  cp go/lib.h $GITHUB_WORKSPACE/go/
+                  mkdir -p $GITHUB_WORKSPACE/go/internal/protobuf
+                  cp go/internal/protobuf/* $GITHUB_WORKSPACE/go/internal/protobuf/
             - name: Commit and push tag
               run: |
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
-                  git add -f .
+                  git add -f go
+                  git status
                   git commit -m "Automated commit from GitHub Actions"
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION

@@ -1368,7 +1368,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewHashScanOptions().SetNoValue(true)
+			opts = options.NewHashScanOptions().SetNoValues(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
 			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)
@@ -4630,15 +4630,13 @@ func (suite *GlideTestSuite) TestXAdd() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
 		// stream does not exist
-		res, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
+		_, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
 		suite.NoError(err)
-		assert.False(suite.T(), res.IsNil())
 		// don't check the value, because it contains server's timestamp
 
 		// adding data to existing stream
-		res, err = client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+		_, err = client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
 		suite.NoError(err)
-		assert.False(suite.T(), res.IsNil())
 
 		// incorrect input
 		_, err = client.XAdd(context.Background(), key, [][]string{})
@@ -4883,10 +4881,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		entry1, err := client.XAdd(context.Background(), key1, [][]string{{"a", "b"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry1.IsNil())
 		entry2, err := client.XAdd(context.Background(), key1, [][]string{{"c", "d"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry2.IsNil())
 
 		// read the entire stream for the consumer and mark messages as pending
 		res, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4933,7 +4929,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in entry2")
 
 		// delete one of the entries
-		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1.Value()}, "Can't send XDEL as a custom command")
+		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1}, "Can't send XDEL as a custom command")
 
 		// now xreadgroup returns one empty entry and one non-empty entry
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: "0"})
@@ -4951,8 +4947,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		}
 
 		// Verify entry1 exists but has no fields (was deleted)
-		assert.Contains(suite.T(), entryMap, entry1.Value())
-		assert.Empty(suite.T(), entryMap[entry1.Value()])
+		assert.Contains(suite.T(), entryMap, entry1)
+		assert.Empty(suite.T(), entryMap[entry1])
 
 		// Verify entry2 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry2.Value())
@@ -4975,7 +4971,6 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		// add a message and read it with ">"
 		entry3, err := client.XAdd(context.Background(), key1, [][]string{{"e", "f"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry3.IsNil())
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
 		assert.NoError(suite.T(), err)
 
@@ -5031,8 +5026,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		}
 
 		// Verify entries in key1
-		assert.Contains(suite.T(), entryMap1, entry1.Value())
-		assert.Empty(suite.T(), entryMap1[entry1.Value()])
+		assert.Contains(suite.T(), entryMap1, entry1)
+		assert.Empty(suite.T(), entryMap1[entry1])
 
 		assert.Contains(suite.T(), entryMap1, entry2.Value())
 
@@ -6114,12 +6109,11 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), "0-1")
 
-		xAddResult, err = client.XAdd(context.Background(),
+		_, err = client.XAdd(context.Background(),
 			key1,
 			[][]string{{field1, "foo2"}, {field2, "bar2"}},
 		)
 		assert.NoError(t, err)
-		assert.False(t, xAddResult.IsNil())
 
 		xLenResult, err := client.XLen(context.Background(), key1)
 		assert.NoError(t, err)
@@ -6557,8 +6551,8 @@ func (suite *GlideTestSuite) TestXPending() {
 
 			expectedSummary := models.XPendingSummary{
 				NumOfMessages: 5,
-				StartId:       streamid_1,
-				EndId:         streamid_5,
+				StartId:       models.CreateStringResult(streamid_1),
+				EndId:         models.CreateStringResult(streamid_5),
 				ConsumerMessages: []models.ConsumerPendingMessage{
 					{ConsumerName: consumer1, MessageCount: 2},
 					{ConsumerName: consumer2, MessageCount: 3},
@@ -6583,8 +6577,8 @@ func (suite *GlideTestSuite) TestXPending() {
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
-			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
-			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+			assert.Equal(suite.T(), streamid_1, detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2, detailResult[1].Id)
 		}
 
 		execCluster := func(client interfaces.GlideClusterClientCommands) {
@@ -6631,8 +6625,8 @@ func (suite *GlideTestSuite) TestXPending() {
 
 			expectedSummary := models.XPendingSummary{
 				NumOfMessages: 5,
-				StartId:       streamid_1,
-				EndId:         streamid_5,
+				StartId:       models.CreateStringResult(streamid_1),
+				EndId:         models.CreateStringResult(streamid_5),
 				ConsumerMessages: []models.ConsumerPendingMessage{
 					{ConsumerName: consumer1, MessageCount: 2},
 					{ConsumerName: consumer2, MessageCount: 3},
@@ -6657,8 +6651,8 @@ func (suite *GlideTestSuite) TestXPending() {
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
-			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
-			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+			assert.Equal(suite.T(), streamid_1, detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2, detailResult[1].Id)
 
 			//
 		}
@@ -7727,7 +7721,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
 
 		// delete one of the streams using XDel
-		respInt64, err = client.XDel(context.Background(), key, []string{streamId1.Value()})
+		respInt64, err = client.XDel(context.Background(), key, []string{streamId1})
 		suite.NoError(err)
 		suite.Equal(int64(1), respInt64)
 
@@ -7747,8 +7741,8 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamId1.Value())
-		assert.Empty(suite.T(), entryMap[streamId1.Value()])
+		assert.Contains(suite.T(), entryMap, streamId1)
+		assert.Empty(suite.T(), entryMap[streamId1])
 
 		assert.Contains(suite.T(), entryMap, streamId2.Value())
 
@@ -7768,7 +7762,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.NotNil(streamId3)
 
 		// xack that streamid1 and streamid2 have been processed
-		xackResult, err := client.XAck(context.Background(), key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		xackResult, err := client.XAck(context.Background(), key, groupName, []string{streamId1, streamId2})
 		suite.NoError(err)
 		suite.Equal(int64(2), xackResult)
 
@@ -7778,7 +7772,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.Equal(int64(0), respInt64)
 
 		// xack streamid_1, and streamid_2 already received returns 0L
-		xackResult, err = client.XAck(context.Background(), key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		xackResult, err = client.XAck(context.Background(), key, groupName, []string{streamId1})
 		suite.NoError(err)
 		suite.Equal(int64(0), xackResult)
 
@@ -7804,7 +7798,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
 
 		// Use non existent group, so xack streamid_3 returns 0
-		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})
+		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3})
 		suite.NoError(err)
 		suite.Equal(int64(0), xackResult)
 
@@ -8742,8 +8736,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
-			StartId:       streamid_1,
-			EndId:         streamid_5,
+			StartId:       models.CreateStringResult(streamid_1),
+			EndId:         models.CreateStringResult(streamid_5),
 			ConsumerMessages: []models.ConsumerPendingMessage{
 				{ConsumerName: consumer1, MessageCount: 2},
 				{ConsumerName: consumer2, MessageCount: 3},
@@ -8769,23 +8763,23 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Greater(suite.T(), len(pendingResultExtended), 2)
 		// because of the idle time return, we have to exclude it from the expected result
 		// and check separately
-		assert.Equal(suite.T(), pendingResultExtended[0].Id, streamid_1.Value())
+		assert.Equal(suite.T(), pendingResultExtended[0].Id, streamid_1)
 		assert.Equal(suite.T(), pendingResultExtended[0].ConsumerName, consumer1)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[0].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[1].Id, streamid_2.Value())
+		assert.Equal(suite.T(), pendingResultExtended[1].Id, streamid_2)
 		assert.Equal(suite.T(), pendingResultExtended[1].ConsumerName, consumer1)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[1].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[2].Id, streamid_3.Value())
+		assert.Equal(suite.T(), pendingResultExtended[2].Id, streamid_3)
 		assert.Equal(suite.T(), pendingResultExtended[2].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[2].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[3].Id, streamid_4.Value())
+		assert.Equal(suite.T(), pendingResultExtended[3].Id, streamid_4)
 		assert.Equal(suite.T(), pendingResultExtended[3].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[3].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[4].Id, streamid_5.Value())
+		assert.Equal(suite.T(), pendingResultExtended[4].Id, streamid_5)
 		assert.Equal(suite.T(), pendingResultExtended[4].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[4].DeliveryCount, int64(0))
 
@@ -8795,7 +8789,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			groupName,
 			consumer1,
 			0,
-			[]string{streamid_3.Value(), streamid_5.Value()},
+			[]string{streamid_3, streamid_5},
 		)
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
@@ -8817,10 +8811,10 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			groupName,
 			consumer1,
 			0,
-			[]string{streamid_3.Value(), streamid_5.Value()},
+			[]string{streamid_3, streamid_5},
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{streamid_3.Value(), streamid_5.Value()}, claimResultJustId)
+		assert.Equal(suite.T(), []string{streamid_3, streamid_5}, claimResultJustId)
 
 		// add one more stream
 		streamid_6, err := client.XAdd(context.Background(), key, [][]string{{"field6", "value6"}})
@@ -8832,7 +8826,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			groupName,
 			consumer1,
 			0,
-			[]string{streamid_6.Value()},
+			[]string{streamid_6},
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
@@ -8851,39 +8845,39 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions(streamid_6.Value(), streamid_6.Value(), 1),
+			*options.NewXPendingOptions(streamid_6, streamid_6, 1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(forcePendingResult))
-		assert.Equal(suite.T(), streamid_6.Value(), forcePendingResult[0].Id)
+		assert.Equal(suite.T(), streamid_6, forcePendingResult[0].Id)
 		assert.Equal(suite.T(), consumer1, forcePendingResult[0].ConsumerName)
 		assert.Equal(suite.T(), int64(99), forcePendingResult[0].DeliveryCount)
 
 		// acknowledge streams 2, 3, 4 and 6 and remove them from xpending results
 		xackResult, err := client.XAck(context.Background(),
 			key, groupName,
-			[]string{streamid_2.Value(), streamid_3.Value(), streamid_4.Value(), streamid_6.Value()})
+			[]string{streamid_2, streamid_3, streamid_4, streamid_6})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(4), xackResult)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions(streamid_3.Value(), "+", 10),
+			*options.NewXPendingOptions(streamid_3, "+", 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
-		assert.Equal(suite.T(), streamid_5.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), streamid_5, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions("-", "("+streamid_5.Value(), 10),
+			*options.NewXPendingOptions("-", "("+streamid_5, 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
-		assert.Equal(suite.T(), streamid_1.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), streamid_1, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
@@ -8958,7 +8952,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
@@ -8967,7 +8961,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.ErrorContains(err, "NOGROUP")
@@ -8978,7 +8972,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
@@ -8987,7 +8981,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.ErrorContains(err, "NOGROUP")
@@ -9001,7 +8995,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 		)
 		assert.Error(suite.T(), err)
 
@@ -9010,7 +9004,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.Error(err)
@@ -9021,7 +9015,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 		)
 		suite.Error(err)
 
@@ -9030,7 +9024,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			groupName,
 			consumer1,
 			1*time.Millisecond,
-			[]string{streamid_1.Value()},
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.Error(err)
@@ -9116,8 +9110,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Equal(
 			suite.T(),
 			[]models.XRangeResponse{
-				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
-				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
+				{StreamId: streamId1, Entries: [][]string{{"field1", "value1"}}},
+				{StreamId: streamId2, Entries: [][]string{{"field2", "value2"}}},
 			},
 			xrangeResult,
 		)
@@ -9133,8 +9127,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Equal(
 			suite.T(),
 			[]models.XRangeResponse{
-				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
-				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
+				{StreamId: streamId2, Entries: [][]string{{"field2", "value2"}}},
+				{StreamId: streamId1, Entries: [][]string{{"field1", "value1"}}},
 			},
 			xrevrangeResult,
 		)
@@ -9173,7 +9167,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			xrangeResult, err = client.XRangeWithOptions(
 				context.Background(),
 				key,
-				options.NewStreamBoundary(streamId2.Value(), false),
+				options.NewStreamBoundary(streamId2, false),
 				positiveInfinity,
 				*options.NewXRangeOptions().SetCount(1),
 			)
@@ -9181,7 +9175,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.Equal(
 				suite.T(),
 				[]models.XRangeResponse{
-					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+					{StreamId: streamId3, Entries: [][]string{{"field3", "value3"}}},
 				},
 				xrangeResult,
 			)
@@ -9191,14 +9185,14 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 				context.Background(),
 				key,
 				positiveInfinity,
-				options.NewStreamBoundary(streamId2.Value(), false),
+				options.NewStreamBoundary(streamId2, false),
 				*options.NewXRangeOptions().SetCount(1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
 				[]models.XRangeResponse{
-					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+					{StreamId: streamId3, Entries: [][]string{{"field3", "value3"}}},
 				},
 				xrevrangeResult,
 			)
@@ -9229,7 +9223,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		xdelResult, err := client.XDel(
 			context.Background(),
 			key,
-			[]string{streamId1.Value(), streamId2.Value(), streamId3.Value()},
+			[]string{streamId1, streamId2, streamId3},
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), xdelResult)

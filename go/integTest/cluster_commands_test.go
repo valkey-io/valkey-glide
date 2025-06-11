@@ -2596,8 +2596,8 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 	opts := pipeline.NewClusterBatchOptions()
 
 	for _, isAtomic := range []bool{true, false} {
-		// TODO use info when implemented
-		batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"info", "replication"})
+		batch := pipeline.NewClusterBatch(isAtomic).
+			InfoWithOptions(options.InfoOptions{Sections: []constants.Section{"replication"}})
 
 		res, err := client.ExecWithOptions(
 			context.Background(),
