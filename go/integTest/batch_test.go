@@ -2471,7 +2471,7 @@ func runBatchOnClient(
 	client interfaces.BaseClientCommands,
 	batch *pipeline.ClusterBatch,
 	raiseOnError bool,
-	route config.Route,
+	route config.SingleNodeRoute,
 ) ([]any, error) {
 	switch c := client.(type) {
 	case *glide.ClusterClient:

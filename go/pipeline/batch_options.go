@@ -24,7 +24,7 @@ type StandaloneBatchOptions struct {
 type ClusterBatchOptions struct {
 	BaseBatchOptions
 	// Route defines the routing strategy for the batch.
-	Route *config.Route
+	Route config.SingleNodeRoute
 	// RetryStrategy defines the retry behavior for cluster batches.
 	RetryStrategy *ClusterBatchRetryStrategy
 }
@@ -122,8 +122,6 @@ func (cbo *ClusterBatchOptions) WithTimeout(timeout time.Duration) *ClusterBatch
 	return cbo
 }
 
-// TODO ensure only single node route is allowed (use config.NotMultiNode?)
-
 // Set the routing strategy for the batch.
 //
 // Parameters:
@@ -133,8 +131,8 @@ func (cbo *ClusterBatchOptions) WithTimeout(timeout time.Duration) *ClusterBatch
 // Returns:
 //
 //	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithRoute(route config.Route) *ClusterBatchOptions {
-	cbo.Route = &route
+func (cbo *ClusterBatchOptions) WithRoute(route config.SingleNodeRoute) *ClusterBatchOptions {
+	cbo.Route = route
 	return cbo
 }
 

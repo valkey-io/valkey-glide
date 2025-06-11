@@ -43,7 +43,7 @@ func (b Batch) Convert(response []any) ([]any, error) {
 
 type BatchOptions struct {
 	Timeout              *uint32
-	Route                *config.Route
+	Route                config.Route
 	RetryServerError     *bool
 	RetryConnectionError *bool
 }
