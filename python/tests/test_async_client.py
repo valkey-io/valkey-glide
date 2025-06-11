@@ -6713,61 +6713,63 @@ class TestCommands:
         )
         assert await glide_client.xgroup_create(key, group_name, stream_id0_0) == OK
 
-        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer)
-        assert result is not None
-        assert key.encode() in result
-        assert len(result[key.encode()].entries) == 4
+        read_result = await glide_client.xreadgroup({key: ">"}, group_name, consumer)
+        assert read_result is not None
+        assert key.encode() in read_result
+        assert len(read_result[key.encode()].entries) == 4
 
         # Check entries
-        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
-        assert len(result[key.encode()].entries[0].fields) == 2
-        assert result[key.encode()].entries[0].fields[0].field_name == b"f1"
-        assert result[key.encode()].entries[0].fields[0].value == b"v1"
-        assert result[key.encode()].entries[0].fields[1].field_name == b"f2"
-        assert result[key.encode()].entries[0].fields[1].value == b"v2"
+        assert read_result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(read_result[key.encode()].entries[0].fields) == 2
+        assert read_result[key.encode()].entries[0].fields[0].field_name == b"f1"
+        assert read_result[key.encode()].entries[0].fields[0].value == b"v1"
+        assert read_result[key.encode()].entries[0].fields[1].field_name == b"f2"
+        assert read_result[key.encode()].entries[0].fields[1].value == b"v2"
 
-        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
-        assert len(result[key.encode()].entries[1].fields) == 1
-        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
-        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
+        assert read_result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(read_result[key.encode()].entries[1].fields) == 1
+        assert read_result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert read_result[key.encode()].entries[1].fields[0].value == b"v1_1"
 
-        assert result[key.encode()].entries[2].id == stream_id1_2.encode()
-        assert len(result[key.encode()].entries[2].fields) == 1
-        assert result[key.encode()].entries[2].fields[0].field_name == b"f1_2"
-        assert result[key.encode()].entries[2].fields[0].value == b"v1_2"
+        assert read_result[key.encode()].entries[2].id == stream_id1_2.encode()
+        assert len(read_result[key.encode()].entries[2].fields) == 1
+        assert read_result[key.encode()].entries[2].fields[0].field_name == b"f1_2"
+        assert read_result[key.encode()].entries[2].fields[0].value == b"v1_2"
 
-        assert result[key.encode()].entries[3].id == stream_id1_3.encode()
-        assert len(result[key.encode()].entries[3].fields) == 1
-        assert result[key.encode()].entries[3].fields[0].field_name == b"f1_3"
-        assert result[key.encode()].entries[3].fields[0].value == b"v1_3"
+        assert read_result[key.encode()].entries[3].id == stream_id1_3.encode()
+        assert len(read_result[key.encode()].entries[3].fields) == 1
+        assert read_result[key.encode()].entries[3].fields[0].field_name == b"f1_3"
+        assert read_result[key.encode()].entries[3].fields[0].value == b"v1_3"
 
         # autoclaim the first entry only
-        result = await glide_client.xautoclaim(
+        autoclaim_result1 = await glide_client.xautoclaim(
             key, group_name, consumer, 0, stream_id0_0, count=1
         )
-        assert result[0] == stream_id1_1.encode()
-        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}
+        assert autoclaim_result1[0] == stream_id1_1.encode()
+        assert autoclaim_result1[1] == {
+            stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]
+        }
         # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if version7_or_above:
-            assert result[2] == []
+            assert autoclaim_result1[2] == []
 
         # delete entry 1-2
         assert await glide_client.xdel(key, [stream_id1_2])
 
         # autoclaim the rest of the entries
-        result = await glide_client.xautoclaim(
+        autoclaim_result2 = await glide_client.xautoclaim(
             key, group_name, consumer, 0, stream_id1_1
         )
         assert (
-            result[0] == stream_id0_0.encode()
+            autoclaim_result2[0] == stream_id0_0.encode()
         )  # "0-0" is returned to indicate the entire stream was scanned.
-        assert result[1] == {
+        assert autoclaim_result2[1] == {
             stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
             stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
         }
         if version7_or_above:
-            assert result[2] == [stream_id1_2.encode()]
+            assert autoclaim_result2[2] == [stream_id1_2.encode()]
 
         # autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed entries, only IDs
         just_id_result = await glide_client.xautoclaim_just_id(
