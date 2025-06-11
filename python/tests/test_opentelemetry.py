@@ -267,14 +267,13 @@ class TestOpenTelemetryGlide:
         # Get final memory usage
         final_memory = process.memory_info().rss
 
-        # Check that memory usage hasn't grown significantly (indicating span leaks)
-        # Allow for some reasonable growth, but not excessive
-        memory_growth = final_memory - initial_memory
-        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
 
+        # Assert memory increase is not more than 10%
         assert (
-            memory_growth < max_allowed_growth
-        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
         await client.close()
 
@@ -334,14 +333,13 @@ class TestOpenTelemetryGlide:
         # Get final memory usage
         final_memory = process.memory_info().rss
 
-        # Check that memory usage hasn't grown significantly (indicating span leaks)
-        # Allow for some reasonable growth, but not excessive
-        memory_growth = final_memory - initial_memory
-        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
 
+        # Assert memory increase is not more than 10%
         assert (
-            memory_growth < max_allowed_growth
-        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
         await client.close()
 
