@@ -1368,7 +1368,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewHashScanOptions().SetNoValue(true)
+			opts = options.NewHashScanOptions().SetNoValues(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
 			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)

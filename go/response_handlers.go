@@ -14,6 +14,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -214,12 +215,6 @@ func parseSet(response *C.struct_CommandResponse) (any, error) {
 	return slice, nil
 }
 
-// get type of T
-func getType[T any]() reflect.Type {
-	var zero [0]T
-	return reflect.TypeOf(zero).Elem()
-}
-
 // convert (typecast) untyped response into a typed value
 // for example, an arbitrary array `[]any` into `[]string`
 type responseConverter interface {
@@ -238,7 +233,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, fmt.Errorf("unexpected type received: nil, expected: map[string]%v", getType[T]())
+			return nil, fmt.Errorf("unexpected type received: nil, expected: map[string]%v", internal.GetType[T]())
 		}
 	}
 	result := make(map[string]T)
@@ -249,7 +244,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// try direct conversion to T when there is no next converter
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", value, getType[T]())
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", value, internal.GetType[T]())
 			}
 			result[key] = valueT
 		} else {
@@ -266,7 +261,7 @@ func (node mapConverter[T]) convert(data any) (any, error) {
 			// convert to T
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", val, getType[T]())
+				return nil, fmt.Errorf("unexpected type of map element: %T, expected: %v", val, internal.GetType[T]())
 			}
 			result[key] = valueT
 		}
@@ -286,7 +281,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.canBeNil {
 			return nil, nil
 		} else {
-			return nil, fmt.Errorf("unexpected type received: nil, expected: []%v", getType[T]())
+			return nil, fmt.Errorf("unexpected type received: nil, expected: []%v", internal.GetType[T]())
 		}
 	}
 	arrData := data.([]any)
@@ -295,7 +290,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", value, getType[T]())
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", value, internal.GetType[T]())
 			}
 			result = append(result, valueT)
 		} else {
@@ -310,7 +305,7 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", val, getType[T]())
+				return nil, fmt.Errorf("unexpected type of array element: %T, expected: %v", val, internal.GetType[T]())
 			}
 			result = append(result, valueT)
 		}
@@ -318,8 +313,6 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 
 	return result, nil
 }
-
-// TODO: convert sets
 
 func handleAnyArrayOrNilResponse(response *C.struct_CommandResponse) ([]any, error) {
 	defer C.free_command_response(response)

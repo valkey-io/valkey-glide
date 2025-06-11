@@ -117,7 +117,7 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	return args, err
 }
 
-// GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
+// GetExOptions represents optional arguments for the [GetExWithOptions] command.
 //
 // See [valkey.io]
 //
