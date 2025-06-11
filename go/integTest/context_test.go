@@ -37,10 +37,10 @@ func (suite *GlideTestSuite) TestContext_CancelDuringExecution() {
 		defer cancel()
 
 		// Start a long-running command (BLPOP) that will block for a while
-		_, err := client.BLPop(ctx, []string{"testList"}, 10)
+		_, err := client.BLPop(ctx, []string{"testList"}, 10*time.Second)
 
 		// Verify that the command fails with context deadline exceeded error
-		assert.ErrorContains(suite.T(), err, "context deadline exceeded")
+		suite.ErrorContains(err, "context deadline exceeded")
 	})
 }
 
