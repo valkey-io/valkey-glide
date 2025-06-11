@@ -11262,12 +11262,14 @@ export function runBaseTests(config: {
                 // wait to get some minIdleTime
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
-                expect(await client.xpending(Buffer.from(key), group)).toEqual([
-                    2,
-                    "0-1",
-                    "0-2",
-                    [["consumer", "2"]],
-                ]);
+                expect(await client.xpending(Buffer.from(key), group)).toEqual({
+                    numMessages: 2,
+                    startId: "0-1",
+                    endId: "0-2",
+                    consumerMessages: [
+                        { consumerName: "consumer", messageCount: 2 },
+                    ],
+                });
 
                 const result = await client.xpendingWithOptions(
                     key,
@@ -11285,8 +11287,15 @@ export function runBaseTests(config: {
                               minIdleTime: 42,
                           },
                 );
-                result[0][2] = 0; // overwrite msec counter to avoid test flakyness
-                expect(result).toEqual([["0-1", "consumer", 0, 1]]);
+                result[0].idleTime = 0; // overwrite msec counter to avoid test flakyness
+                expect(result).toEqual([
+                    {
+                        id: "0-1",
+                        consumerName: "consumer",
+                        idleTime: 0,
+                        deliveryCount: 1,
+                    },
+                ]);
 
                 // not existing consumer
                 expect(

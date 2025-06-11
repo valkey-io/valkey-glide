@@ -357,6 +357,50 @@ export type HashDataType = {
 }[];
 
 /**
+ * XPendingDetail represents the details of a pending message in a stream group.
+ * It includes the message ID, the consumer's name, the idle time, and the delivery count.
+ */
+export type XPendingDetail = {
+    /** The ID of the pending message. */
+    id: GlideString;
+    /** The name of the consumer who has the pending message. */
+    consumerName: GlideString;
+    /** The amount of time (in milliseconds) that the message has been idle. */
+    idleTime: number;
+    /** The number of times the message has been delivered. */
+    deliveryCount: number;
+};
+
+/**
+ * Result from XPending
+ */
+export type XPendingResult = {
+    /** The total number of pending messages for this consumer group. */
+    numMessages: number;
+    /** The smallest ID among the pending messages or null if no pending messages exist. */
+    startId: string | null;
+    /** The greatest ID among the pending messages or null if no pending messages exists. */
+    endId: string | null;
+    /**
+     * 	GroupConsumers - An array of ConsumerPendingMessages with the following fields:
+     *  ConsumerName - The name of the consumer.
+     *  MessageCount - The number of pending messages for this consumer.
+     */
+    consumerMessages: ConsumerPendingMessage[];
+};
+
+/**
+ * ConsumerPendingMessage represents a pending message for a consumer in a Redis stream group.
+ * It includes the consumer's name and the count of pending messages for that consumer.
+ */
+export type ConsumerPendingMessage = {
+    /** Name of the consumer. */
+    consumerName: string;
+    /** Number of pending messages for the consumer */
+    messageCount: number;
+};
+
+/**
  * Data type which reflects now stream entries are returned.
  * The keys of the record are stream entry IDs, which are mapped to key-value pairs of the data.
  */
@@ -433,6 +477,50 @@ export function convertGlideRecordToRecord<T>(
 
         res[pair.key as string] = newVal;
     }
+
+    return res;
+}
+
+/**
+ * @internal
+ * Handle array responses into an XPendingDetail object.
+ */
+export function convertArrayToXPendingDetail(
+    data: (GlideString | number)[],
+): XPendingDetail {
+    return {
+        id: data[0] as GlideString,
+        consumerName: data[1] as GlideString,
+        idleTime: data[2] as number,
+        deliveryCount: data[3] as number,
+    };
+}
+
+/**
+ * @internal
+ * Handle array responses into an XPendingResult object.
+ */
+export function convertArrayToXPendingResult(
+    data: (string | number | string[][])[],
+): XPendingResult {
+    const numMsgs: number = data[0] as number;
+    const startId: string | null = data[1] as string;
+    const endId: string | null = data[2] as string;
+    const consumerMessages: ConsumerPendingMessage[] = [];
+
+    for (const cm of data[3] as string[][]) {
+        consumerMessages.push({
+            consumerName: cm[0] as string,
+            messageCount: Number(cm[1]),
+        });
+    }
+
+    const res: XPendingResult = {
+        numMessages: numMsgs,
+        startId: startId,
+        endId: endId,
+        consumerMessages: consumerMessages,
+    };
 
     return res;
 }
@@ -5771,8 +5859,12 @@ export class BaseClient {
     public async xpending(
         key: GlideString,
         group: GlideString,
-    ): Promise<[number, GlideString, GlideString, [GlideString, number][]]> {
-        return this.createWritePromise(createXPending(key, group));
+    ): Promise<XPendingResult> {
+        return this.createWritePromise<
+            [number, GlideString, GlideString, [GlideString, number][]]
+        >(createXPending(key, group)).then((res) => {
+            return convertArrayToXPendingResult(res);
+        });
     }
 
     /**
@@ -5813,8 +5905,14 @@ export class BaseClient {
         key: GlideString,
         group: GlideString,
         options: StreamPendingOptions,
-    ): Promise<[GlideString, GlideString, number, number][]> {
-        return this.createWritePromise(createXPending(key, group, options));
+    ): Promise<XPendingDetail[]> {
+        return this.createWritePromise<
+            [GlideString, GlideString, number, number][]
+        >(createXPending(key, group, options)).then((res) => {
+            return res.map((item) => {
+                return convertArrayToXPendingDetail(item);
+            });
+        });
     }
 
     /**
