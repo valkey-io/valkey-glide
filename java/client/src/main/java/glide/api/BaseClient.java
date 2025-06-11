@@ -3105,14 +3105,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> xpending(@NonNull String key, @NonNull String group) {
         return commandManager.submitNewCommand(
-                XPending, new String[] {key, group}, this::handleArrayOrNullResponse);
+                XPending, new String[] {key, group}, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xpending(
             @NonNull GlideString key, @NonNull GlideString group) {
         return commandManager.submitNewCommand(
-                XPending, new GlideString[] {key, group}, this::handleArrayOrNullResponseBinary);
+                XPending, new GlideString[] {key, group}, this::handleArrayResponseBinary);
     }
 
     @Override
