@@ -52,9 +52,8 @@ public abstract class BaseClientConfiguration {
      * <p>This setting applies to both standalone and cluster modes. Note that if an operation is
      * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
      *
-     * <p><b>Example:</b>
-     *
-     * <pre>{@code
+     * @example
+     *     <pre>{@code
      * GlideClientConfiguration config = GlideClientConfiguration.builder()
      *         .address(NodeAddress.builder().host("localhost").port(6379).build())
      *         .lazyConnect(true)

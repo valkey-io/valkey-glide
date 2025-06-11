@@ -168,3 +168,75 @@ class TestLazyConnection:
                 await monitoring_client.close()
             if lazy_glide_client:
                 await lazy_glide_client.close()
+
+    async def test_lazy_connection_with_non_existent_host(
+        self,
+        request: Any,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """
+        Test behavior with non-existent host for both eager and lazy connections.
+
+        Expected behavior:
+        1. Eager connection to non-existent host - should fail immediately during client creation
+        2. Lazy connection to non-existent host - should succeed in client creation but fail on command execution
+        """
+        mode_str = "Cluster" if cluster_mode else "Standalone"
+        non_existent_host = "non-existent-host-that-does-not-resolve"
+
+        # First create a monitoring client to ensure the test environment is working
+        monitoring_client = None
+        try:
+
+            # Test 1: Eager connection to non-existent host should fail
+            with pytest.raises(Exception) as excinfo:
+                # Attempt to create client with eager connection - should fail immediately
+                await create_client(
+                    request,
+                    cluster_mode=cluster_mode,
+                    protocol=protocol,
+                    lazy_connect=False,  # Eager
+                    request_timeout=500,
+                    addresses=[NodeAddress(non_existent_host)],
+                )
+
+            # Verify the error message contains expected text
+            error_msg = str(excinfo.value).lower()
+            # Check for different possible error messages depending on implementation
+            assert any(
+                x in error_msg
+                for x in ["ioerror", "connection", "network", "host", "resolve"]
+            )
+
+            # Test 2: Lazy connection to non-existent host should succeed in client creation
+            lazy_client = None
+            try:
+                # This should succeed since we're using lazy connection
+                lazy_client = await create_client(
+                    request,
+                    cluster_mode=cluster_mode,
+                    protocol=protocol,
+                    lazy_connect=True,  # Lazy
+                    request_timeout=500,
+                    addresses=[NodeAddress(non_existent_host)],
+                )
+
+                # But command execution should fail with appropriate error
+                with pytest.raises(Exception) as cmd_excinfo:
+                    await lazy_client.ping()
+
+                # Verify the error message contains expected text
+                cmd_error_msg = str(cmd_excinfo.value).lower()
+                assert any(
+                    x in cmd_error_msg
+                    for x in ["ioerror", "connection", "network", "host", "resolve"]
+                )
+
+            finally:
+                if lazy_client:
+                    await lazy_client.close()
+
+        finally:
+            if monitoring_client:
+                await monitoring_client.close()

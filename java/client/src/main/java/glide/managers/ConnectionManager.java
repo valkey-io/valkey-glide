@@ -20,6 +20,7 @@ import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -36,8 +37,7 @@ public class ConnectionManager {
     /** UDS connection representation. */
     private ChannelHandler channel;
 
-    private BaseClientConfiguration lazyConfig = null;
-    private boolean isLazyConnection = false;
+    private Optional<BaseClientConfiguration> lazyConfig = Optional.empty();
     private final Object lazyConnectionLock = new Object();
 
     /**
@@ -55,11 +55,10 @@ public class ConnectionManager {
      * @param config The configuration to store
      */
     public void storeConfigForLazyConnection(BaseClientConfiguration config) {
-        synchronized (lazyConnectionLock) {
-            this.lazyConfig = config;
-            this.isLazyConnection = true;
-        }
+    synchronized (lazyConnectionLock) {
+        this.lazyConfig = Optional.of(config);
     }
+}
 
     /**
      * Ensure connection is established before executing commands. If this is a lazy connection and no
@@ -69,16 +68,12 @@ public class ConnectionManager {
      */
     public CompletableFuture<Void> ensureConnected() {
         synchronized (lazyConnectionLock) {
-            if (isLazyConnection && lazyConfig != null) {
-                // Mark as not lazy anymore since we're establishing connection
-                isLazyConnection = false;
-                BaseClientConfiguration config = lazyConfig;
-                lazyConfig = null;
+            return lazyConfig.map(config -> {
+                // Clear the optional (mark as connected)
+                lazyConfig = Optional.empty();
                 // Connect using stored config
                 return connectToValkey(config);
-            }
-            // Already connected or not a lazy connection
-            return CompletableFuture.completedFuture(null);
+            }).orElse(CompletableFuture.completedFuture(null));
         }
     }
 
