@@ -20,9 +20,9 @@ import (
 type SetOptions struct {
 	// If ConditionalSet is not set the value will be set regardless of prior value existence. If value isn't set because of
 	// the condition, [api.StringCommands.SetWithOptions] will return a zero-value string ("").
-	ConditionalSet constants.ConditionalSet
+	ConditionalSet *constants.ConditionalSet
 	// Value to compare when [SetOptions.ConditionalSet] is set to `OnlyIfEquals`.
-	ComparisonValue string
+	ComparisonValue *string
 	// Set command to return the old value stored at the given key, or a zero-value string ("") if the key did not exist. An
 	// error is returned and [api.StringCommands.SetWithOptions] is aborted if the value stored at key is not a string.
 	// Equivalent to GET in the valkey API.
@@ -32,8 +32,8 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
-func NewSetOptions() *SetOptions {
-	return &SetOptions{}
+func NewSetOptions() SetOptions {
+	return SetOptions{}
 }
 
 // Sets the condition to [SetOptions.ConditionalSet] for setting the value.
@@ -41,9 +41,9 @@ func NewSetOptions() *SetOptions {
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
 // Deprecated: Use [SetOptions.SetOnlyIfExists], [SetOptions.SetOnlyIfDoesNotExist], or [SetOptions.SetOnlyIfEquals] instead.
-func (setOptions *SetOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *SetOptions {
-	setOptions.ConditionalSet = conditionalSet
-	setOptions.ComparisonValue = ""
+func (setOptions SetOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) SetOptions {
+	setOptions.ConditionalSet = &conditionalSet
+	setOptions.ComparisonValue = nil
 	return setOptions
 }
 
@@ -51,9 +51,10 @@ func (setOptions *SetOptions) SetConditionalSet(conditionalSet constants.Conditi
 // will be set if it already exists.
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
-func (setOptions *SetOptions) SetOnlyIfExists() *SetOptions {
-	setOptions.ConditionalSet = constants.OnlyIfExists
-	setOptions.ComparisonValue = ""
+func (setOptions SetOptions) SetOnlyIfExists() SetOptions {
+	condition := constants.OnlyIfExists
+	setOptions.ConditionalSet = &condition
+	setOptions.ComparisonValue = nil
 	return setOptions
 }
 
@@ -61,9 +62,10 @@ func (setOptions *SetOptions) SetOnlyIfExists() *SetOptions {
 // will not be set if it already exists.
 //
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
-func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
-	setOptions.ConditionalSet = constants.OnlyIfDoesNotExist
-	setOptions.ComparisonValue = ""
+func (setOptions SetOptions) SetOnlyIfDoesNotExist() SetOptions {
+	condition := constants.OnlyIfDoesNotExist
+	setOptions.ConditionalSet = &condition
+	setOptions.ComparisonValue = nil
 	return setOptions
 }
 
@@ -73,29 +75,30 @@ func (setOptions *SetOptions) SetOnlyIfDoesNotExist() *SetOptions {
 // This method overrides any previously set [SetOptions.ConditionalSet] and [SetOptions.ComparisonValue].
 //
 // since Valkey 8.1 and above.
-func (setOptions *SetOptions) SetOnlyIfEquals(comparisonValue string) *SetOptions {
-	setOptions.ConditionalSet = constants.OnlyIfEquals
-	setOptions.ComparisonValue = comparisonValue
+func (setOptions SetOptions) SetOnlyIfEquals(comparisonValue string) SetOptions {
+	condition := constants.OnlyIfEquals
+	setOptions.ConditionalSet = &condition
+	setOptions.ComparisonValue = &comparisonValue
 	return setOptions
 }
 
-func (setOptions *SetOptions) SetReturnOldValue(returnOldValue bool) *SetOptions {
+func (setOptions SetOptions) SetReturnOldValue(returnOldValue bool) SetOptions {
 	setOptions.ReturnOldValue = returnOldValue
 	return setOptions
 }
 
-func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
-	setOptions.Expiry = expiry
+func (setOptions SetOptions) SetExpiry(expiry Expiry) SetOptions {
+	setOptions.Expiry = &expiry
 	return setOptions
 }
 
-func (opts *SetOptions) ToArgs() ([]string, error) {
+func (opts SetOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.ConditionalSet != "" {
-		args = append(args, string(opts.ConditionalSet))
-		if opts.ConditionalSet == constants.OnlyIfEquals {
-			args = append(args, opts.ComparisonValue)
+	if opts.ConditionalSet != nil {
+		args = append(args, string(*opts.ConditionalSet))
+		if *opts.ConditionalSet == constants.OnlyIfEquals {
+			args = append(args, *opts.ComparisonValue)
 		}
 	}
 
@@ -128,16 +131,16 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
-func NewGetExOptions() *GetExOptions {
-	return &GetExOptions{}
+func NewGetExOptions() GetExOptions {
+	return GetExOptions{}
 }
 
-func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
-	getExOptions.Expiry = expiry
+func (getExOptions GetExOptions) SetExpiry(expiry Expiry) GetExOptions {
+	getExOptions.Expiry = &expiry
 	return getExOptions
 }
 
-func (opts *GetExOptions) ToArgs() ([]string, error) {
+func (opts GetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
@@ -168,53 +171,53 @@ func isExpiryTypeSeconds(duration time.Duration) bool {
 }
 
 // NewExpiryIn creates a new Expiry with a duration from now
-func NewExpiryIn(duration time.Duration) *Expiry {
+func NewExpiryIn(duration time.Duration) Expiry {
 	dur := int(duration.Milliseconds())
 	expiryType := constants.Milliseconds
 	if isExpiryTypeSeconds(duration) {
 		expiryType = constants.Seconds
 		dur = int(duration.Seconds())
 	}
-	return &Expiry{
+	return Expiry{
 		Type:     expiryType,
 		Duration: uint64(dur),
 	}
 }
 
 // NewExpiryAt creates a new Expiry with a specific timestamp
-func NewExpiryAt(timestamp time.Time) *Expiry {
+func NewExpiryAt(timestamp time.Time) Expiry {
 	expiryType := constants.UnixMilliseconds
 	if isExpiryTypeSeconds(time.Until(timestamp)) {
 		expiryType = constants.UnixSeconds
 	}
-	return &Expiry{
+	return Expiry{
 		Type:      expiryType,
 		Timestamp: timestamp,
 	}
 }
 
 // NewExpiryKeepExisting creates a new Expiry with the existing expiry
-func NewExpiryKeepExisting() *Expiry {
-	return &Expiry{
+func NewExpiryKeepExisting() Expiry {
+	return Expiry{
 		Type: constants.KeepExisting,
 	}
 }
 
 // NewExpiryPersist creates a new Expiry with the persist expiry
-func NewExpiryPersist() *Expiry {
-	return &Expiry{
+func NewExpiryPersist() Expiry {
+	return Expiry{
 		Type: constants.Persist,
 	}
 }
 
 // SetType sets the expiry type (seconds or milliseconds)
-func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
+func (ex Expiry) SetType(expiryType constants.ExpiryType) Expiry {
 	ex.Type = expiryType
 	return ex
 }
 
 // GetTime returns the time in the appropriate unit (seconds or milliseconds)
-func (ex *Expiry) GetTime() uint64 {
+func (ex Expiry) GetTime() uint64 {
 	if ex.Type == constants.UnixSeconds {
 		return uint64(ex.Timestamp.Unix())
 	} else if ex.Type == constants.UnixMilliseconds {
@@ -240,23 +243,23 @@ type LPosOptions struct {
 	MaxLen int64
 }
 
-func NewLPosOptions() *LPosOptions {
-	return &LPosOptions{}
+func NewLPosOptions() LPosOptions {
+	return LPosOptions{}
 }
 
-func (lposOptions *LPosOptions) SetRank(rank int64) *LPosOptions {
+func (lposOptions LPosOptions) SetRank(rank int64) LPosOptions {
 	lposOptions.IsRankSet = true
 	lposOptions.Rank = rank
 	return lposOptions
 }
 
-func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
+func (lposOptions LPosOptions) SetMaxLen(maxLen int64) LPosOptions {
 	lposOptions.IsMaxLenSet = true
 	lposOptions.MaxLen = maxLen
 	return lposOptions
 }
 
-func (opts *LPosOptions) ToArgs() ([]string, error) {
+func (opts LPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	if opts.IsRankSet {
 		args = append(args, constants.RankKeyword, utils.IntToString(opts.Rank))
@@ -276,26 +279,26 @@ func (opts *LPosOptions) ToArgs() ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/restore/
 type RestoreOptions struct {
 	// Subcommand string to replace existing key.
-	replace string
+	replace bool
 	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	absTTL string
+	absTTL bool
 	// It represents the idletime/frequency of object.
 	eviction Eviction
 }
 
-func NewRestoreOptions() *RestoreOptions {
-	return &RestoreOptions{}
+func NewRestoreOptions() RestoreOptions {
+	return RestoreOptions{}
 }
 
 // Custom setter methods to replace existing key.
-func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = constants.ReplaceKeyword
+func (restoreOption RestoreOptions) SetReplace() RestoreOptions {
+	restoreOption.replace = true
 	return restoreOption
 }
 
 // Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
-func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = constants.ABSTTLKeyword
+func (restoreOption RestoreOptions) SetABSTTL() RestoreOptions {
+	restoreOption.absTTL = true
 	return restoreOption
 }
 
@@ -308,20 +311,20 @@ type Eviction struct {
 }
 
 // Custom setter methods set the idletime/frequency of object.
-func (restoreOption *RestoreOptions) SetEviction(evictionType constants.EvictionType, count int64) *RestoreOptions {
+func (restoreOption RestoreOptions) SetEviction(evictionType constants.EvictionType, count int64) RestoreOptions {
 	restoreOption.eviction.Type = evictionType
 	restoreOption.eviction.Count = count
 	return restoreOption
 }
 
-func (opts *RestoreOptions) ToArgs() ([]string, error) {
+func (opts RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.replace != "" {
-		args = append(args, string(opts.replace))
+	if opts.replace {
+		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.absTTL != "" {
-		args = append(args, string(opts.absTTL))
+	if opts.absTTL {
+		args = append(args, string(constants.ABSTTLKeyword))
 	}
 	if (opts.eviction != Eviction{}) {
 		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
@@ -343,10 +346,7 @@ type ClusterInfoOptions struct {
 	*RouteOption
 }
 
-func (opts *InfoOptions) ToArgs() ([]string, error) {
-	if opts == nil {
-		return []string{}, nil
-	}
+func (opts InfoOptions) ToArgs() ([]string, error) {
 	args := make([]string, 0, len(opts.Sections))
 	for _, section := range opts.Sections {
 		args = append(args, string(section))
@@ -361,59 +361,59 @@ type CopyOptions struct {
 	// The REPLACE option removes the destination key before copying the value to it.
 	replace bool
 	// Option allows specifying an alternative logical database index for the destination key
-	dbDestination int64
+	dbDestination *int64
 }
 
-func NewCopyOptions() *CopyOptions {
-	return &CopyOptions{replace: false}
+func NewCopyOptions() CopyOptions {
+	return CopyOptions{replace: false}
 }
 
 // Custom setter methods to removes the destination key before copying the value to it.
-func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
+func (restoreOption CopyOptions) SetReplace() CopyOptions {
 	restoreOption.replace = true
 	return restoreOption
 }
 
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
-func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
-	copyOption.dbDestination = destinationDB
+func (copyOption CopyOptions) SetDBDestination(destinationDB int64) CopyOptions {
+	copyOption.dbDestination = &destinationDB
 	return copyOption
 }
 
-func (opts *CopyOptions) ToArgs() ([]string, error) {
+func (opts CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 	if opts.replace {
 		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.dbDestination >= 0 {
-		args = append(args, "DB", utils.IntToString(opts.dbDestination))
+	if opts.dbDestination != nil {
+		args = append(args, "DB", utils.IntToString(*opts.dbDestination))
 	}
 	return args, err
 }
 
 // Optional arguments for `ZPopMin` and `ZPopMax` commands.
 type ZPopOptions struct {
-	count int64
+	count *int64
 }
 
-func NewZPopOptions() *ZPopOptions {
-	return &ZPopOptions{}
+func NewZPopOptions() ZPopOptions {
+	return ZPopOptions{}
 }
 
 // The maximum number of popped elements. If not specified, pops one member.
-func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
-	opts.count = count
+func (opts ZPopOptions) SetCount(count int64) ZPopOptions {
+	opts.count = &count
 	return opts
 }
 
 // `ZPopMax/Min` don't use the COUNT keyword, only ZMPop will use .
-func (opts *ZPopOptions) ToArgs(withKeyword bool) ([]string, error) {
-	if opts.count <= 0 {
+func (opts ZPopOptions) ToArgs(withKeyword bool) ([]string, error) {
+	if opts.count == nil {
 		return []string{}, nil
 	}
 	if withKeyword {
-		return []string{"COUNT", strconv.FormatInt(opts.count, 10)}, nil
+		return []string{"COUNT", strconv.FormatInt(*opts.count, 10)}, nil
 	}
-	return []string{strconv.FormatInt(opts.count, 10)}, nil
+	return []string{strconv.FormatInt(*opts.count, 10)}, nil
 }

@@ -595,7 +595,7 @@ func ExampleClient_SScanWithOptions() {
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
+	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -609,7 +609,7 @@ func ExampleClusterClient_SScanWithOptions() {
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
 	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
+	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -189,7 +189,7 @@ func ExampleClient_LolwutWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	// Test with only version
 	opts := options.NewLolwutOptions(6)
-	result, err := client.LolwutWithOptions(context.Background(), *opts)
+	result, err := client.LolwutWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {
@@ -198,7 +198,7 @@ func ExampleClient_LolwutWithOptions() {
 
 	// Test with version and arguments
 	opts = options.NewLolwutOptions(6).SetArgs([]int{10, 20})
-	result, err = client.LolwutWithOptions(context.Background(), *opts)
+	result, err = client.LolwutWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	} else {

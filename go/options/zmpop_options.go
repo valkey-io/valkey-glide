@@ -9,26 +9,24 @@ import (
 
 // Optional arguments for `ZMPop` and `BZMPop` in [SortedSetCommands]
 type ZMPopOptions struct {
-	count      int64
-	countIsSet bool
+	count *int64
 }
 
-func NewZMPopOptions() *ZMPopOptions {
-	return &ZMPopOptions{}
+func NewZMPopOptions() ZMPopOptions {
+	return ZMPopOptions{nil}
 }
 
 // Set the count.
-func (zmpo *ZMPopOptions) SetCount(count int64) *ZMPopOptions {
-	zmpo.count = count
-	zmpo.countIsSet = true
+func (zmpo ZMPopOptions) SetCount(count int64) ZMPopOptions {
+	zmpo.count = &count
 	return zmpo
 }
 
-func (zmpo *ZMPopOptions) ToArgs() ([]string, error) {
+func (zmpo ZMPopOptions) ToArgs() ([]string, error) {
 	var args []string
 
-	if zmpo.countIsSet {
-		args = append(args, constants.CountKeyword, utils.IntToString(zmpo.count))
+	if zmpo.count != nil {
+		args = append(args, constants.CountKeyword, utils.IntToString(*zmpo.count))
 	}
 
 	return args, nil

@@ -13,13 +13,6 @@ type ClusterPingOptions struct {
 	*RouteOption
 }
 
-func (opts *PingOptions) ToArgs() ([]string, error) {
-	if opts == nil {
-		return []string{}, nil
-	}
-	args := []string{}
-	if opts.Message != "" {
-		args = append(args, opts.Message)
-	}
-	return args, nil
+func (opts PingOptions) ToArgs() ([]string, error) {
+	return []string{opts.Message}, nil
 }

@@ -29,7 +29,7 @@ type GeoCoordOrigin struct {
 }
 
 // Converts the [GeoCoordOrigin] to the arguments for the `GeoSearch` command
-func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
+func (o GeoCoordOrigin) ToArgs() ([]string, error) {
 	return []string{
 		constants.GeoCoordOriginAPIKeyword,
 		utils.FloatToString(o.GeospatialData.Longitude),
@@ -43,7 +43,7 @@ type GeoMemberOrigin struct {
 }
 
 // Converts the [GeoMemberOrigin] to the arguments for the `GeoSearch` command
-func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
+func (o GeoMemberOrigin) ToArgs() ([]string, error) {
 	return []string{
 		constants.GeoMemberOriginAPIKeyword,
 		o.Member,
@@ -60,8 +60,8 @@ type GeoSearchShape struct {
 }
 
 // Creates a new [GeoSearchShape] for a circle search by radius
-func NewCircleSearchShape(radius float64, unit constants.GeoUnit) *GeoSearchShape {
-	return &GeoSearchShape{
+func NewCircleSearchShape(radius float64, unit constants.GeoUnit) GeoSearchShape {
+	return GeoSearchShape{
 		shape:  constants.BYRADIUS,
 		radius: radius,
 		width:  0,
@@ -71,8 +71,8 @@ func NewCircleSearchShape(radius float64, unit constants.GeoUnit) *GeoSearchShap
 }
 
 // Creates a new [GeoSearchShape] for a box search by width and height
-func NewBoxSearchShape(width float64, height float64, unit constants.GeoUnit) *GeoSearchShape {
-	return &GeoSearchShape{
+func NewBoxSearchShape(width float64, height float64, unit constants.GeoUnit) GeoSearchShape {
+	return GeoSearchShape{
 		shape:  constants.BYBOX,
 		width:  width,
 		height: height,
@@ -81,7 +81,7 @@ func NewBoxSearchShape(width float64, height float64, unit constants.GeoUnit) *G
 }
 
 // Converts the [GeoSearchShape] to the arguments for the `GeoSearch` command
-func (o *GeoSearchShape) ToArgs() ([]string, error) {
+func (o GeoSearchShape) ToArgs() ([]string, error) {
 	switch o.shape {
 	case constants.BYRADIUS:
 		return []string{string(o.shape), utils.FloatToString(o.radius), string(o.unit)}, nil
@@ -108,8 +108,8 @@ type GeoSearchInfoOptions struct {
 }
 
 // Creates a new [GeoSearchInfoOptions] with the default options
-func NewGeoSearchInfoOptions() *GeoSearchInfoOptions {
-	return &GeoSearchInfoOptions{
+func NewGeoSearchInfoOptions() GeoSearchInfoOptions {
+	return GeoSearchInfoOptions{
 		WithDist:  false,
 		WithCoord: false,
 		WithHash:  false,
@@ -119,25 +119,25 @@ func NewGeoSearchInfoOptions() *GeoSearchInfoOptions {
 // WITHDIST: GeoSearch also return the distance of the returned items from the specified center point.
 //
 // The distance is returned in the same unit as specified for the `searchBy` argument.
-func (o *GeoSearchInfoOptions) SetWithDist(withDist bool) *GeoSearchInfoOptions {
+func (o GeoSearchInfoOptions) SetWithDist(withDist bool) GeoSearchInfoOptions {
 	o.WithDist = withDist
 	return o
 }
 
 // WITHCOORD: GeoSearch also return the coordinate of the returned items.
-func (o *GeoSearchInfoOptions) SetWithCoord(withCoord bool) *GeoSearchInfoOptions {
+func (o GeoSearchInfoOptions) SetWithCoord(withCoord bool) GeoSearchInfoOptions {
 	o.WithCoord = withCoord
 	return o
 }
 
 // WITHHASH: GeoSearch also return the geohash of the returned items.
-func (o *GeoSearchInfoOptions) SetWithHash(withHash bool) *GeoSearchInfoOptions {
+func (o GeoSearchInfoOptions) SetWithHash(withHash bool) GeoSearchInfoOptions {
 	o.WithHash = withHash
 	return o
 }
 
 // Returns the arguments for the `GeoSearch` command
-func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
+func (o GeoSearchInfoOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if o.WithDist {
@@ -154,53 +154,50 @@ func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `GeoSearch` that contains up to 2 optional inputs
 type GeoSearchResultOptions struct {
-	sortOrder  OrderBy
-	count      int64
-	countIsSet bool
-	isAny      bool
+	sortOrder *OrderBy
+	count     *int64
+	isAny     bool
 }
 
-func NewGeoSearchResultOptions() *GeoSearchResultOptions {
-	return &GeoSearchResultOptions{
-		sortOrder:  "",
-		count:      0,
-		countIsSet: false,
-		isAny:      false,
+func NewGeoSearchResultOptions() GeoSearchResultOptions {
+	return GeoSearchResultOptions{
+		sortOrder: nil,
+		count:     nil,
+		isAny:     false,
 	}
 }
 
 // Optional argument for `GeoSearch` that sets the query's order to sort the results by:
 // - ASC: Sort returned items from the nearest to the farthest, relative to the center point.
 // - DESC: Sort returned items from the farthest to the nearest, relative to the center point.
-func (o *GeoSearchResultOptions) SetSortOrder(sortOrder OrderBy) *GeoSearchResultOptions {
-	o.sortOrder = sortOrder
+func (o GeoSearchResultOptions) SetSortOrder(sortOrder OrderBy) GeoSearchResultOptions {
+	o.sortOrder = &sortOrder
 	return o
 }
 
 // Optional argument for `GeoSearch` that sets the number of results to return.
-func (o *GeoSearchResultOptions) SetCount(count int64) *GeoSearchResultOptions {
-	o.count = count
-	o.countIsSet = true
+func (o GeoSearchResultOptions) SetCount(count int64) GeoSearchResultOptions {
+	o.count = &count
 	return o
 }
 
 // Optional argument for `GeoSearch` that sets the query to return any results.
-func (o *GeoSearchResultOptions) SetIsAny(isAny bool) *GeoSearchResultOptions {
+func (o GeoSearchResultOptions) SetIsAny(isAny bool) GeoSearchResultOptions {
 	o.isAny = isAny
 	return o
 }
 
 // Converts the [GeoSearchResultOptions] to a string array of arguments for the `GeoSearch` command
-func (o *GeoSearchResultOptions) ToArgs() ([]string, error) {
+func (o GeoSearchResultOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	if o.sortOrder != "" {
-		args = append(args, string(o.sortOrder))
+	if o.sortOrder != nil {
+		args = append(args, string(*o.sortOrder))
 	}
 
-	if o.countIsSet {
+	if o.count != nil {
 		args = append(args, constants.CountKeyword)
-		args = append(args, utils.IntToString(o.count))
+		args = append(args, utils.IntToString(*o.count))
 
 		if o.isAny {
 			args = append(args, "ANY")
@@ -217,20 +214,20 @@ type GeoSearchStoreInfoOptions struct {
 	StoreDist bool
 }
 
-func NewGeoSearchStoreInfoOptions() *GeoSearchStoreInfoOptions {
-	return &GeoSearchStoreInfoOptions{
+func NewGeoSearchStoreInfoOptions() GeoSearchStoreInfoOptions {
+	return GeoSearchStoreInfoOptions{
 		StoreDist: false,
 	}
 }
 
 // Optional argument for `GeoSearchStore` that sets the query to store the distance of the returned items.
-func (o *GeoSearchStoreInfoOptions) SetStoreDist(storeDist bool) *GeoSearchStoreInfoOptions {
+func (o GeoSearchStoreInfoOptions) SetStoreDist(storeDist bool) GeoSearchStoreInfoOptions {
 	o.StoreDist = storeDist
 	return o
 }
 
 // Returns the arguments for the `GeoSearchStore` command
-func (o *GeoSearchStoreInfoOptions) ToArgs() ([]string, error) {
+func (o GeoSearchStoreInfoOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if o.StoreDist {

@@ -39,7 +39,7 @@ func ExampleClient_SetWithOptions() {
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiryIn(5 * time.Second))
-	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
+	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -53,7 +53,7 @@ func ExampleClusterClient_SetWithOptions() {
 
 	options := options.NewSetOptions().
 		SetExpiry(options.NewExpiryIn(5 * time.Second))
-	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
+	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -152,7 +152,7 @@ func ExampleClient_GetExWithOptions() {
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiryIn(5 * time.Second))
-	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
+	result, err := client.GetExWithOptions(context.Background(), "my_key", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -171,7 +171,7 @@ func ExampleClusterClient_GetExWithOptions() {
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
 		SetExpiry(options.NewExpiryIn(5 * time.Second))
-	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
+	result, err := client.GetExWithOptions(context.Background(), "my_key", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -704,7 +704,7 @@ func ExampleClient_LCSWithOptions() {
 
 	// Basic LCS IDX without additional options
 	opts := options.NewLCSIdxOptions()
-	result1, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *opts)
+	result1, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -713,7 +713,7 @@ func ExampleClient_LCSWithOptions() {
 	// LCS IDX with MINMATCHLEN = 4
 	optsWithMin := options.NewLCSIdxOptions()
 	optsWithMin.SetMinMatchLen(4)
-	result2, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *optsWithMin)
+	result2, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", optsWithMin)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -735,7 +735,7 @@ func ExampleClusterClient_LCSWithOptions() {
 	opts := options.NewLCSIdxOptions()
 	opts.SetMinMatchLen(2)
 	opts.SetWithMatchLen(true)
-	result, err := client.LCSWithOptions(context.Background(), "{my_key}1", "{my_key}2", *opts)
+	result, err := client.LCSWithOptions(context.Background(), "{my_key}1", "{my_key}2", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

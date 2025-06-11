@@ -92,7 +92,7 @@ func (suite *GlideTestSuite) TestContext_CancelWithScan() {
 			SetCount(10)
 
 		// Use the correct API
-		_, _, err := clusterClient.ScanWithOptions(ctx, *cursor, *scanOpts)
+		_, _, err := clusterClient.ScanWithOptions(ctx, cursor, scanOpts)
 
 		// Verify that the command fails with context cancellation error
 		assert.Error(suite.T(), err)

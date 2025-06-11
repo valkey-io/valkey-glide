@@ -2512,7 +2512,7 @@ func (b *BaseBatch[T]) RenameNX(key string, newKey string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
-	return b.XAddWithOptions(key, values, *options.NewXAddOptions())
+	return b.XAddWithOptions(key, values, options.NewXAddOptions())
 }
 
 // Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
@@ -2566,7 +2566,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
-	return b.XReadWithOptions(keysAndIds, *options.NewXReadOptions())
+	return b.XReadWithOptions(keysAndIds, options.NewXReadOptions())
 }
 
 // Reads entries from the given streams with options.
@@ -2609,7 +2609,7 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[string]string) *T {
-	return b.XReadGroupWithOptions(group, consumer, keysAndIds, *options.NewXReadGroupOptions())
+	return b.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
 }
 
 // Reads entries from the given streams owned by a consumer group with options.
@@ -2752,7 +2752,7 @@ func (b *BaseBatch[T]) ZAddIncrWithOptions(key string, member string, increment 
 	return b.zAddIncrBase(key, incrOpts)
 }
 
-func (b *BaseBatch[T]) zAddIncrBase(key string, opts *options.ZAddOptions) *T {
+func (b *BaseBatch[T]) zAddIncrBase(key string, opts options.ZAddOptions) *T {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return b.addError("ZAddIncrWithOptions", err)
@@ -3332,7 +3332,7 @@ func (b *BaseBatch[T]) XLen(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/xautoclaim/
 func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, minIdleTime time.Duration, start string) *T {
-	return b.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
+	return b.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -3416,7 +3416,7 @@ func (b *BaseBatch[T]) XAutoClaimJustId(
 	minIdleTime time.Duration,
 	start string,
 ) *T {
-	return b.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
+	return b.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -3613,7 +3613,7 @@ func (b *BaseBatch[T]) XPendingWithOptions(key string, group string, opts option
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (b *BaseBatch[T]) XGroupCreate(key string, group string, id string) *T {
-	return b.XGroupCreateWithOptions(key, group, id, *options.NewXGroupCreateOptions())
+	return b.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
 }
 
 // Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
@@ -3656,7 +3656,7 @@ func (b *BaseBatch[T]) XGroupCreateWithOptions(key string, group string, id stri
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (b *BaseBatch[T]) Restore(key string, ttl time.Duration, value string) *T {
-	return b.RestoreWithOptions(key, ttl, value, *options.NewRestoreOptions())
+	return b.RestoreWithOptions(key, ttl, value, options.NewRestoreOptions())
 }
 
 // Creates a key associated with a value that is obtained by
@@ -3762,7 +3762,7 @@ func (b *BaseBatch[T]) XGroupDestroy(key string, group string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (b *BaseBatch[T]) XGroupSetId(key string, group string, id string) *T {
-	return b.XGroupSetIdWithOptions(key, group, id, *options.NewXGroupSetIdOptionsOptions())
+	return b.XGroupSetIdWithOptions(key, group, id, options.NewXGroupSetIdOptionsOptions())
 }
 
 // Sets the last delivered ID for a consumer group with options.
@@ -4382,7 +4382,7 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
-	return b.XClaimWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
+	return b.XClaimWithOptions(key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message with options.
@@ -4440,7 +4440,7 @@ func (b *BaseBatch[T]) XClaimWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaimJustId(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
-	return b.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
+	return b.XClaimJustIdWithOptions(key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -4599,7 +4599,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
 func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end options.StreamBoundary) *T {
-	return b.XRangeWithOptions(key, start, end, *options.NewXRangeOptions())
+	return b.XRangeWithOptions(key, start, end, options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs with options.
@@ -4660,7 +4660,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end options.StreamBoundary) *T {
-	return b.XRevRangeWithOptions(key, start, end, *options.NewXRangeOptions())
+	return b.XRevRangeWithOptions(key, start, end, options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs in reverse order with options.
@@ -4952,7 +4952,7 @@ func (b *BaseBatch[T]) ZInterStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) *T {
-	return b.ZInterStoreWithOptions(destination, keysOrWeightedKeys, *options.NewZInterOptions())
+	return b.ZInterStoreWithOptions(destination, keysOrWeightedKeys, options.NewZInterOptions())
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -5631,7 +5631,7 @@ func (b *BaseBatch[T]) GeoSearch(
 	searchFrom options.GeoSearchOrigin,
 	searchByShape options.GeoSearchShape,
 ) *T {
-	return b.GeoSearchWithResultOptions(key, searchFrom, searchByShape, *options.NewGeoSearchResultOptions())
+	return b.GeoSearchWithResultOptions(key, searchFrom, searchByShape, options.NewGeoSearchResultOptions())
 }
 
 // Returns the members of a sorted set populated with geospatial information using [GeoAdd],
@@ -5724,7 +5724,7 @@ func (b *BaseBatch[T]) GeoSearchWithInfoOptions(
 		key,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
 }
@@ -5828,8 +5828,8 @@ func (b *BaseBatch[T]) GeoSearchStore(
 		sourceKey,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
-		*options.NewGeoSearchStoreInfoOptions(),
+		options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchStoreInfoOptions(),
 	)
 }
 
@@ -5874,7 +5874,7 @@ func (b *BaseBatch[T]) GeoSearchStoreWithResultOptions(
 		searchFrom,
 		searchByShape,
 		resultOptions,
-		*options.NewGeoSearchStoreInfoOptions(),
+		options.NewGeoSearchStoreInfoOptions(),
 	)
 }
 
@@ -5918,7 +5918,7 @@ func (b *BaseBatch[T]) GeoSearchStoreWithInfoOptions(
 		sourceKey,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
 }
@@ -6519,7 +6519,7 @@ func (b *BaseBatch[T]) Echo(message string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (b *BaseBatch[T]) Ping() *T {
-	return b.PingWithOptions(options.PingOptions{})
+	return b.addCmdAndTypeChecker(C.Ping, []string{}, reflect.String, false)
 }
 
 // Pings the server.

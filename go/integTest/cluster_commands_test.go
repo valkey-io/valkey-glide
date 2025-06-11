@@ -337,7 +337,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	_, err = client.MSet(context.Background(), keysToSet)
 	assert.NoError(t, err)
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	allKeys := make([]string, 0, len(keysToSet))
 	var keys []string
 
@@ -367,7 +367,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 		assert.NoError(t, err)
 	}
 
-	cursor = *options.NewClusterScanCursor()
+	cursor = options.NewClusterScanCursor()
 	allKeys = make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
@@ -400,13 +400,13 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	_, err = client.MSet(context.Background(), keysToSet)
 	assert.NoError(t, err)
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	opts := options.NewClusterScanOptions().SetCount(10)
 	allKeys := []string{}
 	var keys []string
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -427,12 +427,12 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	_, err = client.MSet(context.Background(), keysToSet)
 	assert.NoError(t, err)
 
-	cursor = *options.NewClusterScanCursor()
+	cursor = options.NewClusterScanCursor()
 	opts = options.NewClusterScanOptions().SetCount(10).SetMatch("*key*")
 	matchedKeys := []string{}
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -455,12 +455,12 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	_, err = client.SAdd(context.Background(), "thisIsASet", []string{"someValue"})
 	assert.NoError(t, err)
 
-	cursor = *options.NewClusterScanCursor()
+	cursor = options.NewClusterScanCursor()
 	opts = options.NewClusterScanOptions().SetType(constants.ObjectTypeSet)
 	matchedTypeKeys := []string{}
 
 	for !cursor.HasFinished() {
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -494,13 +494,13 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithNonUTF8Pattern() {
 	_, err = client.MSet(context.Background(), keysToSet)
 	assert.NoError(t, err)
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	opts := options.NewClusterScanOptions().SetMatch("key\xc0\xc1-*")
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -542,13 +542,13 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	opts := options.NewClusterScanOptions().SetMatch("key-*").SetType(constants.ObjectTypeString)
 	allKeys := make([]string, 0, 100)
 
 	for !cursor.HasFinished() {
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, opts)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -582,7 +582,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	allKeys := make([]string, 0, 100)
 	successfulScans := 0
 
@@ -591,7 +591,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		keysOf100 := []string{}
 
 		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *options.NewClusterScanOptions().SetCount(1))
+		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, options.NewClusterScanOptions().SetCount(1))
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
 			break                  // prevent infinite loop
@@ -606,7 +606,7 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		cursor, keys, err = client.ScanWithOptions(
 			context.Background(),
 			cursor,
-			*options.NewClusterScanOptions().SetCount(100),
+			options.NewClusterScanOptions().SetCount(100),
 		)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
@@ -649,7 +649,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
@@ -657,7 +657,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 		cursor, keys, err = client.ScanWithOptions(
 			context.Background(),
 			cursor,
-			*options.NewClusterScanOptions().SetMatch("key-*"),
+			options.NewClusterScanOptions().SetMatch("key-*"),
 		)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
@@ -726,14 +726,14 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		assert.NoError(t, err)
 	}
 
-	cursor := *options.NewClusterScanCursor()
+	cursor := options.NewClusterScanCursor()
 	allKeys := []string{}
 
 	for !cursor.HasFinished() {
 		var keys []string
 		cursor, keys, err = client.ScanWithOptions(context.Background(),
 			cursor,
-			*options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
+			options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
 		)
 		if err != nil {
 			assert.NoError(t, err) // Use this to print error statement
@@ -1140,7 +1140,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	options := options.ClusterLolwutOptions{
 		LolwutOptions: &options.LolwutOptions{
 			Version: 6,
-			Args:    &[]int{10, 20},
+			Args:    []int{10, 20},
 		},
 		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
@@ -2292,14 +2292,14 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	// Create ClusterScriptOptions for setting key1
 	scriptOptions := options.NewScriptOptions()
 	scriptOptions.WithKeys([]string{key1}).WithArgs([]string{"value1"})
-	setResponse, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions)
+	setResponse, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, scriptOptions)
 	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", setResponse)
 
 	// Set another key with the same script
 	scriptOptions2 := options.NewScriptOptions()
 	scriptOptions2.WithKeys([]string{key2}).WithArgs([]string{"value2"})
-	setResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, *scriptOptions2)
+	setResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script2, scriptOptions2)
 	assert.Equal(suite.T(), "OK", setResponse2)
 	suite.NoError(err)
 	script2.Close()
@@ -2310,14 +2310,14 @@ func (suite *GlideTestSuite) TestInvokeScript() {
 	// Create ClusterScriptOptions for getting key1
 	scriptOptions3 := options.NewScriptOptions()
 	scriptOptions3.WithKeys([]string{key1})
-	getResponse1, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions3)
+	getResponse1, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, scriptOptions3)
 	suite.NoError(err)
 	assert.Equal(suite.T(), "value1", getResponse1)
 
 	// Get another key's value
 	scriptOptions4 := options.NewScriptOptions()
 	scriptOptions4.WithKeys([]string{key2})
-	getResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, *scriptOptions4)
+	getResponse2, err := clusterClient.InvokeScriptWithOptions(context.Background(), *script3, scriptOptions4)
 	assert.Equal(suite.T(), "value2", getResponse2)
 	suite.NoError(err)
 	script3.Close()
@@ -2422,10 +2422,10 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 	assert.Equal(suite.T(), []bool{true}, result)
 
 	// Create ScriptFlushOptions with default mode (SYNC) and route
-	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(&routeOption)
+	scriptFlushOptions := options.NewScriptFlushOptions().WithRoute(routeOption)
 
 	// Flush the script cache
-	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	flushResult, err = client.ScriptFlushWithOptions(context.Background(), scriptFlushOptions)
 	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
@@ -2441,9 +2441,9 @@ func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
 	// Create ScriptFlushOptions with ASYNC mode and route
 	scriptFlushOptions = options.NewScriptFlushOptions().
 		WithMode(options.ASYNC).
-		WithRoute(&routeOption)
+		WithRoute(routeOption)
 
-	flushResult, err = client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	flushResult, err = client.ScriptFlushWithOptions(context.Background(), scriptFlushOptions)
 	suite.NoError(err)
 	assert.Equal(suite.T(), "OK", flushResult)
 
@@ -2523,7 +2523,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 	code := CreateLongRunningLuaScript(7, false)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
+	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, options.NewScriptOptions().WithKeys([]string{key}))
 
 	time.Sleep(3 * time.Second)
 
@@ -2563,7 +2563,7 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 	code := CreateLongRunningLuaScript(7, false)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, *options.NewScriptOptions().WithKeys([]string{key}))
+	go invokeClient.InvokeScriptWithOptions(context.Background(), *script, options.NewScriptOptions().WithKeys([]string{key}))
 
 	time.Sleep(1 * time.Second)
 
@@ -2584,9 +2584,9 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
 func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
 	_, err := suite.defaultClusterClient().ExecWithOptions(
 		context.Background(),
-		*pipeline.NewClusterBatch(true),
+		pipeline.NewClusterBatch(true),
 		true,
-		*pipeline.NewClusterBatchOptions().WithRetryStrategy(*pipeline.NewClusterBatchRetryStrategy()),
+		pipeline.NewClusterBatchOptions().WithRetryStrategy(pipeline.NewClusterBatchRetryStrategy()),
 	)
 	suite.Error(err)
 }
@@ -2601,45 +2601,45 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 
 		res, err := client.ExecWithOptions(
 			context.Background(),
-			*batch,
+			batch,
 			true,
-			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypePrimary, "abc")),
+			opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypePrimary, "abc")),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
 
 		res, err = client.ExecWithOptions(
 			context.Background(),
-			*batch,
+			batch,
 			true,
-			*opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypeReplica, "abc")),
+			opts.WithRoute(config.NewSlotKeyRoute(config.SlotTypeReplica, "abc")),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
 
 		res, err = client.ExecWithOptions(
 			context.Background(),
-			*batch,
+			batch,
 			true,
-			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42)),
+			opts.WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42)),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "role:master", "isAtomic = %v", isAtomic)
 
 		res, err = client.ExecWithOptions(
 			context.Background(),
-			*batch,
+			batch,
 			true,
-			*opts.WithRoute(config.NewSlotIdRoute(config.SlotTypeReplica, 42)),
+			opts.WithRoute(config.NewSlotIdRoute(config.SlotTypeReplica, 42)),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "role:slave", "isAtomic = %v", isAtomic)
 
 		res, err = client.ExecWithOptions(
 			context.Background(),
-			*batch,
+			batch,
 			true,
-			*opts.WithRoute(config.NewByAddressRoute(suite.clusterHosts[0].Host, int32(suite.clusterHosts[0].Port))),
+			opts.WithRoute(config.NewByAddressRoute(suite.clusterHosts[0].Host, int32(suite.clusterHosts[0].Port))),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)

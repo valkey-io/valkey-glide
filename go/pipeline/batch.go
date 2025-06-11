@@ -58,8 +58,8 @@ type ClusterBatchRetryStrategy struct {
 // Returns:
 //
 //	A new ClusterBatchRetryStrategy instance.
-func NewClusterBatchRetryStrategy() *ClusterBatchRetryStrategy {
-	return &ClusterBatchRetryStrategy{false, false}
+func NewClusterBatchRetryStrategy() ClusterBatchRetryStrategy {
+	return ClusterBatchRetryStrategy{false, false}
 }
 
 // WithRetryServerError configures whether to retry on server errors.
@@ -71,7 +71,7 @@ func NewClusterBatchRetryStrategy() *ClusterBatchRetryStrategy {
 // Returns:
 //
 //	The updated ClusterBatchRetryStrategy instance.
-func (cbrs *ClusterBatchRetryStrategy) WithRetryServerError(retryServerError bool) *ClusterBatchRetryStrategy {
+func (cbrs ClusterBatchRetryStrategy) WithRetryServerError(retryServerError bool) ClusterBatchRetryStrategy {
 	cbrs.RetryServerError = retryServerError
 	return cbrs
 }
@@ -85,7 +85,7 @@ func (cbrs *ClusterBatchRetryStrategy) WithRetryServerError(retryServerError boo
 // Returns:
 //
 //	The updated ClusterBatchRetryStrategy instance.
-func (cbrs *ClusterBatchRetryStrategy) WithRetryConnectionError(retryConnectionError bool) *ClusterBatchRetryStrategy {
+func (cbrs ClusterBatchRetryStrategy) WithRetryConnectionError(retryConnectionError bool) ClusterBatchRetryStrategy {
 	cbrs.RetryConnectionError = retryConnectionError
 	return cbrs
 }
@@ -95,8 +95,8 @@ func (cbrs *ClusterBatchRetryStrategy) WithRetryConnectionError(retryConnectionE
 // Returns:
 //
 //	A new StandaloneBatchOptions instance.
-func NewStandaloneBatchOptions() *StandaloneBatchOptions {
-	return &StandaloneBatchOptions{}
+func NewStandaloneBatchOptions() StandaloneBatchOptions {
+	return StandaloneBatchOptions{}
 }
 
 // TODO support duration
@@ -110,7 +110,7 @@ func NewStandaloneBatchOptions() *StandaloneBatchOptions {
 // Returns:
 //
 //	The updated StandaloneBatchOptions instance.
-func (sbo *StandaloneBatchOptions) WithTimeout(timeout uint32) *StandaloneBatchOptions {
+func (sbo StandaloneBatchOptions) WithTimeout(timeout uint32) StandaloneBatchOptions {
 	sbo.Timeout = &timeout
 	return sbo
 }
@@ -120,8 +120,8 @@ func (sbo *StandaloneBatchOptions) WithTimeout(timeout uint32) *StandaloneBatchO
 // Returns:
 //
 //	A new ClusterBatchOptions instance.
-func NewClusterBatchOptions() *ClusterBatchOptions {
-	return &ClusterBatchOptions{}
+func NewClusterBatchOptions() ClusterBatchOptions {
+	return ClusterBatchOptions{}
 }
 
 // WithTimeout sets the timeout for the batch execution.
@@ -133,7 +133,7 @@ func NewClusterBatchOptions() *ClusterBatchOptions {
 // Returns:
 //
 //	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithTimeout(timeout uint32) *ClusterBatchOptions {
+func (cbo ClusterBatchOptions) WithTimeout(timeout uint32) ClusterBatchOptions {
 	cbo.Timeout = &timeout
 	return cbo
 }
@@ -147,7 +147,7 @@ func (cbo *ClusterBatchOptions) WithTimeout(timeout uint32) *ClusterBatchOptions
 // Returns:
 //
 //	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithRoute(route config.SingleNodeRoute) *ClusterBatchOptions {
+func (cbo ClusterBatchOptions) WithRoute(route config.SingleNodeRoute) ClusterBatchOptions {
 	cbo.Route = route
 	return cbo
 }
@@ -161,7 +161,7 @@ func (cbo *ClusterBatchOptions) WithRoute(route config.SingleNodeRoute) *Cluster
 // Returns:
 //
 //	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetryStrategy) *ClusterBatchOptions {
+func (cbo ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetryStrategy) ClusterBatchOptions {
 	cbo.RetryStrategy = &retryStrategy
 	return cbo
 }

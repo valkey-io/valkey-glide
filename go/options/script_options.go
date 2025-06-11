@@ -18,32 +18,32 @@ type ScriptOptions struct {
 }
 
 // NewScriptOptions creates a new ScriptOptions with default values
-func NewScriptOptions() *ScriptOptions {
-	return &ScriptOptions{
+func NewScriptOptions() ScriptOptions {
+	return ScriptOptions{
 		keys: []string{},
 		args: []string{},
 	}
 }
 
 // WithKeys sets the keys for the script
-func (o *ScriptOptions) WithKeys(keys []string) *ScriptOptions {
+func (o ScriptOptions) WithKeys(keys []string) ScriptOptions {
 	o.keys = keys
 	return o
 }
 
 // WithArgs sets the arguments for the script
-func (o *ScriptOptions) WithArgs(args []string) *ScriptOptions {
+func (o ScriptOptions) WithArgs(args []string) ScriptOptions {
 	o.args = args
 	return o
 }
 
 // GetKeys returns the keys for the script
-func (o *ScriptOptions) GetKeys() []string {
+func (o ScriptOptions) GetKeys() []string {
 	return o.keys
 }
 
 // GetArgs returns the arguments for the script
-func (o *ScriptOptions) GetArgs() []string {
+func (o ScriptOptions) GetArgs() []string {
 	return o.args
 }
 
@@ -53,20 +53,20 @@ type ScriptArgOptions struct {
 }
 
 // NewScriptArgOptions creates a new ScriptArgOptions with default values
-func NewScriptArgOptions() *ScriptArgOptions {
-	return &ScriptArgOptions{
+func NewScriptArgOptions() ScriptArgOptions {
+	return ScriptArgOptions{
 		args: []string{},
 	}
 }
 
 // WithArgs sets the arguments for the script
-func (o *ScriptArgOptions) WithArgs(args []string) *ScriptArgOptions {
+func (o ScriptArgOptions) WithArgs(args []string) ScriptArgOptions {
 	o.args = args
 	return o
 }
 
 // GetArgs returns the arguments for the script
-func (o *ScriptArgOptions) GetArgs() []string {
+func (o ScriptArgOptions) GetArgs() []string {
 	return o.args
 }
 
@@ -76,22 +76,22 @@ type ClusterScriptOptions struct {
 }
 
 // NewClusterScriptOptions creates a new ClusterScriptOptions with default values
-func NewClusterScriptOptions() *ClusterScriptOptions {
-	return &ClusterScriptOptions{
-		ScriptArgOptions: NewScriptArgOptions(),
+func NewClusterScriptOptions() ClusterScriptOptions {
+	return ClusterScriptOptions{
+		ScriptArgOptions: &ScriptArgOptions{},
 		RouteOption:      &RouteOption{},
 	}
 }
 
 // WithRouteOptions sets the route options for the cluster script
-func (o *ClusterScriptOptions) WithRouteOptions(routeOption *RouteOption) *ClusterScriptOptions {
-	o.RouteOption = routeOption
+func (o ClusterScriptOptions) WithRouteOptions(routeOption RouteOption) ClusterScriptOptions {
+	o.RouteOption = &routeOption
 	return o
 }
 
 // WithScriptArgOptions sets the script arg options for the cluster script
-func (o *ClusterScriptOptions) WithScriptArgOptions(scriptArgOptions *ScriptArgOptions) *ClusterScriptOptions {
-	o.ScriptArgOptions = scriptArgOptions
+func (o ClusterScriptOptions) WithScriptArgOptions(scriptArgOptions ScriptArgOptions) ClusterScriptOptions {
+	o.ScriptArgOptions = &scriptArgOptions
 	return o
 }
 
@@ -175,26 +175,26 @@ func dropScript(hash string) error {
 
 // ScriptFlushOptions represents options for script flush operations
 type ScriptFlushOptions struct {
-	Mode  FlushMode
+	Mode  *FlushMode
 	Route *RouteOption
 }
 
 // NewScriptFlushOptions creates a new ScriptFlushOptions with default values
-func NewScriptFlushOptions() *ScriptFlushOptions {
-	return &ScriptFlushOptions{
-		Mode:  "",
+func NewScriptFlushOptions() ScriptFlushOptions {
+	return ScriptFlushOptions{
+		Mode:  nil,
 		Route: &RouteOption{},
 	}
 }
 
 // WithMode sets the flush mode for the script flush operation
-func (o *ScriptFlushOptions) WithMode(mode FlushMode) *ScriptFlushOptions {
-	o.Mode = mode
+func (o ScriptFlushOptions) WithMode(mode FlushMode) ScriptFlushOptions {
+	o.Mode = &mode
 	return o
 }
 
 // WithRoute sets the route option for the script flush operation
-func (o *ScriptFlushOptions) WithRoute(route *RouteOption) *ScriptFlushOptions {
-	o.Route = route
+func (o ScriptFlushOptions) WithRoute(route RouteOption) ScriptFlushOptions {
+	o.Route = &route
 	return o
 }

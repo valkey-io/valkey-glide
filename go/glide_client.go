@@ -89,7 +89,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 //
 // [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
-func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
+func (client *Client) Exec(ctx context.Context, batch *pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
 }
 
@@ -119,7 +119,7 @@ func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, 
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
 func (client *Client) ExecWithOptions(
 	ctx context.Context,
-	batch pipeline.StandaloneBatch,
+	batch *pipeline.StandaloneBatch,
 	raiseOnError bool,
 	options pipeline.StandaloneBatchOptions,
 ) ([]any, error) {
@@ -331,7 +331,11 @@ func (client *Client) Echo(ctx context.Context, message string) (models.Result[s
 //
 // [valkey.io]: https://valkey.io/commands/ping/
 func (client *Client) Ping(ctx context.Context) (string, error) {
-	return client.PingWithOptions(ctx, options.PingOptions{})
+	result, err := client.executeCommand(ctx, C.Ping, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
 }
 
 // Pings the server.

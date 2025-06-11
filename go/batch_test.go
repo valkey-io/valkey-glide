@@ -19,7 +19,7 @@ func ExampleClient_Exec_transaction() {
 	batch := pipeline.NewStandaloneBatch(true)
 	batch.Set("key", "1").CustomCommand([]string{"incr", "key"}).Get("key")
 
-	result, err := client.Exec(context.Background(), *batch, true)
+	result, err := client.Exec(context.Background(), batch, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -34,7 +34,7 @@ func ExampleClient_Exec_pipeline() {
 	batch := pipeline.NewStandaloneBatch(false)
 	batch.Set("key1", "value1").Set("key2", "value2").Get("key1").Get("key2")
 
-	result, err := client.Exec(context.Background(), *batch, true)
+	result, err := client.Exec(context.Background(), batch, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -51,7 +51,7 @@ func ExampleClient_ExecWithOptions_transaction() {
 	// Set a timeout of 1000 milliseconds
 	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000)
 
-	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
+	result, err := client.ExecWithOptions(context.Background(), batch, false, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -68,7 +68,7 @@ func ExampleClient_ExecWithOptions_pipeline() {
 	// Set a timeout of 1000 milliseconds
 	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000)
 
-	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
+	result, err := client.ExecWithOptions(context.Background(), batch, false, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -83,7 +83,7 @@ func ExampleClusterClient_Exec_transaction() {
 	batch := pipeline.NewClusterBatch(true)
 	batch.Set("key", "1").CustomCommand([]string{"incr", "key"}).Get("key")
 
-	result, err := client.Exec(context.Background(), *batch, false)
+	result, err := client.Exec(context.Background(), batch, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -98,7 +98,7 @@ func ExampleClusterClient_Exec_pipeline() {
 	batch := pipeline.NewClusterBatch(false)
 	batch.Set("key1", "value1").Set("key2", "value2").Get("key1").Get("key2")
 
-	result, err := client.Exec(context.Background(), *batch, false)
+	result, err := client.Exec(context.Background(), batch, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -115,7 +115,7 @@ func ExampleClusterClient_ExecWithOptions_transaction() {
 	// Set a timeout of 1000 milliseconds
 	options := pipeline.NewClusterBatchOptions().WithTimeout(1000)
 
-	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
+	result, err := client.ExecWithOptions(context.Background(), batch, false, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -131,9 +131,9 @@ func ExampleClusterClient_ExecWithOptions_pipeline() {
 	batch.Set("key1", "value1").Set("key2", "value2").Get("key1").Get("key2")
 	// Set command retry parameters
 	retryStrategy := pipeline.NewClusterBatchRetryStrategy().WithRetryServerError(true).WithRetryConnectionError(true)
-	options := pipeline.NewClusterBatchOptions().WithRetryStrategy(*retryStrategy)
+	options := pipeline.NewClusterBatchOptions().WithRetryStrategy(retryStrategy)
 
-	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
+	result, err := client.ExecWithOptions(context.Background(), batch, false, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -151,7 +151,7 @@ func ExampleClusterClient_ExecWithOptions_route() {
 	route := config.NewSlotKeyRoute(config.SlotTypePrimary, "abc")
 	options := pipeline.NewClusterBatchOptions().WithRoute(route)
 
-	_, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
+	_, err := client.ExecWithOptions(context.Background(), batch, false, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -171,7 +171,7 @@ func ExampleClient_Watch_changedKey() {
 	transaction.Set("sampleKey", "value")
 	// Set command retry parameters
 
-	result1, err := client.Exec(context.Background(), *transaction, false)
+	result1, err := client.Exec(context.Background(), transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -194,7 +194,7 @@ func ExampleClient_Watch_unchangedKey() {
 	transaction.Set("sampleKey", "value")
 	// Set command retry parameters
 
-	result1, err := client.Exec(context.Background(), *transaction, false)
+	result1, err := client.Exec(context.Background(), transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -218,7 +218,7 @@ func ExampleClusterClient_Watch_changedKey() {
 	transaction.Set("sampleKey", "value")
 	// Set command retry parameters
 
-	result1, err := client.Exec(context.Background(), *transaction, false)
+	result1, err := client.Exec(context.Background(), transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -241,7 +241,7 @@ func ExampleClusterClient_Watch_unchangedKey() {
 	transaction.Set("sampleKey", "value")
 	// Set command retry parameters
 
-	result1, err := client.Exec(context.Background(), *transaction, false)
+	result1, err := client.Exec(context.Background(), transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

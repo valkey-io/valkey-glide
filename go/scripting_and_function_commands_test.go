@@ -1053,7 +1053,7 @@ func ExampleClient_InvokeScriptWithOptions() {
 		WithArgs([]string{"Hello World"})
 
 	// Execute the script with options
-	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, scriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1081,7 +1081,7 @@ func ExampleClusterClient_InvokeScriptWithOptions() {
 		WithArgs([]string{"10", "20"})
 
 	// Execute the script with options
-	result, err := client.InvokeScriptWithOptions(context.Background(), *script, *scriptOptions)
+	result, err := client.InvokeScriptWithOptions(context.Background(), *script, scriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1108,7 +1108,7 @@ func ExampleClusterClient_InvokeScriptWithClusterOptions() {
 	clusterScriptOptions.Route = config.AllPrimaries
 
 	// Execute the script with cluster options
-	result, err := client.InvokeScriptWithClusterOptions(context.Background(), *script, *clusterScriptOptions)
+	result, err := client.InvokeScriptWithClusterOptions(context.Background(), *script, clusterScriptOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
@@ -1385,8 +1385,8 @@ func ExampleClusterClient_ScriptFlushWithOptions() {
 	fmt.Println("Script exists before flush:", exists[0])
 
 	// Flush all scripts on all primaries with ASYNC mode
-	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(&route)
-	result, err := client.ScriptFlushWithOptions(context.Background(), *scriptFlushOptions)
+	scriptFlushOptions := options.NewScriptFlushOptions().WithMode(options.ASYNC).WithRoute(route)
+	result, err := client.ScriptFlushWithOptions(context.Background(), scriptFlushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return

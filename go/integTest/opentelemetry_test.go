@@ -446,7 +446,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
 		batch.CustomCommand([]string{"object", "refcount", "test_key"})
 
 		// Execute the batch
-		response, err := client.(*glide.ClusterClient).Exec(context.Background(), *batch, true)
+		response, err := client.(*glide.ClusterClient).Exec(context.Background(), batch, true)
 		require.NoError(suite.T(), err)
 		require.NotNil(suite.T(), response)
 		require.Len(suite.T(), response, 2)
@@ -500,7 +500,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemor
 				batch.CustomCommand([]string{"object", "refcount", "test_key"})
 
 				// Execute the batch
-				response, err := client.(*glide.ClusterClient).Exec(context.Background(), *batch, true)
+				response, err := client.(*glide.ClusterClient).Exec(context.Background(), batch, true)
 				require.NoError(t, err)
 				require.NotNil(t, response)
 				require.Len(t, response, 2)

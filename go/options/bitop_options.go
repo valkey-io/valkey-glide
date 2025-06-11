@@ -23,18 +23,18 @@ type BitOp struct {
 }
 
 // NewBitOp validates and creates a new BitOp command.
-func NewBitOp(operation BitOpType, destKey string, srcKeys []string) (*BitOp, error) {
+func NewBitOp(operation BitOpType, destKey string, srcKeys []string) (BitOp, error) {
 	if operation == NOT {
 		if len(srcKeys) != 1 {
-			return nil, errors.New("BITOP NOT requires exactly 1 source key")
+			return BitOp{}, errors.New("BITOP NOT requires exactly 1 source key")
 		}
 	} else {
 		if len(srcKeys) < 2 {
-			return nil, errors.New("BITOP requires at least 2 source keys")
+			return BitOp{}, errors.New("BITOP requires at least 2 source keys")
 		}
 	}
 
-	return &BitOp{
+	return BitOp{
 		Operation: operation,
 		DestKey:   destKey,
 		SrcKeys:   srcKeys,
@@ -42,7 +42,7 @@ func NewBitOp(operation BitOpType, destKey string, srcKeys []string) (*BitOp, er
 }
 
 // ToArgs converts the BitOp command to arguments.
-func (cmd *BitOp) ToArgs() ([]string, error) {
+func (cmd BitOp) ToArgs() ([]string, error) {
 	args := []string{string(cmd.Operation), cmd.DestKey}
 	args = append(args, cmd.SrcKeys...)
 	return args, nil

@@ -115,7 +115,7 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 //
 // [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
-func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
+func (client *ClusterClient) Exec(ctx context.Context, batch *pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
 }
 
@@ -171,7 +171,7 @@ func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBat
 // [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
 func (client *ClusterClient) ExecWithOptions(
 	ctx context.Context,
-	batch pipeline.ClusterBatch,
+	batch *pipeline.ClusterBatch,
 	raiseOnError bool,
 	options pipeline.ClusterBatchOptions,
 ) ([]any, error) {
@@ -731,13 +731,13 @@ func (client *ClusterClient) Scan(
 	ctx context.Context,
 	cursor options.ClusterScanCursor,
 ) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(ctx, &cursor, *options.NewClusterScanOptions())
+	response, err := client.clusterScan(ctx, &cursor, options.NewClusterScanOptions())
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
 
 	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	return options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
 // Incrementally iterates over the keys in the cluster.
@@ -774,11 +774,11 @@ func (client *ClusterClient) ScanWithOptions(
 ) (options.ClusterScanCursor, []string, error) {
 	response, err := client.clusterScan(ctx, &cursor, opts)
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return options.NewClusterScanCursorWithId("finished"), []string{}, err
 	}
 
 	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	return options.NewClusterScanCursorWithId(nextCursor), keys, err
 }
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
@@ -2320,8 +2320,7 @@ func (client *ClusterClient) FunctionRestoreWithPolicyWithRoute(
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading and execution will all be handled internally. If
 // the script has not already been loaded, it will be loaded automatically using the
-// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA`
-// command.
+// `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
 //
 // Note:
 //
@@ -2366,8 +2365,7 @@ func (client *ClusterClient) InvokeScriptWithRoute(
 // This function simplifies the process of invoking scripts on the server by using an object that
 // represents a Lua script. The script loading, argument preparation, and execution will all be
 // handled internally. If the script has not already been loaded, it will be loaded automatically
-// using the `SCRIPT LOAD` command. After that, it will be invoked using the
-// `EVALSHA` command.
+// using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
 //
 // Note:
 //
@@ -2506,8 +2504,8 @@ func (client *ClusterClient) ScriptFlushWithOptions(
 	options options.ScriptFlushOptions,
 ) (string, error) {
 	args := []string{}
-	if options.Mode != "" {
-		args = append(args, string(options.Mode))
+	if options.Mode != nil {
+		args = append(args, string(*options.Mode))
 	}
 	if options.Route == nil {
 		result, err := client.executeCommand(ctx, C.ScriptFlush, args)

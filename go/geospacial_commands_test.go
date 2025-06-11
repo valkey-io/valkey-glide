@@ -211,7 +211,7 @@ func ExampleClient_GeoSearch() {
 	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -233,7 +233,7 @@ func ExampleClusterClient_GeoSearch() {
 	result, err := client.GeoSearch(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -255,8 +255,8 @@ func ExampleClient_GeoSearchWithResultOptions() {
 	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -278,8 +278,8 @@ func ExampleClusterClient_GeoSearchWithResultOptions() {
 	result, err := client.GeoSearchWithResultOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -301,9 +301,9 @@ func ExampleClient_GeoSearchWithFullOptions() {
 	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
-		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
+		options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -325,9 +325,9 @@ func ExampleClusterClient_GeoSearchWithFullOptions() {
 	result, err := client.GeoSearchWithFullOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
-		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(2).SetSortOrder(options.DESC),
+		options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -349,8 +349,8 @@ func ExampleClient_GeoSearchWithInfoOptions() {
 	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -372,8 +372,8 @@ func ExampleClusterClient_GeoSearchWithInfoOptions() {
 	result, err := client.GeoSearchWithInfoOptions(context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchInfoOptions().SetWithDist(true).SetWithCoord(true).SetWithHash(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -397,7 +397,7 @@ func ExampleClient_GeoSearchStore() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -421,7 +421,7 @@ func ExampleClusterClient_GeoSearchStore() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -445,8 +445,8 @@ func ExampleClient_GeoSearchStoreWithInfoOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -470,8 +470,8 @@ func ExampleClusterClient_GeoSearchStoreWithInfoOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -495,8 +495,8 @@ func ExampleClient_GeoSearchStoreWithResultOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -520,8 +520,8 @@ func ExampleClusterClient_GeoSearchStoreWithResultOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -545,9 +545,9 @@ func ExampleClient_GeoSearchStoreWithFullOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
-		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -571,9 +571,9 @@ func ExampleClusterClient_GeoSearchStoreWithFullOptions() {
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
-		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
-		*options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
-		*options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
+		options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
+		options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.DESC),
+		options.NewGeoSearchStoreInfoOptions().SetStoreDist(true),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

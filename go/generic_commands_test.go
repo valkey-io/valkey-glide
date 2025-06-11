@@ -60,7 +60,7 @@ func ExampleClient_ScanWithOptions() {
 	opts := options.NewScanOptions().SetCount(10).SetType(constants.ObjectTypeList)
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
 	client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
-	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
+	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

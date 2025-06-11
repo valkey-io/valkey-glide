@@ -286,7 +286,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 		SetOrderBy(options.ASC).
 		SetIsAlpha(false)
 
-	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, options)
 
 	suite.NoError(err)
 	resultList := []models.Result[string]{
@@ -314,7 +314,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		SetIsAlpha(false).
 		AddGetPattern("object_*")
 
-	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, options)
 
 	suite.NoError(err)
 
@@ -349,7 +349,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		AddGetPattern("object_*").
 		AddGetPattern("#")
 
-	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, *options)
+	sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, options)
 
 	suite.NoError(err)
 
@@ -781,7 +781,7 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_ImmediateAuthWrongPass
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 	client := suite.defaultClient()
 	options := options.NewLolwutOptions(8)
-	res, err := client.LolwutWithOptions(context.Background(), *options)
+	res, err := client.LolwutWithOptions(context.Background(), options)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
@@ -789,7 +789,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 	client := suite.defaultClient()
 	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
-	res, err := client.LolwutWithOptions(context.Background(), *opts)
+	res, err := client.LolwutWithOptions(context.Background(), opts)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
@@ -797,7 +797,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 	client := suite.defaultClient()
 	opts := options.NewLolwutOptions(6).SetArgs([]int{})
-	res, err := client.LolwutWithOptions(context.Background(), *opts)
+	res, err := client.LolwutWithOptions(context.Background(), opts)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), res, "Redis ver.")
 }
@@ -870,14 +870,14 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(context.Background(), key, "Hello"))
 	opts := options.NewScanOptions().SetCount(10)
-	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
+	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, opts)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)
 
 	// Test TestScanWithOption SetType
 	opts = options.NewScanOptions().SetType(constants.ObjectTypeString)
-	resCursor, resCollection, err = client.ScanWithOptions(context.Background(), 0, *opts)
+	resCursor, resCollection, err = client.ScanWithOptions(context.Background(), 0, opts)
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, len(resCursor), 1)
 	assert.GreaterOrEqual(t, len(resCollection), 1)

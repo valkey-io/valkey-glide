@@ -32,24 +32,24 @@ type GeoAddOptions struct {
 	changed           bool
 }
 
-func NewGeoAddOptions() *GeoAddOptions {
-	return &GeoAddOptions{}
+func NewGeoAddOptions() GeoAddOptions {
+	return GeoAddOptions{}
 }
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
-func (options *GeoAddOptions) SetConditionalChange(conditionalChange constants.ConditionalSet) *GeoAddOptions {
+func (options GeoAddOptions) SetConditionalChange(conditionalChange constants.ConditionalSet) GeoAddOptions {
 	options.conditionalChange = conditionalChange
 	return options
 }
 
 // `Changed` changes the return value from the number of new elements added to the total number of elements changed.
-func (options *GeoAddOptions) SetChanged(changed bool) *GeoAddOptions {
+func (options GeoAddOptions) SetChanged(changed bool) GeoAddOptions {
 	options.changed = changed
 	return options
 }
 
 // `ToArgs` converts the options to a list of arguments.
-func (opts *GeoAddOptions) ToArgs() ([]string, error) {
+func (opts GeoAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 

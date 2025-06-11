@@ -99,7 +99,7 @@ func ExampleClient_BitCountWithOptions() {
 		SetStart(1).
 		SetEnd(1).
 		SetBitmapIndexType(options.BYTE)
-	result, err := client.BitCountWithOptions(context.Background(), "my_key", *options)
+	result, err := client.BitCountWithOptions(context.Background(), "my_key", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -115,7 +115,7 @@ func ExampleClusterClient_BitCountWithOptions() {
 		SetStart(1).
 		SetEnd(1).
 		SetBitmapIndexType(options.BYTE)
-	result, err := client.BitCountWithOptions(context.Background(), "my_key", *options)
+	result, err := client.BitCountWithOptions(context.Background(), "my_key", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -339,7 +339,7 @@ func ExampleClient_BitPosWithOptions() {
 		SetStart(0).
 		SetEnd(1)
 
-	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, *options)
+	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -358,7 +358,7 @@ func ExampleClusterClient_BitPosWithOptions() {
 		SetEnd(14).
 		SetBitmapIndexType(options.BIT)
 
-	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, *options)
+	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -64,7 +64,7 @@ func ExampleClient_XAddWithOptions() {
 		{"key1", "value1"},
 		{"key2", "value2"},
 	}
-	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
+	result, err := client.XAddWithOptions(context.Background(), "mystream", values, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -82,7 +82,7 @@ func ExampleClusterClient_XAddWithOptions() {
 		{"key1", "value1"},
 		{"key2", "value2"},
 	}
-	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
+	result, err := client.XAddWithOptions(context.Background(), "mystream", values, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -97,7 +97,7 @@ func ExampleClient_XTrim() {
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	client.XAdd(context.Background(), "mystream", [][]string{{"field3", "foo4"}, {"field4", "bar4"}})
 
-	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
+	count, err := client.XTrim(context.Background(), "mystream", options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -112,7 +112,7 @@ func ExampleClusterClient_XTrim() {
 	client.XAdd(context.Background(), "mystream", [][]string{{"field1", "foo4"}, {"field2", "bar4"}})
 	client.XAdd(context.Background(), "mystream", [][]string{{"field3", "foo4"}, {"field4", "bar4"}})
 
-	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
+	count, err := client.XTrim(context.Background(), "mystream", options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -153,17 +153,17 @@ func ExampleClient_XAutoClaim() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -183,17 +183,17 @@ func ExampleClusterClient_XAutoClaim() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -213,22 +213,22 @@ func ExampleClient_XAutoClaimWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	options := options.NewXAutoClaimOptions().SetCount(1)
-	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
+	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -243,22 +243,22 @@ func ExampleClusterClient_XAutoClaimWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	options := options.NewXAutoClaimOptions().SetCount(1)
-	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
+	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -273,17 +273,17 @@ func ExampleClient_XAutoClaimJustId() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -302,17 +302,17 @@ func ExampleClusterClient_XAutoClaimJustId() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -331,22 +331,22 @@ func ExampleClient_XAutoClaimJustIdWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	options := options.NewXAutoClaimOptions().SetCount(1)
-	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
+	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -361,22 +361,22 @@ func ExampleClusterClient_XAutoClaimJustIdWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry2_field1", "entry2_value1"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	options := options.NewXAutoClaimOptions().SetCount(1)
-	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
+	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -392,12 +392,12 @@ func ExampleClient_XReadGroup() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	response, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: "0"})
@@ -426,12 +426,12 @@ func ExampleClusterClient_XReadGroup() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	response, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: "0"})
@@ -460,16 +460,16 @@ func ExampleClient_XReadGroupWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	options := options.NewXReadGroupOptions().SetNoAck()
-	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, *options)
+	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -502,16 +502,16 @@ func ExampleClusterClient_XReadGroupWithOptions() {
 	group := uuid.NewString()
 	consumer := uuid.NewString()
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	options := options.NewXReadGroupOptions().SetNoAck()
-	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, *options)
+	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -545,7 +545,7 @@ func ExampleClient_XRead() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	response, err := client.XRead(context.Background(), map[string]string{key: "0-0"})
@@ -582,7 +582,7 @@ func ExampleClusterClient_XRead() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 
 	response, err := client.XRead(context.Background(), map[string]string{key: "0-0"})
@@ -621,17 +621,17 @@ func ExampleClient_XReadWithOptions() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
+		options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field3", "value3"}, {"field4", "value4"}},
-		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
+		options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
 	response, err := client.XReadWithOptions(context.Background(),
 		map[string]string{key: genStreamId(key, streambase, 0)},
-		*options.NewXReadOptions().SetCount(1),
+		options.NewXReadOptions().SetCount(1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -668,17 +668,17 @@ func ExampleClusterClient_XReadWithOptions() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
+		options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field3", "value3"}, {"field4", "value4"}},
-		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
+		options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
 	response, err := client.XReadWithOptions(context.Background(),
 		map[string]string{key: genStreamId(key, streambase, 0)},
-		*options.NewXReadOptions().SetCount(1),
+		options.NewXReadOptions().SetCount(1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -712,7 +712,7 @@ func ExampleClient_XDel() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 
 	count, err := client.XDel(context.Background(), key, []string{"0-1", "0-2", "0-3"})
@@ -731,7 +731,7 @@ func ExampleClusterClient_XDel() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 
 	count, err := client.XDel(context.Background(), key, []string{"0-1", "0-2", "0-3"})
@@ -750,12 +750,12 @@ func ExampleClient_XPending() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -776,12 +776,12 @@ func ExampleClusterClient_XPending() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
@@ -802,19 +802,19 @@ func ExampleClient_XPendingWithOptions() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	details, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -844,19 +844,19 @@ func ExampleClusterClient_XPendingWithOptions() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
 	details, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -886,12 +886,12 @@ func ExampleClient_XGroupSetId() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 	client.XAck(context.Background(), key, group, []string{streamId}) // ack the message and remove it from the pending list
@@ -925,12 +925,12 @@ func ExampleClusterClient_XGroupSetId() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 	client.XAck(context.Background(), key, group, []string{streamId}) // ack the message and remove it from the pending list
@@ -965,17 +965,17 @@ func ExampleClient_XGroupSetIdWithOptions() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field3", "value3"}, {"field4", "value4"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 	client.XAck(
@@ -991,7 +991,7 @@ func ExampleClient_XGroupSetIdWithOptions() {
 		key,
 		group,
 		"0-0",
-		*opts,
+		opts,
 	) // reset the last acknowledged message to 0-0
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"}) // read the group again
 
@@ -1017,17 +1017,17 @@ func ExampleClusterClient_XGroupSetIdWithOptions() {
 	group := "g12345"
 	consumer := "c12345"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field3", "value3"}, {"field4", "value4"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 	client.XAck(
@@ -1043,7 +1043,7 @@ func ExampleClusterClient_XGroupSetIdWithOptions() {
 		key,
 		group,
 		"0-0",
-		*opts,
+		opts,
 	) // reset the last acknowledged message to 0-0
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"}) // read the group again
 
@@ -1070,7 +1070,7 @@ func ExampleClient_XGroupCreate() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	) // This will create the stream if it does not exist
 
 	response, err := client.XGroupCreate(context.Background(), key, group, "0") // create the group (no MKSTREAM needed)
@@ -1091,7 +1091,7 @@ func ExampleClusterClient_XGroupCreate() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	) // This will create the stream if it does not exist
 
 	response, err := client.XGroupCreate(context.Background(), key, group, "0") // create the group (no MKSTREAM needed)
@@ -1114,7 +1114,7 @@ func ExampleClient_XGroupCreateWithOptions() {
 		key,
 		group,
 		"0",
-		*opts,
+		opts,
 	) // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1135,7 +1135,7 @@ func ExampleClusterClient_XGroupCreateWithOptions() {
 		key,
 		group,
 		"0",
-		*opts,
+		opts,
 	) // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1151,7 +1151,7 @@ func ExampleClient_XGroupDestroy() {
 	group := "g12345"
 
 	opts := options.NewXGroupCreateOptions().SetMakeStream()
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *opts) // create the group (no MKSTREAM needed)
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", opts) // create the group (no MKSTREAM needed)
 
 	success, err := client.XGroupDestroy(context.Background(), key, group) // destroy the group
 	if err != nil {
@@ -1168,7 +1168,7 @@ func ExampleClusterClient_XGroupDestroy() {
 	group := "g12345"
 
 	opts := options.NewXGroupCreateOptions().SetMakeStream()
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *opts) // create the group (no MKSTREAM needed)
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", opts) // create the group (no MKSTREAM needed)
 
 	success, err := client.XGroupDestroy(context.Background(), key, group) // destroy the group
 	if err != nil {
@@ -1186,7 +1186,7 @@ func ExampleClient_XGroupCreateConsumer() {
 	consumer := "c12345"
 
 	opts := options.NewXGroupCreateOptions().SetMakeStream()
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *opts) // create the group (no MKSTREAM needed)
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", opts) // create the group (no MKSTREAM needed)
 
 	success, err := client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	if err != nil {
@@ -1204,7 +1204,7 @@ func ExampleClusterClient_XGroupCreateConsumer() {
 	consumer := "c12345"
 
 	opts := options.NewXGroupCreateOptions().SetMakeStream()
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *opts) // create the group (no MKSTREAM needed)
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", opts) // create the group (no MKSTREAM needed)
 
 	success, err := client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	if err != nil {
@@ -1225,7 +1225,7 @@ func ExampleClient_XGroupDelConsumer() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
@@ -1251,7 +1251,7 @@ func ExampleClusterClient_XGroupDelConsumer() {
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"field1", "value1"}, {"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
@@ -1331,19 +1331,19 @@ func ExampleClient_XClaim() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1383,19 +1383,19 @@ func ExampleClusterClient_XClaim() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1435,19 +1435,19 @@ func ExampleClient_XClaimWithOptions() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1465,7 +1465,7 @@ func ExampleClient_XClaimWithOptions() {
 		consumer2,
 		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
-		*opts,
+		opts,
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1497,19 +1497,19 @@ func ExampleClusterClient_XClaimWithOptions() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1527,7 +1527,7 @@ func ExampleClusterClient_XClaimWithOptions() {
 		consumer2,
 		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
-		*opts,
+		opts,
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1545,19 +1545,19 @@ func ExampleClient_XClaimJustId() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1591,19 +1591,19 @@ func ExampleClusterClient_XClaimJustId() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1637,19 +1637,19 @@ func ExampleClient_XClaimJustIdWithOptions() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1667,7 +1667,7 @@ func ExampleClient_XClaimJustIdWithOptions() {
 		consumer2,
 		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
-		*opts,
+		opts,
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1685,19 +1685,19 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 	consumer1 := "c12345-1"
 	consumer2 := "c12345-2"
 
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0", options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
 	client.XAddWithOptions(context.Background(),
 		key,
 		[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		*options.NewXAddOptions().SetId(streamId),
+		options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
 	result, err := client.XPendingWithOptions(context.Background(),
 		key,
 		group,
-		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+		options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1715,7 +1715,7 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 		consumer2,
 		time.Duration(result[0].IdleTime)*time.Millisecond,
 		[]string{result[0].Id},
-		*opts,
+		opts,
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1771,7 +1771,7 @@ func ExampleClient_XRangeWithOptions() {
 	response, err := client.XRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId1, true),
 		options.NewStreamBoundary(streamId2, true),
-		*options.NewXRangeOptions().SetCount(1))
+		options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1790,7 +1790,7 @@ func ExampleClusterClient_XRangeWithOptions() {
 	response, err := client.XRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId1, true),
 		options.NewStreamBoundary(streamId2, true),
-		*options.NewXRangeOptions().SetCount(1))
+		options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1809,13 +1809,13 @@ func ExampleClient_XRevRange() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 
 	response, err := client.XRevRange(context.Background(), key,
@@ -1839,13 +1839,13 @@ func ExampleClusterClient_XRevRange() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 
 	response, err := client.XRevRange(context.Background(), key,
@@ -1869,19 +1869,19 @@ func ExampleClient_XRevRangeWithOptions() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 
 	response, err := client.XRevRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId2, true),
 		options.NewStreamBoundary(streamId1, true),
-		*options.NewXRangeOptions().SetCount(2))
+		options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1900,19 +1900,19 @@ func ExampleClusterClient_XRevRangeWithOptions() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"field2", "value2"}},
-		*options.NewXAddOptions().SetId(streamId2),
+		options.NewXAddOptions().SetId(streamId2),
 	)
 
 	response, err := client.XRevRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId2, true),
 		options.NewStreamBoundary(streamId1, true),
-		*options.NewXRangeOptions().SetCount(2))
+		options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -1930,7 +1930,7 @@ func ExampleClient_XInfoStream() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	response, err := client.XInfoStream(context.Background(), key)
 	if err != nil {
@@ -1975,7 +1975,7 @@ func ExampleClusterClient_XInfoStream() {
 		context.Background(),
 		key,
 		[][]string{{"field1", "value1"}},
-		*options.NewXAddOptions().SetId(streamId1),
+		options.NewXAddOptions().SetId(streamId1),
 	)
 	response, err := client.XInfoStream(context.Background(), key)
 	if err != nil {
@@ -2024,12 +2024,12 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 			context.Background(),
 			key,
 			[][]string{{field, value}},
-			*options.NewXAddOptions().SetId(streamId),
+			options.NewXAddOptions().SetId(streamId),
 		)
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
-	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, options)
+	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, &options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -2079,12 +2079,12 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 			context.Background(),
 			key,
 			[][]string{{field, value}},
-			*options.NewXAddOptions().SetId(streamId),
+			options.NewXAddOptions().SetId(streamId),
 		)
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
-	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, options)
+	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, &options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -2127,19 +2127,19 @@ func ExampleClient_XInfoConsumers() {
 	group := "myGroup"
 
 	// create an empty stream with a group
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", options.NewXGroupCreateOptions().SetMakeStream())
 	// add couple of entries
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
 	client.XReadGroup(context.Background(), group, "myConsumer", map[string]string{key: ">"})
@@ -2170,19 +2170,19 @@ func ExampleClusterClient_XInfoConsumers() {
 	consumer := "myConsumer"
 
 	// create an empty stream with a group
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", options.NewXGroupCreateOptions().SetMakeStream())
 	// add couple of entries
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
 	client.XReadGroupWithOptions(
@@ -2190,7 +2190,7 @@ func ExampleClusterClient_XInfoConsumers() {
 		group,
 		consumer,
 		map[string]string{key: ">"},
-		*options.NewXReadGroupOptions().SetCount(1),
+		options.NewXReadGroupOptions().SetCount(1),
 	)
 	// get the info
 	time.Sleep(100 * time.Millisecond)
@@ -2218,19 +2218,19 @@ func ExampleClient_XInfoGroups() {
 	group := "myGroup"
 
 	// create an empty stream with a group
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", options.NewXGroupCreateOptions().SetMakeStream())
 	// add couple of entries
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
 	client.XReadGroup(context.Background(), group, "myConsumer", map[string]string{key: ">"})
@@ -2264,19 +2264,19 @@ func ExampleClusterClient_XInfoGroups() {
 	group := "myGroup"
 
 	// create an empty stream with a group
-	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", *options.NewXGroupCreateOptions().SetMakeStream())
+	client.XGroupCreateWithOptions(context.Background(), key, group, "0-0", options.NewXGroupCreateOptions().SetMakeStream())
 	// add couple of entries
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
-		*options.NewXAddOptions().SetId("0-1"),
+		options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
 		[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
-		*options.NewXAddOptions().SetId("0-2"),
+		options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
 	client.XReadGroup(context.Background(), group, "myConsumer", map[string]string{key: ">"})

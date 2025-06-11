@@ -49,8 +49,8 @@ type BitFieldGet struct {
 }
 
 // NewBitFieldGet creates a new BitField GET command
-func NewBitFieldGet(encType EncType, bits int64, offset int64) *BitFieldGet {
-	return &BitFieldGet{
+func NewBitFieldGet(encType EncType, bits int64, offset int64) BitFieldGet {
+	return BitFieldGet{
 		EncType: encType,
 		Bits:    bits,
 		Offset:  offset,
@@ -58,7 +58,7 @@ func NewBitFieldGet(encType EncType, bits int64, offset int64) *BitFieldGet {
 }
 
 // ToArgs converts the GET command to arguments
-func (cmd *BitFieldGet) ToArgs() ([]string, error) {
+func (cmd BitFieldGet) ToArgs() ([]string, error) {
 	args := []string{get}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
 	if cmd.UseHash {
@@ -69,7 +69,7 @@ func (cmd *BitFieldGet) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-func (cmd *BitFieldGet) dummy() {}
+func (cmd BitFieldGet) dummy() {}
 
 // BitFieldSet represents a SET operation to set the bits in the binary
 // representation of the string stored in key based on EncType and Offset.
@@ -82,8 +82,8 @@ type BitFieldSet struct {
 }
 
 // NewBitFieldSet creates a new BitField SET command
-func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) *BitFieldSet {
-	return &BitFieldSet{
+func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) BitFieldSet {
+	return BitFieldSet{
 		EncType: encType,
 		Bits:    bits,
 		Offset:  offset,
@@ -92,7 +92,7 @@ func NewBitFieldSet(encType EncType, bits int64, offset int64, value int64) *Bit
 }
 
 // ToArgs converts the SET command to arguments
-func (cmd *BitFieldSet) ToArgs() ([]string, error) {
+func (cmd BitFieldSet) ToArgs() ([]string, error) {
 	args := []string{set}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
 	if cmd.UseHash {
@@ -115,8 +115,8 @@ type BitFieldIncrBy struct {
 }
 
 // NewBitFieldIncrBy creates a new BitField INCRBY command
-func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int64) *BitFieldIncrBy {
-	return &BitFieldIncrBy{
+func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int64) BitFieldIncrBy {
+	return BitFieldIncrBy{
 		EncType:   encType,
 		Bits:      bits,
 		Offset:    offset,
@@ -125,7 +125,7 @@ func NewBitFieldIncrBy(encType EncType, bits int64, offset int64, increment int6
 }
 
 // ToArgs converts the INCRBY command to arguments
-func (cmd *BitFieldIncrBy) ToArgs() ([]string, error) {
+func (cmd BitFieldIncrBy) ToArgs() ([]string, error) {
 	args := []string{incrBy}
 	args = append(args, string(cmd.EncType)+utils.IntToString(cmd.Bits))
 	if cmd.UseHash {
@@ -144,13 +144,13 @@ type BitFieldOverflow struct {
 }
 
 // NewBitFieldOverflow creates a new BitField OVERFLOW command
-func NewBitFieldOverflow(overflow OverflowType) *BitFieldOverflow {
-	return &BitFieldOverflow{
+func NewBitFieldOverflow(overflow OverflowType) BitFieldOverflow {
+	return BitFieldOverflow{
 		Overflow: overflow,
 	}
 }
 
 // ToArgs converts the OVERFLOW command to arguments
-func (cmd *BitFieldOverflow) ToArgs() ([]string, error) {
+func (cmd BitFieldOverflow) ToArgs() ([]string, error) {
 	return []string{overFlow, string(cmd.Overflow)}, nil
 }

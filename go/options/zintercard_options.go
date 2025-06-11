@@ -8,24 +8,24 @@ import (
 
 // This struct represents the optional arguments for the ZINTER command.
 type ZInterCardOptions struct {
-	limit int64
+	limit *int64
 }
 
-func NewZInterCardOptions() *ZInterCardOptions {
-	return &ZInterCardOptions{limit: -1}
+func NewZInterCardOptions() ZInterCardOptions {
+	return ZInterCardOptions{nil}
 }
 
 // SetLimit sets the limit for the ZInterCard command.
-func (options *ZInterCardOptions) SetLimit(limit int64) *ZInterCardOptions {
-	options.limit = limit
+func (options ZInterCardOptions) SetLimit(limit int64) ZInterCardOptions {
+	options.limit = &limit
 	return options
 }
 
-func (options *ZInterCardOptions) ToArgs() ([]string, error) {
+func (options ZInterCardOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	if options.limit != -1 {
-		args = append(args, constants.LimitKeyword, utils.IntToString(options.limit))
+	if options.limit != nil {
+		args = append(args, constants.LimitKeyword, utils.IntToString(*options.limit))
 	}
 
 	return args, nil

@@ -29,14 +29,14 @@ type RangeByIndex struct {
 type RangeByScore struct {
 	start, end scoreBoundary
 	reverse    bool
-	Limit      *Limit
+	limit      *Limit
 }
 
 // Queries a range of elements from a sorted set by theirs lexicographical order.
 type RangeByLex struct {
 	start, end lexBoundary
 	reverse    bool
-	Limit      *Limit
+	limit      *Limit
 }
 
 type (
@@ -86,7 +86,7 @@ type Limit struct {
 	count int64
 }
 
-func (limit *Limit) toArgs() ([]string, error) {
+func (limit Limit) toArgs() ([]string, error) {
 	return []string{"LIMIT", utils.IntToString(limit.offset), utils.IntToString(limit.count)}, nil
 }
 
@@ -96,17 +96,17 @@ func (limit *Limit) toArgs() ([]string, error) {
 //
 //	start - The start index of the range.
 //	end   - The end index of the range.
-func NewRangeByIndexQuery(start int64, end int64) *RangeByIndex {
-	return &RangeByIndex{start, end, false}
+func NewRangeByIndexQuery(start int64, end int64) RangeByIndex {
+	return RangeByIndex{start, end, false}
 }
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
-func (rbi *RangeByIndex) SetReverse() *RangeByIndex {
+func (rbi RangeByIndex) SetReverse() RangeByIndex {
 	rbi.reverse = true
 	return rbi
 }
 
-func (rbi *RangeByIndex) ToArgs() ([]string, error) {
+func (rbi RangeByIndex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 3)
 	args = append(args, utils.IntToString(rbi.start), utils.IntToString(rbi.end))
 	if rbi.reverse {
@@ -121,30 +121,30 @@ func (rbi *RangeByIndex) ToArgs() ([]string, error) {
 //
 //	start - The start score of the range.
 //	end   - The end score of the range.
-func NewRangeByScoreQuery(start scoreBoundary, end scoreBoundary) *RangeByScore {
-	return &RangeByScore{start, end, false, nil}
+func NewRangeByScoreQuery(start scoreBoundary, end scoreBoundary) RangeByScore {
+	return RangeByScore{start, end, false, nil}
 }
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
-func (rbs *RangeByScore) SetReverse() *RangeByScore {
+func (rbs RangeByScore) SetReverse() RangeByScore {
 	rbs.reverse = true
 	return rbs
 }
 
 // The limit argument for a range query, unset by default. See [Limit] for more information.
-func (rbs *RangeByScore) SetLimit(offset, count int64) *RangeByScore {
-	rbs.Limit = &Limit{offset, count}
+func (rbs RangeByScore) SetLimit(offset, count int64) RangeByScore {
+	rbs.limit = &Limit{offset, count}
 	return rbs
 }
 
-func (rbs *RangeByScore) ToArgs() ([]string, error) {
+func (rbs RangeByScore) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
 	args = append(args, string(rbs.start), string(rbs.end), "BYSCORE")
 	if rbs.reverse {
 		args = append(args, "REV")
 	}
-	if rbs.Limit != nil {
-		limitArgs, err := rbs.Limit.toArgs()
+	if rbs.limit != nil {
+		limitArgs, err := rbs.limit.toArgs()
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +153,7 @@ func (rbs *RangeByScore) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-func (rbs *RangeByScore) ToArgsRemRange() ([]string, error) {
+func (rbs RangeByScore) ToArgsRemRange() ([]string, error) {
 	return []string{string(rbs.start), string(rbs.end)}, nil
 }
 
@@ -163,30 +163,30 @@ func (rbs *RangeByScore) ToArgsRemRange() ([]string, error) {
 //
 //	start - The start lex of the range.
 //	end   - The end lex of the range.
-func NewRangeByLexQuery(start lexBoundary, end lexBoundary) *RangeByLex {
-	return &RangeByLex{start, end, false, nil}
+func NewRangeByLexQuery(start lexBoundary, end lexBoundary) RangeByLex {
+	return RangeByLex{start, end, false, nil}
 }
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
-func (rbl *RangeByLex) SetReverse() *RangeByLex {
+func (rbl RangeByLex) SetReverse() RangeByLex {
 	rbl.reverse = true
 	return rbl
 }
 
 // The limit argument for a range query, unset by default. See [Limit] for more information.
-func (rbl *RangeByLex) SetLimit(offset, count int64) *RangeByLex {
-	rbl.Limit = &Limit{offset, count}
+func (rbl RangeByLex) SetLimit(offset, count int64) RangeByLex {
+	rbl.limit = &Limit{offset, count}
 	return rbl
 }
 
-func (rbl *RangeByLex) ToArgs() ([]string, error) {
+func (rbl RangeByLex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
 	args = append(args, string(rbl.start), string(rbl.end), "BYLEX")
 	if rbl.reverse {
 		args = append(args, "REV")
 	}
-	if rbl.Limit != nil {
-		limitArgs, err := rbl.Limit.toArgs()
+	if rbl.limit != nil {
+		limitArgs, err := rbl.limit.toArgs()
 		if err != nil {
 			return nil, err
 		}
@@ -195,11 +195,11 @@ func (rbl *RangeByLex) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-func (rbl *RangeByLex) ToArgsRemRange() ([]string, error) {
+func (rbl RangeByLex) ToArgsRemRange() ([]string, error) {
 	return []string{string(rbl.start), string(rbl.end)}, nil
 }
 
-func (rbl *RangeByLex) ToArgsLexCount() []string {
+func (rbl RangeByLex) ToArgsLexCount() []string {
 	return []string{string(rbl.start), string(rbl.end)}
 }
 
@@ -213,5 +213,5 @@ type ZRangeQueryWithScores interface {
 	ToArgs() ([]string, error)
 }
 
-func (q *RangeByIndex) dummy() {}
-func (q *RangeByScore) dummy() {}
+func (q RangeByIndex) dummy() {}
+func (q RangeByScore) dummy() {}

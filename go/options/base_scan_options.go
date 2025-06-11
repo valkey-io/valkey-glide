@@ -11,12 +11,12 @@ import (
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.
 // Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`, `HSCAN`).
 type BaseScanOptions struct {
-	match string
-	count int64
+	match *string
+	count *int64
 }
 
-func NewBaseScanOptions() *BaseScanOptions {
-	return &BaseScanOptions{}
+func NewBaseScanOptions() BaseScanOptions {
+	return BaseScanOptions{}
 }
 
 /*
@@ -26,8 +26,8 @@ only a subset of the sorted set then there could be a case where the result is e
 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
 that it will only fetch and match `10` items from the list.
 */
-func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
-	scanOptions.match = m
+func (scanOptions BaseScanOptions) SetMatch(m string) BaseScanOptions {
+	scanOptions.match = &m
 	return scanOptions
 }
 
@@ -36,20 +36,20 @@ func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
 sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
 represent the results as compact single-allocation packed encoding.
 */
-func (scanOptions *BaseScanOptions) SetCount(c int64) *BaseScanOptions {
-	scanOptions.count = c
+func (scanOptions BaseScanOptions) SetCount(c int64) BaseScanOptions {
+	scanOptions.count = &c
 	return scanOptions
 }
 
-func (opts *BaseScanOptions) ToArgs() ([]string, error) {
+func (opts BaseScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.match != "" {
-		args = append(args, constants.MatchKeyword, opts.match)
+	if opts.match != nil {
+		args = append(args, constants.MatchKeyword, *opts.match)
 	}
 
-	if opts.count != 0 {
-		args = append(args, constants.CountKeyword, strconv.FormatInt(opts.count, 10))
+	if opts.count != nil {
+		args = append(args, constants.CountKeyword, strconv.FormatInt(*opts.count, 10))
 	}
 
 	return args, err

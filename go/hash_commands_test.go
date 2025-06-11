@@ -738,7 +738,7 @@ func ExampleClient_HScanWithOptions() {
 
 	result, err := client.HSet(context.Background(), "my_hash", fields)
 	opts := options.NewHashScanOptions().SetMatch("a")
-	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", *opts)
+	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -764,7 +764,7 @@ func ExampleClusterClient_HScanWithOptions() {
 
 	result, err := client.HSet(context.Background(), "my_hash", fields)
 	opts := options.NewHashScanOptions().SetMatch("a")
-	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", *opts)
+	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

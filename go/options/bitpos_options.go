@@ -13,30 +13,30 @@ type BitPosOptions struct {
 	bitMapIndexType BitmapIndexType
 }
 
-func NewBitPosOptions() *BitPosOptions {
-	return &BitPosOptions{}
+func NewBitPosOptions() BitPosOptions {
+	return BitPosOptions{}
 }
 
 // SetStart defines start byte to calculate bitpos in bitpos command.
-func (options *BitPosOptions) SetStart(start int64) *BitPosOptions {
+func (options BitPosOptions) SetStart(start int64) BitPosOptions {
 	options.start = &start
 	return options
 }
 
 // SetEnd defines end byte to calculate bitpos in bitpos command.
-func (options *BitPosOptions) SetEnd(end int64) *BitPosOptions {
+func (options BitPosOptions) SetEnd(end int64) BitPosOptions {
 	options.end = &end
 	return options
 }
 
 // SetBitmapIndexType to specify start and end are in BYTE or BIT
-func (options *BitPosOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) *BitPosOptions {
+func (options BitPosOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) BitPosOptions {
 	options.bitMapIndexType = bitMapIndexType
 	return options
 }
 
 // ToArgs converts the options to a list of arguments.
-func (opts *BitPosOptions) ToArgs() ([]string, error) {
+func (opts BitPosOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	if opts.start == nil {

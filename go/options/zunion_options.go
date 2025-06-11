@@ -3,21 +3,21 @@ package options
 
 // This struct represents the optional arguments for the ZUNION command.
 type ZUnionOptions struct {
-	aggregate Aggregate
+	aggregate *Aggregate
 }
 
-func NewZUnionOptionsBuilder() *ZUnionOptions {
-	return &ZUnionOptions{}
+func NewZUnionOptionsBuilder() ZUnionOptions {
+	return ZUnionOptions{}
 }
 
 // SetAggregate sets the aggregate method for the ZUnion command.
-func (options *ZUnionOptions) SetAggregate(aggregate Aggregate) *ZUnionOptions {
-	options.aggregate = aggregate
+func (options ZUnionOptions) SetAggregate(aggregate Aggregate) ZUnionOptions {
+	options.aggregate = &aggregate
 	return options
 }
 
-func (options *ZUnionOptions) ToArgs() ([]string, error) {
-	if options.aggregate != "" {
+func (options ZUnionOptions) ToArgs() ([]string, error) {
+	if options.aggregate != nil {
 		return options.aggregate.ToArgs()
 	}
 

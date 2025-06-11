@@ -39,10 +39,10 @@ type GlideClientCommands interface {
 	ScriptingAndFunctionStandaloneCommands
 	PubSubStandaloneCommands
 
-	Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error)
+	Exec(ctx context.Context, batch *pipeline.StandaloneBatch, raiseOnError bool) ([]any, error)
 	ExecWithOptions(
 		ctx context.Context,
-		batch pipeline.StandaloneBatch,
+		batch *pipeline.StandaloneBatch,
 		raiseOnError bool,
 		options pipeline.StandaloneBatchOptions,
 	) ([]any, error)
@@ -57,10 +57,10 @@ type GlideClusterClientCommands interface {
 	PubSubClusterCommands
 
 	UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error)
-	Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error)
+	Exec(ctx context.Context, batch *pipeline.ClusterBatch, raiseOnError bool) ([]any, error)
 	ExecWithOptions(
 		ctx context.Context,
-		batch pipeline.ClusterBatch,
+		batch *pipeline.ClusterBatch,
 		raiseOnError bool,
 		options pipeline.ClusterBatchOptions,
 	) ([]any, error)

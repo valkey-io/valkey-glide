@@ -4002,7 +4002,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (string, error) {
-	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
+	result, err := client.XAddWithOptions(ctx, key, values, options.NewXAddOptions())
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -4080,7 +4080,7 @@ func (client *baseClient) XAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
-	return client.XReadWithOptions(ctx, keysAndIds, *options.NewXReadOptions())
+	return client.XReadWithOptions(ctx, keysAndIds, options.NewXReadOptions())
 }
 
 // Reads entries from the given streams.
@@ -4156,7 +4156,7 @@ func (client *baseClient) XReadGroup(
 	consumer string,
 	keysAndIds map[string]string,
 ) (map[string]models.StreamResponse, error) {
-	return client.XReadGroupWithOptions(ctx, group, consumer, keysAndIds, *options.NewXReadGroupOptions())
+	return client.XReadGroupWithOptions(ctx, group, consumer, keysAndIds, options.NewXReadGroupOptions())
 }
 
 // Reads entries from the given streams owned by a consumer group.
@@ -4277,7 +4277,7 @@ func (client *baseClient) ZAddWithOptions(
 func (client *baseClient) zAddIncrBase(
 	ctx context.Context,
 	key string,
-	opts *options.ZAddOptions,
+	opts options.ZAddOptions,
 ) (models.Result[float64], error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -5117,7 +5117,7 @@ func (client *baseClient) XAutoClaim(
 	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimResponse, error) {
-	return client.XAutoClaimWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
+	return client.XAutoClaimWithOptions(ctx, key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -5209,7 +5209,7 @@ func (client *baseClient) XAutoClaimJustId(
 	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimJustIdResponse, error) {
-	return client.XAutoClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
+	return client.XAutoClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, start, options.NewXAutoClaimOptions())
 }
 
 // Transfers ownership of pending stream entries that match the specified criteria.
@@ -5467,7 +5467,7 @@ func (client *baseClient) XPendingWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(ctx context.Context, key string, group string, id string) (string, error) {
-	return client.XGroupCreateWithOptions(ctx, key, group, id, *options.NewXGroupCreateOptions())
+	return client.XGroupCreateWithOptions(ctx, key, group, id, options.NewXGroupCreateOptions())
 }
 
 // Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
@@ -5520,7 +5520,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 func (client *baseClient) Restore(ctx context.Context, key string, ttl time.Duration, value string) (string, error) {
-	return client.RestoreWithOptions(ctx, key, ttl, value, *options.NewRestoreOptions())
+	return client.RestoreWithOptions(ctx, key, ttl, value, options.NewRestoreOptions())
 }
 
 // Creates a key associated with a value that is obtained by
@@ -5646,7 +5646,7 @@ func (client *baseClient) XGroupDestroy(ctx context.Context, key string, group s
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-setid/
 func (client *baseClient) XGroupSetId(ctx context.Context, key string, group string, id string) (string, error) {
-	return client.XGroupSetIdWithOptions(ctx, key, group, id, *options.NewXGroupSetIdOptionsOptions())
+	return client.XGroupSetIdWithOptions(ctx, key, group, id, options.NewXGroupSetIdOptionsOptions())
 }
 
 // Sets the last delivered ID for a consumer group.
@@ -6474,7 +6474,7 @@ func (client *baseClient) XClaim(
 	minIdleTime time.Duration,
 	ids []string,
 ) (map[string]models.XClaimResponse, error) {
-	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
+	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message.
@@ -6549,7 +6549,7 @@ func (client *baseClient) XClaimJustId(
 	minIdleTime time.Duration,
 	ids []string,
 ) ([]string, error) {
-	return client.XClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
+	return client.XClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, ids, options.NewXClaimOptions())
 }
 
 // Changes the ownership of a pending message. This function returns an `array` with
@@ -6758,7 +6758,7 @@ func (client *baseClient) XRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) ([]models.XRangeResponse, error) {
-	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
+	return client.XRangeWithOptions(ctx, key, start, end, options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs.
@@ -6832,7 +6832,7 @@ func (client *baseClient) XRevRange(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 ) ([]models.XRangeResponse, error) {
-	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
+	return client.XRevRangeWithOptions(ctx, key, start, end, options.NewXRangeOptions())
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -7209,7 +7209,7 @@ func (client *baseClient) ZInterStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZInterStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZInterOptions())
+	return client.ZInterStoreWithOptions(ctx, destination, keysOrWeightedKeys, options.NewZInterOptions())
 }
 
 // Computes the intersection of sorted sets given by the specified `keysOrWeightedKeys`
@@ -7431,7 +7431,7 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 func (client *baseClient) ZUnionWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
@@ -7478,7 +7478,16 @@ func (client *baseClient) ZUnionStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, nil)
+	keysArgs, err := keysOrWeightedKeys.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	args := append([]string{destination}, keysArgs...)
+	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -7511,20 +7520,18 @@ func (client *baseClient) ZUnionStoreWithOptions(
 	ctx context.Context,
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) (int64, error) {
 	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
 	args := append([]string{destination}, keysArgs...)
-	if zUnionOptions != nil {
-		optionsArgs, err := zUnionOptions.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7555,7 +7562,12 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64, error) {
-	return client.ZInterCardWithOptions(ctx, keys, nil)
+	args := append([]string{strconv.Itoa(len(keys))}, keys...)
+	result, err := client.executeCommand(ctx, C.ZInterCard, args)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Returns the cardinality of the intersection of the sorted sets specified by `keys`.
@@ -7586,16 +7598,14 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 func (client *baseClient) ZInterCardWithOptions(
 	ctx context.Context,
 	keys []string,
-	options *options.ZInterCardOptions,
+	options options.ZInterCardOptions,
 ) (int64, error) {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
-	if options != nil {
-		optionsArgs, err := options.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZInterCard, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7618,7 +7628,7 @@ func (client *baseClient) ZInterCardWithOptions(
 //	The number of elements in the sorted set at key with a value between min and max.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
-func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error) {
+func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error) {
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(ctx, C.ZLexCount, args)
@@ -8127,7 +8137,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 		key,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
 }
@@ -8168,7 +8178,7 @@ func (client *baseClient) GeoSearch(
 		key,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchResultOptions(),
 	)
 }
 
@@ -8290,8 +8300,8 @@ func (client *baseClient) GeoSearchStore(
 		sourceKey,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
-		*options.NewGeoSearchStoreInfoOptions(),
+		options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchStoreInfoOptions(),
 	)
 }
 
@@ -8344,7 +8354,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 		searchFrom,
 		searchByShape,
 		resultOptions,
-		*options.NewGeoSearchStoreInfoOptions(),
+		options.NewGeoSearchStoreInfoOptions(),
 	)
 }
 
@@ -8396,7 +8406,7 @@ func (client *baseClient) GeoSearchStoreWithInfoOptions(
 		sourceKey,
 		searchFrom,
 		searchByShape,
-		*options.NewGeoSearchResultOptions(),
+		options.NewGeoSearchResultOptions(),
 		infoOptions,
 	)
 }

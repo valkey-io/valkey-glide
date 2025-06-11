@@ -24,11 +24,8 @@ type FlushClusterOptions struct {
 }
 
 // ToArgs converts the options to argument strings
-func (opts *FlushClusterOptions) ToArgs() []string {
+func (opts FlushClusterOptions) ToArgs() []string {
 	args := []string{}
-	if opts == nil {
-		return []string{}
-	}
 	if opts.FlushMode != nil {
 		args = append(args, string(*opts.FlushMode))
 	}

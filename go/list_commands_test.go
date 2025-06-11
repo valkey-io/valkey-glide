@@ -142,7 +142,7 @@ func ExampleClient_LPosWithOptions() {
 	result1, err := client.LPosWithOptions(context.Background(),
 		"my_list",
 		"e",
-		*options.NewLPosOptions().SetRank(2),
+		options.NewLPosOptions().SetRank(2),
 	) // (Returns the second occurrence of the element "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -161,7 +161,7 @@ func ExampleClusterClient_LPosWithOptions() {
 	result1, err := client.LPosWithOptions(context.Background(),
 		"my_list",
 		"e",
-		*options.NewLPosOptions().SetRank(2),
+		options.NewLPosOptions().SetRank(2),
 	) // (Returns the second occurrence of the element "e")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -207,9 +207,9 @@ func ExampleClusterClient_LPosCount() {
 func ExampleClient_LPosCountWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
+	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, options.NewLPosOptions().SetRank(2))
 	result2, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 3,
-		*options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
+		options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -226,9 +226,9 @@ func ExampleClient_LPosCountWithOptions() {
 func ExampleClusterClient_LPosCountWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, *options.NewLPosOptions().SetRank(2))
+	result1, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 1, options.NewLPosOptions().SetRank(2))
 	result2, err := client.LPosCountWithOptions(context.Background(), "my_list", "e", 3,
-		*options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
+		options.NewLPosOptions().SetRank(2).SetMaxLen(1000))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
