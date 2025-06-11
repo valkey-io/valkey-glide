@@ -161,9 +161,9 @@ jobs:
                   done
                   # TODO: move generation of protobuf and header file to a non-matrix step
                   cd x86_64-unknown-linux-gnu
-                  cp lib.h $GITHUB_WORKSPACE/go/
+                  cp go/lib.h $GITHUB_WORKSPACE/go/
                   mkdir -p $GITHUB_WORKSPACE/go/internal/protobuf
-                  cp internal/protobuf/* $GITHUB_WORKSPACE/go/internal/protobuf/
+                  cp go/internal/protobuf/* $GITHUB_WORKSPACE/go/internal/protobuf/
             - name: Commit and push tag
               run: |
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
