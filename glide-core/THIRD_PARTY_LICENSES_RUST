@@ -468,7 +468,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: adler2:2.0.0
+Package: adler2:2.0.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2546,7 +2546,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: cfg-if:1.0.0
+Package: cfg-if:1.0.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13565,7 +13565,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: miniz_oxide:0.8.8
+Package: miniz_oxide:0.8.9
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21161,7 +21161,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustc-demangle:0.1.24
+Package: rustc-demangle:0.1.25
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25535,7 +25535,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: syn:2.0.101
+Package: syn:2.0.102
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28469,7 +28469,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasi:0.11.0+wasi-snapshot-preview1
+Package: wasi:0.11.1+wasi-snapshot-preview1
 
 The following copyrights and licenses were found in the source code of this package:
 
