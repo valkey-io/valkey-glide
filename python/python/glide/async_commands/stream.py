@@ -14,8 +14,8 @@ class FieldInfo:
     Represents a field-value pair in a stream entry.
 
     Attributes:
-        field_name (bytes): The name of the field
-        value (bytes): The value of the field
+        field_name (bytes): The name of the field  # :no-index:
+        value (bytes): The value of the field  # :no-index:
     """
 
     field_name: bytes
@@ -29,7 +29,7 @@ class StreamEntry:
 
     Attributes:
         id (bytes): The unique identifier of the entry  # :no-index:
-        fields (List[FieldInfo]): The fields associated with the entry
+        fields (List[FieldInfo]): The fields associated with the entry  # :no-index:
     """
 
     id: bytes
@@ -42,7 +42,7 @@ class StreamResponse:
     Represents a stream with its entries.
 
     Attributes:
-        entries (List[StreamEntry]): The entries in the stream
+        entries (List[StreamEntry]): The entries in the stream  # :no-index:
     """
 
     entries: List[StreamEntry]
