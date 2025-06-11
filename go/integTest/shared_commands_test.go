@@ -4903,11 +4903,11 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		}
 
 		// Verify entry1 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry1.Value())
+		assert.Contains(suite.T(), entryMap, entry1)
 
 		// Check for field "a" with value "b" in entry1
 		foundFieldA := false
-		for _, field := range entryMap[entry1.Value()] {
+		for _, field := range entryMap[entry1] {
 			if field.FieldName == "a" && field.Value == "b" {
 				foundFieldA = true
 				break
@@ -4916,11 +4916,11 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.True(suite.T(), foundFieldA, "Field 'a' with value 'b' not found in entry1")
 
 		// Verify entry2 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry2.Value())
+		assert.Contains(suite.T(), entryMap, entry2)
 
 		// Check for field "c" with value "d" in entry2
 		foundFieldC := false
-		for _, field := range entryMap[entry2.Value()] {
+		for _, field := range entryMap[entry2] {
 			if field.FieldName == "c" && field.Value == "d" {
 				foundFieldC = true
 				break
@@ -4951,11 +4951,11 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Empty(suite.T(), entryMap[entry1])
 
 		// Verify entry2 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry2.Value())
+		assert.Contains(suite.T(), entryMap, entry2)
 
 		// Check for field "c" with value "d" in entry2
 		foundFieldC = false
-		for _, field := range entryMap[entry2.Value()] {
+		for _, field := range entryMap[entry2] {
 			if field.FieldName == "c" && field.Value == "d" {
 				foundFieldC = true
 				break
@@ -4981,7 +4981,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check that we have one entry with the correct ID and fields
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
-		assert.Equal(suite.T(), entry3.Value(), streamResponse.Entries[0].ID)
+		assert.Equal(suite.T(), entry3, streamResponse.Entries[0].ID)
 
 		// Check for field "e" with value "f" in the entry
 		foundFieldE := false
@@ -5029,11 +5029,11 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Contains(suite.T(), entryMap1, entry1)
 		assert.Empty(suite.T(), entryMap1[entry1])
 
-		assert.Contains(suite.T(), entryMap1, entry2.Value())
+		assert.Contains(suite.T(), entryMap1, entry2)
 
 		// Check for field "c" with value "d" in entry2
 		foundFieldC = false
-		for _, field := range entryMap1[entry2.Value()] {
+		for _, field := range entryMap1[entry2] {
 			if field.FieldName == "c" && field.Value == "d" {
 				foundFieldC = true
 				break
@@ -5041,11 +5041,11 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		}
 		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in entry2")
 
-		assert.Contains(suite.T(), entryMap1, entry3.Value())
+		assert.Contains(suite.T(), entryMap1, entry3)
 
 		// Check for field "e" with value "f" in entry3
 		foundFieldE = false
-		for _, field := range entryMap1[entry3.Value()] {
+		for _, field := range entryMap1[entry3] {
 			if field.FieldName == "e" && field.Value == "f" {
 				foundFieldE = true
 				break
@@ -7696,11 +7696,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamId1.Value())
+		assert.Contains(suite.T(), entryMap, streamId1)
 
 		// Check for field "field1" with value "value1" in entry
 		foundField1 := false
-		for _, field := range entryMap[streamId1.Value()] {
+		for _, field := range entryMap[streamId1] {
 			if field.FieldName == "field1" && field.Value == "value1" {
 				foundField1 = true
 				break
@@ -7708,11 +7708,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		}
 		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
 
-		assert.Contains(suite.T(), entryMap, streamId2.Value())
+		assert.Contains(suite.T(), entryMap, streamId2)
 
 		// Check for field "field2" with value "value2" in entry
 		foundField2 := false
-		for _, field := range entryMap[streamId2.Value()] {
+		for _, field := range entryMap[streamId2] {
 			if field.FieldName == "field2" && field.Value == "value2" {
 				foundField2 = true
 				break
@@ -7744,11 +7744,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Contains(suite.T(), entryMap, streamId1)
 		assert.Empty(suite.T(), entryMap[streamId1])
 
-		assert.Contains(suite.T(), entryMap, streamId2.Value())
+		assert.Contains(suite.T(), entryMap, streamId2)
 
 		// Check for field "field2" with value "value2" in entry
 		foundField2 = false
-		for _, field := range entryMap[streamId2.Value()] {
+		for _, field := range entryMap[streamId2] {
 			if field.FieldName == "field2" && field.Value == "value2" {
 				foundField2 = true
 				break
@@ -7785,7 +7785,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		streamResponse, exists = resp[key]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
-		assert.Equal(suite.T(), streamId3.Value(), streamResponse.Entries[0].ID)
+		assert.Equal(suite.T(), streamId3, streamResponse.Entries[0].ID)
 
 		// Check for field "field3" with value "value3" in entry
 		foundField3 := false
@@ -8647,11 +8647,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamid_1.Value())
+		assert.Contains(suite.T(), entryMap, streamid_1)
 
 		// Check for field "field1" with value "value1" in entry
 		foundField1 := false
-		for _, field := range entryMap[streamid_1.Value()] {
+		for _, field := range entryMap[streamid_1] {
 			if field.FieldName == "field1" && field.Value == "value1" {
 				foundField1 = true
 				break
@@ -8659,11 +8659,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
 
-		assert.Contains(suite.T(), entryMap, streamid_2.Value())
+		assert.Contains(suite.T(), entryMap, streamid_2)
 
 		// Check for field "field2" with value "value2" in entry
 		foundField2 := false
-		for _, field := range entryMap[streamid_2.Value()] {
+		for _, field := range entryMap[streamid_2] {
 			if field.FieldName == "field2" && field.Value == "value2" {
 				foundField2 = true
 				break
@@ -8698,11 +8698,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap2, streamid_3.Value())
+		assert.Contains(suite.T(), entryMap2, streamid_3)
 
 		// Check for field "field3" with value "value3" in entry
 		foundField3 := false
-		for _, field := range entryMap2[streamid_3.Value()] {
+		for _, field := range entryMap2[streamid_3] {
 			if field.FieldName == "field3" && field.Value == "value3" {
 				foundField3 = true
 				break
@@ -8710,11 +8710,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
 
-		assert.Contains(suite.T(), entryMap2, streamid_4.Value())
+		assert.Contains(suite.T(), entryMap2, streamid_4)
 
 		// Check for field "field4" with value "value4" in entry
 		foundField4 := false
-		for _, field := range entryMap2[streamid_4.Value()] {
+		for _, field := range entryMap2[streamid_4] {
 			if field.FieldName == "field4" && field.Value == "value4" {
 				foundField4 = true
 				break
@@ -8722,11 +8722,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 		assert.True(suite.T(), foundField4, "Field 'field4' with value 'value4' not found in entry")
 
-		assert.Contains(suite.T(), entryMap2, streamid_5.Value())
+		assert.Contains(suite.T(), entryMap2, streamid_5)
 
 		// Check for field "field5" with value "value5" in entry
 		foundField5 := false
-		for _, field := range entryMap2[streamid_5.Value()] {
+		for _, field := range entryMap2[streamid_5] {
 			if field.FieldName == "field5" && field.Value == "value5" {
 				foundField5 = true
 				break
@@ -8793,12 +8793,12 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		)
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
-			streamid_3.Value(): {
+			streamid_3: {
 				Fields: []models.FieldInfo{
 					{FieldName: "field3", Value: "value3"},
 				},
 			},
-			streamid_5.Value(): {
+			streamid_5: {
 				Fields: []models.FieldInfo{
 					{FieldName: "field5", Value: "value5"},
 				},
@@ -8833,7 +8833,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(
 			suite.T(),
 			map[string]models.XClaimResponse{
-				streamid_6.Value(): {
+				streamid_6: {
 					Fields: []models.FieldInfo{
 						{FieldName: "field6", Value: "value6"},
 					},

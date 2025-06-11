@@ -1936,40 +1936,7 @@ func ExampleClient_XInfoStream() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	// Create a map to represent the response for JSON output
-	responseMap := map[string]interface{}{
-		"entries-added":           response.EntriesAdded,
-		"groups":                  response.Groups,
-		"last-generated-id":       response.LastGeneratedID,
-		"length":                  response.Length,
-		"max-deleted-entry-id":    response.MaxDeletedEntryID,
-		"radix-tree-keys":         response.RadixTreeKeys,
-		"radix-tree-nodes":        response.RadixTreeNodes,
-		"recorded-first-entry-id": response.FirstEntry.ID,
-	}
-
-	// Add first-entry with its fields
-	firstEntryFields := []interface{}{response.FirstEntry.ID}
-	fieldsArray := []interface{}{}
-	for _, field := range response.FirstEntry.Fields {
-		fieldsArray = append(fieldsArray, field.FieldName, field.Value)
-	}
-	firstEntryFields = append(firstEntryFields, fieldsArray)
-	responseMap["first-entry"] = firstEntryFields
-
-	// Add last-entry with its fields
-	lastEntryFields := []interface{}{response.LastEntry.ID}
-	fieldsArray = []interface{}{}
-	for _, field := range response.LastEntry.Fields {
-		fieldsArray = append(fieldsArray, field.FieldName, field.Value)
-	}
-	lastEntryFields = append(lastEntryFields, fieldsArray)
-	responseMap["last-entry"] = lastEntryFields
-
-	jsonResult, _ := json.MarshalIndent(responseMap, "", "  ")
-
-	fmt.Println(string(jsonResult))
-	// Output:
+	// Response Structure is as follows:
 	// {
 	//   "entries-added": 1,
 	//   "first-entry": [
@@ -1994,6 +1961,22 @@ func ExampleClient_XInfoStream() {
 	//   "radix-tree-nodes": 2,
 	//   "recorded-first-entry-id": "12345-1"
 	// }
+
+	// Output a few entries from the return object.
+	fmt.Print("Entries Added: ")
+	fmt.Println(response.EntriesAdded)
+	fmt.Print("Groups: ")
+	fmt.Println(response.Groups)
+	fmt.Print("Last generated Id: ")
+	fmt.Println(response.LastGeneratedID)
+	fmt.Print("Length: ")
+	fmt.Println(response.Length)
+
+	// Output:
+	// Entries Added: 1
+	// Groups: 0
+	// Last generated Id: 12345-1
+	// Length: 1
 }
 
 func ExampleClusterClient_XInfoStream() {
