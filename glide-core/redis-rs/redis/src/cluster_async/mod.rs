@@ -908,9 +908,8 @@ impl<C> Future for Request<C> {
                 }
                 if let Some(request) = self.project().request.take() {
                     return Next::Retry { request }.into();
-                } else {
-                    return Next::Done.into();
                 }
+                return Next::Done.into();
             }
             _ => panic!("Request future must be Some"),
         };

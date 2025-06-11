@@ -28,9 +28,10 @@ use std::sync::Arc;
 use crate::push_manager::PushManager;
 use crate::PushInfo;
 
-use rustls_native_certs::load_native_certs;
-
 use crate::tls::TlsConnParams;
+use std::sync::OnceLock;
+
+static CRYPTO_PROVIDER: OnceLock<()> = OnceLock::new();
 
 static DEFAULT_PORT: u16 = 6379;
 
@@ -765,19 +766,14 @@ pub(crate) fn create_rustls_config(
     insecure: bool,
     tls_params: Option<TlsConnParams>,
 ) -> RedisResult<rustls::ClientConfig> {
-    use crate::tls::ClientTlsParams;
+    // install the default (ring) crypto provider exactly once
+    CRYPTO_PROVIDER.get_or_init(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
 
-    #[allow(unused_mut)]
+    use crate::tls::ClientTlsParams;
     let mut root_store = RootCertStore::empty();
-    for cert in load_native_certs().certs {
-        root_store.add(cert).map_err(|e| {
-            RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Failed to add certificate to root store",
-                format!("{}", e),
-            ))
-        })?;
-    }
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
     let config = rustls::ClientConfig::builder();
     let config = if let Some(tls_params) = tls_params {
