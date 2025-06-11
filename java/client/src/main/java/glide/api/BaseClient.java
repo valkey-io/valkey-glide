@@ -1482,7 +1482,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LRange,
                 new GlideString[] {key, gs(Long.toString(start)), gs(Long.toString(end))},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
