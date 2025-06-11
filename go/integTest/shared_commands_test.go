@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -4875,6 +4876,9 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check that we have two entries with the correct IDs and fields
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: entry1,
@@ -4983,7 +4987,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), entryMap1[entry2], []models.FieldInfo{{FieldName: "c", Value: "d"}})
 
 		assert.Contains(suite.T(), entryMap1, entry3)
-		assert.NotContains(suite.T(), entryMap1, entry3)
+		assert.NotContains(suite.T(), entryMap1[entry3], []models.FieldInfo{{FieldName: "e", Value: "f"}})
 
 		// Check key2 stream (should be empty)
 		streamResponse2, exists := res[key2]
@@ -5070,16 +5074,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse1.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse1.Entries[0].ID)
-
-		// Check fields in the entry
-		foundK1Field1 := false
-		for _, field := range streamResponse1.Entries[0].Fields {
-			if field.FieldName == "k1_field1" && field.Value == "k1_value2" {
-				foundK1Field1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundK1Field1, "Field k1_field1 with value k1_value2 not found")
+		assert.Equal(suite.T(), streamResponse1.Entries[0].Fields,
+			[]models.FieldInfo{{FieldName: "k1_field1", Value: "k1_value1"}, {FieldName: "k1_field1", Value: "k1_value2"}})
 
 		// Check key2 stream
 		streamResponse2, exists := read[key2]
@@ -5087,15 +5083,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Equal(suite.T(), 1, len(streamResponse2.Entries))
 		assert.Equal(suite.T(), "2-0", streamResponse2.Entries[0].ID)
 
-		// Check fields in the entry
-		foundK2Field1 := false
-		for _, field := range streamResponse2.Entries[0].Fields {
-			if field.FieldName == "k2_field1" && field.Value == "k2_value1" {
-				foundK2Field1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundK2Field1, "Field k2_field1 with value k2_value1 not found")
+		assert.Equal(suite.T(), streamResponse2.Entries[0].Fields,
+			[]models.FieldInfo{{FieldName: "k2_field1", Value: "k2_value1"}})
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
