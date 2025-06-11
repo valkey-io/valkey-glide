@@ -2,9 +2,50 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import List, Optional, Union
 
 from glide.constants import TEncodable
+
+
+@dataclass
+class FieldInfo:
+    """
+    Represents a field-value pair in a stream entry.
+
+    Attributes:
+        field_name (bytes): The name of the field
+        value (bytes): The value of the field
+    """
+
+    field_name: bytes
+    value: bytes
+
+
+@dataclass
+class StreamEntry:
+    """
+    Represents a single entry/element in a stream.
+
+    Attributes:
+        id (bytes): The unique identifier of the entry
+        fields (List[FieldInfo]): The fields associated with the entry
+    """
+
+    id: bytes
+    fields: List[FieldInfo]
+
+
+@dataclass
+class StreamResponse:
+    """
+    Represents a stream with its entries.
+
+    Attributes:
+        entries (List[StreamEntry]): The entries in the stream
+    """
+
+    entries: List[StreamEntry]
 
 
 class StreamTrimOptions(ABC):

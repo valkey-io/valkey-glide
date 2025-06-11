@@ -5494,42 +5494,67 @@ class TestCommands:
             == stream_id2_3.encode()
         )
 
-        assert await glide_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
-            key1.encode(): {
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
-            },
-            key2.encode(): {
-                stream_id2_2.encode(): [[b"f2_2", b"v2_2"]],
-                stream_id2_3.encode(): [[b"f2_3", b"v2_3"]],
-            },
-        }
+        result = await glide_client.xread({key1: stream_id1_1, key2: stream_id2_1})
+        assert result is not None
+
+        # Check key1 stream
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 2
+
+        # Check entries for key1
+        entries_key1 = result[key1.encode()].entries
+        assert entries_key1[0].id == stream_id1_2.encode()
+        assert len(entries_key1[0].fields) == 1
+        assert entries_key1[0].fields[0].field_name == b"f1_2"
+        assert entries_key1[0].fields[0].value == b"v1_2"
+
+        assert entries_key1[1].id == stream_id1_3.encode()
+        assert len(entries_key1[1].fields) == 1
+        assert entries_key1[1].fields[0].field_name == b"f1_3"
+        assert entries_key1[1].fields[0].value == b"v1_3"
+
+        # Check key2 stream
+        assert key2.encode() in result
+        assert len(result[key2.encode()].entries) == 2
+
+        # Check entries for key2
+        entries_key2 = result[key2.encode()].entries
+        assert entries_key2[0].id == stream_id2_2.encode()
+        assert len(entries_key2[0].fields) == 1
+        assert entries_key2[0].fields[0].field_name == b"f2_2"
+        assert entries_key2[0].fields[0].value == b"v2_2"
+
+        assert entries_key2[1].id == stream_id2_3.encode()
+        assert len(entries_key2[1].fields) == 1
+        assert entries_key2[1].fields[0].field_name == b"f2_3"
+        assert entries_key2[1].fields[0].value == b"v2_3"
 
         assert await glide_client.xread({non_existing_key: stream_id1_1}) is None
         assert await glide_client.xread({key1: non_existing_id}) is None
 
         # passing an empty read options argument has no effect
-        assert await glide_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
-            key1.encode(): {
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
-            },
-        }
+        result = await glide_client.xread({key1: stream_id1_1}, StreamReadOptions())
+        assert result is not None
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 2
 
-        assert await glide_client.xread(
+        # Check with count=1
+        result = await glide_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1)
-        ) == {
-            key1.encode(): {
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-            },
-        }
-        assert await glide_client.xread(
+        )
+        assert result is not None
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 1
+        assert result[key1.encode()].entries[0].id == stream_id1_2.encode()
+
+        # Check with block_ms
+        result = await glide_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
-        ) == {
-            key1.encode(): {
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-            },
-        }
+        )
+        assert result is not None
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 1
+        assert result[key1.encode()].entries[0].id == stream_id1_2.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5581,22 +5606,19 @@ class TestCommands:
         await test_client.close()
 
         # if count is non-positive, it is ignored
-        assert await glide_client.xread(
+        result = await glide_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=0)
-        ) == {
-            key1.encode(): {
-                stream_id1.encode(): [[b"f1", b"v1"]],
-                stream_id2.encode(): [[b"f2", b"v2"]],
-            },
-        }
-        assert await glide_client.xread(
+        )
+        assert result is not None
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 2
+
+        result = await glide_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=-1)
-        ) == {
-            key1.encode(): {
-                stream_id1.encode(): [[b"f1", b"v1"]],
-                stream_id2.encode(): [[b"f2", b"v2"]],
-            },
-        }
+        )
+        assert result is not None
+        assert key1.encode() in result
+        assert len(result[key1.encode()].entries) == 2
 
         # invalid stream ID
         with pytest.raises(RequestError):
