@@ -1712,16 +1712,18 @@ class BaseBatch:
     ) -> TBatch:
         """
         Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-        If `count` is positive, it removes elements equal to `element` moving from head to tail.
-        If `count` is negative, it removes elements equal to `element` moving from tail to head.
-        If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
-        equal to `element`.
 
         See [valkey.io](https://valkey.io/commands/lrem/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
             count (int): The count of occurrences of elements equal to `element` to remove.
+
+                - If `count` is positive, it removes elements equal to `element` moving from head to tail.
+                - If `count` is negative, it removes elements equal to `element` moving from tail to head.
+                - If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
+                  equal to `element`.
+
             element (TEncodable): The element to remove from the list.
 
         Commands response:
