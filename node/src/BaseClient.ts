@@ -378,9 +378,9 @@ export type XPendingResult = {
     /** The total number of pending messages for this consumer group. */
     numMessages: number;
     /** The smallest ID among the pending messages or null if no pending messages exist. */
-    startId: string | null;
+    startId: GlideString | null;
     /** The greatest ID among the pending messages or null if no pending messages exists. */
-    endId: string | null;
+    endId: GlideString | null;
     /**
      * 	GroupConsumers - An array of ConsumerPendingMessages with the following fields:
      *  ConsumerName - The name of the consumer.
@@ -395,7 +395,7 @@ export type XPendingResult = {
  */
 export type ConsumerPendingMessage = {
     /** Name of the consumer. */
-    consumerName: string;
+    consumerName: GlideString;
     /** Number of pending messages for the consumer */
     messageCount: number;
 };
@@ -501,16 +501,19 @@ export function convertArrayToXPendingDetail(
  * Handle array responses into an XPendingResult object.
  */
 export function convertArrayToXPendingResult(
-    data: (string | number | string[][])[],
+    data: (GlideString | number | [GlideString, number][])[],
 ): XPendingResult {
     const numMsgs: number = data[0] as number;
-    const startId: string | null = data[1] as string;
-    const endId: string | null = data[2] as string;
+    const startId: GlideString | null = data[1] as GlideString;
+    const endId: GlideString | null = data[2] as GlideString;
     const consumerMessages: ConsumerPendingMessage[] = [];
 
-    for (const cm of data[3] as string[][]) {
+    console.log("The data is: ");
+    console.log(data);
+
+    for (const cm of data[3] as [GlideString, number][]) {
         consumerMessages.push({
-            consumerName: cm[0] as string,
+            consumerName: cm[0] as GlideString,
             messageCount: Number(cm[1]),
         });
     }
@@ -5841,19 +5844,19 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
-     * @returns An `array` that includes the summary of the pending messages. See example for more details.
+     * @returns An object that includes the summary of the pending messages. See `XPendingResult` for more details.
      * @example
      * ```typescript
      * console.log(await client.xpending("my_stream", "my_group")); // Output:
-     * // [
-     * //     42,                            // The total number of pending messages
-     * //     "1722643465939-0",             // The smallest ID among the pending messages
-     * //     "1722643484626-0",             // The greatest ID among the pending messages
-     * //     [                              // A 2D-`array` of every consumer in the group
-     * //         [ "consumer1", "10" ],     // with at least one pending message, and the
-     * //         [ "consumer2", "32" ],     // number of pending messages it has
-     * //     ]
-     * // ]
+     * {
+     *    numMessages: 42,
+     *    startId: "1722643465939-0",
+     *    endId: "1722643484626-0",
+     *    groupConsumers: [
+     *        { consumerName: "consumer1", messageCount: 10 },
+     *        { consumerName: "consumer2", messageCount: 32 },
+     *    ]
+     * }
      * ```
      */
     public async xpending(
@@ -5875,7 +5878,7 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param group - The consumer group name.
      * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
-     * @returns A 2D-`array` of 4-tuples containing extended message information. See example for more details.
+     * @returns An `array` of `XPendingDetail`s. See `XPendingDetail` for more details.
      *
      * @example
      * ```typescript
@@ -5886,18 +5889,18 @@ export class BaseClient {
      *     consumer: "consumer1"
      * }); // Output:
      * // [
-     * //     [
-     * //         "1722643465939-0",  // The ID of the message
-     * //         "consumer1",        // The name of the consumer that fetched the message and has still to acknowledge it
-     * //         174431,             // The number of milliseconds that elapsed since the last time this message was delivered to this consumer
-     * //         1                   // The number of times this message was delivered
-     * //     ],
-     * //     [
-     * //         "1722643484626-0",
-     * //         "consumer1",
-     * //         202231,
-     * //         1
-     * //     ]
+     * //     {
+     * //         id: "1722643465939-0",
+     * //         consumerName: "consumer1",
+     * //         idleTime: 174431,
+     * //         deliveryCount: 1,
+     * //     },
+     * //     {
+     * //         id: "1722643484626-0",
+     * //         consumerName: "consumer1",
+     * //         idleTime: 202231,
+     * //         deliverCount: 1,
+     * //     }
      * // ]
      * ```
      */
