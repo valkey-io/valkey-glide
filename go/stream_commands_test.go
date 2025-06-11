@@ -1473,8 +1473,15 @@ func ExampleClient_XClaimWithOptions() {
 	fmt.Printf("Claimed %d message\n", len(response))
 
 	// Access fields from the claimed message
-	for id, _ := range response {
+	for id, claimResponse := range response {
 		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
+		// Print a sample field if available
+		if len(claimResponse.Fields) > 0 {
+			for _, fieldInfo := range claimResponse.Fields {
+				fmt.Printf("Field: %d, Value: %s\n", fieldInfo.FieldName, fieldInfo.Value)
+				break // Just print the first field as an example
+			}
+		}
 	}
 
 	// Output: Claimed 1 message
