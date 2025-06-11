@@ -382,7 +382,7 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            let clinet = self.get_or_initialize_client().await?;
+            let client = self.get_or_initialize_client().await?;
 
             let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
@@ -391,7 +391,7 @@ impl Client {
             };
 
             let value = run_with_timeout(request_timeout, async move {
-                match clinet {
+                match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
                         let final_routing =
