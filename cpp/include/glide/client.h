@@ -4,9 +4,11 @@
 #include <absl/status/status.h>
 #include <absl/status/statusor.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "config.h"
@@ -16,81 +18,138 @@
 namespace glide {
 
 /**
- * The Client class is responsible for managing the connection of a client
- * to a server using a given configuration. It provides methods
- * to connect to the server and handles the connection lifecycle.
+ * @brief A client for connecting to and interacting with a Redis-compatible
+ * server.
+ *
+ * The Client class manages the connection lifecycle and provides methods for
+ * executing Redis commands asynchronously. It supports both string and binary
+ * data operations.
  */
 class Client {
  public:
   /**
-   * Constructs a Client with a const configuration.
+   * @brief Constructs a new Client instance.
    *
-   * @param config A const reference to a glide::Config object.
+   * @param config Configuration object containing connection parameters and
+   * settings.
    */
   explicit Client(const Config &config);
 
   /**
-   * Connects the client using the serialized configuration.
+   * @brief Establishes a connection to the server.
    *
-   * @return True if the connection is successful, false otherwise.
+   * @return true if the connection was established successfully, false
+   * otherwise.
    */
   bool connect();
 
   /**
-   * Sets a key-value pair in the client's configuration.
+   * @brief Sets a string value for the specified key.
    *
    * @param key The key to set.
-   * @param value The value to associate with the key.
-   * @return A Future containing the status of the operation.
+   * @param value The string value to associate with the key.
+   * @return A Future that resolves to the status of the operation.
    */
   Future<absl::Status> set(const std::string &key, const std::string &value);
 
   /**
-   * Retrieves the value associated with the given key from the client's
-   * configuration.
+   * @brief Sets a binary value for the specified key.
    *
-   * @param key The key whose associated value is to be returned.
-   * @return A Future containing the value associated with the specified key,
-   *         or an error status if the key is not found or an error occurs.
+   * @param key The key to set.
+   * @param value The binary value to associate with the key.
+   * @return A Future that resolves to the status of the operation.
    */
-  Future<absl::StatusOr<std::string>> get(const std::string &key);
+  Future<absl::Status> set(const std::string &key,
+                           const std::vector<std::byte> &value);
 
   /**
-   * Gets a value associated with the given string `key` and deletes the key.
+   * @brief Retrieves the value associated with the specified key.
    *
-   * @param key The key whose associated value is to be returned and deleted.
-   * @return A Future containing the value associated with the specified key,
-   *         or an error status if the key is not found or an error occurs.
+   * @tparam T The return type, must be std::string or std::vector<std::byte>.
+   * @param key The key whose value should be retrieved.
+   * @return A Future that resolves to the value associated with the key,
+   *         or an error if the key is not found or an error occurs.
    */
-  Future<absl::StatusOr<std::string>> getdel(const std::string &key);
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, std::string> ||
+                       std::is_same_v<T, std::vector<std::byte>>,
+                   Future<absl::StatusOr<T>>>
+  get(const std::string &key) {
+    Future<absl::StatusOr<T>> future;
+    auto future_ptr = reinterpret_cast<uintptr_t>(&future);
+    std::vector<std::string> args = {key};
+    exec_command(core::RequestType::Get, args, future_ptr);
+    return future;
+  }
 
   /**
-   * Sets multiple field-value pairs in a hash stored at the given key.
+   * @brief Retrieves and deletes the value associated with the specified key.
+   *
+   * @tparam T The return type, must be std::string or std::vector<std::byte>.
+   * @param key The key whose value should be retrieved and deleted.
+   * @return A Future that resolves to the value associated with the key,
+   *         or an error if the key is not found or an error occurs.
+   */
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, std::string> ||
+                       std::is_same_v<T, std::vector<std::byte>>,
+                   Future<absl::StatusOr<T>>>
+  getdel(const std::string &key) {
+    Future<absl::StatusOr<T>> future;
+    auto future_ptr = reinterpret_cast<uintptr_t>(&future);
+    std::vector<std::string> args = {key};
+    exec_command(core::RequestType::GetDel, args, future_ptr);
+    return future;
+  }
+
+  /**
+   * @brief Sets multiple string field-value pairs in a hash.
    *
    * @param key The key where the hash is stored.
-   * @param field_values A map containing the field-value pairs to set in the
+   * @param field_values A map of field names to string values to set in the
    * hash.
-   * @return A Future containing the status of the operation.
+   * @return A Future that resolves to the status of the operation.
    */
   Future<absl::Status> hset(
       const std::string &key,
       const std::map<std::string, std::string> &field_values);
 
   /**
-   * Retrieves the value associated with a field in a hash stored at the given
-   * key.
+   * @brief Sets multiple binary field-value pairs in a hash.
    *
    * @param key The key where the hash is stored.
-   * @param field The field within the hash whose value should be retrieved.
-   * @return A Future containing the value associated with the specified field,
-   *         or an error status if the key or field is not found or an error
-   * occurs.
+   * @param field_values A map of field names to binary values to set in the
+   * hash.
+   * @return A Future that resolves to the status of the operation.
    */
-  Future<absl::StatusOr<std::string>> hget(const std::string &key,
-                                           const std::string &field);
+  Future<absl::Status> hset(
+      const std::string &key,
+      const std::map<std::string, std::vector<std::byte>> &field_values);
 
   /**
-   * Destructor for the Client class.
+   * @brief Retrieves the value of a field in a hash.
+   *
+   * @tparam T The return type, must be std::string or std::vector<std::byte>.
+   * @param key The key where the hash is stored.
+   * @param field The field name within the hash whose value should be
+   * retrieved.
+   * @return A Future that resolves to the value of the specified field,
+   *         or an error if the key or field is not found or an error occurs.
+   */
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, std::string> ||
+                       std::is_same_v<T, std::vector<std::byte>>,
+                   Future<absl::StatusOr<T>>>
+  hget(const std::string &key, const std::string &field) {
+    Future<absl::StatusOr<T>> future;
+    auto future_ptr = reinterpret_cast<uintptr_t>(&future);
+    std::vector<std::string> args = {key, field};
+    exec_command(core::RequestType::HGet, args, future_ptr);
+    return future;
+  }
+
+  /**
+   * @brief Destroys the Client instance and cleans up resources.
    */
   ~Client();
 
@@ -99,15 +158,29 @@ class Client {
   const core::ConnectionResponse *connection_;
 
   /**
-   * Executes a command with the given request type and arguments.
+   * @brief Executes a command with string arguments.
    *
    * @param type The type of request to execute.
    * @param args A vector of string arguments for the command.
-   * @param channel_ptr A pointer to the channel for handling the command
+   * @param channel_ptr A pointer to the future object for handling the
    * response.
    */
   void exec_command(core::RequestType type, std::vector<std::string> &args,
                     uintptr_t channel_ptr);
+
+  /**
+   * @brief Executes a command with binary arguments.
+   *
+   * @param type The type of request to execute.
+   * @param args A vector of pointers to the raw binary argument data.
+   * @param args_len A vector of argument lengths corresponding to each
+   * argument.
+   * @param channel_ptr A pointer to the future object for handling the
+   * response.
+   */
+  void exec_command_b(core::RequestType type, std::vector<uintptr_t> &args,
+                      std::vector<unsigned long> &args_len,
+                      uintptr_t channel_ptr);
 };
 
 }  // namespace glide
