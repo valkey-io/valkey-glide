@@ -11768,7 +11768,14 @@ export function runBaseTests(config: {
                             [key]: ">",
                         }))!,
                     ),
-                ).toEqual({ [key]: { [stream_id1_2]: [["f2", "v2"]] } });
+                ).toEqual({
+                    [key]: [
+                        {
+                            id: stream_id1_2,
+                            fields: [{ field: "f2", value: "v2" }],
+                        },
+                    ],
+                });
 
                 // deleting the consumer, returns 1 since the last entry still hasn't been acknowledged
                 expect(
