@@ -169,7 +169,8 @@ jobs:
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
-                  git add -f .
+                  git add -f go
+                  git status
                   git commit -m "Automated commit from GitHub Actions"
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION
