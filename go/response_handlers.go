@@ -949,35 +949,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 
 	for id, entriesArray := range claimMap {
 		// Process fields
-		fieldInfos := make([]models.FieldInfo, 0)
-
-		entriesData, ok := entriesArray.([]any)
-		if !ok {
-			entriesData = []any{}
-		}
-
-		for _, entryData := range entriesData {
-			fieldValuePairs, ok := entryData.([]any)
-			if !ok || len(fieldValuePairs) < 2 {
-				continue
-			}
-
-			if ok && len(fieldValuePairs) > 0 {
-				for i := 0; i < len(fieldValuePairs); i += 2 {
-					if i+1 < len(fieldValuePairs) {
-						fieldName, okField := fieldValuePairs[i].(string)
-						fieldValue, okValue := fieldValuePairs[i+1].(string)
-						if okField && okValue {
-							fieldInfos = append(fieldInfos, models.FieldInfo{
-								FieldName: fieldName,
-								Value:     fieldValue,
-							})
-						}
-					}
-				}
-			}
-		}
-
+		fieldInfos := createFieldInfoArray(entriesArray)
 		result[id] = models.XClaimResponse{
 			Fields: fieldInfos,
 		}
@@ -1205,36 +1177,7 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 		// Process fields
 		for id, entriesArray := range streamData.(map[string]any) {
 			// Process stream entries
-			entriesData, ok := entriesArray.([]any)
-			if !ok {
-				entriesData = []any{}
-			}
-
-			// Create a slice to hold field-value pairs
-			fieldInfos := make([]models.FieldInfo, 0)
-
-			for _, entryData := range entriesData {
-				fieldValuePairs, ok := entryData.([]any)
-				if !ok || len(fieldValuePairs) < 2 {
-					continue
-				}
-
-				if ok && len(fieldValuePairs) > 0 {
-					for i := 0; i < len(fieldValuePairs); i += 2 {
-						if i+1 < len(fieldValuePairs) {
-							fieldName, okField := fieldValuePairs[i].(string)
-							fieldValue, okValue := fieldValuePairs[i+1].(string)
-							if okField && okValue {
-								// Add field-value pair to the slice
-								fieldInfos = append(fieldInfos, models.FieldInfo{
-									FieldName: fieldName,
-									Value:     fieldValue,
-								})
-							}
-						}
-					}
-				}
-			}
+			fieldInfos := createFieldInfoArray(entriesArray)
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
 				Fields: fieldInfos,
@@ -1806,30 +1749,46 @@ func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
 	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
 		// First element is the ID
 		if id, ok := firstEntryArray[0].(string); ok {
+			// Create field info array.
+			entryArray := []any{firstEntryArray[1]}
+			fieldInfos := createFieldInfoArray(entryArray)
 			// Create a StreamEntry with the ID
 			entry = models.StreamEntry{
 				ID:     id,
-				Fields: make([]models.FieldInfo, 0),
+				Fields: fieldInfos,
 			}
+		}
+	}
+	return entry
+}
 
-			// Second element is an array of field-value pairs
-			if fieldValueArray, ok := firstEntryArray[1].([]any); ok {
-				// Process field-value pairs (they come as alternating field, value, field, value...)
-				for i := 0; i < len(fieldValueArray); i += 2 {
-					if i+1 < len(fieldValueArray) {
-						if field, ok := fieldValueArray[i].(string); ok {
-							if value, ok := fieldValueArray[i+1].(string); ok {
-								// Add field-value pair to the Fields slice
-								entry.Fields = append(entry.Fields, models.FieldInfo{
-									FieldName: field,
-									Value:     value,
-								})
-							}
-						}
+func createFieldInfoArray(entriesArray any) []models.FieldInfo {
+	fieldInfos := make([]models.FieldInfo, 0)
+	entriesData, ok := entriesArray.([]any)
+	if !ok {
+		entriesData = []any{}
+	}
+
+	for _, entryData := range entriesData {
+		fieldValuePairs, ok := entryData.([]any)
+		if !ok || len(fieldValuePairs) < 2 {
+			continue
+		}
+
+		if ok && len(fieldValuePairs) > 0 {
+			for i := 0; i < len(fieldValuePairs); i += 2 {
+				if i+1 < len(fieldValuePairs) {
+					fieldName, okField := fieldValuePairs[i].(string)
+					fieldValue, okValue := fieldValuePairs[i+1].(string)
+					if okField && okValue {
+						fieldInfos = append(fieldInfos, models.FieldInfo{
+							FieldName: fieldName,
+							Value:     fieldValue,
+						})
 					}
 				}
 			}
 		}
 	}
-	return entry
+	return fieldInfos
 }
