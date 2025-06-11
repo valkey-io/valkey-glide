@@ -11031,17 +11031,17 @@ export function runBaseTests(config: {
                     { [key]: ">" },
                 );
                 expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
-                    [key]: {
-                        [streamId1]: [
-                            ["entry1_field1", "entry1_value1"],
-                            ["entry1_field2", "entry1_value2"],
-                        ],
-                        [streamId2]: [
-                            ["entry2_field1", "entry2_value1"],
-                            ["entry2_field2", "entry2_value2"],
-                        ],
-                        [streamId3]: [["entry3_field1", "entry3_value1"]],
-                    },
+                    [key]: [
+                        {id: streamId1, fields: [
+                            {field: "entry1_field1", value: "entry1_value1"},
+                            {field: "entry1_field2", value: "entry1_value2"},
+                        ]},
+                        {id: streamId2, fields: [
+                            {field: "entry2_field1", value: "entry2_value1"},
+                            {field: "entry2_field2", value: "entry2_value2"},
+                        ]},
+                        {id: streamId3, fields: [{field: "entry3_field1", value: "entry3_value1"}]},
+                    ],
                 });
                 // after reading, `lag` is reset, and `pending`, consumer count and last ID are set
                 expect(await client.xinfoGroups(key)).toEqual(
@@ -11551,13 +11551,13 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key]: {
-                        "0-1": [
-                            ["entry1_field1", "entry1_value1"],
-                            ["entry1_field2", "entry1_value2"],
-                        ],
-                        "0-2": [["entry2_field1", "entry2_value1"]],
-                    },
+                    [key]: [
+                        {id: "0-1", fields: [
+                            {field: "entry1_field1", value: "entry1_value1"},
+                            {field: "entry1_field2", value: "entry1_value2"},
+                        ]},
+                        {id: "0-2", fields: [{field: "entry2_field1", value: "entry2_value1"}]},
+                    ],
                 });
 
                 // testing binary parameters
@@ -11674,10 +11674,10 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key]: {
-                        [stream_id1_0]: [["f0", "v0"]],
-                        [stream_id1_1]: [["f1", "v1"]],
-                    },
+                    [key]: [
+                        {id: stream_id1_0, fields: [{field: "f0", value: "v0"}]},
+                        {id: stream_id1_1, fields: [{field: "f1", value: "v1"}]},
+                    ],
                 });
 
                 // add one more entry
@@ -12033,10 +12033,10 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key]: {
-                        [streamid1 as string]: [["field1", "value1"]],
-                        [streamid2 as string]: [["field2", "value2"]],
-                    },
+                    [key]: [
+                        {id: streamid1 as string, fields: [{field: "field1", value: "value1"}]},
+                        {id: streamid2 as string, fields: [{field: "field2", value: "value2"}]},
+                    ],
                 });
 
                 // delete one of the streams & testing binary parameters

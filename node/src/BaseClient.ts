@@ -383,16 +383,6 @@ export type StreamEntry = {
 export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
 
 /**
- * Data type for XPending
- */
-export type XPendingDataType = [
-    number,
-    GlideString,
-    GlideString,
-    [GlideString, number][],
-];
-
-/**
  * Union type that can store either a number or positive/negative infinity.
  */
 export type Score = number | "+inf" | "-inf";
@@ -469,7 +459,7 @@ export function convertGlideRecordToRecord<T>(
 
 /**
  * @internal
- * Recursively downcast `GlideRecord` to `Record`. Use if `data` keys are always strings.
+ * Handle GlideRecord responses into StreamEntry objects.
  */
 export function convertGlideRecordToStreamEntries<T>(
     data: GlideRecord<T>,
