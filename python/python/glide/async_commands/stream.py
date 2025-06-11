@@ -28,7 +28,7 @@ class StreamEntry:
     Represents a single entry/element in a stream.
 
     Attributes:
-        id (bytes): The unique identifier of the entry
+        id (bytes): The unique identifier of the entry  # :no-index:
         fields (List[FieldInfo]): The fields associated with the entry
     """
 

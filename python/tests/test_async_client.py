@@ -5777,28 +5777,46 @@ class TestCommands:
         )
 
         # read the entire stream for the consumer and mark messages as pending
-        assert await glide_client.xreadgroup(
+        result = await glide_client.xreadgroup(
             {key: ">"},
             group_name,
             consumer_name,
             StreamReadGroupOptions(block_ms=1000, count=10),
-        ) == {
-            key.encode(): {
-                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
-                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-            }
-        }
+        )
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 2
+
+        # Check first entry
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1_0"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1_0"
+
+        # Check second entry
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
 
         # delete one of the stream entries
         assert await glide_client.xdel(key, [stream_id1_0]) == 1
 
         # now xreadgroup yields one empty stream entry and one non-empty stream entry
-        assert await glide_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
-            key.encode(): {
-                stream_id1_0.encode(): None,
-                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-            }
-        }
+        result = await glide_client.xreadgroup({key: "0"}, group_name, consumer_name)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 2
+
+        # First entry should be empty (deleted)
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 0
+
+        # Second entry should have data
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
 
         assert (
             await glide_client.xadd(
@@ -5909,9 +5927,11 @@ class TestCommands:
         assert (
             await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
         )
-        assert await glide_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
-            key.encode(): {}
-        }
+
+        result = await glide_client.xreadgroup({key: "0"}, group_name, consumer_name)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 0
 
         # setup first entry
         assert (
@@ -5920,23 +5940,30 @@ class TestCommands:
         )
 
         # if count is non-positive, it is ignored
-        assert await glide_client.xreadgroup(
+        result = await glide_client.xreadgroup(
             {key: ">"}, group_name, consumer_name, StreamReadGroupOptions(count=0)
-        ) == {
-            key.encode(): {
-                stream_id1_1.encode(): [[b"f1", b"v1"]],
-            },
-        }
-        assert await glide_client.xreadgroup(
+        )
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 1
+        assert result[key.encode()].entries[0].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1"
+
+        result = await glide_client.xreadgroup(
             {key: stream_id1_0},
             group_name,
             consumer_name,
             StreamReadGroupOptions(count=-1),
-        ) == {
-            key.encode(): {
-                stream_id1_1.encode(): [[b"f1", b"v1"]],
-            },
-        }
+        )
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 1
+        assert result[key.encode()].entries[0].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1"
 
         # invalid stream ID
         with pytest.raises(RequestError):
@@ -6170,12 +6197,22 @@ class TestCommands:
         )
 
         # read the entire stream with consumer1 and mark messages as pending
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer1) == {
-            key.encode(): {
-                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
-                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-            }
-        }
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer1)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 2
+
+        # Check first entry
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1_0"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1_0"
+
+        # Check second entry
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
 
         # add three stream entries for consumer2
         assert (
@@ -6198,13 +6235,26 @@ class TestCommands:
         )
 
         # read the entire stream with consumer2 and mark messages as pending
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer2) == {
-            key.encode(): {
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
-                stream_id1_4.encode(): [[b"f1_4", b"v1_4"]],
-            }
-        }
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer2)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 3
+
+        # Check entries
+        assert result[key.encode()].entries[0].id == stream_id1_2.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1_2"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1_2"
+
+        assert result[key.encode()].entries[1].id == stream_id1_3.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_3"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_3"
+
+        assert result[key.encode()].entries[2].id == stream_id1_4.encode()
+        assert len(result[key.encode()].entries[2].fields) == 1
+        assert result[key.encode()].entries[2].fields[0].field_name == b"f1_4"
+        assert result[key.encode()].entries[2].fields[0].value == b"v1_4"
 
         # inner array order is non-deterministic, so we have to assert against it separately from the other info
         result = await glide_client.xpending(key, group_name)
@@ -6381,12 +6431,21 @@ class TestCommands:
         )
 
         # read the entire stream with consumer and mark messages as pending
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key.encode(): {
-                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
-                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-            }
-        }
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 2
+
+        # Check entries
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1_0"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1_0"
+
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
 
         # sanity check - expect some results
         assert await glide_client.xpending(key, group_name) == [
@@ -6653,14 +6712,34 @@ class TestCommands:
             == stream_id1_3.encode()
         )
         assert await glide_client.xgroup_create(key, group_name, stream_id0_0) == OK
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key.encode(): {
-                stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]],
-                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
-            }
-        }
+
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 4
+
+        # Check entries
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 2
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1"
+        assert result[key.encode()].entries[0].fields[1].field_name == b"f2"
+        assert result[key.encode()].entries[0].fields[1].value == b"v2"
+
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1_1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1_1"
+
+        assert result[key.encode()].entries[2].id == stream_id1_2.encode()
+        assert len(result[key.encode()].entries[2].fields) == 1
+        assert result[key.encode()].entries[2].fields[0].field_name == b"f1_2"
+        assert result[key.encode()].entries[2].fields[0].value == b"v1_2"
+
+        assert result[key.encode()].entries[3].id == stream_id1_3.encode()
+        assert len(result[key.encode()].entries[3].fields) == 1
+        assert result[key.encode()].entries[3].fields[0].field_name == b"f1_3"
+        assert result[key.encode()].entries[3].fields[0].value == b"v1_3"
 
         # autoclaim the first entry only
         result = await glide_client.xautoclaim(
@@ -6874,9 +6953,19 @@ class TestCommands:
             == stream_id1_2.encode()
         )
         assert await glide_client.xgroup_create(key, group_name1, stream_id0_0) == OK
-        assert await glide_client.xreadgroup(
+
+        result = await glide_client.xreadgroup(
             {key: ">"}, group_name1, consumer1, StreamReadGroupOptions(count=1)
-        ) == {key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}}
+        )
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 1
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 2
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f1"
+        assert result[key.encode()].entries[0].fields[0].value == b"v1"
+        assert result[key.encode()].entries[0].fields[1].field_name == b"f2"
+        assert result[key.encode()].entries[0].fields[1].value == b"v2"
 
         # sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
         time.sleep(2)
@@ -6897,12 +6986,22 @@ class TestCommands:
             await glide_client.xgroup_create_consumer(key, group_name1, consumer2)
             is True
         )
-        assert await glide_client.xreadgroup({key: ">"}, group_name1, consumer2) == {
-            key.encode(): {
-                stream_id1_1.encode(): [[b"f3", b"v3"]],
-                stream_id1_2.encode(): [[b"f4", b"v4"]],
-            }
-        }
+
+        result = await glide_client.xreadgroup({key: ">"}, group_name1, consumer2)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 2
+
+        # Check entries
+        assert result[key.encode()].entries[0].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f3"
+        assert result[key.encode()].entries[0].fields[0].value == b"v3"
+
+        assert result[key.encode()].entries[1].id == stream_id1_2.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f4"
+        assert result[key.encode()].entries[1].fields[0].value == b"v4"
 
         # verify that xinfo_consumers contains info for 2 consumers now
         # test with byte string args
@@ -7045,9 +7144,17 @@ class TestCommands:
             == stream_id1_0.encode()
         )
         assert await glide_client.xgroup_create(key, group_name, stream_id0_0) == OK
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key.encode(): {stream_id1_0.encode(): [[b"a", b"b"], [b"c", b"d"]]}
-        }
+
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 1
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 2
+        assert result[key.encode()].entries[0].fields[0].field_name == b"a"
+        assert result[key.encode()].entries[0].fields[0].value == b"b"
+        assert result[key.encode()].entries[0].fields[1].field_name == b"c"
+        assert result[key.encode()].entries[0].fields[1].value == b"d"
 
         result = await glide_client.xinfo_stream(key)
         assert result.get(b"length") == 1
@@ -7171,13 +7278,28 @@ class TestCommands:
             == stream_id1_2.encode()
         )
         assert await glide_client.xgroup_create(key, group_name, stream_id0) == OK
-        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
-            key.encode(): {
-                stream_id1_0.encode(): [[b"f0", b"v0"]],
-                stream_id1_1.encode(): [[b"f1", b"v1"]],
-                stream_id1_2.encode(): [[b"f2", b"v2"]],
-            }
-        }
+
+        result = await glide_client.xreadgroup({key: ">"}, group_name, consumer_name)
+        assert result is not None
+        assert key.encode() in result
+        assert len(result[key.encode()].entries) == 3
+
+        # Check entries
+        assert result[key.encode()].entries[0].id == stream_id1_0.encode()
+        assert len(result[key.encode()].entries[0].fields) == 1
+        assert result[key.encode()].entries[0].fields[0].field_name == b"f0"
+        assert result[key.encode()].entries[0].fields[0].value == b"v0"
+
+        assert result[key.encode()].entries[1].id == stream_id1_1.encode()
+        assert len(result[key.encode()].entries[1].fields) == 1
+        assert result[key.encode()].entries[1].fields[0].field_name == b"f1"
+        assert result[key.encode()].entries[1].fields[0].value == b"v1"
+
+        assert result[key.encode()].entries[2].id == stream_id1_2.encode()
+        assert len(result[key.encode()].entries[2].fields) == 1
+        assert result[key.encode()].entries[2].fields[0].field_name == b"f2"
+        assert result[key.encode()].entries[2].fields[0].value == b"v2"
+
         # sanity check: xreadgroup should not return more entries since they're all already in the Pending Entries List
         assert (
             await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
