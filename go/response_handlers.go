@@ -1785,12 +1785,29 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 		streamInfo.MaxDeletedEntryID = val
 	}
 
+	// Get First Entry
+	entry := createEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+
+	entry = createEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	return streamInfo, nil
+}
+
+// Parse entry - it's an array where first element is ID and second is array of field-value pairs
+func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
+	entry := models.StreamEntry{}
 	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
-	if firstEntryArray, ok := infoMap["first-entry"].([]any); ok && len(firstEntryArray) >= 2 {
+	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
 		// First element is the ID
 		if id, ok := firstEntryArray[0].(string); ok {
 			// Create a StreamEntry with the ID
-			streamInfo.FirstEntry = models.StreamEntry{
+			entry = models.StreamEntry{
 				ID:     id,
 				Fields: make([]models.FieldInfo, 0),
 			}
@@ -1803,7 +1820,7 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 						if field, ok := fieldValueArray[i].(string); ok {
 							if value, ok := fieldValueArray[i+1].(string); ok {
 								// Add field-value pair to the Fields slice
-								streamInfo.FirstEntry.Fields = append(streamInfo.FirstEntry.Fields, models.FieldInfo{
+								entry.Fields = append(entry.Fields, models.FieldInfo{
 									FieldName: field,
 									Value:     value,
 								})
@@ -1814,36 +1831,5 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 			}
 		}
 	}
-
-	// Parse last-entry - it's an array where first element is ID and second is array of field-value pairs
-	if lastEntryArray, ok := infoMap["last-entry"].([]any); ok && len(lastEntryArray) >= 2 {
-		// First element is the ID
-		if id, ok := lastEntryArray[0].(string); ok {
-			// Create a StreamEntry with the ID
-			streamInfo.LastEntry = models.StreamEntry{
-				ID:     id,
-				Fields: make([]models.FieldInfo, 0),
-			}
-
-			// Second element is an array of field-value pairs
-			if fieldValueArray, ok := lastEntryArray[1].([]any); ok {
-				// Process field-value pairs (they come as alternating field, value, field, value...)
-				for i := 0; i < len(fieldValueArray); i += 2 {
-					if i+1 < len(fieldValueArray) {
-						if field, ok := fieldValueArray[i].(string); ok {
-							if value, ok := fieldValueArray[i+1].(string); ok {
-								// Add field-value pair to the Fields slice
-								streamInfo.LastEntry.Fields = append(streamInfo.LastEntry.Fields, models.FieldInfo{
-									FieldName: field,
-									Value:     value,
-								})
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return streamInfo, nil
+	return entry
 }
