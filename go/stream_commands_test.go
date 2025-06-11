@@ -2025,10 +2025,7 @@ func ExampleClusterClient_XInfoStream() {
 	lastEntryFields = append(lastEntryFields, fieldsArray)
 	responseMap["last-entry"] = lastEntryFields
 
-	jsonResult, _ := json.MarshalIndent(responseMap, "", "  ")
-
-	fmt.Println(string(jsonResult))
-	// Output:
+	// Response Structure is as follows:
 	// {
 	//   "entries-added": 1,
 	//   "first-entry": [
@@ -2053,6 +2050,22 @@ func ExampleClusterClient_XInfoStream() {
 	//   "radix-tree-nodes": 2,
 	//   "recorded-first-entry-id": "12345-1"
 	// }
+
+	// Output a few entries from the return object.
+	fmt.Print("Entries Added: ")
+	fmt.Println(response.EntriesAdded)
+	fmt.Print("Groups: ")
+	fmt.Println(response.Groups)
+	fmt.Print("Last generated Id: ")
+	fmt.Println(response.LastGeneratedID)
+	fmt.Print("Length: ")
+	fmt.Println(response.Length)
+
+	// Output:
+	// Entries Added: 1
+	// Groups: 0
+	// Last generated Id: 12345-1
+	// Length: 1
 }
 
 func ExampleClient_XInfoStreamFullWithOptions() {
