@@ -357,10 +357,40 @@ export type HashDataType = {
 }[];
 
 /**
+ * An object to represent stream entries field-value pairs
+ */
+export type StreamFieldValue = {
+    /** The field name. */
+    field: GlideString;
+    /** tThe field value. */
+    value: GlideString;
+};
+
+/**
+ * An object to represent a stream entry with ID and field value pairs
+ */
+export type StreamEntry = {
+    /** The stream ID. */
+    id: GlideString;
+    /** The field-value pairs. */
+    fields: StreamFieldValue[] | null;
+};
+
+/**
  * Data type which reflects now stream entries are returned.
  * The keys of the record are stream entry IDs, which are mapped to key-value pairs of the data.
  */
 export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
+
+/**
+ * Data type for XPending
+ */
+export type XPendingDataType = [
+    number,
+    GlideString,
+    GlideString,
+    [GlideString, number][],
+];
 
 /**
  * Union type that can store either a number or positive/negative infinity.
@@ -432,6 +462,44 @@ export function convertGlideRecordToRecord<T>(
         }
 
         res[pair.key as string] = newVal;
+    }
+
+    return res;
+}
+
+/**
+ * @internal
+ * Recursively downcast `GlideRecord` to `Record`. Use if `data` keys are always strings.
+ */
+export function convertGlideRecordToStreamEntries<T>(
+    data: GlideRecord<T>,
+): StreamEntry[] {
+    const res: StreamEntry[] = [];
+
+    for (const pair of data) {
+        const vals = pair.value as [[GlideString, GlideString]];
+        let fields: StreamFieldValue[] | null = [];
+
+        if (pair.value === null) {
+            fields = null;
+        } else {
+            for (const entry of vals) {
+                const streamEntryObject: StreamFieldValue = {
+                    field: entry[0] as GlideString,
+                    value: entry[1] as GlideString,
+                };
+                fields.push(streamEntryObject);
+            }
+        }
+
+        const se: StreamEntry = {
+            id: Buffer.isBuffer(pair.key)
+                ? pair.key.toString()
+                : (pair.key as GlideString),
+            fields: fields,
+        };
+
+        res.push(se);
     }
 
     return res;
@@ -5625,17 +5693,17 @@ export class BaseClient {
      * // [
      * //     {
      * //         key: "my_stream",
-     * //         value: {
-     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
-     * //             "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
-     * //         }
+     * //         value: [
+     * //             {id: "1526984818136-0", fields: [{field: "duration", value: "1532"}, {field: "event-id", value: "5"}, {field: "user-id", value: "7782813"}]},
+     * //             {id: "1526999352406-0", fields: [{field: "duration", value: "812"}, {field: "event-id", value: "9"}, {field: "user-id", value: "388234"}]},
+     * //         ]
      * //     },
      * //     {
      * //         key: "writers",
-     * //         value: {
-     * //             "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
-     * //             "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
-     * //         }
+     * //         value: [
+     * //             {id: "1526985676425-0", fields: [{field: "name", value: "Virginia"}, {field: "surname", value: "Woolf"}]},
+     * //             {id: "1526985685298-0", fields: [{field: "name", value: "Jane"}, {field: "surname", value: "Austen"}]},
+     * //         ]
      * //     }
      * // ]
      * ```
@@ -5643,9 +5711,9 @@ export class BaseClient {
     public async xread(
         keys_and_ids: Record<string, string> | GlideRecord<string>,
         options?: StreamReadOptions & DecoderOption,
-    ): Promise<GlideRecord<StreamEntryDataType> | null> {
+    ): Promise<GlideRecord<StreamEntry[]> | null> {
         return this.createWritePromise<GlideRecord<
-            GlideRecord<[GlideString, GlideString][]>
+            GlideRecord<StreamFieldValue[]>
         > | null>(
             createXRead(convertKeysAndEntries(keys_and_ids), options),
             options,
@@ -5654,7 +5722,7 @@ export class BaseClient {
                 res?.map((k) => {
                     return {
                         key: k.key,
-                        value: convertGlideRecordToRecord(k.value),
+                        value: convertGlideRecordToStreamEntries(k.value),
                     };
                 }) ?? null,
         );
@@ -5680,21 +5748,21 @@ export class BaseClient {
      * // [
      * //     {
      * //         key: "my_stream",
-     * //         value: {
-     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
-     * //             "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
-     * //         }
+     * //         value: [
+     * //             {id: "1526984818136-0", fields: [{field: "duration", value: "1532"}, {field: "event-id", value: "5"}, {field: "user-id", value: "7782813"}]},
+     * //             {id: "1526999352406-0", fields: [{field: "duration", value: "812"}, {field: "event-id", value: "9"}, {field: "user-id", value: "388234"}]},
+     * //         ]
      * //     },
      * //     {
      * //         key: "writers_stream",
-     * //         value: {
-     * //             "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
-     * //             "1526985685298-0": null,                                          // entry was deleted
-     * //         }
+     * //         value: [
+     * //             {id: "1526985676425-0", fields: [{field: "name", value: "Virginia"}, {field: "surname", value: "Woolf"}]},
+     * //             {id: "1526985685298-0", fields: null},                                          // entry was deleted
+     * //         ]
      * //     },
      * //     {
      * //         key: "readers_stream",                                                // stream is empty
-     * //         value: {}
+     * //         value: []
      * //     }
      * // ]
      * ```
@@ -5704,9 +5772,7 @@ export class BaseClient {
         consumer: GlideString,
         keys_and_ids: Record<string, string> | GlideRecord<string>,
         options?: StreamReadGroupOptions & DecoderOption,
-    ): Promise<GlideRecord<
-        Record<string, [GlideString, GlideString][] | null>
-    > | null> {
+    ): Promise<GlideRecord<StreamEntry[] | null> | null> {
         return this.createWritePromise<GlideRecord<
             GlideRecord<[GlideString, GlideString][] | null>
         > | null>(
@@ -5722,7 +5788,7 @@ export class BaseClient {
                 res?.map((k) => {
                     return {
                         key: k.key,
-                        value: convertGlideRecordToRecord(k.value),
+                        value: convertGlideRecordToStreamEntries(k.value),
                     };
                 }) ?? null,
         );
@@ -5771,7 +5837,7 @@ export class BaseClient {
     public async xpending(
         key: GlideString,
         group: GlideString,
-    ): Promise<[number, GlideString, GlideString, [GlideString, number][]]> {
+    ): Promise<XPendingDataType> {
         return this.createWritePromise(createXPending(key, group));
     }
 

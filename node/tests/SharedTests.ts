@@ -7344,17 +7344,29 @@ export function runBaseTests(config: {
                 );
 
                 const expected = {
-                    [key1]: {
-                        [timestamp_1_2]: [[field1, "foo2"]],
-                        [timestamp_1_3]: [
-                            [field1, "foo3"],
-                            [field3, "barvaz3"],
-                        ],
-                    },
-                    [key2]: {
-                        [timestamp_2_2]: [["bar", "bar2"]],
-                        [timestamp_2_3]: [["bar", "bar3"]],
-                    },
+                    [key1]: [
+                        {
+                            id: timestamp_1_2,
+                            fields: [{ field: field1, value: "foo2" }],
+                        },
+                        {
+                            id: timestamp_1_3,
+                            fields: [
+                                { field: field1, value: "foo3" },
+                                { field: field3, value: "barvaz3" },
+                            ],
+                        },
+                    ],
+                    [key2]: [
+                        {
+                            id: timestamp_2_2,
+                            fields: [{ field: "bar", value: "bar2" }],
+                        },
+                        {
+                            id: timestamp_2_3,
+                            fields: [{ field: "bar", value: "bar3" }],
+                        },
+                    ],
                 };
                 expect(convertGlideRecordToRecord(result!)).toEqual(expected);
 
@@ -7371,14 +7383,26 @@ export function runBaseTests(config: {
                 ).toEqual([
                     {
                         key: Buffer.from(key2),
-                        value: {
-                            [timestamp_2_2]: [
-                                [Buffer.from("bar"), Buffer.from("bar2")],
-                            ],
-                            [timestamp_2_3]: [
-                                [Buffer.from("bar"), Buffer.from("bar3")],
-                            ],
-                        },
+                        value: [
+                            {
+                                id: timestamp_2_2,
+                                fields: [
+                                    {
+                                        field: Buffer.from("bar"),
+                                        value: Buffer.from("bar2"),
+                                    },
+                                ],
+                            },
+                            {
+                                id: timestamp_2_3,
+                                fields: [
+                                    {
+                                        field: Buffer.from("bar"),
+                                        value: Buffer.from("bar3"),
+                                    },
+                                ],
+                            },
+                        ],
                     },
                 ]);
 
@@ -7444,10 +7468,10 @@ export function runBaseTests(config: {
                         ))!,
                     ),
                 ).toEqual({
-                    [key1]: {
-                        [entry1]: [["a", "b"]],
-                        [entry2]: [["c", "d"]],
-                    },
+                    [key1]: [
+                        { id: entry1, fields: [{ field: "a", value: "b" }] },
+                        { id: entry2, fields: [{ field: "c", value: "d" }] },
+                    ],
                 });
 
                 // delete one of the entries
@@ -7461,10 +7485,10 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key1]: {
-                        [entry1]: null,
-                        [entry2]: [["c", "d"]],
-                    },
+                    [key1]: [
+                        { id: entry1, fields: null },
+                        { id: entry2, fields: [{ field: "c", value: "d" }] },
+                    ],
                 });
 
                 // try to read new messages only
@@ -7483,9 +7507,9 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key1]: {
-                        [entry3]: [["e", "f"]],
-                    },
+                    [key1]: [
+                        { id: entry3, fields: [{ field: "e", value: "f" }] },
+                    ],
                 });
 
                 // add second key with a group and a consumer, but no messages
@@ -7507,12 +7531,12 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key1]: {
-                        [entry1]: null,
-                        [entry2]: [["c", "d"]],
-                        [entry3]: [["e", "f"]],
-                    },
-                    [key2]: {},
+                    [key1]: [
+                        { id: entry1, fields: null },
+                        { id: entry2, fields: [{ field: "c", value: "d" }] },
+                        { id: entry3, fields: [{ field: "e", value: "f" }] },
+                    ],
+                    [key2]: [],
                 });
 
                 // error cases:
@@ -7542,7 +7566,7 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key3]: {},
+                    [key3]: [],
                 });
             }, protocol);
         },
@@ -10796,12 +10820,21 @@ export function runBaseTests(config: {
                     { count: 1 },
                 );
                 expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
-                    [key]: {
-                        [streamId1]: [
-                            ["entry1_field1", "entry1_value1"],
-                            ["entry1_field2", "entry1_value2"],
-                        ],
-                    },
+                    [key]: [
+                        {
+                            id: streamId1,
+                            fields: [
+                                {
+                                    field: "entry1_field1",
+                                    value: "entry1_value1",
+                                },
+                                {
+                                    field: "entry1_field2",
+                                    value: "entry1_value2",
+                                },
+                            ],
+                        },
+                    ],
                 });
                 // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
                 await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -10833,24 +10866,30 @@ export function runBaseTests(config: {
                 expect(xreadgroup).toEqual([
                     {
                         key: Buffer.from(key),
-                        value: {
-                            [streamId2]: [
-                                [
-                                    Buffer.from("entry2_field1"),
-                                    Buffer.from("entry2_value1"),
+                        value: [
+                            {
+                                id: streamId2,
+                                fields: [
+                                    {
+                                        field: Buffer.from("entry2_field1"),
+                                        value: Buffer.from("entry2_value1"),
+                                    },
+                                    {
+                                        field: Buffer.from("entry2_field2"),
+                                        value: Buffer.from("entry2_value2"),
+                                    },
                                 ],
-                                [
-                                    Buffer.from("entry2_field2"),
-                                    Buffer.from("entry2_value2"),
+                            },
+                            {
+                                id: streamId3,
+                                fields: [
+                                    {
+                                        field: Buffer.from("entry3_field1"),
+                                        value: Buffer.from("entry3_value1"),
+                                    },
                                 ],
-                            ],
-                            [streamId3]: [
-                                [
-                                    Buffer.from("entry3_field1"),
-                                    Buffer.from("entry3_value1"),
-                                ],
-                            ],
-                        },
+                            },
+                        ],
                     },
                 ]);
 
@@ -11116,11 +11155,20 @@ export function runBaseTests(config: {
                             }))!,
                         ),
                     ).toEqual({
-                        [key]: {
-                            [streamid1_0]: [["f0", "v0"]],
-                            [streamid1_1]: [["f1", "v1"]],
-                            [streamid1_2]: [["f2", "v2"]],
-                        },
+                        [key]: [
+                            {
+                                id: streamid1_0,
+                                fields: [{ field: "f0", value: "v0" }],
+                            },
+                            {
+                                id: streamid1_1,
+                                fields: [{ field: "f1", value: "v1" }],
+                            },
+                            {
+                                id: streamid1_2,
+                                fields: [{ field: "f2", value: "v2" }],
+                            },
+                        ],
                     });
 
                     // Sanity check: xreadgroup should not return more entries since they're all already in the
@@ -11158,9 +11206,12 @@ export function runBaseTests(config: {
                         { [key]: ">" },
                     );
                     expect(convertGlideRecordToRecord(newResult!)).toEqual({
-                        [key]: {
-                            [streamid1_2]: [["f2", "v2"]],
-                        },
+                        [key]: [
+                            {
+                                id: streamid1_2,
+                                fields: [{ field: "f2", value: "v2" }],
+                            },
+                        ],
                     });
 
                     // An error is raised if XGROUP SETID is called with a non-existing key
@@ -11250,13 +11301,30 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key]: {
-                        "0-1": [
-                            ["entry1_field1", "entry1_value1"],
-                            ["entry1_field2", "entry1_value2"],
-                        ],
-                        "0-2": [["entry2_field1", "entry2_value1"]],
-                    },
+                    [key]: [
+                        {
+                            id: "0-1",
+                            fields: [
+                                {
+                                    field: "entry1_field1",
+                                    value: "entry1_value1",
+                                },
+                                {
+                                    field: "entry1_field2",
+                                    value: "entry1_value2",
+                                },
+                            ],
+                        },
+                        {
+                            id: "0-2",
+                            fields: [
+                                {
+                                    field: "entry2_field1",
+                                    value: "entry2_value1",
+                                },
+                            ],
+                        },
+                    ],
                 });
 
                 // wait to get some minIdleTime
@@ -11350,13 +11418,30 @@ export function runBaseTests(config: {
                         }))!,
                     ),
                 ).toEqual({
-                    [key]: {
-                        "0-1": [
-                            ["entry1_field1", "entry1_value1"],
-                            ["entry1_field2", "entry1_value2"],
-                        ],
-                        "0-2": [["entry2_field1", "entry2_value1"]],
-                    },
+                    [key]: [
+                        {
+                            id: "0-1",
+                            fields: [
+                                {
+                                    field: "entry1_field1",
+                                    value: "entry1_value1",
+                                },
+                                {
+                                    field: "entry1_field2",
+                                    value: "entry1_value2",
+                                },
+                            ],
+                        },
+                        {
+                            id: "0-2",
+                            fields: [
+                                {
+                                    field: "entry2_field1",
+                                    value: "entry2_value1",
+                                },
+                            ],
+                        },
+                    ],
                 });
 
                 expect(
