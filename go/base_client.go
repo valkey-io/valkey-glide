@@ -8836,8 +8836,8 @@ func (client *baseClient) InvokeScriptWithOptions(
 	script options.Script,
 	scriptOptions options.ScriptOptions,
 ) (any, error) {
-	keys := scriptOptions.GetKeys()
-	args := scriptOptions.GetArgs()
+	keys := scriptOptions.Keys
+	args := scriptOptions.Args
 
 	response, err := client.executeScriptWithRoute(ctx, script.GetHash(), keys, args, nil)
 	if err != nil {

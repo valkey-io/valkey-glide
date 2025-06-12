@@ -9021,17 +9021,17 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			*options.NewXRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Empty(suite.T(), xrangeResult)
+		assert.Nil(suite.T(), xrangeResult)
 
 		xrevrangeResult, err = client.XRevRangeWithOptions(
 			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
-			*options.NewXRangeOptions().SetCount(-1),
+			*options.NewXRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Empty(suite.T(), xrevrangeResult)
+		assert.Nil(suite.T(), xrevrangeResult)
 
 		// xrange and xrevrange against an empty stream
 		xdelResult, err := client.XDel(
