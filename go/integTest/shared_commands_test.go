@@ -5183,43 +5183,23 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 			entryMap[entry.ID] = entry.Fields
 		}
 
-		// Verify entries
+		// // Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
-
-		// Check for field "f0" with value "v0" in entry 1-0
-		foundF0 := false
-		for _, field := range entryMap["1-0"] {
-			if field.FieldName == "f0" && field.Value == "v0" {
-				foundF0 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundF0, "Field 'f0' with value 'v0' not found in entry 1-0")
+		assert.Equal(suite.T(), entryMap["1-0"],
+			[]models.FieldInfo{{FieldName: "f0", Value: "v0"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "1-1")
-
 		// Check for field "f1" with value "v1" in entry 1-1
-		foundF1 := false
-		for _, field := range entryMap["1-1"] {
-			if field.FieldName == "f1" && field.Value == "v1" {
-				foundF1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundF1, "Field 'f1' with value 'v1' not found in entry 1-1")
+		assert.Equal(suite.T(), entryMap["1-1"],
+			[]models.FieldInfo{{FieldName: "f1", Value: "v1"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "1-2")
-
 		// Check for field "f2" with value "v2" in entry 1-2
-		foundF2 := false
-		for _, field := range entryMap["1-2"] {
-			if field.FieldName == "f2" && field.Value == "v2" {
-				foundF2 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundF2, "Field 'f2' with value 'v2' not found in entry 1-2")
-
+		assert.Equal(suite.T(), entryMap["1-2"],
+			[]models.FieldInfo{{FieldName: "f2", Value: "v2"}},
+		)
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
 		xreadgroup, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -5246,16 +5226,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Check entries
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "1-2", streamResponse.Entries[0].ID)
-
-		// Check for field "f2" with value "v2" in the entry
-		foundF2 = false
-		for _, field := range streamResponse.Entries[0].Fields {
-			if field.FieldName == "f2" && field.Value == "v2" {
-				foundF2 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundF2, "Field 'f2' with value 'v2' not found in entry")
+		assert.Equal(suite.T(), []models.FieldInfo{{FieldName: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
