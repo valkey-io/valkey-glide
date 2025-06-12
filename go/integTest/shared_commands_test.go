@@ -8530,9 +8530,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			streamResponse2,
 			models.StreamResponse{
 				Entries: []models.StreamEntry{
-					{ID: streamid_1, Fields: []models.FieldInfo{{FieldName: "field1", Value: "value1"}}},
-					{ID: streamid_2, Fields: []models.FieldInfo{{FieldName: "field2", Value: "value2"}}},
 					{ID: streamid_3, Fields: []models.FieldInfo{{FieldName: "field3", Value: "value3"}}},
+					{ID: streamid_4, Fields: []models.FieldInfo{{FieldName: "field4", Value: "value4"}}},
+					{ID: streamid_5, Fields: []models.FieldInfo{{FieldName: "field5", Value: "value5"}}},
 				},
 			},
 		)
