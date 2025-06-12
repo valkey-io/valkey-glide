@@ -1658,22 +1658,19 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
-func (client *baseClient) HScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor})
+func (client *baseClient) HScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -1688,33 +1685,30 @@ func (client *baseClient) HScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The [options.HashScanOptions].
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.HashScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2538,20 +2532,18 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
-func (client *baseClient) SScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor})
+func (client *baseClient) SScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2565,31 +2557,29 @@ func (client *baseClient) SScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - [options.BaseScanOptions]
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.BaseScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5333,16 +5323,16 @@ func (client *baseClient) ZScore(ctx context.Context, key string, member string)
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
-func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor})
+func (client *baseClient) ZScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5356,33 +5346,30 @@ func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The options for the command. See [options.ZScanOptions] for details.
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (client *baseClient) ZScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.ZScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }

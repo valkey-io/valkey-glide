@@ -902,28 +902,21 @@ func handleMemberAndScoreArrayResponse(response *C.struct_CommandResponse) ([]mo
 	return result, nil
 }
 
-func handleScanResponse(response *C.struct_CommandResponse) (string, []string, error) {
+func handleScanResponse(response *C.struct_CommandResponse) (models.ScanResult, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
-		return "", nil, typeErr
+		return models.ScanResult{}, typeErr
 	}
 
 	slice, err := parseArray(response)
 	if err != nil {
-		return "", nil, err
+		return models.ScanResult{}, err
 	}
 
-	if arr, ok := slice.([]any); ok {
-		resCollection, err := convertToStringArray(arr[1].([]any))
-		if err != nil {
-			return "", nil, err
-		}
-		return arr[0].(string), resCollection, nil
-	}
-
-	return "", nil, err
+	res, err := internal.ConvertScanResult(slice)
+	return res.(models.ScanResult), err
 }
 
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {

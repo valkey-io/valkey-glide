@@ -552,6 +552,12 @@ func ConvertFunctionStatsResponse(data any) (any, error) {
 	}, nil
 }
 
+func ConvertScanResult(data any) (any, error) {
+	arr := data.([]any)
+	scanData, err := ConvertArrayOf[string](arr[1])
+	return models.ScanResult{Cursor: models.NewCursorFromString(arr[0].(string)), Data: scanData.([]string)}, err
+}
+
 func ConverterAndTypeChecker(
 	data any,
 	expectedType reflect.Kind,

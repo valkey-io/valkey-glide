@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -83,7 +84,7 @@ func (suite *GlideTestSuite) TestContext_CancelWithScan() {
 		cancel() // Cancel immediately
 
 		// Create a new cluster scan cursor
-		cursor := options.NewClusterScanCursor()
+		cursor := models.NewClusterScanCursor()
 
 		// Try to perform a scan with cancelled context
 		scanOpts := options.NewClusterScanOptions().
@@ -91,7 +92,7 @@ func (suite *GlideTestSuite) TestContext_CancelWithScan() {
 			SetCount(10)
 
 		// Use the correct API
-		_, _, err := clusterClient.ScanWithOptions(ctx, *cursor, *scanOpts)
+		_, err := clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
 
 		// Verify that the command fails with context cancellation error
 		assert.Error(suite.T(), err)

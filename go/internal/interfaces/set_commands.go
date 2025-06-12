@@ -51,9 +51,9 @@ type SetCommands interface {
 
 	SUnion(ctx context.Context, keys []string) (map[string]struct{}, error)
 
-	SScan(ctx context.Context, key string, cursor string) (string, []string, error)
+	SScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
 
-	SScanWithOptions(ctx context.Context, key string, cursor string, options options.BaseScanOptions) (string, []string, error)
+	SScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.BaseScanOptions) (models.ScanResult, error)
 
 	SMove(ctx context.Context, source string, destination string, member string) (bool, error)
 }

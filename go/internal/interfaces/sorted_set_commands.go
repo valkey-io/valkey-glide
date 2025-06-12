@@ -104,9 +104,9 @@ type SortedSetCommands interface {
 
 	ZCount(ctx context.Context, key string, rangeOptions options.ZCountRange) (int64, error)
 
-	ZScan(ctx context.Context, key string, cursor string) (string, []string, error)
+	ZScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
 
-	ZScanWithOptions(ctx context.Context, key string, cursor string, options options.ZScanOptions) (string, []string, error)
+	ZScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.ZScanOptions) (models.ScanResult, error)
 
 	ZRemRangeByLex(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error)
 

@@ -41,13 +41,13 @@ type HashCommands interface {
 
 	HIncrByFloat(ctx context.Context, key string, field string, increment float64) (float64, error)
 
-	HScan(ctx context.Context, key string, cursor string) (string, []string, error)
+	HScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
+
+	HScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.HashScanOptions) (models.ScanResult, error)
 
 	HRandField(ctx context.Context, key string) (models.Result[string], error)
 
 	HRandFieldWithCount(ctx context.Context, key string, count int64) ([]string, error)
 
 	HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error)
-
-	HScanWithOptions(ctx context.Context, key string, cursor string, options options.HashScanOptions) (string, []string, error)
 }
