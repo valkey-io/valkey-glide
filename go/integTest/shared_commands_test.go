@@ -8029,6 +8029,9 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.Contains(suite.T(), entryMap, "0-1")
 		assert.Contains(suite.T(), entryMap, "0-2")
 		assert.Contains(suite.T(), entryMap, "0-3")
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
 		assert.Equal(
 			suite.T(),
 			streamResponse,
