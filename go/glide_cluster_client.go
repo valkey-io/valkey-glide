@@ -29,7 +29,7 @@ var _ interfaces.GlideClusterClientCommands = (*ClusterClient)(nil)
 //
 // [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
 type ClusterClient struct {
-	*baseClient
+	baseClient
 }
 
 // Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
@@ -67,7 +67,7 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
-	return &ClusterClient{client}, nil
+	return &ClusterClient{*client}, nil
 }
 
 // Executes a batch by processing the queued commands.

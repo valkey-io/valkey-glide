@@ -28,7 +28,7 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 //
 // [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
 type Client struct {
-	*baseClient
+	baseClient
 }
 
 // Creates a new `Client` instance and establishes a connection to a standalone Valkey server.
@@ -63,7 +63,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
-	return &Client{client}, nil
+	return &Client{*client}, nil
 }
 
 // Executes a batch by processing the queued commands.

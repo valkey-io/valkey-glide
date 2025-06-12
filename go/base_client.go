@@ -54,7 +54,7 @@ type clientConfiguration interface {
 type baseClient struct {
 	pending        map[unsafe.Pointer]struct{}
 	coreClient     unsafe.Pointer
-	mu             sync.Mutex
+	mu             *sync.Mutex
 	messageHandler *MessageHandler
 }
 
@@ -153,7 +153,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
-	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
@@ -4064,7 +4064,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4092,7 +4092,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -6456,7 +6456,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6489,7 +6489,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6883,15 +6883,24 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A stream information for the given `key`. See the example for a sample response.
+//	A models.XInfoStreamResponse containing information about the stream stored at key:
+//	- Length: the number of entries in the stream
+//	- RadixTreeKeys: the number of keys in the underlying radix data structure
+//	- RadixTreeNodes: the number of nodes in the underlying radix data structure
+//	- Groups: the number of consumer groups defined for the stream
+//	- LastGeneratedID: the ID of the least-recently entry that was added to the stream
+//	- MaxDeletedEntryID: the maximal entry ID that was deleted from the stream
+//	- EntriesAdded: the count of all entries added to the stream during its lifetime
+//	- FirstEntry: the ID and field-value tuples of the first entry in the stream
+//	- LastEntry: the ID and field-value tuples of the last entry in the stream
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[string]any, error) {
+func (client *baseClient) XInfoStream(ctx context.Context, key string) (models.XInfoStreamResponse, error) {
 	result, err := client.executeCommand(ctx, C.XInfoStream, []string{key})
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamResponse(result)
 }
 
 // Returns detailed information about the stream stored at `key`.

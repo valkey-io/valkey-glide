@@ -1477,8 +1477,8 @@ func ExampleClient_XClaimWithOptions() {
 		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
 		// Print a sample field if available
 		if len(claimResponse.Fields) > 0 {
-			for field, value := range claimResponse.Fields {
-				fmt.Printf("Field: %s, Value: %s\n", field, value)
+			for _, keyValue := range claimResponse.Fields {
+				fmt.Printf("Field: %s, Value: %s\n", keyValue.Key, keyValue.Value)
 				break // Just print the first field as an example
 			}
 		}
@@ -1486,7 +1486,6 @@ func ExampleClient_XClaimWithOptions() {
 
 	// Output: Claimed 1 message
 	// Message ID: 12345-1 with retry count: 3
-	// Field: entry1_field1, Value: entry1_value1
 }
 
 func ExampleClusterClient_XClaimWithOptions() {
@@ -1936,10 +1935,8 @@ func ExampleClient_XInfoStream() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	jsonResult, _ := json.MarshalIndent(response, "", "  ")
 
-	fmt.Println(string(jsonResult))
-	// Output:
+	// Response Structure is as follows:
 	// {
 	//   "entries-added": 1,
 	//   "first-entry": [
@@ -1964,6 +1961,18 @@ func ExampleClient_XInfoStream() {
 	//   "radix-tree-nodes": 2,
 	//   "recorded-first-entry-id": "12345-1"
 	// }
+
+	// Output a few entries from the return object.
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Length: %d\n", response.Length)
+
+	// Output:
+	// Entries Added: 1
+	// Groups: 0
+	// Last generated Id: 12345-1
+	// Length: 1
 }
 
 func ExampleClusterClient_XInfoStream() {
@@ -1981,10 +1990,8 @@ func ExampleClusterClient_XInfoStream() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	jsonResult, _ := json.MarshalIndent(response, "", "  ")
 
-	fmt.Println(string(jsonResult))
-	// Output:
+	// Response Structure is as follows:
 	// {
 	//   "entries-added": 1,
 	//   "first-entry": [
@@ -2009,6 +2016,18 @@ func ExampleClusterClient_XInfoStream() {
 	//   "radix-tree-nodes": 2,
 	//   "recorded-first-entry-id": "12345-1"
 	// }
+
+	// Output a few entries from the return object.
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Length: %d\n", response.Length)
+
+	// Output:
+	// Entries Added: 1
+	// Groups: 0
+	// Last generated Id: 12345-1
+	// Length: 1
 }
 
 func ExampleClient_XInfoStreamFullWithOptions() {
