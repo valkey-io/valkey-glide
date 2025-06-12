@@ -54,7 +54,7 @@ type clientConfiguration interface {
 type baseClient struct {
 	pending        map[unsafe.Pointer]struct{}
 	coreClient     unsafe.Pointer
-	mu             sync.Mutex
+	mu             *sync.Mutex
 	messageHandler *MessageHandler
 }
 
@@ -153,7 +153,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
-	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
