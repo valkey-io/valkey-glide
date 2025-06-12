@@ -6935,20 +6935,20 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
 	opts *options.XInfoStreamOptions,
-) (map[string]any, error) {
+) (models.XInfoStreamFullOptionsResponse, error) {
 	args := []string{key, constants.FullKeyword}
 	if opts != nil {
 		optionArgs, err := opts.ToArgs()
 		if err != nil {
-			return nil, err
+			return models.XInfoStreamFullOptionsResponse{}, err
 		}
 		args = append(args, optionArgs...)
 	}
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamFullOptionsResponse(result)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the

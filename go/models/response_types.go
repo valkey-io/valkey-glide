@@ -341,3 +341,11 @@ type XInfoStreamResponse struct {
 	// The ID and field-value tuples of the last entry in the stream
 	LastEntry StreamEntry
 }
+
+type XInfoStreamFullOptionsResponse struct {
+	XInfoStreamResponse
+	// The list of consumer groups defined for the stream
+	GroupsInfo []XInfoGroupInfo
+	// The list of consumer information for the stream
+	ConsumersInfo []XInfoConsumerInfo
+}

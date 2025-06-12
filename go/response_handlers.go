@@ -1700,7 +1700,38 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 		return models.XInfoStreamResponse{},
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
+	return getXInfoStreamFields(infoMap)
+}
 
+func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return models.XInfoStreamFullOptionsResponse{}, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	infoMap, ok := result.(map[string]any)
+	if !ok {
+		return models.XInfoStreamFullOptionsResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
+
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+	streamInfo.XInfoStreamResponse, err = getXInfoStreamFields(infoMap)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	return streamInfo, nil
+}
+
+func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, error) {
 	streamInfo := models.XInfoStreamResponse{}
 
 	// Parse integer fields
