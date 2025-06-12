@@ -49,10 +49,7 @@ type ClusterScanCursor struct {
 
 // Create a new ClusterScanCursor with a default value
 func NewClusterScanCursor() ClusterScanCursor {
-	cStr := C.CString("0")
-	C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
-	return ClusterScanCursor{cursor: "0"}
+	return NewClusterScanCursorWithId("0")
 }
 
 // Create a new ClusterScanCursor with a specified value

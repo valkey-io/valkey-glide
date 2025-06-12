@@ -2683,7 +2683,9 @@ func (suite *GlideTestSuite) TestSScan() {
 			result, err := client.SScan(context.Background(), key1, cursor)
 			assert.NoError(t, err)
 			assert.NotEqual(t, cursor, result.Cursor)
-			assert.False(t, isSubset(result.Data, resultCollection))
+			if len(result.Data) > 0 {
+				assert.False(t, isSubset(result.Data, resultCollection))
+			}
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}
@@ -6320,7 +6322,9 @@ func (suite *GlideTestSuite) TestZScan() {
 			result, err := client.ZScan(context.Background(), key1, cursor)
 			assert.NoError(suite.T(), err)
 			assert.NotEqual(suite.T(), cursor, result.Cursor)
-			assert.False(suite.T(), isSubset(result.Data, resultCollection))
+			if len(result.Data) > 0 {
+				assert.False(suite.T(), isSubset(result.Data, resultCollection))
+			}
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}
