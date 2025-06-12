@@ -1751,19 +1751,19 @@ func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
 		if id, ok := firstEntryArray[0].(string); ok {
 			// Create field info array.
 			entryArray := []any{firstEntryArray[1]}
-			fieldInfos := createFieldInfoArray(entryArray)
+			keyValues := createFieldInfoArray(entryArray)
 			// Create a StreamEntry with the ID
 			entry = models.StreamEntry{
 				ID:     id,
-				Fields: fieldInfos,
+				Fields: keyValues,
 			}
 		}
 	}
 	return entry
 }
 
-func createFieldInfoArray(entriesArray any) []models.FieldInfo {
-	fieldInfos := make([]models.FieldInfo, 0)
+func createFieldInfoArray(entriesArray any) []models.KeyValue {
+	keyValues := make([]models.KeyValue, 0)
 	entriesData, ok := entriesArray.([]any)
 	if !ok {
 		entriesData = []any{}
@@ -1778,12 +1778,12 @@ func createFieldInfoArray(entriesArray any) []models.FieldInfo {
 			fieldName, okField := fieldValuePairs[i].(string)
 			fieldValue, okValue := fieldValuePairs[i+1].(string)
 			if okField && okValue {
-				fieldInfos = append(fieldInfos, models.FieldInfo{
-					FieldName: fieldName,
-					Value:     fieldValue,
+				keyValues = append(keyValues, models.KeyValue{
+					Name:  fieldName,
+					Value: fieldValue,
 				})
 			}
 		}
 	}
-	return fieldInfos
+	return keyValues
 }

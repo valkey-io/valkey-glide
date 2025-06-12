@@ -4074,7 +4074,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4102,7 +4102,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -6469,7 +6469,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6502,7 +6502,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(

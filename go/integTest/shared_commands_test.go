@@ -4756,15 +4756,15 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: "0-1",
-				Fields: []models.FieldInfo{{
-					FieldName: "entry1_field1", Value: "entry1_value1",
+				Fields: []models.KeyValue{{
+					Name: "entry1_field1", Value: "entry1_value1",
 				}, {
-					FieldName: "entry1_field2", Value: "entry1_value2",
+					Name: "entry1_field2", Value: "entry1_value2",
 				}},
 			}, {
 				ID: "0-2",
-				Fields: []models.FieldInfo{{
-					FieldName: "entry2_field1", Value: "entry2_value1",
+				Fields: []models.KeyValue{{
+					Name: "entry2_field1", Value: "entry2_value1",
 				}},
 			}},
 		})
@@ -4885,13 +4885,13 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: entry1,
-				Fields: []models.FieldInfo{{
-					FieldName: "a", Value: "b",
+				Fields: []models.KeyValue{{
+					Name: "a", Value: "b",
 				}},
 			}, {
 				ID: entry2,
-				Fields: []models.FieldInfo{{
-					FieldName: "c", Value: "d",
+				Fields: []models.KeyValue{{
+					Name: "c", Value: "d",
 				}},
 			}},
 		})
@@ -4908,7 +4908,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		streamResponse, exists = res[key1]
 		assert.True(suite.T(), exists)
 		// Check entries
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -4919,7 +4919,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Verify entry2 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry2)
-		assert.Equal(suite.T(), entryMap[entry2], []models.FieldInfo{{FieldName: "c", Value: "d"}})
+		assert.Equal(suite.T(), entryMap[entry2], []models.KeyValue{{Name: "c", Value: "d"}})
 
 		// try to read new messages only
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4943,8 +4943,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: entry3,
-				Fields: []models.FieldInfo{{
-					FieldName: "e", Value: "f",
+				Fields: []models.KeyValue{{
+					Name: "e", Value: "f",
 				}},
 			}},
 		})
@@ -4976,7 +4976,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 3, len(streamResponse1.Entries))
 
 		// Create a map of entry IDs to their fields for key1
-		entryMap1 := make(map[string][]models.FieldInfo)
+		entryMap1 := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse1.Entries {
 			entryMap1[entry.ID] = entry.Fields
 		}
@@ -4987,10 +4987,10 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check for field "c" with value "d" in entry2
 		assert.Contains(suite.T(), entryMap1, entry2)
-		assert.Equal(suite.T(), entryMap1[entry2], []models.FieldInfo{{FieldName: "c", Value: "d"}})
+		assert.Equal(suite.T(), entryMap1[entry2], []models.KeyValue{{Name: "c", Value: "d"}})
 
 		assert.Contains(suite.T(), entryMap1, entry3)
-		assert.NotContains(suite.T(), entryMap1[entry3], []models.FieldInfo{{FieldName: "e", Value: "f"}})
+		assert.NotContains(suite.T(), entryMap1[entry3], []models.KeyValue{{Name: "e", Value: "f"}})
 
 		// Check key2 stream (should be empty)
 		streamResponse2, exists := res[key2]
@@ -5078,7 +5078,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Equal(suite.T(), 1, len(streamResponse1.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse1.Entries[0].ID)
 		assert.Equal(suite.T(), streamResponse1.Entries[0].Fields,
-			[]models.FieldInfo{{FieldName: "k1_field1", Value: "k1_value1"}, {FieldName: "k1_field1", Value: "k1_value2"}})
+			[]models.KeyValue{{Name: "k1_field1", Value: "k1_value1"}, {Name: "k1_field1", Value: "k1_value2"}})
 
 		// Check key2 stream
 		streamResponse2, exists := read[key2]
@@ -5087,7 +5087,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Equal(suite.T(), "2-0", streamResponse2.Entries[0].ID)
 
 		assert.Equal(suite.T(), streamResponse2.Entries[0].Fields,
-			[]models.FieldInfo{{FieldName: "k2_field1", Value: "k2_value1"}})
+			[]models.KeyValue{{Name: "k2_field1", Value: "k2_value1"}})
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
@@ -5181,7 +5181,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -5189,19 +5189,19 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// // Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
 		assert.Equal(suite.T(), entryMap["1-0"],
-			[]models.FieldInfo{{FieldName: "f0", Value: "v0"}},
+			[]models.KeyValue{{Name: "f0", Value: "v0"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-1")
 		// Check for field "f1" with value "v1" in entry 1-1
 		assert.Equal(suite.T(), entryMap["1-1"],
-			[]models.FieldInfo{{FieldName: "f1", Value: "v1"}},
+			[]models.KeyValue{{Name: "f1", Value: "v1"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-2")
 		// Check for field "f2" with value "v2" in entry 1-2
 		assert.Equal(suite.T(), entryMap["1-2"],
-			[]models.FieldInfo{{FieldName: "f2", Value: "v2"}},
+			[]models.KeyValue{{Name: "f2", Value: "v2"}},
 		)
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
@@ -5229,7 +5229,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Check entries
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "1-2", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), []models.FieldInfo{{FieldName: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), []models.KeyValue{{Name: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
@@ -7585,7 +7585,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7593,11 +7593,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, streamId1)
 		// Check for field "field1" with value "value1" in entry
-		assert.Equal(suite.T(), entryMap[streamId1], []models.FieldInfo{{FieldName: "field1", Value: "value1"}})
+		assert.Equal(suite.T(), entryMap[streamId1], []models.KeyValue{{Name: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamId2)
 		// Check for field "field2" with value "value2" in entry
-		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldInfo{{FieldName: "field2", Value: "value2"}})
+		assert.Equal(suite.T(), entryMap[streamId2], []models.KeyValue{{Name: "field2", Value: "value2"}})
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(context.Background(), key, []string{streamId1})
@@ -7614,7 +7614,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap = make(map[string][]models.FieldInfo)
+		entryMap = make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7626,7 +7626,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Contains(suite.T(), entryMap, streamId2)
 
 		// Check for field "field2" with value "value2" in entry
-		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldInfo{{FieldName: "field2", Value: "value2"}})
+		assert.Equal(suite.T(), entryMap[streamId2], []models.KeyValue{{Name: "field2", Value: "value2"}})
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -7660,7 +7660,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), streamId3, streamResponse.Entries[0].ID)
 
 		// Check for field "field3" with value "value3" in entry
-		assert.Equal(suite.T(), []models.FieldInfo{{FieldName: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), []models.KeyValue{{Name: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3})
@@ -7715,7 +7715,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(
 			suite.T(),
 			infoSmall.FirstEntry.Fields,
-			[]models.FieldInfo{{FieldName: "a", Value: "b"}, {FieldName: "c", Value: "d"}},
+			[]models.KeyValue{{Name: "a", Value: "b"}, {Name: "c", Value: "d"}},
 		)
 
 		// Check the last entry
@@ -7725,7 +7725,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(
 			suite.T(),
 			infoSmall.LastEntry.Fields,
-			[]models.FieldInfo{{FieldName: "a", Value: "b"}, {FieldName: "c", Value: "d"}},
+			[]models.KeyValue{{Name: "a", Value: "b"}, {Name: "c", Value: "d"}},
 		)
 
 		xadd, err = client.XAddWithOptions(
@@ -7818,7 +7818,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(
 			suite.T(),
 			streamResponse.Entries[0].Fields,
-			[]models.FieldInfo{{FieldName: "e1_f1", Value: "e1_v1"}, {FieldName: "e1_f2", Value: "e1_v2"}},
+			[]models.KeyValue{{Name: "e1_f1", Value: "e1_v1"}, {Name: "e1_f2", Value: "e1_v2"}},
 		)
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
@@ -7852,7 +7852,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7871,15 +7871,15 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 				Entries: []models.StreamEntry{
 					{
 						ID: "0-2",
-						Fields: []models.FieldInfo{
-							{FieldName: "e2_f1", Value: "e2_v1"},
-							{FieldName: "e2_f2", Value: "e2_v2"},
+						Fields: []models.KeyValue{
+							{Name: "e2_f1", Value: "e2_v1"},
+							{Name: "e2_f2", Value: "e2_v2"},
 						},
 					},
 					{
 						ID: "0-3",
-						Fields: []models.FieldInfo{
-							{FieldName: "e3_f1", Value: "e3_v1"},
+						Fields: []models.KeyValue{
+							{Name: "e3_f1", Value: "e3_v1"},
 						},
 					},
 				},
@@ -8021,7 +8021,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.Equal(suite.T(), 3, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
@@ -8041,22 +8041,22 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 				Entries: []models.StreamEntry{
 					{
 						ID: "0-1",
-						Fields: []models.FieldInfo{
-							{FieldName: "e1_f1", Value: "e1_v1"},
-							{FieldName: "e1_f2", Value: "e1_v2"},
+						Fields: []models.KeyValue{
+							{Name: "e1_f1", Value: "e1_v1"},
+							{Name: "e1_f2", Value: "e1_v2"},
 						},
 					},
 					{
 						ID: "0-2",
-						Fields: []models.FieldInfo{
-							{FieldName: "e2_f1", Value: "e2_v1"},
-							{FieldName: "e2_f2", Value: "e2_v2"},
+						Fields: []models.KeyValue{
+							{Name: "e2_f1", Value: "e2_v1"},
+							{Name: "e2_f2", Value: "e2_v2"},
 						},
 					},
 					{
 						ID: "0-3",
-						Fields: []models.FieldInfo{
-							{FieldName: "e3_f1", Value: "e3_v1"},
+						Fields: []models.KeyValue{
+							{Name: "e3_f1", Value: "e3_v1"},
 						},
 					},
 				},
@@ -8478,7 +8478,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.FieldInfo)
+		entryMap := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -8490,14 +8490,14 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_1],
-			[]models.FieldInfo{{FieldName: "field1", Value: "value1"}})
+			[]models.KeyValue{{Name: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamid_2)
 		// Check for field "field2" with value "value2" in entry
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_2],
-			[]models.FieldInfo{{FieldName: "field2", Value: "value2"}})
+			[]models.KeyValue{{Name: "field2", Value: "value2"}})
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -8520,7 +8520,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 3, len(streamResponse2.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap2 := make(map[string][]models.FieldInfo)
+		entryMap2 := make(map[string][]models.KeyValue)
 		for _, entry := range streamResponse2.Entries {
 			entryMap2[entry.ID] = entry.Fields
 		}
@@ -8533,9 +8533,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			return streamResponse2.Entries[i].ID < streamResponse2.Entries[j].ID
 		})
 		entries := []models.StreamEntry{
-			{ID: streamid_3, Fields: []models.FieldInfo{{FieldName: "field3", Value: "value3"}}},
-			{ID: streamid_4, Fields: []models.FieldInfo{{FieldName: "field4", Value: "value4"}}},
-			{ID: streamid_5, Fields: []models.FieldInfo{{FieldName: "field5", Value: "value5"}}},
+			{ID: streamid_3, Fields: []models.KeyValue{{Name: "field3", Value: "value3"}}},
+			{ID: streamid_4, Fields: []models.KeyValue{{Name: "field4", Value: "value4"}}},
+			{ID: streamid_5, Fields: []models.KeyValue{{Name: "field5", Value: "value5"}}},
 		}
 		sort.Slice(entries, func(i, j int) bool {
 			return entries[i].ID < entries[j].ID
@@ -8608,13 +8608,13 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
 			streamid_3: {
-				Fields: []models.FieldInfo{
-					{FieldName: "field3", Value: "value3"},
+				Fields: []models.KeyValue{
+					{Name: "field3", Value: "value3"},
 				},
 			},
 			streamid_5: {
-				Fields: []models.FieldInfo{
-					{FieldName: "field5", Value: "value5"},
+				Fields: []models.KeyValue{
+					{Name: "field5", Value: "value5"},
 				},
 			},
 		}
@@ -8648,8 +8648,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			suite.T(),
 			map[string]models.XClaimResponse{
 				streamid_6: {
-					Fields: []models.FieldInfo{
-						{FieldName: "field6", Value: "value6"},
+					Fields: []models.KeyValue{
+						{Name: "field6", Value: "value6"},
 					},
 				},
 			},
