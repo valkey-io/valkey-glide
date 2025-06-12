@@ -455,3 +455,20 @@ type RankAndScore struct {
 	// The score of the member
 	Score float64
 }
+
+type LCSMatch struct {
+	MatchString string
+	Matches     []LCSMatchedPosition
+	Len         int64
+}
+
+type LCSMatchedPosition struct {
+	Key1     LCSPosition
+	Key2     LCSPosition
+	MatchLen int64
+}
+
+type LCSPosition struct {
+	Start int64
+	End   int64
+}

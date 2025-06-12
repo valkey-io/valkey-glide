@@ -53,7 +53,7 @@ type StringCommands interface {
 
 	LCSLen(ctx context.Context, key1 string, key2 string) (int64, error)
 
-	LCSWithOptions(ctx context.Context, key1, key2 string, opts options.LCSIdxOptions) (map[string]any, error)
+	LCSWithOptions(ctx context.Context, key1, key2 string, opts options.LCSIdxOptions) (*models.LCSMatch, error)
 
 	GetDel(ctx context.Context, key string) (models.Result[string], error)
 }

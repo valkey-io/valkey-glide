@@ -1286,7 +1286,7 @@ func (client *baseClient) LCSWithOptions(
 	ctx context.Context,
 	key1, key2 string,
 	opts options.LCSIdxOptions,
-) (map[string]any, error) {
+) (*models.LCSMatch, error) {
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -1295,7 +1295,17 @@ func (client *baseClient) LCSWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToAnyMapResponse(response)
+	lcsResp, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("LCS Response: %+v\n", lcsResp)
+
+	return &models.LCSMatch{
+		MatchString: lcsResp["match_string"].(string),
+		Matches:     lcsResp["matches"].([]models.LCSMatchedPosition),
+		Len:         lcsResp["len"].(int64),
+	}, nil
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
