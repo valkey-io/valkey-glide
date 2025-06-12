@@ -1139,7 +1139,6 @@ pub unsafe extern "C-unwind" fn command(
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
-    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
 
     let route = if !route_bytes.is_null() {
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
@@ -1158,6 +1157,7 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
     let result = client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
