@@ -7859,21 +7859,29 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-2")
-
-		// Check for fields in entry 0-2
-		assert.Equal(
-			suite.T(),
-			entryMap["0-2"],
-			[]models.FieldInfo{{FieldName: "e2_f1", Value: "e2_v1"}, {FieldName: "e2_f2", Value: "e2_v2"}},
-		)
-
 		assert.Contains(suite.T(), entryMap, "0-3")
 
-		// Check for field in entry 0-3
+		// Check for fields
 		assert.Equal(
 			suite.T(),
-			entryMap["0-3"],
-			[]models.FieldInfo{{FieldName: "e3_f1", Value: "e3_v1"}},
+			streamResponse,
+			models.StreamResponse{
+				Entries: []models.StreamEntry{
+					{
+						ID: "0-2",
+						Fields: []models.FieldInfo{
+							{FieldName: "e2_f1", Value: "e2_v1"},
+							{FieldName: "e2_f2", Value: "e2_v2"},
+						},
+					},
+					{
+						ID: "0-3",
+						Fields: []models.FieldInfo{
+							{FieldName: "e3_f1", Value: "e3_v1"},
+						},
+					},
+				},
+			},
 		)
 
 		// Verify that xinfo_consumers contains info for 2 consumers now
@@ -8019,27 +8027,35 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
-		// Check for fields in entry 0-1
-		assert.Equal(
-			suite.T(),
-			entryMap["0-1"],
-			[]models.FieldInfo{{FieldName: "e1_f1", Value: "e1_v1"}, {FieldName: "e1_f2", Value: "e1_v2"}},
-		)
-
 		assert.Contains(suite.T(), entryMap, "0-2")
-		// Check for fields in entry 0-2
-		assert.Equal(
-			suite.T(),
-			entryMap["0-2"],
-			[]models.FieldInfo{{FieldName: "e2_f1", Value: "e2_v1"}, {FieldName: "e2_f2", Value: "e2_v2"}},
-		)
-
 		assert.Contains(suite.T(), entryMap, "0-3")
-		// Check for field in entry 0-3
 		assert.Equal(
 			suite.T(),
-			entryMap["0-3"],
-			[]models.FieldInfo{{FieldName: "e3_f1", Value: "e3_v1"}},
+			streamResponse,
+			models.StreamResponse{
+				Entries: []models.StreamEntry{
+					{
+						ID: "0-1",
+						Fields: []models.FieldInfo{
+							{FieldName: "e1_f1", Value: "e1_v1"},
+							{FieldName: "e1_f2", Value: "e1_v2"},
+						},
+					},
+					{
+						ID: "0-2",
+						Fields: []models.FieldInfo{
+							{FieldName: "e2_f1", Value: "e2_v1"},
+							{FieldName: "e2_f2", Value: "e2_v2"},
+						},
+					},
+					{
+						ID: "0-3",
+						Fields: []models.FieldInfo{
+							{FieldName: "e3_f1", Value: "e3_v1"},
+						},
+					},
+				},
+			},
 		)
 
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
@@ -8506,27 +8522,20 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap2, streamid_3)
-
-		// Check for field "field3" with value "value3" in entry
-		assert.Equal(
-			suite.T(),
-			entryMap2[streamid_3],
-			[]models.FieldInfo{{FieldName: "field3", Value: "value3"}})
-
 		assert.Contains(suite.T(), entryMap2, streamid_4)
-		// Check for field "field4" with value "value4" in entry
-		assert.Equal(
-			suite.T(),
-			entryMap2[streamid_4],
-			[]models.FieldInfo{{FieldName: "field4", Value: "value4"}})
-
 		assert.Contains(suite.T(), entryMap2, streamid_5)
 
-		// Check for field "field5" with value "value5" in entry
 		assert.Equal(
 			suite.T(),
-			entryMap2[streamid_5],
-			[]models.FieldInfo{{FieldName: "field5", Value: "value5"}})
+			streamResponse2,
+			models.StreamResponse{
+				Entries: []models.StreamEntry{
+					{ID: streamid_1, Fields: []models.FieldInfo{{FieldName: "field1", Value: "value1"}}},
+					{ID: streamid_2, Fields: []models.FieldInfo{{FieldName: "field2", Value: "value2"}}},
+					{ID: streamid_3, Fields: []models.FieldInfo{{FieldName: "field3", Value: "value3"}}},
+				},
+			},
+		)
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
