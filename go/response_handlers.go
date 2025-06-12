@@ -1779,7 +1779,7 @@ func createFieldInfoArray(entriesArray any) []models.KeyValue {
 			fieldValue, okValue := fieldValuePairs[i+1].(string)
 			if okField && okValue {
 				keyValues = append(keyValues, models.KeyValue{
-					Name:  fieldName,
+					Key:   fieldName,
 					Value: fieldValue,
 				})
 			}

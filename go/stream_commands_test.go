@@ -1478,7 +1478,7 @@ func ExampleClient_XClaimWithOptions() {
 		// Print a sample field if available
 		if len(claimResponse.Fields) > 0 {
 			for _, keyValue := range claimResponse.Fields {
-				fmt.Printf("Field: %s, Value: %s\n", keyValue.Name, keyValue.Value)
+				fmt.Printf("Field: %s, Value: %s\n", keyValue.Key, keyValue.Value)
 				break // Just print the first field as an example
 			}
 		}

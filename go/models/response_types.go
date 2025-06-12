@@ -303,7 +303,7 @@ type StreamEntry struct {
 // KeyValue represents the Key-value pairs added to the entry.
 type KeyValue struct {
 	// The name of the field
-	Name string
+	Key string
 	// The value of the field
 	Value string
 }
