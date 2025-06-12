@@ -928,6 +928,7 @@ func handleScanResponse(response *C.struct_CommandResponse) (string, []string, e
 
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {
 	defer C.free_command_response(response)
+
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -948,34 +949,9 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 
 	for id, entriesArray := range claimMap {
 		// Process fields
-		fields := make(map[string]string)
-
-		entriesData, ok := entriesArray.([]any)
-		if !ok {
-			entriesData = []any{}
-		}
-
-		for _, entryData := range entriesData {
-			fieldValuePairs, ok := entryData.([]any)
-			if !ok || len(fieldValuePairs) < 2 {
-				continue
-			}
-
-			if ok && len(fieldValuePairs) > 0 {
-				for i := 0; i < len(fieldValuePairs); i += 2 {
-					if i+1 < len(fieldValuePairs) {
-						fieldName, okField := fieldValuePairs[i].(string)
-						fieldValue, okValue := fieldValuePairs[i+1].(string)
-						if okField && okValue {
-							fields[fieldName] = fieldValue
-						}
-					}
-				}
-			}
-		}
-
+		fieldInfos := createFieldInfoArray(entriesArray)
 		result[id] = models.XClaimResponse{
-			Fields: fields,
+			Fields: fieldInfos,
 		}
 	}
 
@@ -1176,40 +1152,6 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.
 	}, nil
 }
 
-func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
-	defer C.free_command_response(response)
-	data, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	if data == nil {
-		return nil, nil
-	}
-
-	converters := mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				false,
-			},
-			false,
-		},
-		false,
-	}
-
-	res, err := converters.convert(data)
-	if err != nil {
-		return nil, err
-	}
-	if result, ok := res.(map[string]map[string][][]string); ok {
-		return result, nil
-	}
-	return nil, fmt.Errorf("unexpected type received: %T", res)
-}
-
 func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models.StreamResponse, error) {
 	defer C.free_command_response(response)
 	data, err := parseMap(response)
@@ -1235,32 +1177,10 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 		// Process fields
 		for id, entriesArray := range streamData.(map[string]any) {
 			// Process stream entries
-			entriesData, ok := entriesArray.([]any)
-			if !ok {
-				entriesData = []any{}
-			}
-			fields := make(map[string]string)
-			for _, entryData := range entriesData {
-				fieldValuePairs, ok := entryData.([]any)
-				if !ok || len(fieldValuePairs) < 2 {
-					continue
-				}
-
-				if ok && len(fieldValuePairs) > 0 {
-					for i := 0; i < len(fieldValuePairs); i += 2 {
-						if i+1 < len(fieldValuePairs) {
-							fieldName, okField := fieldValuePairs[i].(string)
-							fieldValue, okValue := fieldValuePairs[i+1].(string)
-							if okField && okValue {
-								fields[fieldName] = fieldValue
-							}
-						}
-					}
-				}
-			}
+			fieldInfos := createFieldInfoArray(entriesArray)
 			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
 				ID:     id,
-				Fields: fields,
+				Fields: fieldInfos,
 			})
 		}
 
@@ -1760,4 +1680,110 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	}
 
 	return zRangeResponseArray, nil
+}
+
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return models.XInfoStreamResponse{}, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return models.XInfoStreamResponse{}, err
+	}
+
+	infoMap, ok := result.(map[string]any)
+	if !ok {
+		return models.XInfoStreamResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
+
+	streamInfo := models.XInfoStreamResponse{}
+
+	// Parse integer fields
+	if val, ok := infoMap["length"].(int64); ok {
+		streamInfo.Length = val
+	}
+	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
+		streamInfo.RadixTreeKeys = val
+	}
+	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
+		streamInfo.RadixTreeNodes = val
+	}
+	if val, ok := infoMap["groups"].(int64); ok {
+		streamInfo.Groups = val
+	}
+	if val, ok := infoMap["entries-added"].(int64); ok {
+		streamInfo.EntriesAdded = val
+	}
+
+	// Parse string fields
+	if val, ok := infoMap["last-generated-id"].(string); ok {
+		streamInfo.LastGeneratedID = val
+	}
+	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
+		streamInfo.MaxDeletedEntryID = val
+	}
+
+	// Get First Entry
+	entry := createEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+
+	entry = createEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	return streamInfo, nil
+}
+
+// Parse entry - it's an array where first element is ID and second is array of field-value pairs
+func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
+	entry := models.StreamEntry{}
+	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
+	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := firstEntryArray[0].(string); ok {
+			// Create field info array.
+			entryArray := []any{firstEntryArray[1]}
+			keyValues := createFieldInfoArray(entryArray)
+			// Create a StreamEntry with the ID
+			entry = models.StreamEntry{
+				ID:     id,
+				Fields: keyValues,
+			}
+		}
+	}
+	return entry
+}
+
+func createFieldInfoArray(entriesArray any) []models.KeyValue {
+	keyValues := make([]models.KeyValue, 0)
+	entriesData, ok := entriesArray.([]any)
+	if !ok {
+		entriesData = []any{}
+	}
+
+	for _, entryData := range entriesData {
+		fieldValuePairs, ok := entryData.([]any)
+		if !ok || len(fieldValuePairs) < 2 {
+			continue
+		}
+		for i := 0; i+1 < len(fieldValuePairs); i += 2 {
+			fieldName, okField := fieldValuePairs[i].(string)
+			fieldValue, okValue := fieldValuePairs[i+1].(string)
+			if okField && okValue {
+				keyValues = append(keyValues, models.KeyValue{
+					Key:   fieldName,
+					Value: fieldValue,
+				})
+			}
+		}
+	}
+	return keyValues
 }
