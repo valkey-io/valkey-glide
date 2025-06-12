@@ -43,7 +43,12 @@ type HashCommands interface {
 
 	HScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
 
-	HScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.HashScanOptions) (models.ScanResult, error)
+	HScanWithOptions(
+		ctx context.Context,
+		key string,
+		cursor models.Cursor,
+		options options.HashScanOptions,
+	) (models.ScanResult, error)
 
 	HRandField(ctx context.Context, key string) (models.Result[string], error)
 

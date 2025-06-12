@@ -106,7 +106,12 @@ type SortedSetCommands interface {
 
 	ZScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
 
-	ZScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.ZScanOptions) (models.ScanResult, error)
+	ZScanWithOptions(
+		ctx context.Context,
+		key string,
+		cursor models.Cursor,
+		options options.ZScanOptions,
+	) (models.ScanResult, error)
 
 	ZRemRangeByLex(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error)
 

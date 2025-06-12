@@ -54,12 +54,12 @@ func ExampleClusterClient_Scan() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		var keys []string
-		cursor, keys, err = client.Scan(context.Background(), cursor)
+		result, err := client.Scan(context.Background(), cursor)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		allKeys = append(allKeys, keys...)
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
 	}
 
 	// Elements will contain values [key1 key2 key3] but because order
@@ -94,12 +94,12 @@ func ExampleClusterClient_ScanWithOptions_match() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		allKeys = append(allKeys, keys...)
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
 	}
 
 	// Elements will contain values [key-1 key-2] but because order
@@ -133,12 +133,12 @@ func ExampleClusterClient_ScanWithOptions_matchNonUTF8() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		allKeys = append(allKeys, keys...)
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
 	}
 
 	// Elements will contain value [key\xc0\xc1-1] but since it is
@@ -167,12 +167,12 @@ func ExampleClusterClient_ScanWithOptions_count() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		allKeys = append(allKeys, keys...)
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
 	}
 
 	// Elements will contain values [key1 key2 key3] but because order
@@ -206,12 +206,12 @@ func ExampleClusterClient_ScanWithOptions_type() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		var keys []string
-		cursor, keys, err = client.ScanWithOptions(context.Background(), cursor, *opts)
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if err != nil {
 			fmt.Println("Glide example failed with an error: ", err)
 		}
-		allKeys = append(allKeys, keys...)
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
 	}
 
 	fmt.Println(allKeys)

@@ -1258,7 +1258,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		// Check for empty set.
 		result, err := client.HScan(context.Background(), key1, initialCursor)
 		suite.NoError(err)
-		assert.Equal(t, initialCursor, result.Cursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		assert.Empty(t, result.Data)
 
 		// Negative cursor check.
@@ -1267,7 +1267,7 @@ func (suite *GlideTestSuite) TestHScan() {
 			assert.NotEmpty(t, err)
 		} else {
 			result, _ = client.HScan(context.Background(), key1, models.NewCursorFromString("-1"))
-			assert.Equal(t, initialCursor, result.Cursor)
+			assert.Equal(t, initialCursor.String(), result.Cursor.String())
 			assert.Empty(t, result.Data)
 		}
 
@@ -1276,7 +1276,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.Equal(t, int64(len(charMembers)), hsetResult)
 
 		result, _ = client.HScan(context.Background(), key1, initialCursor)
-		assert.Equal(t, initialCursor, result.Cursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		// Length includes the score which is twice the map size
 		assert.Equal(t, len(charMap)*2, len(result.Data))
 
@@ -1293,7 +1293,7 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		opts := options.NewHashScanOptions().SetMatch("a")
 		result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-		assert.Equal(t, initialCursor, result.Cursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		assert.Equal(t, len(result.Data), 2)
 		assert.Equal(t, result.Data[0], "a")
 		assert.Equal(t, result.Data[1], "0")
@@ -2640,14 +2640,14 @@ func (suite *GlideTestSuite) TestSScan() {
 		// empty set
 		result, err := client.SScan(context.Background(), key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, result.Cursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		assert.Empty(t, result.Data)
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
 			result, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NoError(t, err)
-			assert.Equal(t, initialCursor, result.Cursor)
+			assert.Equal(t, initialCursor.String(), result.Cursor.String())
 			assert.Empty(t, result.Data)
 		} else {
 			_, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
@@ -2660,23 +2660,21 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(len(charMembers)), res)
 		result, err = client.SScan(context.Background(), key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, result.Cursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		assert.Equal(t, len(charMembers), len(result.Data))
-		assert.True(t, isSubset(result.Data, charMembers))
+		suite.Subset(result.Data, charMembers)
 
 		opts := options.NewBaseScanOptions().SetMatch("a")
 		result, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, result.Cursor)
-		assert.True(t, isSubset(result.Data, []string{"a"}))
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		suite.Subset(result.Data, []string{"a"})
 
 		// result contains a subset of the key
 		res, err = client.SAdd(context.Background(), key1, numMembers)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(50000), res)
-		result, err = client.SScan(context.Background(), key1, models.NewCursor())
-		assert.NoError(t, err)
-		resultCollection := result.Data
+		resultCollection := []string{}
 
 		cursor := models.NewCursor()
 		// 0 is returned for the cursor of the last iteration
@@ -2684,7 +2682,7 @@ func (suite *GlideTestSuite) TestSScan() {
 			result, err := client.SScan(context.Background(), key1, cursor)
 			assert.NoError(t, err)
 			assert.NotEqual(t, cursor, result.Cursor)
-			assert.False(t, isSubset(resultCollection, result.Data))
+			assert.False(t, isSubset(result.Data, resultCollection))
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}
@@ -6242,7 +6240,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		// Empty set
 		result, err := client.ZScan(context.Background(), key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, result.Cursor)
+		suite.Equal(initialCursor.String(), result.Cursor.String())
 		assert.Empty(suite.T(), result.Data)
 
 		// Negative cursor
@@ -6252,7 +6250,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		} else {
 			result, err = client.ZScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.NoError(err)
-			suite.Equal(initialCursor, result.Cursor)
+			suite.Equal(initialCursor.String(), result.Cursor.String())
 			suite.Empty(result.Data)
 		}
 
@@ -6263,7 +6261,7 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		result, err = client.ZScan(context.Background(), key1, initialCursor)
 		suite.NoError(err)
-		suite.Equal(initialCursor, result.Cursor)
+		suite.Equal(initialCursor.String(), result.Cursor.String())
 		suite.Equal(len(charMap)*2, len(result.Data))
 
 		resultKeySet := make([]string, 0, len(charMap))
@@ -6284,7 +6282,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		opts := options.NewZScanOptions().SetMatch("a")
 		result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, result.Cursor)
+		suite.Equal(initialCursor.String(), result.Cursor.String())
 		assert.Equal(suite.T(), result.Data, []string{"a", "0"})
 
 		// Result contains a subset of the key
@@ -6292,9 +6290,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(50000), res)
 
-		result, err = client.ZScan(context.Background(), key1, models.NewCursor())
-		assert.NoError(suite.T(), err)
-		resultCollection := result.Data
+		resultCollection := []string{}
 		resKeys := []string{}
 
 		cursor := models.NewCursor()
@@ -6303,7 +6299,7 @@ func (suite *GlideTestSuite) TestZScan() {
 			result, err := client.ZScan(context.Background(), key1, cursor)
 			assert.NoError(suite.T(), err)
 			assert.NotEqual(suite.T(), cursor, result.Cursor)
-			assert.False(suite.T(), isSubset(resultCollection, result.Data))
+			assert.False(suite.T(), isSubset(result.Data, resultCollection))
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}

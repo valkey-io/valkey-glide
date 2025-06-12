@@ -53,7 +53,12 @@ type SetCommands interface {
 
 	SScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error)
 
-	SScanWithOptions(ctx context.Context, key string, cursor models.Cursor, options options.BaseScanOptions) (models.ScanResult, error)
+	SScanWithOptions(
+		ctx context.Context,
+		key string,
+		cursor models.Cursor,
+		options options.BaseScanOptions,
+	) (models.ScanResult, error)
 
 	SMove(ctx context.Context, source string, destination string, member string) (bool, error)
 }

@@ -324,7 +324,10 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	// Iterate over all keys in the cluster
@@ -343,7 +346,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	for !cursor.IsFinished() {
 		result, err := client.Scan(context.Background(), cursor)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		allKeys = append(allKeys, result.Keys...)
 		cursor = result.Cursor
@@ -352,7 +355,10 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	assert.ElementsMatch(t, allKeys, []string{"key1", "key2", "key3"})
 
 	// Ensure clean start
-	_, err = client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err = client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	expectedKeys := make([]string, 0, 100)
@@ -372,7 +378,7 @@ func (suite *GlideTestSuite) TestBasicClusterScan() {
 	for !cursor.IsFinished() {
 		result, err := client.Scan(context.Background(), cursor)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		allKeys = append(allKeys, result.Keys...)
 		cursor = result.Cursor
@@ -386,7 +392,10 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	// Iterate over all keys in the cluster
@@ -406,7 +415,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	for !cursor.IsFinished() {
 		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		allKeys = append(allKeys, result.Keys...)
 		cursor = result.Cursor
@@ -432,7 +441,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	for !cursor.IsFinished() {
 		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		matchedKeys = append(matchedKeys, result.Keys...)
 		cursor = result.Cursor
@@ -460,7 +469,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithOptions() {
 	for !cursor.IsFinished() {
 		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		matchedTypeKeys = append(matchedTypeKeys, result.Keys...)
 		cursor = result.Cursor
@@ -477,7 +486,10 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithNonUTF8Pattern() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	// Iterate over all keys in the cluster
@@ -499,7 +511,7 @@ func (suite *GlideTestSuite) TestBasicClusterScanWithNonUTF8Pattern() {
 	for !cursor.IsFinished() {
 		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		allKeys = append(allKeys, result.Keys...)
 		cursor = result.Cursor
@@ -513,7 +525,10 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	expectedKeys := make([]string, 0, 100)
@@ -546,7 +561,7 @@ func (suite *GlideTestSuite) TestClusterScanWithObjectTypeAndPattern() {
 	for !cursor.IsFinished() {
 		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		allKeys = append(allKeys, result.Keys...)
 		cursor = result.Cursor
@@ -566,7 +581,10 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	expectedKeys := make([]string, 0, 100)
@@ -586,11 +604,8 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 		keysOf100 := []string{}
 
 		result, err := client.ScanWithOptions(context.Background(), cursor, *options.NewClusterScanOptions().SetCount(1))
-
-		fmt.Printf("------> %d \n%+v\n%+v\n", successfulScans, cursor, result)
-
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		keysOf1 = append(keysOf1, result.Keys...)
 		allKeys = append(allKeys, keysOf1...)
@@ -606,10 +621,11 @@ func (suite *GlideTestSuite) TestClusterScanWithCount() {
 			*options.NewClusterScanOptions().SetCount(100),
 		)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 		keysOf100 = append(keysOf100, result.Keys...)
 		allKeys = append(allKeys, keysOf100...)
+		cursor = result.Cursor
 
 		if len(keysOf1) < len(keysOf100) {
 			successfulScans += 1
@@ -625,7 +641,10 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	expectedKeys := []string{}
@@ -655,7 +674,7 @@ func (suite *GlideTestSuite) TestClusterScanWithMatch() {
 			*options.NewClusterScanOptions().SetMatch("key-*"),
 		)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 
 		allKeys = append(allKeys, result.Keys...)
@@ -673,7 +692,10 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	t := suite.T()
 
 	// Ensure clean start
-	_, err := client.FlushAllWithOptions(context.Background(), options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}})
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
 	assert.NoError(t, err)
 
 	stringKeys := []string{}
@@ -730,7 +752,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 			*options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
 		)
 		if !assert.NoError(t, err) {
-			break                  // prevent infinite loop
+			break // prevent infinite loop
 		}
 
 		allKeys = append(allKeys, result.Keys...)

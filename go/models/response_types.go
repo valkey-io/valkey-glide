@@ -301,7 +301,7 @@ type XInfoGroupInfo struct {
 
 type Cursor struct {
 	cursor string
-	new bool
+	new    bool
 }
 
 func NewCursor() Cursor {
@@ -327,7 +327,7 @@ func (cursor Cursor) String() string {
 
 type ScanResult struct {
 	Cursor Cursor
-	Data []string
+	Data   []string
 }
 
 var FINISHED_SCAN_CURSOR = "finished"
