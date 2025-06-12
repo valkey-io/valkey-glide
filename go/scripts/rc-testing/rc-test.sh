@@ -24,7 +24,7 @@ else
     echo "Testing release candidate: $VERSION"
 fi
 
-# Create testutils directory and copy internal interfaces to avoid internal package restrictions
+# Create testutils directory and copy internal interfaces to prevent errors in the test files
 echo "Setting up testutils to handle internal package imports..."
 mkdir -p testutils
 cp -r internal/interfaces/* testutils/
@@ -50,8 +50,6 @@ if [ "$os" = "Linux" ]; then
         # Linux
         sed -i -e 's|module github.com/valkey-io/valkey-glide/go/v2|module github.com/valkey-io/valkey-glide/go-test-rc|' go.mod
         sed -i -e '/github.com\/stretchr\/testify/a\\tgithub.com/valkey-io/valkey-glide/go/v2 '"$VERSION" go.mod
-        # Add replace directive after the require block
-        sed -i -e '/^)/a\\nreplace github.com/valkey-io/valkey-glide/go/v2 => ./' go.mod
         if [ $MAJOR -lt "2" ]; then # Fix for release version 1 branches
             sed -i -e 's|"redis-cli",|CLI_COMMAND,|g' ../utils/cluster_manager.py
         fi
@@ -60,10 +58,6 @@ else
         sed -i '' -e 's|module github.com/valkey-io/valkey-glide/go/v2|module github.com/valkey-io/valkey-glide/go-test-rc|' go.mod
         sed -i '' -e '/github.com\/stretchr\/testify/a\
         github.com/valkey-io/valkey-glide/go/v2 '"$VERSION" go.mod
-        # Add replace directive after the require block
-#         sed -i '' -e '/^)/a\
-# \
-# replace github.com/valkey-io/valkey-glide/go/v2 => ./' go.mod
         if [ $MAJOR -lt "2" ]; then # Fix for release version 1 branches
             sed -i '' -e 's|"redis-cli",|CLI_COMMAND,|g' ../utils/cluster_manager.py 
         fi
