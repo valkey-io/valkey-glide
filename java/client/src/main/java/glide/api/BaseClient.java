@@ -254,6 +254,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.SScanOptionsBinary;
+import glide.api.models.commands.scan.ScanResult;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -774,6 +775,17 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
+    }
+
+    protected ScanResult<String[]> handleScanResponse(Response response) throws GlideException {
+        Object[] objArrResult = handleArrayResponse(response);
+        return ScanResult.createScanResult(String[].class, objArrResult);
+    }
+
+    protected ScanResult<GlideString[]> handleScanBinaryResponse(Response response)
+            throws GlideException {
+        Object[] objArrResult = handleArrayResponseBinary(response);
+        return ScanResult.createScanResult(GlideString[].class, objArrResult);
     }
 
     /**

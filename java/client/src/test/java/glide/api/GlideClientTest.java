@@ -354,7 +354,9 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.SScanOptionsBinary;
+import glide.api.models.commands.scan.ScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.scan.ScanResult;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -14229,58 +14231,64 @@ public class GlideClientTest {
     @Test
     public void scan_returns_success() {
         // setup
-        String cursor = "0";
+        ScanCursor cursor = new ScanCursor("0");
         Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+        ScanResult<String[]> scanResult = ScanResult.createScanResult(String[].class, value);
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ScanResult<String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(scanResult);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(new String[] {cursor}), any()))
+        when(commandManager.<ScanResult<String[]>>submitNewCommand(
+                        eq(Scan), eq(new String[] {cursor.getString()}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.scan(cursor);
-        Object[] payload = response.get();
+        CompletableFuture<ScanResult<String[]>> response = service.scan(cursor);
+        ScanResult<String[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(scanResult.getCursor().getString(), payload.getCursor().getString());
+        assertArrayEquals(scanResult.getData(), payload.getData());
     }
 
     @SneakyThrows
     @Test
     public void scan_binary_returns_success() {
         // setup
-        GlideString cursor = gs("0");
+        ScanCursor cursor = new ScanCursor(gs("0"));
         Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+        ScanResult<GlideString[]> scanResult = ScanResult.createScanResult(GlideString[].class, value);
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ScanResult<GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(scanResult);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(new GlideString[] {cursor}), any()))
+        when(commandManager.<ScanResult<GlideString[]>>submitNewCommand(
+                        eq(Scan), eq(new GlideString[] {cursor.getGlideString()}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.scan(cursor);
-        Object[] payload = response.get();
+        CompletableFuture<ScanResult<GlideString[]>> response = service.scanBinary(cursor);
+        ScanResult<GlideString[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(scanResult.getCursor().getGlideString(), payload.getCursor().getGlideString());
+        assertArrayEquals(scanResult.getData(), payload.getData());
     }
 
     @SneakyThrows
     @Test
     public void scan_with_options_returns_success() {
         // setup
-        String cursor = "0";
+        ScanCursor cursor = new ScanCursor("0");
         ScanOptions options =
                 ScanOptions.builder().matchPattern("match").count(10L).type(STRING).build();
         String[] args =
                 new String[] {
-                    cursor,
+                    cursor.getString(),
                     MATCH_OPTION_STRING,
                     "match",
                     COUNT_OPTION_STRING,
@@ -14289,33 +14297,35 @@ public class GlideClientTest {
                     STRING.toString()
                 };
         Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+        ScanResult<String[]> scanResult = ScanResult.createScanResult(String[].class, value);
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ScanResult<String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(scanResult);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(args), any()))
+        when(commandManager.<ScanResult<String[]>>submitNewCommand(eq(Scan), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.scan(cursor, options);
-        Object[] payload = response.get();
+        CompletableFuture<ScanResult<String[]>> response = service.scan(cursor, options);
+        ScanResult<String[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(scanResult.getCursor().getString(), payload.getCursor().getString());
+        assertArrayEquals(scanResult.getData(), payload.getData());
     }
 
     @SneakyThrows
     @Test
     public void scan_binary_with_options_returns_success() {
         // setup
-        GlideString cursor = gs("0");
+        ScanCursor cursor = new ScanCursor(gs("0"));
         ScanOptions options =
                 ScanOptions.builder().matchPattern("match").count(10L).type(STRING).build();
         GlideString[] args =
                 new GlideString[] {
-                    cursor,
+                    cursor.getGlideString(),
                     gs(MATCH_OPTION_STRING),
                     gs("match"),
                     gs(COUNT_OPTION_STRING),
@@ -14324,21 +14334,23 @@ public class GlideClientTest {
                     gs(STRING.toString())
                 };
         Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+        ScanResult<GlideString[]> scanResult = ScanResult.createScanResult(GlideString[].class, value);
 
-        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ScanResult<GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(scanResult);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(args), any()))
+        when(commandManager.<ScanResult<GlideString[]>>submitNewCommand(eq(Scan), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object[]> response = service.scan(cursor, options);
-        Object[] payload = response.get();
+        CompletableFuture<ScanResult<GlideString[]>> response = service.scanBinary(cursor, options);
+        ScanResult<GlideString[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(scanResult.getCursor().getGlideString(), payload.getCursor().getGlideString());
+        assertArrayEquals(scanResult.getData(), payload.getData());
     }
 
     @SneakyThrows

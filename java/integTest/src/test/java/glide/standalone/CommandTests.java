@@ -53,7 +53,9 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
+import glide.api.models.commands.scan.ScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.scan.ScanResult;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
@@ -1203,7 +1205,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scan(GlideClient regularClient) {
-        String initialCursor = "0";
+        ScanCursor initialCursor = new ScanCursor("0");
 
         int numberKeys = 500;
         Map<String, String> keys = new HashMap<>();
@@ -1211,47 +1213,44 @@ public class CommandTests {
             keys.put("{key}-" + i + "-" + UUID.randomUUID(), "{value}-" + i + "-" + UUID.randomUUID());
         }
 
-        int resultCursorIndex = 0;
-        int resultCollectionIndex = 1;
-
         // empty the database
         assertEquals(OK, regularClient.flushdb().get());
 
         // Empty return
-        Object[] emptyResult = regularClient.scan(initialCursor).get();
-        assertEquals(initialCursor, emptyResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+        ScanResult<String[]> emptyResult = regularClient.scan(initialCursor).get();
+        assertEquals(initialCursor.getString(), emptyResult.getCursor().getString());
+        assertDeepEquals(new String[] {}, emptyResult.getData());
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
-                    assertThrows(ExecutionException.class, () -> regularClient.scan("-1").get());
+                    assertThrows(
+                            ExecutionException.class, () -> regularClient.scan(new ScanCursor("-1")).get());
         } else {
-            Object[] negativeResult = regularClient.scan("-1").get();
-            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+            ScanResult<String[]> negativeResult = regularClient.scan(new ScanCursor("-1")).get();
+            assertEquals(initialCursor, negativeResult.getCursor());
+            assertDeepEquals(new String[] {}, negativeResult.getData());
         }
 
         // Add keys to the database using mset
         regularClient.mset(keys).get();
 
-        Object[] result;
-        Object[] keysFound = new String[0];
-        String resultCursor = "0";
+        ScanResult<String[]> result;
+        String[] keysFound = new String[0];
+        ScanCursor resultCursor = new ScanCursor("0");
         boolean isFirstLoop = true;
         do {
             result = regularClient.scan(resultCursor).get();
-            resultCursor = result[resultCursorIndex].toString();
-            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            resultCursor = result.getCursor();
+            String[] resultKeys = result.getData();
             keysFound = ArrayUtils.addAll(keysFound, resultKeys);
 
             if (isFirstLoop) {
-                assertNotEquals("0", resultCursor);
+                assertNotEquals("0", resultCursor.getString());
                 isFirstLoop = false;
-            } else if (resultCursor.equals("0")) {
-                break;
             }
-        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+        } while (!"0"
+                .equals(resultCursor.getString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
@@ -1262,7 +1261,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scan_binary(GlideClient regularClient) {
-        GlideString initialCursor = gs("0");
+        ScanCursor initialCursor = new ScanCursor(gs("0"));
 
         int numberKeys = 500;
         Map<GlideString, GlideString> keys = new HashMap<>();
@@ -1271,47 +1270,47 @@ public class CommandTests {
                     gs("{key}-" + i + "-" + UUID.randomUUID()), gs("{value}-" + i + "-" + UUID.randomUUID()));
         }
 
-        int resultCursorIndex = 0;
-        int resultCollectionIndex = 1;
-
         // empty the database
         assertEquals(OK, regularClient.flushdb().get());
 
         // Empty return
-        Object[] emptyResult = regularClient.scan(initialCursor).get();
-        assertEquals(initialCursor, emptyResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+        ScanResult<GlideString[]> emptyResult = regularClient.scanBinary(initialCursor).get();
+        assertEquals(initialCursor.getGlideString(), emptyResult.getCursor().getGlideString());
+        assertDeepEquals(new String[] {}, emptyResult.getData());
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
-                    assertThrows(ExecutionException.class, () -> regularClient.scan(gs("-1")).get());
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> regularClient.scanBinary(new ScanCursor(gs("-1"))).get());
         } else {
-            Object[] negativeResult = regularClient.scan(gs("-1")).get();
-            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+            ScanResult<GlideString[]> negativeResult =
+                    regularClient.scanBinary(new ScanCursor(gs("-1"))).get();
+            assertEquals(initialCursor.getGlideString(), negativeResult.getCursor().getGlideString());
+            assertDeepEquals(new String[] {}, negativeResult.getData());
         }
 
         // Add keys to the database using mset
         regularClient.msetBinary(keys).get();
 
-        Object[] result;
-        Object[] keysFound = new GlideString[0];
-        GlideString resultCursor = gs("0");
+        ScanResult<GlideString[]> result;
+        GlideString[] keysFound = new GlideString[0];
+        ScanCursor resultCursor = new ScanCursor(gs("0"));
         boolean isFirstLoop = true;
         do {
-            result = regularClient.scan(resultCursor).get();
-            resultCursor = (GlideString) result[resultCursorIndex];
-            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            result = regularClient.scanBinary(resultCursor).get();
+            resultCursor = result.getCursor();
+            GlideString[] resultKeys = result.getData();
             keysFound = ArrayUtils.addAll(keysFound, resultKeys);
 
             if (isFirstLoop) {
-                assertNotEquals(gs("0"), resultCursor);
+                assertNotEquals(gs("0"), resultCursor.getGlideString());
                 isFirstLoop = false;
-            } else if (resultCursor.equals(gs("0"))) {
-                break;
             }
-        } while (!resultCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
+        } while (!gs("0")
+                .equals(
+                        resultCursor.getGlideString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
@@ -1322,11 +1321,8 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scan_with_options(GlideClient regularClient) {
-        String initialCursor = "0";
+        ScanCursor initialCursor = new ScanCursor("0");
         String matchPattern = UUID.randomUUID().toString();
-
-        int resultCursorIndex = 0;
-        int resultCollectionIndex = 1;
 
         // Add string keys to the database using mset
         Map<String, String> stringKeys = new HashMap<>();
@@ -1347,75 +1343,76 @@ public class CommandTests {
 
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
-        Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+        ScanResult<String[]> emptyResult = regularClient.scan(initialCursor, options).get();
+        assertNotEquals(initialCursor.getString(), emptyResult.getCursor().getString());
+        assertDeepEquals(new String[] {}, emptyResult.getData());
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             final ScanOptions finalOptions = options;
             ExecutionException executionException =
                     assertThrows(
-                            ExecutionException.class, () -> regularClient.scan("-1", finalOptions).get());
+                            ExecutionException.class,
+                            () -> regularClient.scan(new ScanCursor("-1"), finalOptions).get());
         } else {
-            Object[] negativeResult = regularClient.scan("-1", options).get();
-            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+            ScanResult<String[]> negativeResult = regularClient.scan(new ScanCursor("-1"), options).get();
+            assertEquals(initialCursor.getString(), negativeResult.getCursor().getString());
+            assertDeepEquals(new String[] {}, negativeResult.getData());
         }
 
         // scan for strings by match pattern:
         options =
                 ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(STRING).build();
-        Object[] result;
-        Object[] keysFound = new String[0];
-        String resultCursor = "0";
+        ScanResult<String[]> result;
+        String[] keysFound = new String[0];
+        ScanCursor resultCursor = new ScanCursor("0");
         do {
             result = regularClient.scan(resultCursor, options).get();
-            resultCursor = result[resultCursorIndex].toString();
-            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            resultCursor = result.getCursor();
+            String[] resultKeys = result.getData();
             keysFound = ArrayUtils.addAll(keysFound, resultKeys);
-        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+        } while (!"0"
+                .equals(resultCursor.getString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
-        Object[] finalKeysFound = keysFound;
+        String[] finalKeysFound = keysFound;
         stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
 
         // scan for sets by match pattern:
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(SET).build();
-        Object[] setResult;
-        Object[] setsFound = new String[0];
-        String setCursor = "0";
+        ScanResult<String[]> setResult;
+        String[] setsFound = new String[0];
+        ScanCursor setCursor = new ScanCursor("0");
         do {
             setResult = regularClient.scan(setCursor, options).get();
-            setCursor = setResult[resultCursorIndex].toString();
-            Object[] resultKeys = (Object[]) setResult[resultCollectionIndex];
+            setCursor = setResult.getCursor();
+            String[] resultKeys = setResult.getData();
             setsFound = ArrayUtils.addAll(setsFound, resultKeys);
-        } while (!setCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+        } while (!"0"
+                .equals(setCursor.getString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
-        Object[] finalSetsFound = setsFound;
+        String[] finalSetsFound = setsFound;
         setKeys.forEach(k -> assertTrue(ArrayUtils.contains(finalSetsFound, k)));
 
         // scan for hashes by match pattern:
         // except in this case, we should never find anything
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(HASH).build();
-        String hashCursor = "0";
+        ScanCursor hashCursor = new ScanCursor("0");
         do {
-            Object[] hashResult = regularClient.scan(hashCursor, options).get();
-            hashCursor = hashResult[resultCursorIndex].toString();
-            assertEquals(0, ((Object[]) hashResult[resultCollectionIndex]).length);
-        } while (!hashCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+            ScanResult<String[]> hashResult = regularClient.scan(hashCursor, options).get();
+            hashCursor = hashResult.getCursor();
+            assertEquals(0, hashResult.getData().length);
+        } while (!"0"
+                .equals(hashCursor.getString())); // 0 is returned for the cursor of the last iteration.
     }
 
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
     public void scan_binary_with_options(GlideClient regularClient) {
-        GlideString initialCursor = gs("0");
+        ScanCursor initialCursor = new ScanCursor(gs("0"));
         String matchPattern = UUID.randomUUID().toString();
-
-        int resultCursorIndex = 0;
-        int resultCollectionIndex = 1;
 
         // Add string keys to the database using mset
         Map<GlideString, GlideString> stringKeys = new HashMap<>();
@@ -1437,64 +1434,71 @@ public class CommandTests {
 
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
-        Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+        ScanResult<GlideString[]> emptyResult = regularClient.scanBinary(initialCursor, options).get();
+        assertNotEquals(initialCursor.getGlideString(), emptyResult.getCursor().getGlideString());
+        assertDeepEquals(new GlideString[] {}, emptyResult.getData());
 
         // Negative cursor
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             final ScanOptions finalOptions = options;
             ExecutionException executionException =
                     assertThrows(
-                            ExecutionException.class, () -> regularClient.scan(gs("-1"), finalOptions).get());
+                            ExecutionException.class,
+                            () -> regularClient.scanBinary(new ScanCursor(gs("-1")), finalOptions).get());
         } else {
-            Object[] negativeResult = regularClient.scan(gs("-1"), options).get();
-            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+            ScanResult<GlideString[]> negativeResult =
+                    regularClient.scanBinary(new ScanCursor(gs("-1")), options).get();
+            assertEquals(initialCursor.getGlideString(), negativeResult.getCursor().getGlideString());
+            assertDeepEquals(new GlideString[] {}, negativeResult.getData());
         }
 
         // scan for strings by match pattern:
         options =
                 ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(STRING).build();
-        Object[] result;
-        Object[] keysFound = new GlideString[0];
-        GlideString resultCursor = gs("0");
+        ScanResult<GlideString[]> result;
+        GlideString[] keysFound = new GlideString[0];
+        ScanCursor resultCursor = new ScanCursor(gs("0"));
         do {
-            result = regularClient.scan(resultCursor, options).get();
-            resultCursor = (GlideString) result[resultCursorIndex];
-            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            result = regularClient.scanBinary(resultCursor, options).get();
+            resultCursor = result.getCursor();
+            GlideString[] resultKeys = result.getData();
             keysFound = ArrayUtils.addAll(keysFound, resultKeys);
-        } while (!resultCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
+        } while (!gs("0")
+                .equals(
+                        resultCursor.getGlideString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
-        Object[] finalKeysFound = keysFound;
+        GlideString[] finalKeysFound = keysFound;
         stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
 
         // scan for sets by match pattern:
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(SET).build();
-        Object[] setResult;
-        Object[] setsFound = new GlideString[0];
-        GlideString setCursor = gs("0");
+        ScanResult<GlideString[]> setResult;
+        GlideString[] setsFound = new GlideString[0];
+        ScanCursor setCursor = new ScanCursor(gs("0"));
         do {
-            setResult = regularClient.scan(setCursor, options).get();
-            setCursor = (GlideString) setResult[resultCursorIndex];
-            Object[] resultKeys = (Object[]) setResult[resultCollectionIndex];
+            setResult = regularClient.scanBinary(setCursor, options).get();
+            setCursor = setResult.getCursor();
+            GlideString[] resultKeys = setResult.getData();
             setsFound = ArrayUtils.addAll(setsFound, resultKeys);
-        } while (!setCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
+        } while (!gs("0")
+                .equals(setCursor.getGlideString())); // 0 is returned for the cursor of the last iteration.
 
         // check that each key added to the database is found through the cursor
-        Object[] finalSetsFound = setsFound;
+        GlideString[] finalSetsFound = setsFound;
         setKeys.forEach(k -> assertTrue(ArrayUtils.contains(finalSetsFound, k)));
 
         // scan for hashes by match pattern:
         // except in this case, we should never find anything
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(HASH).build();
-        GlideString hashCursor = gs("0");
+        ScanCursor hashCursor = new ScanCursor(gs("0"));
         do {
-            Object[] hashResult = regularClient.scan(hashCursor, options).get();
-            hashCursor = (GlideString) hashResult[resultCursorIndex];
-            assertEquals(0, ((Object[]) hashResult[resultCollectionIndex]).length);
-        } while (!hashCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
+            ScanResult<GlideString[]> hashResult = regularClient.scanBinary(hashCursor, options).get();
+            hashCursor = hashResult.getCursor();
+            assertEquals(0, hashResult.getData().length);
+        } while (!gs("0")
+                .equals(
+                        hashCursor.getGlideString())); // 0 is returned for the cursor of the last iteration.
     }
 
     @SneakyThrows
