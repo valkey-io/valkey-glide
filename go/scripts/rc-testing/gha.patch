@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/go.yml b/.github/workflows/go.yml
-index d83c6f577..6eb9046ba 100644
+index 05f572abf..6eb9046ba 100644
 --- a/.github/workflows/go.yml
 +++ b/.github/workflows/go.yml
 @@ -137,8 +137,8 @@ jobs:
@@ -13,7 +13,7 @@ index d83c6f577..6eb9046ba 100644
                    make -k pubsub-test
                    make -k opentelemetry-test
  
-@@ -164,44 +164,6 @@ jobs:
+@@ -164,45 +164,6 @@ jobs:
                        benchmarks/results/**
                        go/reports/**
  
@@ -44,6 +44,7 @@ index d83c6f577..6eb9046ba 100644
 -                  restore-keys: |
 -                      x86_64-unknown-linux-gnu-glide-core
 -                      x86_64-unknown-linux-gnu
+-
 -            - name: lint rust
 -              uses: ./.github/workflows/lint-rust
 -              with:
@@ -58,7 +59,7 @@ index d83c6f577..6eb9046ba 100644
      get-containers:
          runs-on: ubuntu-latest
          if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-@@ -278,8 +240,8 @@ jobs:
+@@ -279,8 +240,8 @@ jobs:
                working-directory: go
                if: ${{ github.event.inputs.rc-test != 'true' }}
                run: |
@@ -69,7 +70,16 @@ index d83c6f577..6eb9046ba 100644
                    make -k pubsub-test
  
              - name: Upload test reports
-@@ -401,7 +363,7 @@ jobs:
+@@ -336,7 +297,7 @@ jobs:
+             - name: Build and test
+               working-directory: ./go
+               run: |
+-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
++                  make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+ 
+             - name: Upload test reports
+               if: always()
+@@ -402,7 +363,7 @@ jobs:
              - name: Install & build & test
                working-directory: go
                run: |
