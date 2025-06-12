@@ -7815,18 +7815,11 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), "0-1", streamResponse.Entries[0].ID)
 
 		// Check for fields in the entry
-		foundE1F1 := false
-		foundE1F2 := false
-		for _, field := range streamResponse.Entries[0].Fields {
-			if field.FieldName == "e1_f1" && field.Value == "e1_v1" {
-				foundE1F1 = true
-			}
-			if field.FieldName == "e1_f2" && field.Value == "e1_v2" {
-				foundE1F2 = true
-			}
-		}
-		assert.True(suite.T(), foundE1F1, "Field 'e1_f1' with value 'e1_v1' not found in entry")
-		assert.True(suite.T(), foundE1F2, "Field 'e1_f2' with value 'e1_v2' not found in entry")
+		assert.Equal(
+			suite.T(),
+			streamResponse.Entries[0].Fields,
+			[]models.FieldInfo{{FieldName: "e1_f1", Value: "e1_v1"}, {FieldName: "e1_f2", Value: "e1_v2"}},
+		)
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
 		time.Sleep(2000 * time.Millisecond)
@@ -7868,30 +7861,20 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Contains(suite.T(), entryMap, "0-2")
 
 		// Check for fields in entry 0-2
-		foundE2F1 := false
-		foundE2F2 := false
-		for _, field := range entryMap["0-2"] {
-			if field.FieldName == "e2_f1" && field.Value == "e2_v1" {
-				foundE2F1 = true
-			}
-			if field.FieldName == "e2_f2" && field.Value == "e2_v2" {
-				foundE2F2 = true
-			}
-		}
-		assert.True(suite.T(), foundE2F1, "Field 'e2_f1' with value 'e2_v1' not found in entry 0-2")
-		assert.True(suite.T(), foundE2F2, "Field 'e2_f2' with value 'e2_v2' not found in entry 0-2")
+		assert.Equal(
+			suite.T(),
+			entryMap["0-2"],
+			[]models.FieldInfo{{FieldName: "e2_f1", Value: "e2_v1"}, {FieldName: "e2_f2", Value: "e2_v2"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "0-3")
 
 		// Check for field in entry 0-3
-		foundE3F1 := false
-		for _, field := range entryMap["0-3"] {
-			if field.FieldName == "e3_f1" && field.Value == "e3_v1" {
-				foundE3F1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundE3F1, "Field 'e3_f1' with value 'e3_v1' not found in entry 0-3")
+		assert.Equal(
+			suite.T(),
+			entryMap["0-3"],
+			[]models.FieldInfo{{FieldName: "e3_f1", Value: "e3_v1"}},
+		)
 
 		// Verify that xinfo_consumers contains info for 2 consumers now
 		info, err = client.XInfoConsumers(context.Background(), key, group)
