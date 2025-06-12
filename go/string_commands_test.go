@@ -613,6 +613,7 @@ func ExampleClient_LCS() {
 	fmt.Println(result)
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
 	// Output: h o
 }
 
@@ -627,6 +628,7 @@ func ExampleClusterClient_LCS() {
 	fmt.Println(result)
 
 	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
+
 	// Output: h o
 }
 
@@ -677,7 +679,8 @@ func ExampleClient_LCSLen() {
 	fmt.Println(result)
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
-	// Output: 3
+
+	// Output: 6
 }
 
 func ExampleClusterClient_LCSLen() {
@@ -693,7 +696,8 @@ func ExampleClusterClient_LCSLen() {
 	fmt.Println(result)
 
 	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
-	// Output: 3
+
+	// Output: 6
 }
 
 func ExampleClient_LCSWithOptions() {
@@ -720,6 +724,7 @@ func ExampleClient_LCSWithOptions() {
 	fmt.Println("With MinMatchLen 4:", result2)
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
 	// Output:
 	// Basic LCS result: map[len:3 matches:[[0 1 0 1] [6 7 4 5]]]
 	// With MinMatchLen 4: map[len:0 matches:[]]
@@ -743,6 +748,7 @@ func ExampleClusterClient_LCSWithOptions() {
 	fmt.Println("Full result with both options:", result)
 
 	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
+
 	// Output:
 	// Full result with both options: map[len:3 matches:[[0 1 0 1 2] [6 7 4 5 2]]]
 }
