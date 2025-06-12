@@ -31,6 +31,10 @@ func (cursor Cursor) IsFinished() bool {
 	return cursor.cursor == "0"
 }
 
+func (cursor Cursor) GetCursor() string {
+	return cursor.cursor
+}
+
 func (cursor Cursor) String() string {
 	return cursor.cursor
 }
