@@ -8527,16 +8527,22 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Contains(suite.T(), entryMap2, streamid_3)
 		assert.Contains(suite.T(), entryMap2, streamid_4)
 		assert.Contains(suite.T(), entryMap2, streamid_5)
-
+		sort.Slice(streamResponse2.Entries, func(i, j int) bool {
+			return streamResponse2.Entries[i].ID < streamResponse2.Entries[j].ID
+		})
+		entries := []models.StreamEntry{
+			{ID: streamid_3, Fields: []models.FieldInfo{{FieldName: "field3", Value: "value3"}}},
+			{ID: streamid_4, Fields: []models.FieldInfo{{FieldName: "field4", Value: "value4"}}},
+			{ID: streamid_5, Fields: []models.FieldInfo{{FieldName: "field5", Value: "value5"}}},
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].ID < entries[j].ID
+		})
 		assert.Equal(
 			suite.T(),
 			streamResponse2,
 			models.StreamResponse{
-				Entries: []models.StreamEntry{
-					{ID: streamid_3, Fields: []models.FieldInfo{{FieldName: "field3", Value: "value3"}}},
-					{ID: streamid_4, Fields: []models.FieldInfo{{FieldName: "field4", Value: "value4"}}},
-					{ID: streamid_5, Fields: []models.FieldInfo{{FieldName: "field5", Value: "value5"}}},
-				},
+				Entries: entries,
 			},
 		)
 
