@@ -4750,6 +4750,9 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 
 		// Check that we have two entries with the correct IDs and fields
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: "0-1",
@@ -7589,28 +7592,12 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, streamId1)
-
 		// Check for field "field1" with value "value1" in entry
-		foundField1 := false
-		for _, field := range entryMap[streamId1] {
-			if field.FieldName == "field1" && field.Value == "value1" {
-				foundField1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
+		assert.Equal(suite.T(), entryMap[streamId1], []models.FieldInfo{{FieldName: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamId2)
-
 		// Check for field "field2" with value "value2" in entry
-		foundField2 := false
-		for _, field := range entryMap[streamId2] {
-			if field.FieldName == "field2" && field.Value == "value2" {
-				foundField2 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldInfo{{FieldName: "field2", Value: "value2"}})
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(context.Background(), key, []string{streamId1})
@@ -7639,14 +7626,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Contains(suite.T(), entryMap, streamId2)
 
 		// Check for field "field2" with value "value2" in entry
-		foundField2 = false
-		for _, field := range entryMap[streamId2] {
-			if field.FieldName == "field2" && field.Value == "value2" {
-				foundField2 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldInfo{{FieldName: "field2", Value: "value2"}})
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -7680,14 +7660,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), streamId3, streamResponse.Entries[0].ID)
 
 		// Check for field "field3" with value "value3" in entry
-		foundField3 := false
-		for _, field := range streamResponse.Entries[0].Fields {
-			if field.FieldName == "field3" && field.Value == "value3" {
-				foundField3 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
+		assert.Equal(suite.T(), []models.FieldInfo{{FieldName: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3})
@@ -7739,35 +7712,21 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(suite.T(), "1-0", infoSmall.FirstEntry.ID)
 
 		// Check fields in the first entry
-		foundFieldA := false
-		foundFieldC := false
-		for _, field := range infoSmall.FirstEntry.Fields {
-			if field.FieldName == "a" && field.Value == "b" {
-				foundFieldA = true
-			}
-			if field.FieldName == "c" && field.Value == "d" {
-				foundFieldC = true
-			}
-		}
-		assert.True(suite.T(), foundFieldA, "Field 'a' with value 'b' not found in first entry")
-		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in first entry")
+		assert.Equal(
+			suite.T(),
+			infoSmall.FirstEntry.Fields,
+			[]models.FieldInfo{{FieldName: "a", Value: "b"}, {FieldName: "c", Value: "d"}},
+		)
 
 		// Check the last entry
 		assert.Equal(suite.T(), "1-0", infoSmall.LastEntry.ID)
 
 		// Check fields in the last entry
-		foundFieldA = false
-		foundFieldC = false
-		for _, field := range infoSmall.LastEntry.Fields {
-			if field.FieldName == "a" && field.Value == "b" {
-				foundFieldA = true
-			}
-			if field.FieldName == "c" && field.Value == "d" {
-				foundFieldC = true
-			}
-		}
-		assert.True(suite.T(), foundFieldA, "Field 'a' with value 'b' not found in last entry")
-		assert.True(suite.T(), foundFieldC, "Field 'c' with value 'd' not found in last entry")
+		assert.Equal(
+			suite.T(),
+			infoSmall.LastEntry.Fields,
+			[]models.FieldInfo{{FieldName: "a", Value: "b"}, {FieldName: "c", Value: "d"}},
+		)
 
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
