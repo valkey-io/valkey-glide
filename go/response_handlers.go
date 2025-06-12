@@ -1774,19 +1774,14 @@ func createFieldInfoArray(entriesArray any) []models.FieldInfo {
 		if !ok || len(fieldValuePairs) < 2 {
 			continue
 		}
-
-		if ok && len(fieldValuePairs) > 0 {
-			for i := 0; i < len(fieldValuePairs); i += 2 {
-				if i+1 < len(fieldValuePairs) {
-					fieldName, okField := fieldValuePairs[i].(string)
-					fieldValue, okValue := fieldValuePairs[i+1].(string)
-					if okField && okValue {
-						fieldInfos = append(fieldInfos, models.FieldInfo{
-							FieldName: fieldName,
-							Value:     fieldValue,
-						})
-					}
-				}
+		for i := 0; i+1 < len(fieldValuePairs); i += 2 {
+			fieldName, okField := fieldValuePairs[i].(string)
+			fieldValue, okValue := fieldValuePairs[i+1].(string)
+			if okField && okValue {
+				fieldInfos = append(fieldInfos, models.FieldInfo{
+					FieldName: fieldName,
+					Value:     fieldValue,
+				})
 			}
 		}
 	}
