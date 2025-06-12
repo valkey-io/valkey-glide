@@ -95,6 +95,51 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBatchDumpRestore() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := "{prefix}" + uuid.NewString()
+
+		// Dump
+		transaction := pipeline.NewClusterBatch(true).
+			Set(key, "someValue").
+			Dump(key)
+
+		res1, err1 := runBatchOnClient(client, transaction, true, nil)
+
+		suite.verifyOK(res1[0].(string), err1)
+		suite.NotNil(res1[1])
+
+		// Restore
+		transaction = pipeline.NewClusterBatch(true).
+			Del([]string{key}).
+			Restore(key, 0, res1[1].(string))
+
+		res2, err2 := runBatchOnClient(client, transaction, true, nil)
+
+		suite.NoError(err2)
+		suite.Equal(int64(1), res2[0].(int64))
+		suite.verifyOK(res2[1].(string), err2)
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchMove() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		key := "{prefix}-" + uuid.NewString()
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			return // Move is not supported in cluster client
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				Set(key, "val").
+				Move(key, 2)
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			suite.verifyOK(res[0].(string), err)
+			suite.True(res[1].(bool))
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 	suite.runWithDefaultClients(func(client1 interfaces.BaseClientCommands) {
 		key1 := "{prefix}" + uuid.NewString()
@@ -802,8 +847,6 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.TTL(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "TTL(slotHashedKey1)"})
 
-	// TODO: TEST DUMP AND RESTORE
-
 	batch.Del([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
 	batch.ObjectEncoding(slotHashedKey1)
@@ -957,8 +1000,6 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 	batch.RandomKey()
 	testData = append(testData, CommandTestData{ExpectedResponse: slotHashedKey1, TestName: "RandomKey()"})
-
-	// TODO: add Move in separate standalone batch tests
 
 	return BatchTestData{CommandTestData: testData, TestName: "Generic commands"}
 }

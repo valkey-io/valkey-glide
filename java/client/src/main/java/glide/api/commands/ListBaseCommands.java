@@ -531,16 +531,17 @@ public interface ListBaseCommands {
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
      * the list stored at <code>key</code>.<br>
-     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
-     * head to tail.<br>
-     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
-     * tail to head.<br>
-     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
-     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
      *
      * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     *     If <code>count</code> is positive: Removes elements equal to <code>element</code> moving
+     *     from head to tail.<br>
+     *     If <code>count</code> is negative: Removes elements equal to <code>element</code> moving
+     *     from tail to head.<br>
+     *     If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of
+     *     elements equal to <code>element</code>, it removes all elements equal to <code>element
+     *     </code>.`
      * @param element The element to remove from the list.
      * @return The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.
@@ -555,16 +556,17 @@ public interface ListBaseCommands {
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
      * the list stored at <code>key</code>.<br>
-     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
-     * head to tail.<br>
-     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
-     * tail to head.<br>
-     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
-     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
      *
      * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     *     If <code>count</code> is positive: Removes elements equal to <code>element</code> moving
+     *     from head to tail.<br>
+     *     If <code>count</code> is negative: Removes elements equal to <code>element</code> moving
+     *     from tail to head.<br>
+     *     If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of
+     *     elements equal to <code>element</code>, it removes all elements equal to <code>element
+     *     </code>.`
      * @param element The element to remove from the list.
      * @return The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.
