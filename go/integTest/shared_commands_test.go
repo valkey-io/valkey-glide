@@ -7860,7 +7860,9 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-2")
 		assert.Contains(suite.T(), entryMap, "0-3")
-
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
 		// Check for fields
 		assert.Equal(
 			suite.T(),
