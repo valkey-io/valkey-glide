@@ -1228,7 +1228,7 @@ public class CommandTests {
                             ExecutionException.class, () -> regularClient.scan(new ScanCursor("-1")).get());
         } else {
             ScanResult<String[]> negativeResult = regularClient.scan(new ScanCursor("-1")).get();
-            assertEquals(initialCursor, negativeResult.getCursor());
+            assertEquals(initialCursor.getString(), negativeResult.getCursor().getString());
             assertDeepEquals(new String[] {}, negativeResult.getData());
         }
 
