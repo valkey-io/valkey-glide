@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
     Batch,
@@ -57,8 +58,7 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,
@@ -7989,12 +7989,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = getRandomKey();
-                expect(await client.pfadd(key, [])).toEqual(1);
-                expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
+                expect(await client.pfadd(key, [])).toBeTruthy();
+                expect(await client.pfadd(key, ["one", "two"])).toBeTruthy();
                 expect(
                     await client.pfadd(Buffer.from(key), [Buffer.from("two")]),
-                ).toEqual(0);
-                expect(await client.pfadd(key, [])).toEqual(0);
+                ).toBeFalsy();
+                expect(await client.pfadd(key, [])).toBeFalsy();
 
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
@@ -8014,8 +8014,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
                 expect(await client.pfcount([key1])).toEqual(3);
                 expect(await client.pfcount([Buffer.from(key2)])).toEqual(3);
                 expect(await client.pfcount([key1, key2])).toEqual(4);
@@ -8024,7 +8024,7 @@ export function runBaseTests(config: {
                 ).toEqual(4);
 
                 // empty HyperLogLog data set
-                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfadd(key3, [])).toBeTruthy();
                 expect(await client.pfcount([key3])).toEqual(0);
 
                 // invalid argument - key list must not be empty
@@ -8050,8 +8050,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
 
                 // merge into new HyperLogLog data set
                 expect(

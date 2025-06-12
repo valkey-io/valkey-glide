@@ -1,4 +1,4 @@
-use rand::{distributions::Alphanumeric, Rng};
+use rand::Rng;
 use redis::{
     cluster_async::ClusterConnection,
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
@@ -47,8 +47,8 @@ pub fn version_greater_or_equal(ctx: &TestContext, version: &str) -> bool {
 }
 
 pub fn generate_random_string(length: usize) -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    rand::rng()
+        .sample_iter(rand::distr::Alphanumeric)
         .take(length)
         .map(char::from)
         .collect()

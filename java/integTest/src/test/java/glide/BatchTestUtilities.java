@@ -56,19 +56,20 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
 public class BatchTestUtilities {
 
-    private static final String value1 = "value1-" + UUID.randomUUID();
-    private static final String value2 = "value2-" + UUID.randomUUID();
-    private static final String value3 = "value3-" + UUID.randomUUID();
-    private static final String field1 = "field1-" + UUID.randomUUID();
-    private static final String field2 = "field2-" + UUID.randomUUID();
-    private static final String field3 = "field3-" + UUID.randomUUID();
+    private static final int KEY_SUFFIX_LENGTH = 6;
+    private static final String value1 = "value1-" + generateRandomNumericSuffix();
+    private static final String value2 = "value2-" + generateRandomNumericSuffix();
+    private static final String value3 = "value3-" + generateRandomNumericSuffix();
+    private static final String field1 = "field1-" + generateRandomNumericSuffix();
+    private static final String field2 = "field2-" + generateRandomNumericSuffix();
+    private static final String field3 = "field3-" + generateRandomNumericSuffix();
 
     /**
      * Generate a key with the same hash slot if keySlot is provided and isAtomic is true; otherwise,
@@ -81,11 +82,18 @@ public class BatchTestUtilities {
      */
     public static String generateKey(String keySlot, boolean isAtomic) {
         if (isAtomic && keySlot != null && !keySlot.isEmpty()) {
-            // Use keySlot to force the same hash slot with a 10-character random suffix.
-            return "{" + keySlot + "}-" + UUID.randomUUID();
+            // Use keySlot to force the same hash slot with a random suffix.
+            return "{" + keySlot + "}-" + generateRandomNumericSuffix();
         }
-        // Generate a random key with 20 characters.
-        return UUID.randomUUID().toString();
+        // Generate a random key
+        return generateRandomNumericSuffix();
+    }
+
+    private static String generateRandomNumericSuffix() {
+        final int lowerBound = (int) Math.pow(10, KEY_SUFFIX_LENGTH - 1);
+        final int upperBound = (int) Math.pow(10, KEY_SUFFIX_LENGTH);
+        final int intSuffix = ThreadLocalRandom.current().nextInt(lowerBound, upperBound);
+        return String.valueOf(intSuffix);
     }
 
     /**
@@ -104,7 +112,7 @@ public class BatchTestUtilities {
         } else {
             tag = keySlot;
         }
-        return "{" + tag + "}-" + UUID.randomUUID();
+        return "{" + tag + "}-" + generateRandomNumericSuffix();
     }
 
     @FunctionalInterface
@@ -898,7 +906,7 @@ public class BatchTestUtilities {
                 .pfcount(new String[] {hllKey3});
 
         return new Object[] {
-            1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
+            true, // pfadd(hllKey1, new String[] {"a", "b", "c"})
             3L, // pfcount(new String[] { hllKey1, hllKey2 })
             OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
             3L, // pfcount(new String[] { hllKey3 })
@@ -910,10 +918,10 @@ public class BatchTestUtilities {
         final String streamKey2 = generateKey("streamKey", isAtomic);
         final String streamKey3 = generateKey("streamKey", isAtomic);
         final String streamKey4 = generateKey("streamKey", isAtomic);
-        final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
-        final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
-        final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
-        final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
+        final String groupName1 = "{groupName}-1-" + generateRandomNumericSuffix();
+        final String groupName2 = "{groupName}-2-" + generateRandomNumericSuffix();
+        final String groupName3 = "{groupName}-2-" + generateRandomNumericSuffix();
+        final String consumer1 = "{consumer}-1-" + generateRandomNumericSuffix();
 
         batch
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())

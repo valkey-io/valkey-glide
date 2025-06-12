@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -49,26 +50,26 @@ type SortedSetCommands interface {
 
 	ZCard(ctx context.Context, key string) (int64, error)
 
-	BZPopMin(ctx context.Context, keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
+	BZPopMin(ctx context.Context, keys []string, timeout time.Duration) (models.Result[models.KeyWithMemberAndScore], error)
 
 	BZMPop(
 		ctx context.Context,
 		keys []string,
 		scoreFilter constants.ScoreFilter,
-		timeoutSecs float64,
+		timeout time.Duration,
 	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	BZMPopWithOptions(
 		ctx context.Context,
 		keys []string,
 		scoreFilter constants.ScoreFilter,
-		timeoutSecs float64,
+		timeout time.Duration,
 		options options.ZMPopOptions,
 	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZRange(ctx context.Context, key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	BZPopMax(ctx context.Context, keys []string, timeoutSecs float64) (models.Result[models.KeyWithMemberAndScore], error)
+	BZPopMax(ctx context.Context, keys []string, timeout time.Duration) (models.Result[models.KeyWithMemberAndScore], error)
 
 	ZMPop(
 		ctx context.Context,
@@ -80,7 +81,7 @@ type SortedSetCommands interface {
 		ctx context.Context,
 		keys []string,
 		scoreFilter constants.ScoreFilter,
-		opts options.ZPopOptions,
+		opts options.ZMPopOptions,
 	) (models.Result[models.KeyWithArrayOfMembersAndScores], error)
 
 	ZRangeWithScores(

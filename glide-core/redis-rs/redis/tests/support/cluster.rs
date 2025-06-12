@@ -26,7 +26,6 @@ use tempfile::TempDir;
 
 use crate::support::{build_keys_and_certs_for_tls, Module};
 
-#[cfg(feature = "tls-rustls")]
 use super::{build_single_client, load_certs_from_file};
 
 use super::use_protocol;
@@ -105,7 +104,6 @@ impl RedisCluster {
         RedisCluster::with_modules(nodes, replicas, &[], false)
     }
 
-    #[cfg(feature = "tls-rustls")]
     pub fn new_with_mtls(nodes: u16, replicas: u16) -> RedisCluster {
         RedisCluster::with_modules(nodes, replicas, &[], true)
     }
@@ -222,7 +220,7 @@ impl RedisCluster {
         let cli_command = ["valkey-cli", "redis-cli"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
-            .map(|&cmd| cmd)
+            .copied()
             .unwrap_or_else(|| panic!("Neither valkey-cli nor redis-cli exists in the system."));
 
         let mut cmd = process::Command::new(cli_command);
@@ -295,12 +293,9 @@ impl RedisCluster {
                 conn_info.addr
             );
 
-            #[cfg(feature = "tls-rustls")]
             let client =
                 build_single_client(server.connection_info(), &self.tls_paths, _mtls_enabled)
                     .unwrap();
-            #[cfg(not(feature = "tls-rustls"))]
-            let client = redis::Client::open(server.connection_info()).unwrap();
 
             let mut con = client.get_connection(None).unwrap();
 
@@ -369,7 +364,6 @@ impl TestClusterContext {
         Self::new_with_cluster_client_builder(nodes, replicas, identity, false)
     }
 
-    #[cfg(feature = "tls-rustls")]
     pub fn new_with_mtls(nodes: u16, replicas: u16) -> TestClusterContext {
         Self::new_with_cluster_client_builder(nodes, replicas, identity, true)
     }
@@ -391,7 +385,6 @@ impl TestClusterContext {
         let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes.clone())
             .use_protocol(use_protocol());
 
-        #[cfg(feature = "tls-rustls")]
         if mtls_enabled {
             if let Some(tls_file_paths) = &cluster.tls_paths {
                 builder = builder.certs(load_certs_from_file(tls_file_paths));
@@ -454,15 +447,12 @@ impl TestClusterContext {
 
     pub fn disable_default_user(&self) {
         for server in &self.cluster.servers {
-            #[cfg(feature = "tls-rustls")]
             let client = build_single_client(
                 server.connection_info(),
                 &self.cluster.tls_paths,
                 self.mtls_enabled,
             )
             .unwrap();
-            #[cfg(not(feature = "tls-rustls"))]
-            let client = redis::Client::open(server.connection_info()).unwrap();
 
             let mut con = client.get_connection(None).unwrap();
             let _: () = redis::cmd("ACL")
@@ -724,7 +714,7 @@ impl TestClusterContext {
                 })
                 .expect("No matching node found for the given slot")
         } else {
-            let index_of_random_node = rand::thread_rng().gen_range(0..slot_distribution.len());
+            let index_of_random_node = rand::rng().random_range(0..slot_distribution.len());
             distribution_clone
                 .get(index_of_random_node)
                 .expect("Slot distribution is empty")
@@ -909,7 +899,7 @@ impl TestClusterContext {
                 let host = host_and_port.clone().next().unwrap();
                 let port = host_and_port
                     .clone()
-                    .last()
+                    .next_back()
                     .unwrap()
                     .split('@')
                     .next()
@@ -933,7 +923,7 @@ impl TestClusterContext {
                 let host = host_and_port.clone().next().unwrap();
                 let port = host_and_port
                     .clone()
-                    .last()
+                    .next_back()
                     .unwrap()
                     .split('@')
                     .next()

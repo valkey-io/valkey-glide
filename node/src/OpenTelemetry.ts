@@ -1,9 +1,17 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- *
+ */
+
+import {
+    ConfigurationError,
+    InitOpenTelemetry,
+    Logger,
+    OpenTelemetryConfig,
+} from ".";
+
+/**
  * ⚠️ OpenTelemetry can only be initialized once per process. Calling `OpenTelemetry.init()` more than once will be ignored.
  * If you need to change configuration, restart the process with new settings.
- *
  * ### OpenTelemetry
  *
  * - **openTelemetryConfig**: Use this object to configure OpenTelemetry exporters and options.
@@ -33,31 +41,40 @@
  * - File exporter paths must start with `file://` and have an existing parent directory.
  * - Invalid configuration will throw an error synchronously when calling `OpenTelemetry.init()`.
  */
-
-import { InitOpenTelemetry, OpenTelemetryConfig } from "glide-rs";
-import { ConfigurationError } from "./Errors";
-import { Logger } from "./Logger";
-
 export class OpenTelemetry {
     private static _instance: OpenTelemetry | null = null;
     private static openTelemetryConfig: OpenTelemetryConfig | null = null;
 
     /**
+     * Singleton class for managing OpenTelemetry configuration and operations.
+     * This class provides a centralized way to initialize OpenTelemetry and control
+     * sampling behavior at runtime.
+     *
      * Example usage:
      * ```typescript
-     * import { OpenTelemetry } from "@valkey/glide";
+     * import { OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig } from "@valkey/valkey-glide";
      *
-     * OpenTelemetry.init({
-     *   traces: {
-     *     endpoint: "http://localhost:4318/v1/traces",
-     *     samplePercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via setSamplePercentage().
-     *   },
-     *   metrics: {
-     *     endpoint: "http://localhost:4318/v1/metrics",
-     *   },
-     *   flushIntervalMs: 5000, // Optional, defaults to 5000
-     * });
+     * let tracesConfig: OpenTelemetryTracesConfig = {
+     *  endpoint: "http://localhost:4318/v1/traces",
+     *  samplePercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via setSamplePercentage().
+     * };
+     * let metricsConfig: OpenTelemetryMetricsConfig = {
+     *  endpoint: "http://localhost:4318/v1/metrics",
+     * };
+
+     * let config : OpenTelemetryConfig = { 
+     *  traces: tracesConfig,
+     *  metrics: metricsConfig,
+     *  flushIntervalMs: 1000, // Optional, defaults to 5000
+     * };
+     * OpenTelemetry.init(config);
+     * 
      * ```
+     *
+     * @remarks
+     *   OpenTelemetry can only be initialized once per process. Subsequent calls to
+     *   init() will be ignored. This is by design, as OpenTelemetry is a global
+     *   resource that should be configured once at application startup.
      *
      * Initialize the OpenTelemetry instance
      * @param openTelemetryConfig - The OpenTelemetry configuration
@@ -77,7 +94,7 @@ export class OpenTelemetry {
         Logger.log(
             "warn",
             "GlideOpenTelemetry",
-            "OpenTelemetry already initialized",
+            "OpenTelemetry already initialized - ignoring new configuration",
         );
     }
 
@@ -129,6 +146,12 @@ export class OpenTelemetry {
         if (!this.openTelemetryConfig || !this.openTelemetryConfig.traces) {
             throw new ConfigurationError(
                 "OpenTelemetry config traces not initialized",
+            );
+        }
+
+        if (percentage < 0 || percentage > 100) {
+            throw new ConfigurationError(
+                "Sample percentage must be between 0 and 100",
             );
         }
 

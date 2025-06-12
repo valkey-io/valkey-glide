@@ -2,32 +2,31 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
-import { Writer } from "protobufjs";
+import { Writer } from "protobufjs/minimal";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
+    ClusterBatch,
+    ClusterBatchOptions,
+    ClusterScanCursor,
+    ClusterScanOptions,
     Decoder,
     DecoderOption,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
-    PubSubMsg,
-    convertGlideRecordToRecord,
-} from "./BaseClient";
-import { ClusterBatch } from "./Batch";
-import {
-    ClusterBatchOptions,
-    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
     InfoOptions,
     LolwutOptions,
+    PubSubMsg,
+    Script,
+    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -63,9 +62,11 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from "./Commands";
-import { command_request, connection_request } from "./ProtobufMessage";
-
+} from ".";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -207,6 +208,9 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  * ```typescript
  * const config: AdvancedGlideClusterClientConfiguration = {
  *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ *   tlsAdvancedConfiguration: {
+ *     insecure: true, // Skip TLS certificate verification (use only in development)
+ *   },
  * };
  * ```
  */
@@ -574,6 +578,12 @@ export class GlideClusterClient extends BaseClient {
      *       console.log(`Received message: ${msg.payload}`);
      *     },
      *   },
+     *   connectionBackoff: {
+     *     numberOfRetries: 5,
+     *     factor: 1000,
+     *     exponentBase: 2,
+     *     jitter: 20,
+     *   },
      * });
      * ```
      *
@@ -581,6 +591,8 @@ export class GlideClusterClient extends BaseClient {
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
+     *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     *      For advanced tls configuration, please use the {@link AdvancedGlideClusterClientConfiguration} option.
      * - **Periodic Checks**: The `periodicChecks` setting allows you to configure how often the client checks for cluster topology changes.
      * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
      */
@@ -652,7 +664,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                (resolveAns: [typeof cursor, GlideString[]]) => {
                     try {
                         resolve([
                             new ClusterScanCursor(resolveAns[0].toString()),

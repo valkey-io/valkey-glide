@@ -4,15 +4,15 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
-import { OpenTelemetryConfig } from "glide-rs";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     ClusterBatch,
     GlideClient,
     GlideClusterClient,
     OpenTelemetry,
+    OpenTelemetryConfig,
     ProtocolVersion,
-} from "..";
-import ValkeyCluster from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -190,6 +190,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             flushIntervalMs: 100,
         };
         OpenTelemetry.init(openTelemetryConfig);
+        await teardown_otel_test();
     }, 40000);
 
     async function teardown_otel_test() {
@@ -297,7 +298,13 @@ describe("OpenTelemetry GlideClusterClient", () => {
             // check that the spans not exporter to the file due to the requests percentage is 0
             expect(fs.existsSync(VALID_ENDPOINT_TRACES)).toBe(false);
 
+            expect(() => OpenTelemetry.setSamplePercentage(-100)).toThrow(
+                /Sample percentage must be between 0 and 100/i,
+            );
+            // check that the sample percentage is still 0
+            expect(OpenTelemetry.getSamplePercentage()).toBe(0);
             OpenTelemetry.setSamplePercentage(100);
+            expect(OpenTelemetry.getSamplePercentage()).toBe(100);
 
             // Execute a series of commands sequentially
             for (let i = 0; i < 10; i++) {

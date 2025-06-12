@@ -7,15 +7,16 @@ import "C"
 
 import (
 	"context"
+	"errors"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // GlideClusterClient interface compliance check.
@@ -69,6 +70,118 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	return &ClusterClient{client}, nil
 }
 
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Routing Behavior:
+//
+//   - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+//     If no key is found, the request is sent to a random node.
+//   - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+//     key's slot. If no key is present, routing follows the command's default request policy.
+//     Multi-node commands are automatically split and dispatched to the appropriate nodes.
+//
+// Behavior notes:
+//
+// Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+// If keys span different slots, the transaction will fail. If the transaction fails due to a
+// `WATCH` command, `Exec` will return `nil`.
+//
+// Retry and Redirection:
+//
+// If a redirection error occurs:
+//   - Atomic batches (Transactions): The entire transaction will be redirected.
+//   - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+//
+// Retries for failures will be handled according to the `retry_server_error` and `retry_connection_error` parameters.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// # Routing Behavior
+//
+// If a `route` is specified:
+//   - The entire batch is sent to the specified node.
+//
+// If no `route` is specified:
+//   - Atomic batches (Transactions): Routed to the slot owner of the first key in the batch.
+//     If no key is found, the request is sent to a random node.
+//   - Non-atomic batches (Pipelines): Each command is routed to the node owning the corresponding
+//     key's slot. If no key is present, routing follows the command's default request policy.
+//     Multi-node commands are automatically split and dispatched to the appropriate nodes.
+//
+// # Behavior notes
+//
+// Atomic Batches (Transactions): All key-based commands must map to the same hash slot.
+// If keys span different slots, the transaction will fail. If the transaction fails due to a
+// `WATCH` command, `Exec` will return `nil`.
+//
+// # Retry and Redirection
+//
+// If a redirection error occurs:
+//   - Atomic batches (Transactions): The entire transaction will be redirected.
+//   - Non-atomic batches (Pipelines): Only commands that encountered redirection errors will be redirected.
+//
+// Retries for failures will be handled according to the `retry_server_error` and `retry_connection_error` parameters.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//	options - A [ClusterBatchOptions] object containing execution options.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *ClusterClient) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.ClusterBatch,
+	raiseOnError bool,
+	options pipeline.ClusterBatchOptions,
+) ([]any, error) {
+	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
+		return nil, errors.New("retry strategy is not supported for atomic batches (transactions)")
+	}
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
+}
+
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
@@ -96,7 +209,7 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := HandleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
@@ -104,7 +217,6 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 }
 
 // Gets information and statistics about the server.
-//
 // The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
@@ -128,8 +240,9 @@ func (client *ClusterClient) Info(ctx context.Context) (map[string]string, error
 }
 
 // Gets information and statistics about the server.
-//
 // The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+//
+// Note:
 //
 // Starting from server version 7, command supports multiple section arguments.
 //
@@ -210,7 +323,7 @@ func (client *ClusterClient) CustomCommandWithRoute(ctx context.Context,
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
-	data, err := HandleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
 	if err != nil {
 		return models.CreateEmptyClusterValue[any](), err
 	}
@@ -461,6 +574,8 @@ func (client *ClusterClient) Echo(ctx context.Context, message string) (models.R
 
 // Echo the provided message back.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx     - The context for controlling the command execution.
@@ -521,7 +636,7 @@ func (client *ClusterClient) clusterScan(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
@@ -561,6 +676,13 @@ func (client *ClusterClient) clusterScan(
 			delete(client.pending, resultChannelPtr)
 		}
 		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
 		return nil, ctx.Err()
 	case payload = <-resultChannel:
 		// Continue with normal processing
@@ -951,8 +1073,11 @@ func (client *ClusterClient) ConfigSetWithOptions(ctx context.Context,
 }
 
 // Get the values of configuration parameters.
-// Starting from server version 7, command supports multiple parameters.
 // The command will be sent to a random node.
+//
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // Parameters:
 //
@@ -979,7 +1104,10 @@ func (client *ClusterClient) ConfigGet(ctx context.Context,
 }
 
 // Get the values of configuration parameters.
-// Starting from server version 7, command supports multiple parameters.
+//
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // Parameters:
 //
@@ -1026,16 +1154,16 @@ func (client *ClusterClient) ConfigGetWithOptions(ctx context.Context,
 //	OK - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
-func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName string) (models.ClusterValue[string], error) {
+func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName string) (string, error) {
 	response, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return data, nil
 }
 
 // Set the name of the current connection.
@@ -1055,27 +1183,20 @@ func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName s
 func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 	connectionName string,
 	opts options.RouteOption,
-) (models.ClusterValue[string], error) {
+) (string, error) {
 	response, err := client.executeCommandWithRoute(ctx, C.ClientSetName, []string{connectionName}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
-	}
-	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
-		data, err := handleStringToStringMapResponse(response)
-		if err != nil {
-			return models.CreateEmptyClusterValue[string](), err
-		}
-		return models.CreateClusterMultiValue[string](data), nil
+		return models.DefaultStringResponse, err
 	}
 	data, err := handleOkResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.DefaultStringResponse, err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return data, nil
 }
 
 // Gets the name of the current connection.
+// The command will be routed to a random node.
 //
 // See [valkey.io] for details.
 //
@@ -1085,19 +1206,20 @@ func (client *ClusterClient) ClientSetNameWithOptions(ctx context.Context,
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a models.Result[string].
+//	Otherwise, returns [models.CreateNilStringResult()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterValue[string], error) {
+func (client *ClusterClient) ClientGetName(ctx context.Context) (models.Result[string], error) {
 	response, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateNilStringResult(), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringOrNilResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateNilStringResult(), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return data, nil
 }
 
 // Gets the name of the current connection.
@@ -1112,30 +1234,31 @@ func (client *ClusterClient) ClientGetName(ctx context.Context) (models.ClusterV
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a ClusterValue wrapped models.Result[string].
+//	Otherwise, returns [models.CreateEmptyClusterValue[models.Result[string]]()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (client *ClusterClient) ClientGetNameWithOptions(
 	ctx context.Context,
 	opts options.RouteOption,
-) (models.ClusterValue[string], error) {
+) (models.ClusterValue[models.Result[string]], error) {
 	response, err := client.executeCommandWithRoute(ctx, C.ClientGetName, []string{}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
 	if opts.Route != nil &&
 		(opts.Route).IsMultiNode() {
-		data, err := handleStringToStringMapResponse(response)
+		data, err := handleStringToStringOrNilMapResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[string](), err
+			return models.CreateEmptyClusterValue[models.Result[string]](), err
 		}
-		return models.CreateClusterMultiValue[string](data), nil
+		return models.CreateClusterMultiValue[models.Result[string]](data), nil
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringOrNilResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[string](), err
+		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
 // Rewrites the configuration file with the current configuration.
@@ -1748,6 +1871,37 @@ func (client *ClusterClient) FunctionDeleteWithRoute(
 //
 //	Valkey 7.0 and above.
 //
+// Note:
+//
+//	This command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`OK` if function is terminated. Otherwise, throws an error.
+//
+// [valkey.io]: https://valkey.io/commands/function-kill/
+func (client *ClusterClient) FunctionKill(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionKill, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Kills a function that is currently executing.
+//
+// `FUNCTION KILL` terminates read-only functions only.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
 // See [valkey.io] for more details.
 //
 // Parameters:
@@ -1772,6 +1926,32 @@ func (client *ClusterClient) FunctionKillWithRoute(ctx context.Context, route op
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// Returns information about the functions and libraries.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	query - The query to use to filter the functions and libraries.
+//
+// Return value:
+//
+//	A list of info about queried libraries and their functions.
+//
+// [valkey.io]: https://valkey.io/commands/function-list/
+func (client *ClusterClient) FunctionList(ctx context.Context, query models.FunctionListQuery) ([]models.LibraryInfo, error) {
+	response, err := client.executeCommand(ctx, C.FunctionList, query.ToArgs())
+	if err != nil {
+		return nil, err
+	}
+	return handleFunctionListResponse(response)
 }
 
 // Returns information about the functions and libraries.
@@ -1935,6 +2115,35 @@ func (client *ClusterClient) PubSubShardNumSub(ctx context.Context, channels ...
 }
 
 // Returns the serialized payload of all loaded libraries.
+//
+// Note:
+//
+//	The command will be routed to a random node.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The serialized payload of all loaded libraries.
+//
+// [valkey.io]: https://valkey.io/commands/function-dump/
+func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionDump, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Returns the serialized payload of all loaded libraries.
 // The command will be routed to the nodes defined by the route parameter.
 //
 // Since:
@@ -1975,6 +2184,36 @@ func (client *ClusterClient) FunctionDumpWithRoute(
 	return models.CreateClusterSingleValue[string](data), nil
 }
 
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	The command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *ClusterClient) FunctionRestore(ctx context.Context, payload string) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
 // Restores libraries from the serialized payload.
 // The command will be routed to the nodes defined by the route parameter.
 //
@@ -2001,6 +2240,41 @@ func (client *ClusterClient) FunctionRestoreWithRoute(
 	route config.Route,
 ) (string, error) {
 	result, err := client.executeCommandWithRoute(ctx, C.FunctionRestore, []string{payload}, route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Restores libraries from the serialized payload returned by `FunctionDump`.
+//
+// Note:
+//
+//	The command will be routed to all primary nodes.
+//
+// Since:
+//
+//	Valkey 7.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	payload - The serialized data from `FunctionDump`.
+//	policy - A policy for handling existing libraries.
+//
+// Return value:
+//
+//	`OK`
+//
+// [valkey.io]: https://valkey.io/commands/function-restore/
+func (client *ClusterClient) FunctionRestoreWithPolicy(
+	ctx context.Context,
+	payload string,
+	policy constants.FunctionRestorePolicy,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.FunctionRestore, []string{payload, string(policy)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -2272,6 +2546,55 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 		[]string{},
 		route.Route,
 	)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx   - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.UnWatch, []string{}, route.Route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

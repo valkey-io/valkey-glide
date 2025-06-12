@@ -1,5 +1,7 @@
 #### Changes
 
+* Java: fix addReturnField method in FT module ([#4084]https://github.com/valkey-io/valkey-glide/pull/4084)
+* Python: Create openTelemetry span to measure command latency ([#3985](https://github.com/valkey-io/valkey-glide/pull/3985))
 * Go: Add client name and version identifiers ([#3903](https://github.com/valkey-io/valkey-glide/pull/3903))
 * Python: Add support for Trio ([#3465](https://github.com/valkey-io/valkey-glide/pull/3465))
 * Core: Add an OK response type to FFI ([#3630](https://github.com/valkey-io/valkey-glide/pull/3630))
@@ -9,10 +11,11 @@
 * Python: Add Batch support ([#3555](https://github.com/valkey-io/valkey-glide/pull/3555))
 * Node: Fix type declarations ([#3489](https://github.com/valkey-io/valkey-glide/pull/3489))
 * Core: Add `opentelemetry` protocols support ([#3191](https://github.com/valkey-io/valkey-glide/pull/3191))
-* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830)) 
+* Node: Make the request sampling percentage configurable, and create spans conditionally based on it ([#3830](https://github.com/valkey-io/valkey-glide/pull/3830))
 * Core/Node: Make OpenTelemetry config to be global per process ([#3771](https://github.com/valkey-io/valkey-glide/pull/3771))
 * Core/Node: Create openTelemetry span to measure command latency ([#3391](https://github.com/valkey-io/valkey-glide/pull/3391))
 * Core: Add `opentelemetry` metrics support ([#3466](https://github.com/valkey-io/valkey-glide/pull/3466))
+* Core: Add `opentelemetry` moved, retry attemps counters and set_status ([#3944](https://github.com/valkey-io/valkey-glide/pull/3944))
 * Node: Fix ZADD, enabling `+inf` and `-inf` as score ([#3370](https://github.com/valkey-io/valkey-glide/pull/3370))
 * Go: Add JSON.SET and JSON.GET ([#3115](https://github.com/valkey-io/valkey-glide/pull/3115))
 * Csharp: updating xUnit, adding xUnit analyser rules and guidelines ([#3035](https://github.com/valkey-io/valkey-glide/pull/3035))
@@ -89,6 +92,15 @@
 * Java: Add toArgs() to restore batch command ([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
 * Java: Add error restore command ([#3905](https://github.com/valkey-io/valkey-glide/pull/3905))
 * Core: Add reference counting to Script container to support multiple instances ([#3897](https://github.com/valkey-io/valkey-glide/pull/3897))
+* Java: Implement support for Insecure TLS authentication mode([#3386](https://github.com/valkey-io/valkey-glide/pull/3386))
+* Java: Otel implementation ([#3962](https://github.com/valkey-io/valkey-glide/pull/3962))
+* Go: SRandMemberCount command added ([#4037](https://github.com/valkey-io/valkey-glide/pull/4037))
+* Go: SPopCount command added ([#4026](https://github.com/valkey-io/valkey-glide/pull/4026))
+* Go: Batch/Transaction/Pipeline ([#3938](https://github.com/valkey-io/valkey-glide/pull/3938) and [#4005](https://github.com/valkey-io/valkey-glide/pull/4005))
+* Go: `WATCH` and `UNWATCH` ([#4054](https://github.com/valkey-io/valkey-glide/pull/4054))
+* Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
+* Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
+* Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 
 #### Breaking Changes
 
@@ -101,13 +113,19 @@
 * Go: Change parameters of `EchoWithOptions` to be more user-friendly ([#3806](https://github.com/valkey-io/valkey-glide/pull/3806))
 * Java: Shadow netty dependencies. ([#3004](https://github.com/valkey-io/valkey-glide/pull/3004))
 * Go: Modify `requestTimeout` and `connectionTimeout` to be of type `time.Duration` ([#3857](https://github.com/valkey-io/valkey-glide/pull/3857))
-
+* Go: Update options.Expiry to use time.Duration ([#4089](https://github.com/valkey-io/valkey-glide/pull/4089))
+* Go: XRead and XReadGroup response update ([#4085](https://github.com/valkey-io/valkey-glide/pull/4085))
+* Go: XClaim and XClaimWithOptions update response type ([#4091](https://github.com/valkey-io/valkey-glide/pull/4091))
+* Modify `PFADD` to return a boolean rather than an integer ([#4094](https://github.com/valkey-io/valkey-glide/pull/4094))
+* Go: Modify blocking commands to use type `time.Duration` for timeouts ([#4086](https://github.com/valkey-io/valkey-glide/pull/4086))
 
 #### Fixes
 
 * Add support for Intel MAC (x86_64/amd64) ([#3482](https://github.com/valkey-io/valkey-glide/pull/3482))
 * Go, Java: Fix response handling for `customCommand` API for cluster client ([#3593](https://github.com/valkey-io/valkey-glide/pull/3593))
 * Java: Bump `netty` version ([#3804](https://github.com/valkey-io/valkey-glide/pull/3804))
+* Go: Fix `GeoHash`'s return type to allow for both strings and null ([#4098](https://github.com/valkey-io/valkey-glide/pull/4098))
+* Go: `ClientGetName` returns a nullable string ([#4088](https://github.com/valkey-io/valkey-glide/pull/4088))
 
 #### Operational Enhancements
 
