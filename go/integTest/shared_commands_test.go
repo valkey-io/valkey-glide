@@ -8020,45 +8020,27 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
 		// Check for fields in entry 0-1
-		foundE1F1 := false
-		foundE1F2 := false
-		for _, field := range entryMap["0-1"] {
-			if field.FieldName == "e1_f1" && field.Value == "e1_v1" {
-				foundE1F1 = true
-			}
-			if field.FieldName == "e1_f2" && field.Value == "e1_v2" {
-				foundE1F2 = true
-			}
-		}
-		assert.True(suite.T(), foundE1F1, "Field 'e1_f1' with value 'e1_v1' not found in entry 0-1")
-		assert.True(suite.T(), foundE1F2, "Field 'e1_f2' with value 'e1_v2' not found in entry 0-1")
-		assert.Contains(suite.T(), entryMap, "0-2")
+		assert.Equal(
+			suite.T(),
+			entryMap["0-1"],
+			[]models.FieldInfo{{FieldName: "e1_f1", Value: "e1_v1"}, {FieldName: "e1_f2", Value: "e1_v2"}},
+		)
 
+		assert.Contains(suite.T(), entryMap, "0-2")
 		// Check for fields in entry 0-2
-		foundE2F1 := false
-		foundE2F2 := false
-		for _, field := range entryMap["0-2"] {
-			if field.FieldName == "e2_f1" && field.Value == "e2_v1" {
-				foundE2F1 = true
-			}
-			if field.FieldName == "e2_f2" && field.Value == "e2_v2" {
-				foundE2F2 = true
-			}
-		}
-		assert.True(suite.T(), foundE2F1, "Field 'e2_f1' with value 'e2_v1' not found in entry 0-2")
-		assert.True(suite.T(), foundE2F2, "Field 'e2_f2' with value 'e2_v2' not found in entry 0-2")
+		assert.Equal(
+			suite.T(),
+			entryMap["0-2"],
+			[]models.FieldInfo{{FieldName: "e2_f1", Value: "e2_v1"}, {FieldName: "e2_f2", Value: "e2_v2"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "0-3")
-
 		// Check for field in entry 0-3
-		foundE3F1 := false
-		for _, field := range entryMap["0-3"] {
-			if field.FieldName == "e3_f1" && field.Value == "e3_v1" {
-				foundE3F1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundE3F1, "Field 'e3_f1' with value 'e3_v1' not found in entry 0-3")
+		assert.Equal(
+			suite.T(),
+			entryMap["0-3"],
+			[]models.FieldInfo{{FieldName: "e3_f1", Value: "e3_v1"}},
+		)
 
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(context.Background(), key)
@@ -8484,26 +8466,17 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Contains(suite.T(), entryMap, streamid_1)
 
 		// Check for field "field1" with value "value1" in entry
-		foundField1 := false
-		for _, field := range entryMap[streamid_1] {
-			if field.FieldName == "field1" && field.Value == "value1" {
-				foundField1 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField1, "Field 'field1' with value 'value1' not found in entry")
+		assert.Equal(
+			suite.T(),
+			entryMap[streamid_1],
+			[]models.FieldInfo{{FieldName: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamid_2)
-
 		// Check for field "field2" with value "value2" in entry
-		foundField2 := false
-		for _, field := range entryMap[streamid_2] {
-			if field.FieldName == "field2" && field.Value == "value2" {
-				foundField2 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField2, "Field 'field2' with value 'value2' not found in entry")
+		assert.Equal(
+			suite.T(),
+			entryMap[streamid_2],
+			[]models.FieldInfo{{FieldName: "field2", Value: "value2"}})
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
@@ -8535,38 +8508,25 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Contains(suite.T(), entryMap2, streamid_3)
 
 		// Check for field "field3" with value "value3" in entry
-		foundField3 := false
-		for _, field := range entryMap2[streamid_3] {
-			if field.FieldName == "field3" && field.Value == "value3" {
-				foundField3 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField3, "Field 'field3' with value 'value3' not found in entry")
+		assert.Equal(
+			suite.T(),
+			entryMap2[streamid_3],
+			[]models.FieldInfo{{FieldName: "field3", Value: "value3"}})
 
 		assert.Contains(suite.T(), entryMap2, streamid_4)
-
 		// Check for field "field4" with value "value4" in entry
-		foundField4 := false
-		for _, field := range entryMap2[streamid_4] {
-			if field.FieldName == "field4" && field.Value == "value4" {
-				foundField4 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField4, "Field 'field4' with value 'value4' not found in entry")
+		assert.Equal(
+			suite.T(),
+			entryMap2[streamid_4],
+			[]models.FieldInfo{{FieldName: "field4", Value: "value4"}})
 
 		assert.Contains(suite.T(), entryMap2, streamid_5)
 
 		// Check for field "field5" with value "value5" in entry
-		foundField5 := false
-		for _, field := range entryMap2[streamid_5] {
-			if field.FieldName == "field5" && field.Value == "value5" {
-				foundField5 = true
-				break
-			}
-		}
-		assert.True(suite.T(), foundField5, "Field 'field5' with value 'value5' not found in entry")
+		assert.Equal(
+			suite.T(),
+			entryMap2[streamid_5],
+			[]models.FieldInfo{{FieldName: "field5", Value: "value5"}})
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
