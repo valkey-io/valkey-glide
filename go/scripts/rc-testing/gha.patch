@@ -1,0 +1,80 @@
+diff --git a/.github/workflows/go.yml b/.github/workflows/go.yml
+index d83c6f577..6eb9046ba 100644
+--- a/.github/workflows/go.yml
++++ b/.github/workflows/go.yml
+@@ -137,8 +137,8 @@ jobs:
+             - name: Install & build & test
+               working-directory: go
+               run: |
+-                  make install-tools build
+-                  make -k unit-test integ-test
++                  make install-tools
++                  make -k integ-test
+                   make -k pubsub-test
+                   make -k opentelemetry-test
+ 
+@@ -164,44 +164,6 @@ jobs:
+                       benchmarks/results/**
+                       go/reports/**
+ 
+-    lint:
+-        timeout-minutes: 10
+-        runs-on: ubuntu-latest
+-        if: ${{ github.event.inputs.rc-test != 'true' }}
+-        steps:
+-            - uses: actions/checkout@v4
+-
+-            - name: Set up Go
+-              uses: actions/setup-go@v5
+-              with:
+-                  go-version: ${{ env.BASE_GO_VERSION }}
+-                  cache-dependency-path: go/go.sum
+-
+-            - name: Install protoc
+-              uses: ./.github/workflows/install-rust-and-protoc
+-              with:
+-                  github-token: ${{ secrets.GITHUB_TOKEN }}
+-
+-            - uses: actions/cache@v4
+-              with:
+-                  path: |
+-                      ffi/target
+-                      glide-core/src/generated
+-                  key: x86_64-unknown-linux-gnu-go
+-                  restore-keys: |
+-                      x86_64-unknown-linux-gnu-glide-core
+-                      x86_64-unknown-linux-gnu
+-            - name: lint rust
+-              uses: ./.github/workflows/lint-rust
+-              with:
+-                  cargo-toml-folder: ffi
+-                  github-token: ${{ secrets.GITHUB_TOKEN }}
+-
+-            - name: Install and run linters
+-              working-directory: go
+-              run: |
+-                  make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
+-
+     get-containers:
+         runs-on: ubuntu-latest
+         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+@@ -278,8 +240,8 @@ jobs:
+               working-directory: go
+               if: ${{ github.event.inputs.rc-test != 'true' }}
+               run: |
+-                  make install-tools build
+-                  make -k unit-test integ-test
++                  make install-tools
++                  make -k integ-test
+                   make -k pubsub-test
+ 
+             - name: Upload test reports
+@@ -401,7 +363,7 @@ jobs:
+             - name: Install & build & test
+               working-directory: go
+               run: |
+-                  make install-tools build
++                  make install-tools
+                   make -k long-timeout-test test-filter=TestLongTimeout
+ 
+             - name: Upload logs and reports
