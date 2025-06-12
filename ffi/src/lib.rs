@@ -1157,11 +1157,16 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(request_id, async move {
+    let result = client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
         client.send_command(&cmd, routing_info).await
-    })
+    });
+    if let Ok(span) = child_span {
+        span.end();
+    }
+    result
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
