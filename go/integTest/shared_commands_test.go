@@ -7740,7 +7740,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		infoFull, err := client.XInfoStreamFullWithOptions(
 			context.Background(),
 			key,
-			options.NewXInfoStreamOptionsOptions().SetCount(1),
+			*options.NewXInfoStreamOptionsOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), infoFull["length"])
@@ -9819,7 +9819,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		zUnionWithScoresResult, err := client.ZUnionWithScores(
 			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9831,7 +9831,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with max aggregate
 		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9843,7 +9843,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with min aggregate
 		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9855,7 +9855,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with sum aggregate
 		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9872,7 +9872,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 					{Key: key2, Weight: 2.0},
 				},
 			},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9884,7 +9884,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// non-existent key - empty union
 		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9895,7 +9895,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 
 		// empty key list - empty union
 		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(context.Background(), options.KeyArray{Keys: []string{}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		assert.Empty(suite.T(), zUnionWithEmptyKeyArray)
@@ -9909,7 +9909,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 
 		_, err = client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		suite.Error(err)
 	})
@@ -9952,7 +9952,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err := client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9968,7 +9968,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9984,7 +9984,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -10000,7 +10000,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -10021,7 +10021,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 					{Key: key2, Weight: 2.0},
 				},
 			},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -10037,7 +10037,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -10051,7 +10051,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithEmptyKeyArray, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -10069,7 +10069,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		_, err = client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		suite.Error(err)
 	})
@@ -10112,7 +10112,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(0),
+			*options.NewZInterCardOptions().SetLimit(0),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -10120,7 +10120,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(1),
+			*options.NewZInterCardOptions().SetLimit(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res)
@@ -10128,7 +10128,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(3),
+			*options.NewZInterCardOptions().SetLimit(3),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -10140,7 +10140,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		_, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key3},
-			options.NewZInterCardOptions().SetLimit(3),
+			*options.NewZInterCardOptions().SetLimit(3),
 		)
 		suite.Error(err)
 	})
@@ -10159,7 +10159,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range a exclusive to c inclusive
 		result, err := client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
@@ -10170,7 +10170,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range negative to positive infinity
 		result, err = client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
 				options.NewInfiniteLexBoundary("+"),
 			),
@@ -10181,7 +10181,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range negative infinity to c inclusive
 		result, err = client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
 				options.NewLexBoundary("c", true),
 			),
@@ -10192,7 +10192,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// non-existent key
 		result, err = client.ZLexCount(context.Background(),
 			key2,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
@@ -10206,7 +10206,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 
 		_, err = client.ZLexCount(context.Background(),
 			key2,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
