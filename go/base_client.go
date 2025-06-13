@@ -3266,14 +3266,14 @@ func (client *baseClient) LMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
-// depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
-// wherefrom.
-// BLMove is the blocking variant of [LMove].
+// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at `source`
+// depending on `whereFrom`, and pushes the element at the first/last element of the list stored at `destination` depending on
+// `whereFrom`.
+// `BLMove` is the blocking variant of [Client.LMove] and [ClusterClient.LMove].
 //
 // Note:
-//   - When in cluster mode, all source and destination must map to the same hash slot.
-//   - BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - When in cluster mode, `source` and `destination` must map to the same hash slot.
+//   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -3286,13 +3286,13 @@ func (client *baseClient) LMove(
 //	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
-//	wherefrom   - The ListDirection the element should be removed from.
-//	whereto     - The ListDirection the element should be added to.
+//	whereFrom   - The ListDirection the element should be removed from.
+//	whereTo     - The ListDirection the element should be added to.
 //	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
-//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist or if the
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if `source` does not exist or if the
 //	operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
@@ -4562,11 +4562,11 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 // Blocks the connection until it removes and returns a member-score pair
 // with the lowest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMin` is the blocking variant of [Client.BZPopMin] and [ClusterClient.BZPopMin].
 //
 // Note:
 //   - When in cluster mode, all `keys` must map to the same hash slot.
-//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMin` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for more details.
 //
@@ -7640,11 +7640,11 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 // Blocks the connection until it pops and returns a member-score pair
 // with the highest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMax` is the blocking variant of [Client.ZPopMax] and [ClusterClient.ZPopMax].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
-//   - BZPopMax is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMax` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
