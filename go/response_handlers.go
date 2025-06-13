@@ -1717,13 +1717,13 @@ func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (m
 	}
 
 	infoMap, ok := result.(map[string]any)
+
 	if !ok {
 		return models.XInfoStreamFullOptionsResponse{},
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
 
-	streamInfo := models.XInfoStreamFullOptionsResponse{}
-	streamInfo.XInfoStreamResponse, err = getXInfoStreamFields(infoMap)
+	streamInfo, err := getXInfoStreamFullOptionFields(infoMap)
 	if err != nil {
 		return models.XInfoStreamFullOptionsResponse{}, err
 	}
@@ -1770,6 +1770,42 @@ func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, e
 		streamInfo.LastEntry = entry
 	}
 
+	return streamInfo, nil
+}
+
+func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamFullOptionsResponse, error) {
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+
+	// Parse integer fields
+	if val, ok := infoMap["length"].(int64); ok {
+		streamInfo.Length = val
+	}
+	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
+		streamInfo.RadixTreeKeys = val
+	}
+	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
+		streamInfo.RadixTreeNodes = val
+	}
+	if val, ok := infoMap["entries-added"].(int64); ok {
+		streamInfo.EntriesAdded = val
+	}
+	// Parse string fields
+	if val, ok := infoMap["last-generated-id"].(string); ok {
+		streamInfo.LastGeneratedID = val
+	}
+	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
+		streamInfo.MaxDeletedEntryID = val
+	}
+	// Get First Entry
+	entry := createEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+	// Get Last Entry
+	entry = createEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
 	return streamInfo, nil
 }
 

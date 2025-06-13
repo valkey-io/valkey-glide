@@ -342,10 +342,50 @@ type XInfoStreamResponse struct {
 	LastEntry StreamEntry
 }
 
-type XInfoStreamFullOptionsResponse struct {
-	XInfoStreamResponse
-	// The list of consumer groups defined for the stream
-	GroupsInfo []XInfoGroupInfo
+// The information for each pending entry for each group in `XInfoStream` command with full option
+type PendingEntry struct {
+	// The ID of the message
+	Id string
+	// The name of consumer
+	Name string
+	// The unix timestamp when the message was delivered to the consumer
+	DeleveredTime int64
+	// The number of times the message was delivered
+	DeleveredCount int64
+}
+
+// XInfoGroupInfo represents a group information returned by `XInfoStream` command with full option
+// in full mode.
+type XInfoStreamGroupInfo struct {
+	// The count of the group's Pending Entries List (PEL), which are messages that were delivered
+	// but are yet to be acknowledged.
+	PelCount int64
+	// The group's Pending Entries List (PEL), which are messages that were delivered but are yet to be
+	// acknowledged.
+	Pending []PendingEntry
 	// The list of consumer information for the stream
-	ConsumersInfo []XInfoConsumerInfo
+	Consumers []XInfoConsumerInfo
+}
+
+type XInfoStreamFullOptionsResponse struct {
+	// The number of entries in the stream
+	Length int64
+	// The number of keys in the underlying radix data structure
+	RadixTreeKeys int64
+	// The number of nodes in the underlying radix data structure
+	RadixTreeNodes int64
+	// The ID of the least-recently entry that was added to the stream
+	LastGeneratedID string
+	// The maximal entry ID that was deleted from the stream
+	MaxDeletedEntryID string
+	// The count of all entries added to the stream during its lifetime
+	EntriesAdded int64
+	// The ID and field-value tuples of the first entry in the stream
+	FirstEntry StreamEntry
+	// The ID and field-value tuples of the last entry in the stream
+	LastEntry StreamEntry
+	// The list of consumer groups defined for the stream
+	Groups []XInfoStreamGroupInfo
+	// The list of stream entries
+	Entries []StreamEntry
 }
