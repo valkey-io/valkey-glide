@@ -742,8 +742,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
-// [OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
+// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
+// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
 // set, the old value is returned.
 //
 // See [valkey.io] for details.
@@ -3071,7 +3071,7 @@ func (client *baseClient) LMPopCount(
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
-// BLMPop is the blocking variant of [LMPop].
+// BLMPop is the blocking variant of [Client.LMPop] and [ClusterClient.LMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3127,7 +3127,7 @@ func (client *baseClient) BLMPop(
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
-// BLMPopCount is the blocking variant of [LMPopCount].
+// BLMPopCount is the blocking variant of [Client.LMPopCount] [ClusterClient.LMPopCount].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3256,14 +3256,14 @@ func (client *baseClient) LMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
-// depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
-// wherefrom.
-// BLMove is the blocking variant of [LMove].
+// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at `source`
+// depending on `whereFrom`, and pushes the element at the first/last element of the list stored at `destination` depending on
+// `whereFrom`.
+// `BLMove` is the blocking variant of [Client.LMove] and [ClusterClient.LMove].
 //
 // Note:
-//   - When in cluster mode, all source and destination must map to the same hash slot.
-//   - BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - When in cluster mode, `source` and `destination` must map to the same hash slot.
+//   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -3276,14 +3276,14 @@ func (client *baseClient) LMove(
 //	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
-//	wherefrom   - The ListDirection the element should be removed from.
-//	whereto     - The ListDirection the element should be added to.
+//	whereFrom   - The ListDirection the element should be removed from.
+//	whereTo     - The ListDirection the element should be added to.
 //	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
-//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist or if the
-//	operation timed-out.
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if `source` does not exist or if
+//	the operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3842,7 +3842,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
-// This command, similar to [Del], however, this command does not block the server.
+// This command, similar to [Client.Del] and [ClusterClient.Del], however, this command does not block the server.
 //
 // Note:
 //
@@ -4233,7 +4233,7 @@ func (client *baseClient) ZAdd(
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	membersScoreMap - A map of members to their scores.
-//	opts - The options for the command. See [ZAddOptions] for details.
+//	opts - The options for the command. See [Client.ZAddOptions] [ClusterClient.ZAddOptions] for details.
 //
 // Return value:
 //
@@ -4557,11 +4557,11 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 // Blocks the connection until it removes and returns a member-score pair
 // with the lowest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMin` is the blocking variant of [Client.BZPopMin] and [ClusterClient.BZPopMin].
 //
 // Note:
 //   - When in cluster mode, all `keys` must map to the same hash slot.
-//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMin` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for more details.
 //
@@ -4595,7 +4595,7 @@ func (client *baseClient) BZPopMin(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4657,7 +4657,7 @@ func (client *baseClient) BZMPop(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4728,7 +4728,7 @@ func (client *baseClient) BZMPopWithOptions(
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
-// To get the elements with their scores, see [ZRangeWithScores].
+// To get the elements with their scores, see [Client.ZRangeWithScores] and [ClusterClient.ZRangeWithScores].
 //
 // See [valkey.io] for more details.
 //
@@ -4910,7 +4910,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 
 // Returns the rank of `member` in the sorted set stored at `key`, with
 // scores ordered from low to high, starting from `0`.
-// To get the rank of `member` with its score, see [ZRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRankWithScore] and [ClusterClient.ZRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -4971,7 +4971,7 @@ func (client *baseClient) ZRankWithScore(
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRevRankWithScore] and [ClusterClient.ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -4999,7 +4999,6 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
 //
 // Since:
 //
@@ -5017,7 +5016,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 //	A tuple containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.s
+//	`nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
@@ -5503,7 +5502,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
@@ -5522,7 +5521,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl time.Dura
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
@@ -5951,7 +5950,7 @@ func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (model
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStore] or [ClusterClient.SortStore] function.
 //
 // See [valkey.io] for details.
 //
@@ -5976,7 +5975,8 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStoreWithOptions] or
+// [ClusterClient.SortStoreWithOptions] function.
 //
 // Note:
 //
@@ -6093,7 +6093,8 @@ func (client *baseClient) SortReadOnlyWithOptions(
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.Sort] and [ClusterClient.Sort]
+// or [Client.SortReadOnly] and [ClusterClient.SortReadOnly] function.
 //
 // Note:
 //
@@ -6130,7 +6131,8 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.SortWithOptions] and [ClusterClient.SortWithOptions]
+// or [Client.SortReadOnlyWithOptions] and [ClusterClient.SortReadOnlyWithOptions] function.
 //
 // Note:
 //
@@ -7109,7 +7111,7 @@ func (client *baseClient) Time(ctx context.Context) ([]string, error) {
 }
 
 // Returns the intersection of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZInterWithScores].
+// To get the elements with their scores, see [Client.ZInterWithScores] or [ClusterClient.ZInterWithScores].
 //
 // Note:
 //
@@ -7267,7 +7269,7 @@ func (client *baseClient) ZInterStoreWithOptions(
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
-// To get the elements with their scores, see [ZDiffWithScores].
+// To get the elements with their scores, see [Client.ZDiffWithScores] or [ClusterClient.ZDiffWithScores].
 //
 // Note:
 //
@@ -7371,7 +7373,7 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 }
 
 // Returns the union of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZUnionWithScores].
+// To get the elements with their scores, see [Client.ZUnionWithScores] or [ClusterClient.ZUnionWithScores].
 //
 // Since:
 //
@@ -7632,11 +7634,11 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 // Blocks the connection until it pops and returns a member-score pair
 // with the highest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMax` is the blocking variant of [Client.ZPopMax] and [ClusterClient.ZPopMax].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
-//   - BZPopMax is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMax` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -7961,7 +7963,7 @@ func (client *baseClient) GeoDistWithUnit(
 	return handleFloatOrNilResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8028,7 +8030,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 	return handleLocationArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8085,7 +8087,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 	return handleStringArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8133,7 +8135,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 	)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8176,7 +8178,7 @@ func (client *baseClient) GeoSearch(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8248,7 +8250,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8299,7 +8301,7 @@ func (client *baseClient) GeoSearchStore(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8352,7 +8354,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8511,7 +8513,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 
 // Invokes a previously loaded function.
 // The command will be routed to a primary random node.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -8566,7 +8568,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 
 // Invokes a previously loaded function.
 // This command is routed to primary nodes only.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
