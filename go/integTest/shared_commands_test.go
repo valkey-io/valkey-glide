@@ -7737,14 +7737,15 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 
-		// infoFull, err := client.XInfoStreamFullWithOptions(
-		// 	context.Background(),
-		// 	key,
-		// 	options.NewXInfoStreamOptionsOptions().SetCount(1),
-		// )
+		infoFull, err := client.XInfoStreamFullWithOptions(
+			context.Background(),
+			key,
+			options.NewXInfoStreamOptionsOptions().SetCount(1),
+		)
 		// assert.NoError(suite.T(), err)
-		// assert.Equal(suite.T(), int64(2), ["lengthinfoFull"])
-
+		// assert.Equal(suite.T(), int64(2), infoFull.Length)
+		fmt.Println("infoFull================")
+		fmt.Println(infoFull)
 		// if suite.serverVersion >= "7.0.0" {
 		// 	assert.Equal(suite.T(), "1-0", infoFull["recorded-first-entry-id"])
 		// } else {

@@ -1806,6 +1806,131 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 	if entry.ID != "" {
 		streamInfo.LastEntry = entry
 	}
+
+	if val, ok := infoMap["groups"].([]any); ok {
+		converted, err := arrayConverter[map[string]any]{
+			nil,
+			false,
+		}.convert(val)
+		if err != nil {
+			return models.XInfoStreamFullOptionsResponse{}, err
+		}
+		groups, ok := converted.([][]any)
+		if !ok {
+			return models.XInfoStreamFullOptionsResponse{},
+				fmt.Errorf("unexpected type: %T", converted)
+		}
+		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
+		for _, group := range groups {
+			groupInfo := models.XInfoStreamGroupInfo{}
+			for index, groupItem := range group {
+				if groupItem == "name" {
+					if name, ok := group[index+1].(string); ok {
+						groupInfo.Name = name
+					}
+				}
+				if groupItem == "last-delivered-id" {
+					if lastDeliveredId, ok := group[index+1].(string); ok {
+						groupInfo.LastDeliveredId = lastDeliveredId
+					}
+				}
+				if groupItem == "pel-count" {
+					if pelCount, ok := group[index+1].(int64); ok {
+						groupInfo.PelCount = pelCount
+					}
+				}
+				if groupItem == "entries-read" {
+					switch entriesRead := group[index+1].(type) {
+					case int64:
+						groupInfo.EntriesRead = models.CreateInt64Result(entriesRead)
+					default:
+						groupInfo.EntriesRead = models.CreateNilInt64Result()
+					}
+				}
+				if groupItem == "lag" {
+					switch lag := group[index+1].(type) {
+					case int64:
+						groupInfo.Lag = models.CreateInt64Result(lag)
+					default:
+						groupInfo.Lag = models.CreateNilInt64Result()
+					}
+				}
+				if groupItem == "pending" {
+					if pending, ok := group[index+1].([][]any); ok {
+						pendingArr := make([]models.PendingEntry, 0, len(pending))
+						for _, pendingEntry := range pending {
+							pendingArr = append(pendingArr, models.PendingEntry{
+								Id:             pendingEntry[0].(string),
+								Name:           pendingEntry[1].(string),
+								DeliveredTime:  pendingEntry[2].(int64),
+								DeliveredCount: pendingEntry[3].(int64),
+							})
+						}
+						groupInfo.Pending = pendingArr
+					}
+				}
+				if groupItem == "consumers" {
+					if consumers, ok := group[index+1].([][]any); ok {
+						consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
+						consumerInfo := models.XInfoStreamConsumerInfo{}
+
+						for _, consumer := range consumers {
+							for index, consumerItem := range consumer {
+								if consumerItem == "name" {
+									if name, ok := consumer[index+1].(string); ok {
+										consumerInfo.Name = name
+									}
+								}
+								if consumerItem == "seen-time" {
+									if seenTime, ok := consumer[index+1].(int64); ok {
+										consumerInfo.SeenTime = seenTime
+									}
+								}
+								if consumerItem == "active-time" {
+									if activeTime, ok := consumer[index+1].(int64); ok {
+										consumerInfo.ActiveTime = activeTime
+									}
+								}
+								if consumerItem == "pel-count" {
+									if pelCount, ok := consumer[index+1].(int64); ok {
+										consumerInfo.PelCount = pelCount
+									}
+								}
+								if consumerItem == "pending" {
+									if pending, ok := consumer[index+1].([][]any); ok {
+										pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
+										for _, pendingEntry := range pending {
+											pendingConsumerArr = append(pendingConsumerArr, models.ConsumerPendingEntry{
+												Id:             pendingEntry[0].(string),
+												DeliveredTime:  pendingEntry[1].(int64),
+												DeliveredCount: pendingEntry[2].(int64),
+											})
+										}
+										consumerInfo.Pending = pendingConsumerArr
+									}
+								}
+							}
+						}
+						groupInfo.Consumers = consumersArr
+					}
+				}
+
+			}
+			groupsArr = append(groupsArr, groupInfo)
+		}
+		streamInfo.Groups = groupsArr
+	}
+	if val, ok := infoMap["entries"].([][]any); ok {
+		entriesArr := make([]models.StreamEntry, 0, len(val))
+		for _, entry := range val {
+			entryInfo := models.StreamEntry{}
+			entryInfo.ID = entry[0].(string)
+			entryInfo.Fields = createFieldInfoArray([]any{entry[1]})
+			entriesArr = append(entriesArr, entryInfo)
+		}
+		streamInfo.Entries = entriesArr
+	}
+
 	return streamInfo, nil
 }
 

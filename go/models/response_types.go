@@ -349,14 +349,47 @@ type PendingEntry struct {
 	// The name of consumer
 	Name string
 	// The unix timestamp when the message was delivered to the consumer
-	DeleveredTime int64
+	DeliveredTime int64
 	// The number of times the message was delivered
-	DeleveredCount int64
+	DeliveredCount int64
+}
+
+// The information for each pending entry for each consumer item in `XInfoStream` command with full option
+type ConsumerPendingEntry struct {
+	// The ID of the message
+	Id string
+	// The unix timestamp when the message was delivered to the consumer
+	DeliveredTime int64
+	// The number of times the message was delivered
+	DeliveredCount int64
+}
+
+// XInfoStreamConsumerInfo represents a consumer information returned by `XInfoStream` command with full option.
+type XInfoStreamConsumerInfo struct {
+	// The consumer's name.
+	Name       string
+	SeenTime   int64
+	ActiveTime int64
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	PelCount int64
+	Pending  []ConsumerPendingEntry
 }
 
 // XInfoGroupInfo represents a group information returned by `XInfoStream` command with full option
 // in full mode.
 type XInfoStreamGroupInfo struct {
+	// The consumer group's name.
+	Name string
+	// The ID of the last entry delivered to the group's consumers.
+	LastDeliveredId string
+	// The logical "read counter" of the last entry delivered to the group's consumers.
+	// Included in the response only on valkey 7.0.0 and above.
+	EntriesRead Result[int64]
+	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
+	// that number can't be determined.
+	// Included in the response only on valkey 7.0.0 and above.
+	Lag Result[int64]
 	// The count of the group's Pending Entries List (PEL), which are messages that were delivered
 	// but are yet to be acknowledged.
 	PelCount int64
@@ -364,7 +397,7 @@ type XInfoStreamGroupInfo struct {
 	// acknowledged.
 	Pending []PendingEntry
 	// The list of consumer information for the stream
-	Consumers []XInfoConsumerInfo
+	Consumers []XInfoStreamConsumerInfo
 }
 
 type XInfoStreamFullOptionsResponse struct {
