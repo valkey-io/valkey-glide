@@ -2326,11 +2326,13 @@ func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlush()"})
 	batch.ScriptFlushWithMode(options.SYNC)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlushWithMode()"})
-	batch.ScriptShow("abc")
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptShow()"},
-	)
+	if serverVer >= "8.0.0" {
+		batch.ScriptShow("abc")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptShow()"},
+		)
+	}
 	batch.ScriptKill()
 	testData = append(
 		testData,
