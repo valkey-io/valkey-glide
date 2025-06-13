@@ -1211,13 +1211,13 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //	An empty string is returned if the keys do not exist or have no common subsequences.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (string, error) {
+func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2})
 	if err != nil {
-		return models.DefaultStringResponse, err
+		return nil, err
 	}
 
-	return handleStringResponse(result)
+	return handleLCSMatchResponse(result, models.SimpleLCSString)
 }
 
 // Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
@@ -1243,13 +1243,13 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (st
 //	The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64, error) {
+func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2, options.LCSLenCommand})
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return nil, err
 	}
 
-	return handleIntResponse(result)
+	return handleLCSMatchResponse(result, models.SimpleLCSLength)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
@@ -1295,17 +1295,8 @@ func (client *baseClient) LCSWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	lcsResp, err := handleStringToAnyMapResponse(response)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("LCS Response: %+v\n", lcsResp)
 
-	return &models.LCSMatch{
-		MatchString: lcsResp["match_string"].(string),
-		Matches:     lcsResp["matches"].([]models.LCSMatchedPosition),
-		Len:         lcsResp["len"].(int64),
-	}, nil
+	return handleLCSMatchResponse(response, models.ComplexLCSMatch)
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
