@@ -3106,7 +3106,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{key1: {"five"}},
+			[]models.KeyValues{{Key: key1, Values: []string{"five"}}},
 			res5,
 		)
 
@@ -3114,9 +3114,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{
-				key2: {"one", "two"},
-			},
+			[]models.KeyValues{{Key: key2, Values: []string{"one", "two"}}},
 			res6,
 		)
 
@@ -3160,7 +3158,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{key1: {"five"}},
+			[]models.KeyValues{{Key: key1, Values: []string{"five"}}},
 			res5,
 		)
 
@@ -3174,9 +3172,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{
-				key2: {"one", "two"},
-			},
+			[]models.KeyValues{{Key: key2, Values: []string{"one", "two"}}},
 			res6,
 		)
 

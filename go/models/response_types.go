@@ -341,3 +341,11 @@ type XInfoStreamResponse struct {
 	// The ID and field-value tuples of the last entry in the stream
 	LastEntry StreamEntry
 }
+
+// KeyValues represents a key and a list of associated values
+type KeyValues struct {
+	// The key associated with the values
+	Key string
+	// The slice of string values associated with the key
+	Values []string
+}
