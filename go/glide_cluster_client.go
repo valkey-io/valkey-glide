@@ -640,9 +640,8 @@ func (client *ClusterClient) clusterScan(
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
-	cStr := C.CString(cursor.GetCursor())
-	c_cursor := C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
+	c_cursor := C.CString(cursor.GetCursor())
+	defer C.free(unsafe.Pointer(c_cursor))
 
 	args, err := opts.ToArgs()
 	if err != nil {
