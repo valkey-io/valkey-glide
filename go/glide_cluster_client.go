@@ -240,7 +240,7 @@ func (client *ClusterClient) Info(ctx context.Context) (map[string]string, error
 }
 
 // Gets information and statistics about the server.
-// The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+// The command will be routed to all primary nodes, unless `route` in [options.ClusterInfoOptions] is provided.
 //
 // Note:
 //
@@ -1469,7 +1469,7 @@ func (client *ClusterClient) FunctionFlushAsyncWithRoute(ctx context.Context, ro
 }
 
 // Invokes a previously loaded function.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -2159,7 +2159,7 @@ func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//	A [models.ClusterValue] containing the serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
 func (client *ClusterClient) FunctionDumpWithRoute(

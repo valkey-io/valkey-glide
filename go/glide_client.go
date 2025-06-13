@@ -775,7 +775,7 @@ func (client *Client) FunctionKill(ctx context.Context) (string, error) {
 // Return value:
 //
 //	A map of node addresses to their function statistics represented by
-//	[FunctionStatsResult] object containing the following information:
+//	[models.FunctionStatsResult] object containing the following information:
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
 //
@@ -865,7 +865,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 	return handleStringResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //
@@ -891,7 +891,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 	return handleOkResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //
