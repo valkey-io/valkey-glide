@@ -21,6 +21,7 @@ type Location struct {
 // The interface representing origin of the search for the `GeoSearch` command
 type GeoSearchOrigin interface {
 	ToArgs() ([]string, error)
+	dummyGeoSearchOrigin()
 }
 
 // The search origin represented by a [GeospatialData] position
@@ -37,6 +38,8 @@ func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
 	}, nil
 }
 
+func (o *GeoCoordOrigin) dummyGeoSearchOrigin() {}
+
 // The search origin represented by an existing member in the sorted set
 type GeoMemberOrigin struct {
 	Member string
@@ -49,6 +52,8 @@ func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
 		o.Member,
 	}, nil
 }
+
+func (o *GeoMemberOrigin) dummyGeoSearchOrigin() {}
 
 // The search options for the `GeoSearch` command
 type GeoSearchShape struct {
