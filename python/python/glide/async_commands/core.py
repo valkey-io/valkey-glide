@@ -44,13 +44,16 @@ from glide.async_commands.sorted_set import (
     _create_zrange_args,
 )
 from glide.async_commands.stream import (
+    FieldInfo,
     StreamAddOptions,
     StreamClaimOptions,
+    StreamEntry,
     StreamGroupOptions,
     StreamPendingOptions,
     StreamRangeBound,
     StreamReadGroupOptions,
     StreamReadOptions,
+    StreamResponse,
     StreamTrimOptions,
     _create_xpending_range_args,
 )
@@ -3214,7 +3217,7 @@ class CoreCommands(Protocol):
         self,
         keys_and_ids: Mapping[TEncodable, TEncodable],
         options: Optional[StreamReadOptions] = None,
-    ) -> Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]:
+    ) -> Optional[Mapping[bytes, StreamResponse]]:
         """
         Reads entries from the given streams.
 
@@ -3228,8 +3231,8 @@ class CoreCommands(Protocol):
             options (Optional[StreamReadOptions]): Options detailing how to read the stream.
 
         Returns:
-            Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]: A mapping of stream keys, to a mapping of stream IDs,
-            to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+            Optional[Mapping[bytes, StreamResponse]]: A mapping of stream keys to StreamResponse objects.
+            Each StreamResponse contains a list of StreamEntry objects, each with an ID and a list of field-value pairs.
 
             None will be returned under the following conditions:
 
@@ -3240,25 +3243,40 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
             >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
-            >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
-                {
-                    b"mystream": {
-                        b"0-1": [[b"field1", b"value1"]],
-                        b"0-2": [[b"field2", b"value2"], [b"field2", b"value3"]],
-                    }
-                }
-                # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
-                # 1000ms if there is no stream data.
+            >>> result = await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+            >>> # result will be a mapping with stream key to StreamResponse
+            >>> # Each StreamResponse contains entries with IDs and field-value pairs
+            >>> # For example, to access the first entry's ID:
+            >>> first_entry_id = result[b"mystream"].entries[0].id  # b"0-1"
+            >>> # To access the field-value pairs of the first entry:
+            >>> first_entry_fields = result[b"mystream"].entries[0].fields  # [FieldInfo(field_name=b"field1", value=b"value1")]
         """
         args: List[TEncodable] = [] if options is None else options.to_args()
         args.append("STREAMS")
         args.extend([key for key in keys_and_ids.keys()])
         args.extend([value for value in keys_and_ids.values()])
 
-        return cast(
-            Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]],
-            await self._execute_command(RequestType.XRead, args),
-        )
+        raw_result = await self._execute_command(RequestType.XRead, args)
+
+        if raw_result is None:
+            return None
+
+        # Convert the raw result to StreamResponse objects
+        result: Dict[bytes, StreamResponse] = {}
+        for stream_key, entries_dict in raw_result.items():
+            stream_entries = []
+            for entry_id, field_values in entries_dict.items():
+                fields = []
+                for field_value_pair in field_values:
+                    fields.append(
+                        FieldInfo(
+                            field_name=field_value_pair[0], value=field_value_pair[1]
+                        )
+                    )
+                stream_entries.append(StreamEntry(id=entry_id, fields=fields))
+            result[stream_key] = StreamResponse(entries=stream_entries)
+
+        return result
 
     async def xgroup_create(
         self,
@@ -3424,7 +3442,7 @@ class CoreCommands(Protocol):
         group_name: TEncodable,
         consumer_name: TEncodable,
         options: Optional[StreamReadGroupOptions] = None,
-    ) -> Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]]:
+    ) -> Optional[Mapping[bytes, StreamResponse]]:
         """
         Reads entries from the given streams owned by a consumer group.
 
@@ -3441,20 +3459,21 @@ class CoreCommands(Protocol):
             options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
 
         Returns:
-            Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]]: A mapping of stream keys, to a mapping of
-            stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+            Optional[Mapping[bytes, StreamResponse]]: A mapping of stream keys to StreamResponse objects.
+            Each StreamResponse contains a list of StreamEntry objects, each with an ID and a list of field-value pairs.
 
             Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
 
         Examples:
             >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
             >>> await client.xgroup_create("mystream", "mygroup", "0-0")
-            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
-                {
-                    b"mystream": {
-                        b"1-0": [[b"field1", b"value1"]],
-                    }
-                }  # Read one stream entry from "mystream" using "myconsumer" in the consumer group "mygroup".
+            >>> result = await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
+            >>> # result will be a mapping with stream key to StreamResponse
+            >>> # Each StreamResponse contains entries with IDs and field-value pairs
+            >>> # For example, to access the first entry's ID:
+            >>> first_entry_id = result[b"mystream"].entries[0].id  # b"1-0"
+            >>> # To access the field-value pairs of the first entry:
+            >>> first_entry_fields = result[b"mystream"].entries[0].fields  # [FieldInfo(field_name=b"field1", value=b"value1")]
         """
         args: List[TEncodable] = ["GROUP", group_name, consumer_name]
         if options is not None:
@@ -3464,10 +3483,27 @@ class CoreCommands(Protocol):
         args.extend([key for key in keys_and_ids.keys()])
         args.extend([value for value in keys_and_ids.values()])
 
-        return cast(
-            Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]],
-            await self._execute_command(RequestType.XReadGroup, args),
-        )
+        raw_result = await self._execute_command(RequestType.XReadGroup, args)
+
+        if raw_result is None:
+            return None
+
+        # Convert the raw result to StreamResponse objects
+        result: Dict[bytes, StreamResponse] = {}
+        for stream_key, entries_dict in raw_result.items():
+            stream_entries = []
+            for entry_id, field_values in entries_dict.items():
+                fields = []
+                for field_value_pair in field_values:
+                    fields.append(
+                        FieldInfo(
+                            field_name=field_value_pair[0], value=field_value_pair[1]
+                        )
+                    )
+                stream_entries.append(StreamEntry(id=entry_id, fields=fields))
+            result[stream_key] = StreamResponse(entries=stream_entries)
+
+        return result
 
     async def xack(
         self,
