@@ -289,7 +289,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZInter(options.KeyArray{Keys: []string{key1, key2}}).
 			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
 			ZUnion(options.KeyArray{Keys: []string{key1, key2}}).
-			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax)).
+			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptions().SetAggregate(options.AggregateMax)).
 			XAdd(key1, [][]string{{"a", "b"}}).
 			XAddWithOptions(key1, [][]string{{"a", "b"}}, *options.NewXAddOptions().SetId("0-1")).
 			XAutoClaim(key1, "g", "c", 2, "0-0").
@@ -1974,7 +1974,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	batch.ZUnionWithScores(
 		options.KeyArray{Keys: []string{prefix + key, key4}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	testData = append(
 		testData,
@@ -1990,7 +1990,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZUnionStoreWithOptions(
 		dest,
 		options.KeyArray{Keys: []string{prefix + key, key4}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	testData = append(
 		testData,

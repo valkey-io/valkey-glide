@@ -1457,7 +1457,7 @@ func ExampleClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1481,7 +1481,7 @@ func ExampleClusterClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1562,7 +1562,7 @@ func ExampleClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1591,7 +1591,7 @@ func ExampleClusterClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

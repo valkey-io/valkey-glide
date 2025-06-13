@@ -7491,7 +7491,7 @@ func (client *baseClient) ZUnionStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZUnionOptionsBuilder())
+	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZUnionOptions())
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
