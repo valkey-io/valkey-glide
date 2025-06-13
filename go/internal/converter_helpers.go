@@ -5,6 +5,8 @@ package internal
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 // get type of T
@@ -29,6 +31,11 @@ type mapConverter[T any] struct {
 
 // convert arrays, T - type of the value
 type arrayConverter[T any] struct {
+	next     responseConverter
+	canBeNil bool
+}
+
+type keyValuesConverter struct {
 	next     responseConverter
 	canBeNil bool
 }
@@ -115,4 +122,26 @@ func (node arrayConverter[T]) convert(data any) (any, error) {
 	}
 
 	return result, nil
+}
+
+// Converts an untyped map into a []models.KeyValues
+func (node keyValuesConverter) convert(data any) ([]models.KeyValues, error) {
+	converters := mapConverter[[]string]{
+		arrayConverter[string]{},
+		false,
+	}
+
+	res, err := converters.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string][]string); ok {
+		resultArray := make([]models.KeyValues, 0, len(result))
+		for key, values := range result {
+			resultArray = append(resultArray, models.KeyValues{Key: key, Values: values})
+		}
+		return resultArray, nil
+	}
+
+	return nil, fmt.Errorf("unexpected type received: %T", res)
 }

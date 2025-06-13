@@ -808,24 +808,7 @@ func handleKeyValuesArrayOrNilResponse(
 		return nil, err
 	}
 
-	converters := mapConverter[[]string]{
-		arrayConverter[string]{},
-		false,
-	}
-
-	res, err := converters.convert(data)
-	if err != nil {
-		return nil, err
-	}
-	if result, ok := res.(map[string][]string); ok {
-		resultArray := make([]models.KeyValues, 0, len(result))
-		for key, values := range result {
-			resultArray = append(resultArray, models.KeyValues{Key: key, Values: values})
-		}
-		return resultArray, nil
-	}
-
-	return nil, fmt.Errorf("unexpected type received: %T", res)
+	return internal.ConvertKeyValuesArrayOrNil(data)
 }
 
 func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]struct{}, error) {
