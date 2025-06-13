@@ -2,13 +2,6 @@
 
 package models
 
-// #include "../lib.h"
-import "C"
-
-import (
-	"unsafe"
-)
-
 type Cursor struct {
 	cursor string
 	new    bool
@@ -58,9 +51,6 @@ func NewClusterScanCursor() ClusterScanCursor {
 
 // Create a new ClusterScanCursor with a specified value
 func NewClusterScanCursorWithId(newCursor string) ClusterScanCursor {
-	cStr := C.CString(newCursor)
-	C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
 	return ClusterScanCursor{cursor: newCursor}
 }
 
