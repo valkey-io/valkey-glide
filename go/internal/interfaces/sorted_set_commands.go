@@ -26,7 +26,7 @@ type SortedSetCommands interface {
 		opts options.ZAddOptions,
 	) (int64, error)
 
-	ZAddIncr(ctx context.Context, key string, member string, increment float64) (models.Result[float64], error)
+	ZAddIncr(ctx context.Context, key string, member string, increment float64) (float64, error)
 
 	ZAddIncrWithOptions(
 		ctx context.Context,

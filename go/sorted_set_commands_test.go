@@ -83,7 +83,7 @@ func ExampleClient_ZAddIncr() {
 	fmt.Println(result)
 
 	// Output:
-	// {1 false}
+	// 1
 }
 
 func ExampleClusterClient_ZAddIncr() {
@@ -96,7 +96,7 @@ func ExampleClusterClient_ZAddIncr() {
 	fmt.Println(result)
 
 	// Output:
-	// {1 false}
+	// 1
 }
 
 func ExampleClient_ZAddIncrWithOptions() {

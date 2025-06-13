@@ -4308,7 +4308,7 @@ func (client *baseClient) zAddIncrBase(
 //
 // Return value:
 //
-//	models.Result[float64] - The new score of the member.
+//	The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -4316,13 +4316,18 @@ func (client *baseClient) ZAddIncr(
 	key string,
 	member string,
 	increment float64,
-) (models.Result[float64], error) {
+) (float64, error) {
 	options, err := options.NewZAddOptions().SetIncr(true, increment, member)
 	if err != nil {
-		return models.CreateNilFloat64Result(), err
+		return models.DefaultFloatResponse, err
 	}
 
-	return client.zAddIncrBase(ctx, key, options)
+	res, err := client.zAddIncrBase(ctx, key, options)
+	if err != nil {
+		return models.DefaultFloatResponse, err
+	}
+
+	return res.Value(), nil
 }
 
 // Increments the score of member in the sorted set stored at `key` by `increment`.
