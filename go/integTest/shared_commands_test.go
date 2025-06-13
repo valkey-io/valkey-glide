@@ -5269,7 +5269,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		resIncr, err := client.ZAddIncr(context.Background(), key, "one", float64(2))
 		assert.Nil(t, err)
-		assert.Equal(t, float64(3), resIncr.Value())
+		assert.Equal(t, float64(3), resIncr)
 
 		// error cases
 		// non-sortedset key
@@ -5295,13 +5295,13 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(3), res)
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfDoesNotExistOpts)
+		resIncr2, err := client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfDoesNotExistOpts)
 		suite.NoError(err)
-		assert.True(suite.T(), resIncr.IsNil())
+		assert.True(suite.T(), resIncr2.IsNil())
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfExistsOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfExistsOpts)
 		suite.NoError(err)
-		assert.Equal(suite.T(), float64(6), resIncr.Value())
+		assert.Equal(suite.T(), float64(6), resIncr2.Value())
 
 		// with GT or LT
 		membersScoreMap2 := map[string]float64{
@@ -5329,13 +5329,13 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(0), res)
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *ltOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *ltOpts)
 		suite.NoError(err)
-		assert.Equal(suite.T(), float64(7), resIncr.Value())
+		assert.Equal(suite.T(), float64(7), resIncr2.Value())
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *gtOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *gtOpts)
 		suite.NoError(err)
-		assert.True(suite.T(), resIncr.IsNil())
+		assert.True(suite.T(), resIncr2.IsNil())
 	})
 }
 
