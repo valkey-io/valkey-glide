@@ -172,7 +172,7 @@ type StreamCommands interface {
 	XInfoStreamFullWithOptions(
 		ctx context.Context,
 		key string,
-		options *options.XInfoStreamOptions) (models.XInfoStreamFullOptionsResponse, error)
+		options options.XInfoStreamOptions) (models.XInfoStreamFullOptionsResponse, error)
 
 	XInfoConsumers(ctx context.Context, key string, group string) ([]models.XInfoConsumerInfo, error)
 

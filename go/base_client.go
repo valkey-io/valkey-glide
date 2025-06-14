@@ -6928,15 +6928,12 @@ func (client *baseClient) XInfoStream(ctx context.Context, key string) (models.X
 func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
-	opts *options.XInfoStreamOptions,
+	opts options.XInfoStreamOptions,
 ) (models.XInfoStreamFullOptionsResponse, error) {
 	args := []string{key, constants.FullKeyword}
-	if opts != nil {
-		optionArgs, err := opts.ToArgs()
-		if err != nil {
-			return models.XInfoStreamFullOptionsResponse{}, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
