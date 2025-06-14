@@ -367,13 +367,16 @@ type ConsumerPendingEntry struct {
 // XInfoStreamConsumerInfo represents a consumer information returned by `XInfoStream` command with full option.
 type XInfoStreamConsumerInfo struct {
 	// The consumer's name.
-	Name       string
-	SeenTime   int64
+	Name string
+	// The time stamp of the last attempted interaction.
+	SeenTime int64
+	// The time stamp of the last successful interaction.
 	ActiveTime int64
 	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
 	// to be acknowledged.
 	PelCount int64
-	Pending  []ConsumerPendingEntry
+	// A list containing the pending entries information.
+	Pending []ConsumerPendingEntry
 }
 
 // XInfoGroupInfo represents a group information returned by `XInfoStream` command with full option
@@ -421,4 +424,6 @@ type XInfoStreamFullOptionsResponse struct {
 	Groups []XInfoStreamGroupInfo
 	// The list of stream entries
 	Entries []StreamEntry
+	// The first entry id recorded
+	RecordedFirstEntryId string
 }

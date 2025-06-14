@@ -7737,7 +7737,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 
-		infoFull, err := client.XInfoStreamFullWithOptions(
+		infoFull, _ := client.XInfoStreamFullWithOptions(
 			context.Background(),
 			key,
 			options.NewXInfoStreamOptionsOptions().SetCount(1),

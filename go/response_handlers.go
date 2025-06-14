@@ -1725,6 +1725,7 @@ func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (m
 
 	streamInfo, err := getXInfoStreamFullOptionFields(infoMap)
 	if err != nil {
+		fmt.Println(err)
 		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 
@@ -1775,7 +1776,8 @@ func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, e
 
 func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamFullOptionsResponse, error) {
 	streamInfo := models.XInfoStreamFullOptionsResponse{}
-
+	// fmt.Println("info=-=========")
+	// fmt.Println(infoMap)
 	// Parse integer fields
 	if val, ok := infoMap["length"].(int64); ok {
 		streamInfo.Length = val
@@ -1807,19 +1809,21 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 		streamInfo.LastEntry = entry
 	}
 
-	if val, ok := infoMap["groups"].([]any); ok {
-		converted, err := arrayConverter[map[string]any]{
-			nil,
-			false,
-		}.convert(val)
-		if err != nil {
-			return models.XInfoStreamFullOptionsResponse{}, err
-		}
-		groups, ok := converted.([][]any)
-		if !ok {
-			return models.XInfoStreamFullOptionsResponse{},
-				fmt.Errorf("unexpected type: %T", converted)
-		}
+	if groups, ok := infoMap["groups"].([][]any); ok {
+		// converted, err := arrayConverter[map[string]any]{
+		// 	nil,
+		// 	false,
+		// }.convert(val)
+		// if err != nil {
+		// 	return models.XInfoStreamFullOptionsResponse{}, err
+		// }
+		// groups, ok := val.([][]any)
+		// if !ok {
+		// 	return models.XInfoStreamFullOptionsResponse{},
+		// 		fmt.Errorf("unexpected type: %T", converted)
+		// }
+		// fmt.Println("any-------")
+		// fmt.Println(groups)
 		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
 		for _, group := range groups {
 			groupInfo := models.XInfoStreamGroupInfo{}
@@ -1920,15 +1924,21 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 		}
 		streamInfo.Groups = groupsArr
 	}
-	if val, ok := infoMap["entries"].([][]any); ok {
+	if val, ok := infoMap["entries"].([]any); ok {
 		entriesArr := make([]models.StreamEntry, 0, len(val))
 		for _, entry := range val {
-			entryInfo := models.StreamEntry{}
-			entryInfo.ID = entry[0].(string)
-			entryInfo.Fields = createFieldInfoArray([]any{entry[1]})
-			entriesArr = append(entriesArr, entryInfo)
+			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
+				entryInfo := models.StreamEntry{}
+				entryInfo.ID = streamEntry[0].(string)
+				entryInfo.Fields = createFieldInfoArray([]any{streamEntry[1]})
+				entriesArr = append(entriesArr, entryInfo)
+			}
 		}
 		streamInfo.Entries = entriesArr
+	}
+
+	if val, ok := infoMap["recorded-first-entry-id"].(string); ok {
+		streamInfo.RecordedFirstEntryId = val
 	}
 
 	return streamInfo, nil
