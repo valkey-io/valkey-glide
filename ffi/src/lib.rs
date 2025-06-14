@@ -1346,62 +1346,11 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<
     })
 }
 
-// This struct is used to keep track of the cursor of a cluster scan.
-#[repr(C)]
-pub struct ClusterScanCursor {
-    cursor: *const c_char,
-}
-
-impl ClusterScanCursor {
-    /// Construct a new `ClusterScanCursor`.
-    ///
-    /// This smart constructor ensures that any valid `ClusterScanCursor` is a UTF-8 string.
-    /// This is necessary to enforce safety and avoid panicking in the `Drop` impl.
-    ///
-    /// # Safety
-    /// * Memory pointed to by `new_cursor` must contain a valid nul terminator at the end of the string.
-    /// * `new_cursor` must be valid for reads of bytes up to and including the nul terminator. This means in particular:
-    ///     * The entire memory range of this CStr must be contained within a single allocated object!
-    /// * The nul terminator must be within `isize::MAX` from `new_cursor`.
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
-        if !new_cursor.is_null() && unsafe { CStr::from_ptr(new_cursor) }.to_str().is_ok() {
-            ClusterScanCursor { cursor: new_cursor }
-        } else {
-            ClusterScanCursor::default()
-        }
-    }
-
-    fn get_cursor(&self) -> *const c_char {
-        self.cursor
-    }
-}
-
-impl Default for ClusterScanCursor {
-    fn default() -> Self {
-        let default_value = CString::new("0").unwrap();
-        ClusterScanCursor {
-            cursor: default_value.into_raw(),
-        }
-    }
-}
-
-impl Drop for ClusterScanCursor {
-    // It is best practice to avoid panicking in Drop impls (https://doc.rust-lang.org/std/ops/trait.Drop.html#tymethod.drop)
-    // so we use a "smart constructor" to guarantee that a valid ClusterScanCursor
-    // is able to be safely dropped.
-    fn drop(&mut self) {
-        if let Ok(temp_str) = unsafe { CStr::from_ptr(self.cursor).to_str() } {
-            glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
-        }
-    }
-}
-
 /// Allows the client to request a cluster scan command to be executed.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
 /// `request_id` is a unique identifier for a valid payload buffer which is created in the client.
-/// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
+/// `cursor` is a cursor string.
 /// `arg_count` keeps track of how many option arguments are passed in the client.
 /// `args` is a pointer to C string representation of the string args.
 /// `args_len` is a pointer to the lengths of the C string representation of the string args.
@@ -1413,12 +1362,14 @@ impl Drop for ClusterScanCursor {
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
 /// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * `cursor` must not be null. It must point to a valid C string ([`CStr`]). See the safety documentation of [`CStr::from_ptr`].
+/// * `cursor` must remain valid until the end of this call. The caller is responsible for freeing the memory allocated for this string.
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
     request_id: usize,
-    cursor: ClusterScanCursor,
+    cursor: *const c_char,
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
@@ -1428,14 +1379,10 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
-    let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
-    let temp_str = match c_str.to_str() {
-        Ok(temp_str) => temp_str,
-        Err(e) => {
-            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), request_id) };
-        }
-    };
-    let cursor_id = temp_str.to_string();
+    let cursor_id = unsafe { CStr::from_ptr(cursor) }
+        .to_str()
+        .unwrap_or("0")
+        .to_owned();
 
     let cluster_scan_args: ClusterScanArgs = if arg_count > 0 {
         let arg_vec = unsafe {

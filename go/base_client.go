@@ -742,8 +742,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
-// [OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
+// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
+// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
 // set, the old value is returned.
 //
 // See [valkey.io] for details.
@@ -1658,22 +1658,19 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
-func (client *baseClient) HScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor})
+func (client *baseClient) HScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -1688,33 +1685,30 @@ func (client *baseClient) HScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The [options.HashScanOptions].
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.HashScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2538,20 +2532,18 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
-func (client *baseClient) SScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor})
+func (client *baseClient) SScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2565,31 +2557,29 @@ func (client *baseClient) SScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - [options.BaseScanOptions]
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.BaseScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -3081,7 +3071,7 @@ func (client *baseClient) LMPopCount(
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
-// BLMPop is the blocking variant of [LMPop].
+// BLMPop is the blocking variant of [Client.LMPop] and [ClusterClient.LMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3137,7 +3127,7 @@ func (client *baseClient) BLMPop(
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
-// BLMPopCount is the blocking variant of [LMPopCount].
+// BLMPopCount is the blocking variant of [Client.LMPopCount] [ClusterClient.LMPopCount].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3266,14 +3256,14 @@ func (client *baseClient) LMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
-// depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
-// wherefrom.
-// BLMove is the blocking variant of [LMove].
+// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at `source`
+// depending on `whereFrom`, and pushes the element at the first/last element of the list stored at `destination` depending on
+// `whereFrom`.
+// `BLMove` is the blocking variant of [Client.LMove] and [ClusterClient.LMove].
 //
 // Note:
-//   - When in cluster mode, all source and destination must map to the same hash slot.
-//   - BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - When in cluster mode, `source` and `destination` must map to the same hash slot.
+//   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -3286,14 +3276,14 @@ func (client *baseClient) LMove(
 //	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
-//	wherefrom   - The ListDirection the element should be removed from.
-//	whereto     - The ListDirection the element should be added to.
+//	whereFrom   - The ListDirection the element should be removed from.
+//	whereTo     - The ListDirection the element should be added to.
 //	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
-//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist or if the
-//	operation timed-out.
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if `source` does not exist or if
+//	the operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3852,7 +3842,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
-// This command, similar to [Del], however, this command does not block the server.
+// This command, similar to [Client.Del] and [ClusterClient.Del], however, this command does not block the server.
 //
 // Note:
 //
@@ -4243,7 +4233,7 @@ func (client *baseClient) ZAdd(
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	membersScoreMap - A map of members to their scores.
-//	opts - The options for the command. See [ZAddOptions] for details.
+//	opts - The options for the command. See [Client.ZAddOptions] [ClusterClient.ZAddOptions] for details.
 //
 // Return value:
 //
@@ -4308,7 +4298,7 @@ func (client *baseClient) zAddIncrBase(
 //
 // Return value:
 //
-//	models.Result[float64] - The new score of the member.
+//	The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -4316,13 +4306,18 @@ func (client *baseClient) ZAddIncr(
 	key string,
 	member string,
 	increment float64,
-) (models.Result[float64], error) {
+) (float64, error) {
 	options, err := options.NewZAddOptions().SetIncr(true, increment, member)
 	if err != nil {
-		return models.CreateNilFloat64Result(), err
+		return models.DefaultFloatResponse, err
 	}
 
-	return client.zAddIncrBase(ctx, key, options)
+	res, err := client.zAddIncrBase(ctx, key, options)
+	if err != nil {
+		return models.DefaultFloatResponse, err
+	}
+
+	return res.Value(), nil
 }
 
 // Increments the score of member in the sorted set stored at `key` by `increment`.
@@ -4562,11 +4557,11 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 // Blocks the connection until it removes and returns a member-score pair
 // with the lowest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMin` is the blocking variant of [Client.BZPopMin] and [ClusterClient.BZPopMin].
 //
 // Note:
 //   - When in cluster mode, all `keys` must map to the same hash slot.
-//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMin` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for more details.
 //
@@ -4600,7 +4595,7 @@ func (client *baseClient) BZPopMin(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4662,7 +4657,7 @@ func (client *baseClient) BZMPop(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4733,7 +4728,7 @@ func (client *baseClient) BZMPopWithOptions(
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
-// To get the elements with their scores, see [ZRangeWithScores].
+// To get the elements with their scores, see [Client.ZRangeWithScores] and [ClusterClient.ZRangeWithScores].
 //
 // See [valkey.io] for more details.
 //
@@ -4915,7 +4910,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 
 // Returns the rank of `member` in the sorted set stored at `key`, with
 // scores ordered from low to high, starting from `0`.
-// To get the rank of `member` with its score, see [ZRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRankWithScore] and [ClusterClient.ZRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -4976,7 +4971,7 @@ func (client *baseClient) ZRankWithScore(
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRevRankWithScore] and [ClusterClient.ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -5004,7 +4999,6 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
 //
 // Since:
 //
@@ -5022,7 +5016,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 //	A tuple containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.s
+//	`nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
@@ -5333,16 +5327,16 @@ func (client *baseClient) ZScore(ctx context.Context, key string, member string)
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
-func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor})
+func (client *baseClient) ZScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5356,33 +5350,30 @@ func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The options for the command. See [options.ZScanOptions] for details.
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (client *baseClient) ZScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.ZScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5511,7 +5502,7 @@ func (client *baseClient) XGroupCreateWithOptions(
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
@@ -5530,7 +5521,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl time.Dura
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
@@ -5959,7 +5950,7 @@ func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (model
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStore] or [ClusterClient.SortStore] function.
 //
 // See [valkey.io] for details.
 //
@@ -5984,7 +5975,8 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStoreWithOptions] or
+// [ClusterClient.SortStoreWithOptions] function.
 //
 // Note:
 //
@@ -6101,7 +6093,8 @@ func (client *baseClient) SortReadOnlyWithOptions(
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.Sort] and [ClusterClient.Sort]
+// or [Client.SortReadOnly] and [ClusterClient.SortReadOnly] function.
 //
 // Note:
 //
@@ -6138,7 +6131,8 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.SortWithOptions] and [ClusterClient.SortWithOptions]
+// or [Client.SortReadOnlyWithOptions] and [ClusterClient.SortReadOnlyWithOptions] function.
 //
 // Note:
 //
@@ -6944,6 +6938,7 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 		}
 		args = append(args, optionArgs...)
 	}
+	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
 		return models.XInfoStreamFullOptionsResponse{}, err
@@ -7119,7 +7114,7 @@ func (client *baseClient) Time(ctx context.Context) ([]string, error) {
 }
 
 // Returns the intersection of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZInterWithScores].
+// To get the elements with their scores, see [Client.ZInterWithScores] or [ClusterClient.ZInterWithScores].
 //
 // Note:
 //
@@ -7277,7 +7272,7 @@ func (client *baseClient) ZInterStoreWithOptions(
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
-// To get the elements with their scores, see [ZDiffWithScores].
+// To get the elements with their scores, see [Client.ZDiffWithScores] or [ClusterClient.ZDiffWithScores].
 //
 // Note:
 //
@@ -7381,7 +7376,7 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 }
 
 // Returns the union of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZUnionWithScores].
+// To get the elements with their scores, see [Client.ZUnionWithScores] or [ClusterClient.ZUnionWithScores].
 //
 // Since:
 //
@@ -7446,7 +7441,7 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 func (client *baseClient) ZUnionWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
@@ -7493,7 +7488,7 @@ func (client *baseClient) ZUnionStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, nil)
+	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZUnionOptions())
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -7526,20 +7521,18 @@ func (client *baseClient) ZUnionStoreWithOptions(
 	ctx context.Context,
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) (int64, error) {
 	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
 	args := append([]string{destination}, keysArgs...)
-	if zUnionOptions != nil {
-		optionsArgs, err := zUnionOptions.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7570,7 +7563,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64, error) {
-	return client.ZInterCardWithOptions(ctx, keys, nil)
+	return client.ZInterCardWithOptions(ctx, keys, *options.NewZInterCardOptions())
 }
 
 // Returns the cardinality of the intersection of the sorted sets specified by `keys`.
@@ -7601,16 +7594,14 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 func (client *baseClient) ZInterCardWithOptions(
 	ctx context.Context,
 	keys []string,
-	options *options.ZInterCardOptions,
+	options options.ZInterCardOptions,
 ) (int64, error) {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
-	if options != nil {
-		optionsArgs, err := options.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZInterCard, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7633,7 +7624,7 @@ func (client *baseClient) ZInterCardWithOptions(
 //	The number of elements in the sorted set at key with a value between min and max.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
-func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error) {
+func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error) {
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(ctx, C.ZLexCount, args)
@@ -7646,11 +7637,11 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 // Blocks the connection until it pops and returns a member-score pair
 // with the highest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMax` is the blocking variant of [Client.ZPopMax] and [ClusterClient.ZPopMax].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
-//   - BZPopMax is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMax` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -7975,7 +7966,7 @@ func (client *baseClient) GeoDistWithUnit(
 	return handleFloatOrNilResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8042,7 +8033,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 	return handleLocationArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8099,7 +8090,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 	return handleStringArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8147,7 +8138,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 	)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8190,7 +8181,7 @@ func (client *baseClient) GeoSearch(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8262,7 +8253,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8313,7 +8304,7 @@ func (client *baseClient) GeoSearchStore(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8366,7 +8357,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8525,7 +8516,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 
 // Invokes a previously loaded function.
 // The command will be routed to a primary random node.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -8580,7 +8571,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 
 // Invokes a previously loaded function.
 // This command is routed to primary nodes only.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //

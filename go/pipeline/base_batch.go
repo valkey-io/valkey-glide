@@ -1899,7 +1899,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list.
-// BLMPopCount is the blocking variant of [LMPopCount].
+// BLMPopCount is the blocking variant of [BaseBatch.LMPopCount].
 //
 // Note:
 //
@@ -2008,7 +2008,7 @@ func (b *BaseBatch[T]) LMove(
 // Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
 // depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
 // wherefrom.
-// BLMove is the blocking variant of [LMove].
+// BLMove is the blocking variant of [BaseBatch.LMove].
 //
 // Note:
 //
@@ -2466,7 +2466,7 @@ func (b *BaseBatch[T]) PfMerge(destination string, sourceKeys []string) *T {
 }
 
 // Unlinks (deletes) multiple keys from the database. A key is ignored if it does not exist.
-// This command, similar to [Del], however, this command does not block the server.
+// This command, similar to [BaseBatch.Del], however, this command does not block the server.
 //
 // See [valkey.io] for details.
 //
@@ -2979,7 +2979,7 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 // Blocks the connection until it pops and returns a member-score pair
 // with the lowest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// BZPopMin is the blocking variant of [BaseBatch.ZPopMin].
 //
 // Note:
 //
@@ -3013,7 +3013,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [BaseBatch.ZMPop].
 //
 // Note:
 //
@@ -3063,7 +3063,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [BaseBatch.ZMPop].
 //
 // Note:
 //
@@ -3124,7 +3124,7 @@ func (b *BaseBatch[T]) BZMPopWithOptions(
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
-// To get the elements with their scores, see [ZRangeWithScores].
+// To get the elements with their scores, see [BaseBatch.ZRangeWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -3267,7 +3267,7 @@ func (b *BaseBatch[T]) ZCount(key string, rangeOptions options.ZCountRange) *T {
 
 // Returns the rank of `member` in the sorted set stored at `key`, with
 // scores ordered from low to high, starting from `0`.
-// To get the rank of `member` with its score, see [ZRankWithScore].
+// To get the rank of `member` with its score, see [BaseBatch.ZRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -3312,7 +3312,7 @@ func (b *BaseBatch[T]) ZRankWithScore(key string, member string) *T {
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
+// To get the rank of `member` with its score, see [BaseBatch.ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -3333,7 +3333,6 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
 //
 // Since:
 //
@@ -3743,7 +3742,7 @@ func (b *BaseBatch[T]) XGroupCreateWithOptions(key string, group string, id stri
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [BaseBatch.Dump]).
 //
 // See [valkey.io] for details.
 //
@@ -3763,7 +3762,7 @@ func (b *BaseBatch[T]) Restore(key string, ttl time.Duration, value string) *T {
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [BaseBatch.Dump]).
 //
 // See [valkey.io] for details.
 //
@@ -4141,7 +4140,7 @@ func (b *BaseBatch[T]) Sort(key string) *T {
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [BaseBatch.SortStoreWithOptions] function.
 //
 // Note:
 //
@@ -4233,7 +4232,7 @@ func (b *BaseBatch[T]) SortReadOnlyWithOptions(key string, options options.SortO
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [BaseBatch.Sort] or [BaseBatch.SortReadOnly] function.
 //
 // See [valkey.io] for details.
 //
@@ -4256,7 +4255,7 @@ func (b *BaseBatch[T]) SortStore(key string, destination string) *T {
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [BaseBatch.Sort] or [BaseBatch.SortReadOnly] function.
 //
 // See [valkey.io] for details.
 //
@@ -5008,7 +5007,7 @@ func (b *BaseBatch[T]) Time() *T {
 }
 
 // Returns the intersection of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZInterWithScores].
+// To get the elements with their scores, see [BaseBatch.ZInterWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -5139,7 +5138,7 @@ func (b *BaseBatch[T]) ZInterStoreWithOptions(
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
-// To get the elements with their scores, see [ZDiffWithScores].
+// To get the elements with their scores, see [BaseBatch.ZDiffWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -5219,7 +5218,7 @@ func (b *BaseBatch[T]) ZDiffStore(destination string, keys []string) *T {
 }
 
 // Returns the union of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZUnionWithScores].
+// To get the elements with their scores, see [BaseBatch.ZUnionWithScores].
 //
 // See [valkey.io] for details.
 //
@@ -5505,7 +5504,7 @@ func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 // Blocks the connection until it pops and returns a member-score pair
 // with the highest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMAX is the blocking variant of [ZPOPMAX].
+// BZPopMax is the blocking variant of [BaseBatch.ZPopMax].
 //
 // Note:
 //
@@ -5685,7 +5684,7 @@ func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 strin
 	)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -5746,7 +5745,7 @@ func (b *BaseBatch[T]) GeoSearchWithFullOptions(
 	return b.addCmdAndConverter(C.GeoSearch, args, reflect.Slice, false, internal.ConvertLocationArrayResponse)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -5779,7 +5778,7 @@ func (b *BaseBatch[T]) GeoSearch(
 	return b.GeoSearchWithResultOptions(key, searchFrom, searchByShape, *options.NewGeoSearchResultOptions())
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -5830,7 +5829,7 @@ func (b *BaseBatch[T]) GeoSearchWithResultOptions(
 	return b.addCmdAndConverter(C.GeoSearch, args, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [BaseBatch.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -5877,7 +5876,7 @@ func (b *BaseBatch[T]) GeoSearchWithInfoOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -5938,7 +5937,7 @@ func (b *BaseBatch[T]) GeoSearchStoreWithFullOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -5981,7 +5980,7 @@ func (b *BaseBatch[T]) GeoSearchStore(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -6026,7 +6025,7 @@ func (b *BaseBatch[T]) GeoSearchStoreWithResultOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [BaseBatch.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -6307,7 +6306,7 @@ func (b *BaseBatch[T]) FunctionDump() *T {
 	return b.addCmdAndTypeChecker(C.FunctionDump, []string{}, reflect.String, false)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [BaseBatch.FunctionDump].
 //
 // Since:
 //
@@ -6328,7 +6327,7 @@ func (b *BaseBatch[T]) FunctionRestore(payload string) *T {
 	return b.addCmdAndTypeChecker(C.FunctionRestore, []string{payload}, reflect.String, false)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [BaseBatch.FunctionDump].
 //
 // Since:
 //

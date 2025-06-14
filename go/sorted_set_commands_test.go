@@ -83,7 +83,7 @@ func ExampleClient_ZAddIncr() {
 	fmt.Println(result)
 
 	// Output:
-	// {1 false}
+	// 1
 }
 
 func ExampleClusterClient_ZAddIncr() {
@@ -96,7 +96,7 @@ func ExampleClusterClient_ZAddIncr() {
 	fmt.Println(result)
 
 	// Output:
-	// {1 false}
+	// 1
 }
 
 func ExampleClient_ZAddIncrWithOptions() {
@@ -768,99 +768,91 @@ func ExampleClusterClient_ZCount() {
 func ExampleClient_ZScan() {
 	var client *Client = getExampleClient() // example helper function
 
-	result, err := client.ZAdd(
+	client.ZAdd(
 		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resCursor, resCol, err := client.ZScan(context.Background(), "key1", "0")
+	result, err := client.ZScan(context.Background(), "key1", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCol)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 4
-	// 0
-	// [one 1 two 2 three 3 four 4]
+	// Cursor: 0
+	// Collection: [one 1 two 2 three 3 four 4]
 }
 
 func ExampleClusterClient_ZScan() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	result, err := client.ZAdd(
+	client.ZAdd(
 		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resCursor, resCol, err := client.ZScan(context.Background(), "key1", "0")
+	result, err := client.ZScan(context.Background(), "key1", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCol)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 4
-	// 0
-	// [one 1 two 2 three 3 four 4]
+	// Cursor: 0
+	// Collection: [one 1 two 2 three 3 four 4]
 }
 
 func ExampleClient_ZScanWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
-	result, err := client.ZAdd(
+	client.ZAdd(
 		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resCursor, resCol, err := client.ZScanWithOptions(
+	result, err := client.ZScanWithOptions(
 		context.Background(),
 		"key1",
-		"0",
+		models.NewCursor(),
 		*options.NewZScanOptions().SetMatch("*"),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCol)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 4
-	// 0
-	// [one 1 two 2 three 3 four 4]
+	// Cursor: 0
+	// Collection: [one 1 two 2 three 3 four 4]
 }
 
 func ExampleClusterClient_ZScanWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	result, err := client.ZAdd(
+	client.ZAdd(
 		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resCursor, resCol, err := client.ZScanWithOptions(
+	result, err := client.ZScanWithOptions(
 		context.Background(),
 		"key1",
-		"0",
+		models.NewCursor(),
 		*options.NewZScanOptions().SetMatch("*"),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCol)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 4
-	// 0
-	// [one 1 two 2 three 3 four 4]
+	// Cursor: 0
+	// Collection: [one 1 two 2 three 3 four 4]
 }
 
 func ExampleClient_ZRemRangeByLex() {
@@ -1457,7 +1449,7 @@ func ExampleClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1481,7 +1473,7 @@ func ExampleClusterClient_ZUnionWithScores() {
 
 	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	fmt.Println(zUnionResult)
 
@@ -1562,7 +1554,7 @@ func ExampleClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1591,7 +1583,7 @@ func ExampleClusterClient_ZUnionStoreWithOptions() {
 	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
-		options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1648,7 +1640,7 @@ func ExampleClient_ZInterCardWithOptions() {
 
 	res, err := client.ZInterCardWithOptions(context.Background(),
 		[]string{key1, key2},
-		options.NewZInterCardOptions().SetLimit(5),
+		*options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1669,7 +1661,7 @@ func ExampleClusterClient_ZInterCardWithOptions() {
 
 	res, err := client.ZInterCardWithOptions(context.Background(),
 		[]string{key1, key2},
-		options.NewZInterCardOptions().SetLimit(5),
+		*options.NewZInterCardOptions().SetLimit(5),
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -1686,7 +1678,7 @@ func ExampleClient_ZLexCount() {
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
 	result, err := client.ZLexCount(context.Background(), "key1",
-		options.NewRangeByLexQuery(
+		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),
 		),
@@ -1706,7 +1698,7 @@ func ExampleClusterClient_ZLexCount() {
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
 	result, err := client.ZLexCount(context.Background(), "key1",
-		options.NewRangeByLexQuery(
+		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),
 		),

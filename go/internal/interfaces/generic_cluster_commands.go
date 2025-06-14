@@ -20,13 +20,13 @@ type GenericClusterCommands interface {
 
 	CustomCommandWithRoute(ctx context.Context, args []string, route config.Route) (models.ClusterValue[any], error)
 
-	Scan(ctx context.Context, cursor options.ClusterScanCursor) (options.ClusterScanCursor, []string, error)
+	Scan(ctx context.Context, cursor models.ClusterScanCursor) (models.ClusterScanResult, error)
 
 	ScanWithOptions(
 		ctx context.Context,
-		cursor options.ClusterScanCursor,
+		cursor models.ClusterScanCursor,
 		opts options.ClusterScanOptions,
-	) (options.ClusterScanCursor, []string, error)
+	) (models.ClusterScanResult, error)
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
 

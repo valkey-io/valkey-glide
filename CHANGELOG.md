@@ -122,6 +122,8 @@
 * Go: Modify most commands to use type `time.Duration` (check PR for list of commands modified) ([#4105](https://github.com/valkey-io/valkey-glide/pull/4105))
 * Go: XInfoStream update response ([#4136](https://github.com/valkey-io/valkey-glide/pull/4136))
 * Go: Update return type for `XAdd` without optional arguments ([#4141](https://github.com/valkey-io/valkey-glide/pull/4141))
+* Go: Change options arguments to not be pointers ([#4106](https://github.com/valkey-io/valkey-glide/pull/4106))
+* Go: Change `ZAddIncr` Return Type to be `float64` ([#4190](https://github.com/valkey-io/valkey-glide/pull/4190))
 
 #### Fixes
 
