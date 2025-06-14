@@ -7744,27 +7744,40 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 			key,
 			*options.NewXInfoStreamOptionsOptions().SetCount(1),
 		)
-		// assert.NoError(suite.T(), err)
-		// assert.Equal(suite.T(), int64(2), infoFull.Length)
-		fmt.Println("infoFull================")
-		fmt.Println(infoFull)
-		// if suite.serverVersion >= "7.0.0" {
-		// 	assert.Equal(suite.T(), "1-0", infoFull["recorded-first-entry-id"])
-		// } else {
-		// 	assert.NotContains(suite.T(), infoFull, "recorded-first-entry-id")
-		// 	assert.NotContains(suite.T(), infoFull, "max-deleted-entry-id")
-		// 	assert.NotContains(suite.T(), infoFull, "entries-added")
-		// 	assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "entries-read")
-		// 	assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "lag")
-		// }
-		// // first consumer of first group
-		// cns := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
-		// assert.Contains(suite.T(), cns, "seen-time")
-		// if suite.serverVersion >= "7.2.0" {
-		// 	assert.Contains(suite.T(), cns, "active-time")
-		// } else {
-		// 	assert.NotContains(suite.T(), cns, "active-time")
-		// }
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), infoFull.Length)
+		if suite.serverVersion >= "7.0.0" {
+			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId)
+		} else {
+			assert.Nil(suite.T(), infoFull.RecordedFirstEntryId)
+			assert.Nil(suite.T(), infoFull.MaxDeletedEntryID)
+			assert.Nil(suite.T(), infoFull.EntriesAdded)
+			assert.Nil(suite.T(), infoFull.Groups[0].EntriesRead)
+			assert.Nil(suite.T(), infoFull.Groups[0].Lag)
+		}
+		// first group
+		assert.Equal(suite.T(), len(infoFull.Groups), 1)
+		groupItem := infoFull.Groups[0]
+		assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
+		assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
+		assert.Equal(suite.T(), groupItem.LastDeliveredId, "1-0")
+		assert.Equal(suite.T(), groupItem.Name, group)
+		assert.Equal(suite.T(), len(groupItem.Pending), int(1))
+
+		// first consumer of first group
+		cns := infoFull.Groups[0].Consumers[0]
+		assert.NotNil(suite.T(), cns.SeenTime)
+		assert.NotNil(suite.T(), cns.ActiveTime)
+		assert.Equal(suite.T(), cns.Name, consumer)
+		assert.Equal(suite.T(), cns.PelCount, int64(1))
+		assert.Equal(suite.T(), len(cns.Pending), int(1))
+		assert.Equal(suite.T(), cns.Pending[0].Id, "1-0")
+		assert.Equal(suite.T(), cns.Pending[0].DeliveredCount, int64(1))
+		if suite.serverVersion >= "7.2.0" {
+			assert.NotNil(suite.T(), cns.ActiveTime)
+		} else {
+			assert.Nil(suite.T(), cns.ActiveTime)
+		}
 	})
 }
 
