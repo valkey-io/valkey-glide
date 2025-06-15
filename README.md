@@ -31,14 +31,23 @@ Valkey GLIDE is API-compatible with the following engine versions:
 
 ## Current Status and Upcoming Releases
 
-In the current release, Valkey GLIDE is available for Python, Java, and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future. Additionally, Python sync and C++ are under active development, and a Ruby client is starting to take off.
+The client currently supports Python, Java, Node.js, and Go. Active development continues for C#, C++, and Ruby clients, with Python synchronous operations targeted for the next release.
 
-#### v1.2 (Dec. 2024)
-- Vector Similarity Search and JSON modules support
-- Availability zone routing for Read from Replica
+#### v2.0 (June 2025)
+
+- Go GA – Official stable release for production environments
+- OpenTelemetry Integration – Enhanced observability and tracing
+- Batching Support – Improved performance through batch operations
+- Lazy Connection – Deferred connection establishment for optimized resource usage
+
+### Previous Releases
 
 #### v1.3 (Feb. 2025)
-- Public preview for GO support
+- Public preview release of Go client support
+
+#### v1.2 (Dec. 2024)
+- Vector Similarity Search and JSON module support
+- Availability zone-aware routing for read-from-replica operations
 
 ## Getting Started
 
