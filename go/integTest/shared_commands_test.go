@@ -7757,6 +7757,8 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		}
 		// first group
 		assert.Equal(suite.T(), len(infoFull.Groups), 1)
+		fmt.Println("infoFull========")
+		fmt.Println(infoFull)
 		groupItem := infoFull.Groups[0]
 		assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
 		assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
