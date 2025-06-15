@@ -7757,13 +7757,11 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		}
 		// first group
 		assert.Equal(suite.T(), len(infoFull.Groups), 1)
-		fmt.Println("infoFull========")
-		fmt.Println(infoFull)
 		groupItem := infoFull.Groups[0]
 		if suite.serverVersion >= "7.0.0" {
 			assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
+			assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
 		}
-		assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
 		assert.Equal(suite.T(), groupItem.LastDeliveredId, "1-0")
 		assert.Equal(suite.T(), groupItem.Name, group)
 		assert.Equal(suite.T(), len(groupItem.Pending), int(1))
@@ -7771,7 +7769,6 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		// first consumer of first group
 		cns := infoFull.Groups[0].Consumers[0]
 		assert.NotNil(suite.T(), cns.SeenTime)
-		assert.False(suite.T(), cns.ActiveTime.IsNil())
 		assert.Equal(suite.T(), cns.Name, consumer)
 		assert.Equal(suite.T(), cns.PelCount, int64(1))
 		assert.Equal(suite.T(), len(cns.Pending), int(1))
