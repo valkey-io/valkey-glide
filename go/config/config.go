@@ -486,7 +486,7 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 	return nil
 }
 
-// Represents advanced configuration settings for a Standalone [Client] used in [ClientConfiguration].
+// Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].
 type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
 }
@@ -511,7 +511,7 @@ func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	return config
 }
 
-// Represents advanced configuration settings for a Standalone [ClusterClient] used in
+// Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout time.Duration

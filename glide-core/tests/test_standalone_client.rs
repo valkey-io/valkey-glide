@@ -417,6 +417,15 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct database ID after an automatic reconnection.
+    /// This test:
+    /// 1. Creates a client connected to database 4
+    /// 2. Verifies the initial connection is to the correct database
+    /// 3. Simulates a connection drop by killing the connection
+    /// 4. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection to db=4
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still on db=4
+    /// This ensures that database selection persists across reconnections.
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();
         client_info_cmd.arg("CLIENT").arg("INFO");
@@ -435,23 +444,51 @@ mod standalone_client_tests {
             .unwrap();
             assert!(client_info.contains("db=4"));
 
+            // Extract initial client ID
+            let initial_client_id =
+                extract_client_id(&client_info).expect("Failed to extract initial client ID");
+
             kill_connection(&mut client).await;
 
-            let error = client.send_command(&client_info_cmd).await;
-            assert!(error.is_err(), "{error:?}",);
-            let error = error.unwrap_err();
-            assert!(
-                error.is_connection_dropped() || error.is_timeout(),
-                "{error:?}",
-            );
-
-            let client_info = repeat_try_create(|| async {
-                let mut client = client.clone();
-                String::from_owned_redis_value(client.send_command(&client_info_cmd).await.unwrap())
-                    .ok()
-            })
-            .await;
-            assert!(client_info.contains("db=4"));
+            let res = client.send_command(&client_info_cmd).await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = client.clone();
+                        String::from_owned_redis_value(
+                            client.send_command(&client_info_cmd).await.unwrap(),
+                        )
+                        .ok()
+                    })
+                    .await;
+                    assert!(client_info.contains("db=4"));
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_client_info: String = String::from_owned_redis_value(response).unwrap();
+                    let new_client_id = extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                    // Check that the database ID is still 4
+                    assert!(new_client_info.contains("db=4"));
+                }
+            }
         });
+    }
+
+    fn extract_client_id(client_info: &str) -> Option<String> {
+        client_info
+            .split_whitespace()
+            .find(|part| part.starts_with("id="))
+            .and_then(|id_part| id_part.strip_prefix("id="))
+            .map(|id| id.to_string())
     }
 }

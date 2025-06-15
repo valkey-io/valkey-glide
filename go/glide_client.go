@@ -28,7 +28,7 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 //
 // [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
 type Client struct {
-	*baseClient
+	baseClient
 }
 
 // Creates a new `Client` instance and establishes a connection to a standalone Valkey server.
@@ -63,7 +63,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
-	return &Client{client}, nil
+	return &Client{*client}, nil
 }
 
 // Executes a batch by processing the queued commands.
@@ -75,11 +75,11 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
-//	  instances of `RequestError`.
+//	  instances of error.
 //
 // Return value:
 //
@@ -102,8 +102,8 @@ func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, 
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -632,20 +632,19 @@ func (client *Client) Move(ctx context.Context, key string, dbIndex int64) (bool
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	cursor - The cursor that points to the next iteration of results. A value of 0
-//			 indicates the start of the search.
+//	cursor - The cursor that points to the next iteration of results.
 //
 // Return value:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string, error) {
-	res, err := client.executeCommand(ctx, C.Scan, []string{utils.IntToString(cursor)})
+func (client *Client) Scan(ctx context.Context, cursor models.Cursor) (models.ScanResult, error) {
+	res, err := client.executeCommand(ctx, C.Scan, []string{cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(res)
 }
@@ -657,29 +656,28 @@ func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string,
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	cursor - The cursor that points to the next iteration of results. A value of 0
-//			 indicates the start of the search.
+//	cursor - The cursor that points to the next iteration of results.
 //	scanOptions - Additional command parameters, see [ScanOptions] for more details.
 //
 // Return value:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *Client) ScanWithOptions(
 	ctx context.Context,
-	cursor int64,
+	cursor models.Cursor,
 	scanOptions options.ScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
-	res, err := client.executeCommand(ctx, C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executeCommand(ctx, C.Scan, append([]string{cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(res)
 }
@@ -775,7 +773,7 @@ func (client *Client) FunctionKill(ctx context.Context) (string, error) {
 // Return value:
 //
 //	A map of node addresses to their function statistics represented by
-//	[FunctionStatsResult] object containing the following information:
+//	[models.FunctionStatsResult] object containing the following information:
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
 //
@@ -865,7 +863,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 	return handleStringResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //
@@ -891,7 +889,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 	return handleOkResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by [FunctionDump].
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //

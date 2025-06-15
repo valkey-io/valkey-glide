@@ -7,19 +7,18 @@ import "github.com/valkey-io/valkey-glide/go/v2/constants"
 // This struct represents the optional arguments for the HSCAN command.
 type HashScanOptions struct {
 	BaseScanOptions
-	noValue bool
+	noValues bool
 }
 
 func NewHashScanOptions() *HashScanOptions {
 	return &HashScanOptions{}
 }
 
-/*
-If this value is set to true, the HSCAN command will be called with NOVALUES option.
-In the NOVALUES option, values are not included in the response.
-*/
-func (hashScanOptions *HashScanOptions) SetNoValue(noValue bool) *HashScanOptions {
-	hashScanOptions.noValue = noValue
+// If this value is set to true, the HSCAN command will be called with NOVALUES option.
+// In the NOVALUES option, values are not included in the response.
+// Supported from Valkey 8.0.0 and above.
+func (hashScanOptions *HashScanOptions) SetNoValues(noValues bool) *HashScanOptions {
+	hashScanOptions.noValues = noValues
 	return hashScanOptions
 }
 
@@ -38,8 +37,8 @@ func (options *HashScanOptions) ToArgs() ([]string, error) {
 	baseArgs, err := options.BaseScanOptions.ToArgs()
 	args = append(args, baseArgs...)
 
-	if options.noValue {
-		args = append(args, constants.NoValueKeyword)
+	if options.noValues {
+		args = append(args, constants.NoValuesKeyword)
 	}
 	return args, err
 }

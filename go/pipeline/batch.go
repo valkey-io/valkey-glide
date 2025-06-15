@@ -9,194 +9,14 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-// TODO - move to internals
-type Cmd struct {
-	RequestType C.RequestType
-	Args        []string
-	// Response converter
-	Converter func(any) any
-}
-
-// ====================
-
-// BaseBatchOptions contains common options for both standalone and cluster batches.
-type BaseBatchOptions struct {
-	// Timeout for the batch execution in milliseconds.
-	Timeout *uint32
-}
-
-// StandaloneBatchOptions contains options specific to standalone batches.
-type StandaloneBatchOptions struct {
-	BaseBatchOptions
-}
-
-// ClusterBatchOptions contains options specific to cluster batches.
-type ClusterBatchOptions struct {
-	BaseBatchOptions
-	// Route defines the routing strategy for the batch.
-	Route *config.Route
-	// RetryStrategy defines the retry behavior for cluster batches.
-	RetryStrategy *ClusterBatchRetryStrategy
-}
-
-// ClusterBatchRetryStrategy defines the retry behavior for cluster batches.
-type ClusterBatchRetryStrategy struct {
-	// RetryServerError indicates whether to retry on server errors.
-	RetryServerError bool
-	// RetryConnectionError indicates whether to retry on connection errors.
-	RetryConnectionError bool
-}
-
-// NewClusterBatchRetryStrategy creates a new retry strategy for cluster batches.
-//
-// Returns:
-//
-//	A new ClusterBatchRetryStrategy instance.
-func NewClusterBatchRetryStrategy() *ClusterBatchRetryStrategy {
-	return &ClusterBatchRetryStrategy{false, false}
-}
-
-// WithRetryServerError configures whether to retry on server errors.
-//
-// Parameters:
-//
-//	retryServerError - If true, retry on server errors.
-//
-// Returns:
-//
-//	The updated ClusterBatchRetryStrategy instance.
-func (cbrs *ClusterBatchRetryStrategy) WithRetryServerError(retryServerError bool) *ClusterBatchRetryStrategy {
-	cbrs.RetryServerError = retryServerError
-	return cbrs
-}
-
-// WithRetryConnectionError configures whether to retry on connection errors.
-//
-// Parameters:
-//
-//	retryConnectionError - If true, retry on connection errors.
-//
-// Returns:
-//
-//	The updated ClusterBatchRetryStrategy instance.
-func (cbrs *ClusterBatchRetryStrategy) WithRetryConnectionError(retryConnectionError bool) *ClusterBatchRetryStrategy {
-	cbrs.RetryConnectionError = retryConnectionError
-	return cbrs
-}
-
-// NewStandaloneBatchOptions creates a new options instance for standalone batches.
-//
-// Returns:
-//
-//	A new StandaloneBatchOptions instance.
-func NewStandaloneBatchOptions() *StandaloneBatchOptions {
-	return &StandaloneBatchOptions{}
-}
-
-// TODO support duration
-
-// WithTimeout sets the timeout for the batch execution.
-//
-// Parameters:
-//
-//	timeout - The timeout in milliseconds.
-//
-// Returns:
-//
-//	The updated StandaloneBatchOptions instance.
-func (sbo *StandaloneBatchOptions) WithTimeout(timeout uint32) *StandaloneBatchOptions {
-	sbo.Timeout = &timeout
-	return sbo
-}
-
-// NewClusterBatchOptions creates a new options instance for cluster batches.
-//
-// Returns:
-//
-//	A new ClusterBatchOptions instance.
-func NewClusterBatchOptions() *ClusterBatchOptions {
-	return &ClusterBatchOptions{}
-}
-
-// WithTimeout sets the timeout for the batch execution.
-//
-// Parameters:
-//
-//	timeout - The timeout in milliseconds.
-//
-// Returns:
-//
-//	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithTimeout(timeout uint32) *ClusterBatchOptions {
-	cbo.Timeout = &timeout
-	return cbo
-}
-
-// TODO ensure only single node route is allowed (use config.NotMultiNode?)
-
-// WithRoute sets the routing strategy for the batch.
-//
-// Parameters:
-//
-//	route - The routing strategy to use.
-//
-// Returns:
-//
-//	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithRoute(route config.Route) *ClusterBatchOptions {
-	cbo.Route = &route
-	return cbo
-}
-
-// WithRetryStrategy sets the retry strategy for the batch.
-//
-// Parameters:
-//
-//	retryStrategy - The retry strategy to use.
-//
-// Returns:
-//
-//	The updated ClusterBatchOptions instance.
-func (cbo *ClusterBatchOptions) WithRetryStrategy(retryStrategy ClusterBatchRetryStrategy) *ClusterBatchOptions {
-	cbo.RetryStrategy = &retryStrategy
-	return cbo
-}
-
-// ====================
-
-// TODO - move this struct and convert methods to internals
-type BatchOptions struct {
-	Timeout       *uint32
-	Route         *config.Route
-	RetryStrategy *ClusterBatchRetryStrategy
-}
-
-func (sbo StandaloneBatchOptions) Convert() BatchOptions {
-	return BatchOptions{Timeout: sbo.Timeout}
-}
-
-func (cbo ClusterBatchOptions) Convert() BatchOptions {
-	return BatchOptions{Timeout: cbo.Timeout, Route: cbo.Route, RetryStrategy: cbo.RetryStrategy}
-}
-
-// ====================
-
-// TODO make private if possible
-type Batch struct {
-	Commands []Cmd
-	IsAtomic bool
-	Errors   []string // errors processing command args, spotted while batch is filled
-}
-
 // BaseBatch is the base structure for both standalone and cluster batch implementations.
 type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
-	Batch
+	internal.Batch
 	self *T
 }
 
@@ -228,21 +48,7 @@ type ClusterBatch struct {
 
 // ====================
 
-func (b Batch) Convert(response []any) ([]any, error) {
-	if len(response) != len(b.Commands) {
-		return nil, &errors.RequestError{
-			Msg: fmt.Sprintf("Response misaligned: received %d responses for %d commands", len(response), len(b.Commands)),
-		}
-	}
-	for i, res := range response {
-		response[i] = b.Commands[i].Converter(res)
-	}
-	return response, nil
-}
-
-// ====================
-
-// NewStandaloneBatch creates a new batch for standalone Valkey servers.
+// Create a new batch for standalone Valkey servers.
 //
 // Parameters:
 //
@@ -254,12 +60,12 @@ func (b Batch) Convert(response []any) ([]any, error) {
 //
 //	A new StandaloneBatch instance.
 func NewStandaloneBatch(isAtomic bool) *StandaloneBatch {
-	b := StandaloneBatch{BaseBatch: BaseBatch[StandaloneBatch]{Batch: Batch{IsAtomic: isAtomic}}}
+	b := StandaloneBatch{BaseBatch: BaseBatch[StandaloneBatch]{Batch: internal.Batch{IsAtomic: isAtomic}}}
 	b.self = &b
 	return &b
 }
 
-// NewClusterBatch creates a new batch for clustered Valkey servers.
+// Create a new batch for clustered Valkey servers.
 //
 // Parameters:
 //
@@ -271,20 +77,23 @@ func NewStandaloneBatch(isAtomic bool) *StandaloneBatch {
 //
 //	A new ClusterBatch instance.
 func NewClusterBatch(isAtomic bool) *ClusterBatch {
-	b := ClusterBatch{BaseBatch: BaseBatch[ClusterBatch]{Batch: Batch{IsAtomic: isAtomic}}}
+	b := ClusterBatch{BaseBatch: BaseBatch[ClusterBatch]{Batch: internal.Batch{IsAtomic: isAtomic}}}
 	b.self = &b
 	return &b
 }
 
 // Add a cmd to batch without response type checking nor conversion
 func (b *BaseBatch[T]) addCmd(request C.RequestType, args []string) *T {
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: func(res any) any { return res }})
+	b.Batch.Commands = append(
+		b.Batch.Commands,
+		internal.MakeCmd(uint32(request), args, func(res any) (any, error) { return res, nil }),
+	)
 	return b.self
 }
 
 func (b *BaseBatch[T]) addError(command string, err error) *T {
-	b.Errors = append(b.Errors, fmt.Sprintf("Error processing arguments for %d's command ('%s'): %s",
-		len(b.Commands)+len(b.Errors)+1, command, err))
+	b.Batch.Errors = append(b.Batch.Errors, fmt.Errorf("error processing arguments for %d'th command ('%s'): %w",
+		len(b.Batch.Commands)+len(b.Batch.Errors)+1, command, err))
 	return b.self
 }
 
@@ -295,7 +104,7 @@ func (b *BaseBatch[T]) addCmdAndTypeChecker(
 	expectedType reflect.Kind,
 	isNilable bool,
 ) *T {
-	return b.addCmdAndConverter(request, args, expectedType, isNilable, func(res any) any { return res })
+	return b.addCmdAndConverter(request, args, expectedType, isNilable, func(res any) (any, error) { return res, nil })
 }
 
 // Add a cmd to batch with type checker and with response type conversion
@@ -304,27 +113,12 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	args []string,
 	expectedType reflect.Kind,
 	isNilable bool,
-	converter func(res any) any,
+	converter func(res any) (any, error),
 ) *T {
-	converterAndTypeChecker := func(res any) any {
-		if res == nil {
-			if isNilable {
-				return nil
-			}
-			return &errors.RequestError{
-				Msg: fmt.Sprintf("Unexpected return type from Glide: got nil, expected %v", expectedType),
-			}
-		}
-		if reflect.TypeOf(res).Kind() == expectedType {
-			return converter(res)
-		}
-		// data lost even though it was incorrect
-		// TODO maybe still return the data?
-		return &errors.RequestError{
-			Msg: fmt.Sprintf("Unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(res), expectedType),
-		}
+	converterAndTypeChecker := func(res any) (any, error) {
+		return internal.ConverterAndTypeChecker(res, expectedType, isNilable, converter)
 	}
-	b.Commands = append(b.Commands, Cmd{RequestType: request, Args: args, Converter: converterAndTypeChecker})
+	b.Batch.Commands = append(b.Batch.Commands, internal.MakeCmd(uint32(request), args, converterAndTypeChecker))
 	return b.self
 }
 
@@ -448,7 +242,7 @@ func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels
 func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.PubSubShardChannels, []string{}, reflect.Slice, false, internal.ConvertArrayOf[string])
 }
 
 // Returns a list of all sharded channels that match the given pattern.
@@ -469,7 +263,13 @@ func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-channels-with-pattern
 func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardChannels, []string{pattern}, reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.PubSubShardChannels,
+		[]string{pattern},
+		reflect.Slice,
+		false,
+		internal.ConvertArrayOf[string],
+	)
 }
 
 // Returns the number of subscribers for a sharded channel.
@@ -490,5 +290,5 @@ func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBa
 //
 // [valkey.io]: https://valkey.io/commands/pubsub-shard-numsub
 func (b *ClusterBatch) PubSubShardNumSub(channels ...string) *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.PubSubShardNumSub, channels, reflect.Map, false)
+	return b.addCmdAndConverter(C.PubSubShardNumSub, channels, reflect.Map, false, internal.ConvertMapOf[int64])
 }

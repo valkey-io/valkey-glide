@@ -7,11 +7,11 @@ import "C"
 
 import (
 	"context"
+	"errors"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -29,7 +29,7 @@ var _ interfaces.GlideClusterClientCommands = (*ClusterClient)(nil)
 //
 // [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
 type ClusterClient struct {
-	*baseClient
+	baseClient
 }
 
 // Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
@@ -67,7 +67,7 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
-	return &ClusterClient{client}, nil
+	return &ClusterClient{*client}, nil
 }
 
 // Executes a batch by processing the queued commands.
@@ -101,8 +101,8 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -154,8 +154,8 @@ func (client *ClusterClient) Exec(ctx context.Context, batch pipeline.ClusterBat
 //	ctx - The context for controlling the command execution
 //	batch - A `ClusterBatch` object containing a list of commands to be executed.
 //	raiseOnError - Determines how errors are handled within the batch response. When set to
-//	  `true`, the first encountered error in the batch will be raised as a `RequestError`
-//	  exception after all retries and reconnections have been executed. When set to `false`,
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
 //	  errors will be included as part of the batch response array, allowing the caller to process both
 //	  successful and failed commands together. In this case, error details will be provided as
 //	  instances of `RequestError`.
@@ -176,7 +176,7 @@ func (client *ClusterClient) ExecWithOptions(
 	options pipeline.ClusterBatchOptions,
 ) ([]any, error) {
 	if batch.Batch.IsAtomic && options.RetryStrategy != nil {
-		return nil, &errors.RequestError{Msg: "Retry strategy is not supported for atomic batches (transactions)."}
+		return nil, errors.New("retry strategy is not supported for atomic batches (transactions)")
 	}
 	converted := options.Convert()
 	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
@@ -240,7 +240,7 @@ func (client *ClusterClient) Info(ctx context.Context) (map[string]string, error
 }
 
 // Gets information and statistics about the server.
-// The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+// The command will be routed to all primary nodes, unless `route` in [options.ClusterInfoOptions] is provided.
 //
 // Note:
 //
@@ -614,7 +614,7 @@ func (client *ClusterClient) EchoWithOptions(
 // Helper function to perform the cluster scan.
 func (client *ClusterClient) clusterScan(
 	ctx context.Context,
-	cursor *options.ClusterScanCursor,
+	cursor models.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
 	// Check if context is already done
@@ -636,13 +636,12 @@ func (client *ClusterClient) clusterScan(
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
-		return nil, &errors.ClosingError{Msg: "Cluster Scan failed. The client is closed."}
+		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
-	cStr := C.CString(cursor.GetCursor())
-	c_cursor := C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
+	c_cursor := C.CString(cursor.GetCursor())
+	defer C.free(unsafe.Pointer(c_cursor))
 
 	args, err := opts.ToArgs()
 	if err != nil {
@@ -720,24 +719,26 @@ func (client *ClusterClient) clusterScan(
 //
 //	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
-//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	   To start a new scan, create a new empty `ClusterScanCursor` using [models.NewClusterScanCursor()].
 //
 // Returns:
 //
-//	The ID of the next cursor and a list of keys found for this cursor ID.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *ClusterClient) Scan(
 	ctx context.Context,
-	cursor options.ClusterScanCursor,
-) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(ctx, &cursor, *options.NewClusterScanOptions())
+	cursor models.ClusterScanCursor,
+) (models.ClusterScanResult, error) {
+	response, err := client.clusterScan(ctx, cursor, *options.NewClusterScanOptions())
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return models.ClusterScanResult{}, err
 	}
 
-	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	res, err := handleScanResponse(response)
+	return models.ClusterScanResult{Cursor: models.NewClusterScanCursorWithId(res.Cursor.String()), Keys: res.Data}, err
 }
 
 // Incrementally iterates over the keys in the cluster.
@@ -759,26 +760,28 @@ func (client *ClusterClient) Scan(
 //
 //	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
-//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	   To start a new scan, create a new empty `ClusterScanCursor` using [models.NewClusterScanCursor()].
 //	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
 //
 // Returns:
 //
-//	The ID of the next cursor and a list of keys found for this cursor ID.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *ClusterClient) ScanWithOptions(
 	ctx context.Context,
-	cursor options.ClusterScanCursor,
+	cursor models.ClusterScanCursor,
 	opts options.ClusterScanOptions,
-) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(ctx, &cursor, opts)
+) (models.ClusterScanResult, error) {
+	response, err := client.clusterScan(ctx, cursor, opts)
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return models.ClusterScanResult{}, err
 	}
 
-	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	res, err := handleScanResponse(response)
+	return models.ClusterScanResult{Cursor: models.NewClusterScanCursorWithId(res.Cursor.String()), Keys: res.Data}, err
 }
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
@@ -1469,7 +1472,7 @@ func (client *ClusterClient) FunctionFlushAsyncWithRoute(ctx context.Context, ro
 }
 
 // Invokes a previously loaded function.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -2159,7 +2162,7 @@ func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//	A [models.ClusterValue] containing the serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
 func (client *ClusterClient) FunctionDumpWithRoute(

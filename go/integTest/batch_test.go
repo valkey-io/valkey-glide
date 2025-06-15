@@ -4,18 +4,16 @@ package integTest
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -25,43 +23,44 @@ import (
 func (suite *GlideTestSuite) runBatchTest(test func(client interfaces.BaseClientCommands, isAtomic bool)) {
 	for _, client := range suite.getDefaultClients() {
 		for _, isAtomic := range []bool{true, false} {
-			suite.T().Run(fmt.Sprintf("%T isAtomic = %v", client, isAtomic)[7:], func(t *testing.T) {
+			suite.T().Run(makeFullTestName(client, "", isAtomic), func(t *testing.T) {
 				test(client, isAtomic)
 			})
 		}
 	}
 }
 
+// Note: test may cause others to fail, because they run in parallel and DEBUG command locks the server
 func (suite *GlideTestSuite) TestBatchTimeout() {
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			opts := pipeline.NewClusterBatchOptions().WithRoute(config.RandomRoute).WithTimeout(100 * time.Millisecond)
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(1000)
+			opts.WithTimeout(1 * time.Second)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
-			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100)
-			// Expect a timeout exception on short timeout
+			opts := pipeline.NewStandaloneBatchOptions().WithTimeout(100 * time.Millisecond)
+			// Expect a timeout error on short timeout
 			_, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.Error(err)
-			suite.IsType(&errors.TimeoutError{}, err)
+			suite.IsType(&glide.TimeoutError{}, err)
 
 			time.Sleep(1 * time.Second)
 
 			// Retry with a longer timeout and expect [OK]
-			opts.WithTimeout(1000)
+			opts.WithTimeout(1 * time.Second)
 			res, err := c.ExecWithOptions(context.Background(), *batch, true, *opts)
 			suite.NoError(err)
 			suite.Equal([]any{"OK"}, res)
@@ -74,44 +73,70 @@ func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 		key1 := "{BatchRaiseOnError}" + uuid.NewString()
 		key2 := "{BatchRaiseOnError}" + uuid.NewString()
 
-		var res []any
-		var err1 error
-		var err2 error
+		batch := pipeline.NewClusterBatch(isAtomic).
+			Set(key1, "hello").
+			LPop(key1).
+			Del([]string{key1}).
+			Rename(key1, key2)
 
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic).
-				Set(key1, "hello").
-				CustomCommand([]string{"lpop", key1}).
-				CustomCommand([]string{"del", key1}).
-				CustomCommand([]string{"rename", key1, key2})
+		_, err1 := runBatchOnClient(client, batch, true, nil)
+		res, err2 := runBatchOnClient(client, batch, false, nil)
 
-			_, err1 = c.Exec(context.Background(), *batch, true)
-			res, err2 = c.Exec(context.Background(), *batch, false)
-
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				Set(key1, "hello").
-				CustomCommand([]string{"lpop", key1}).
-				CustomCommand([]string{"del", key1}).
-				CustomCommand([]string{"rename", key1, key2})
-
-			_, err1 = c.Exec(context.Background(), *batch, true)
-			res, err2 = c.Exec(context.Background(), *batch, false)
-		}
 		// First exception is raised, all data lost
 		suite.Error(err1)
-		suite.IsType(&errors.RequestError{}, err1)
 
-		// Exceptions aren't raised, but stored in the result set
+		// Errors aren't raised, but stored in the result set
 		suite.NoError(err2)
 		suite.Len(res, 4)
 		suite.Equal("OK", res[0])
 		suite.Equal(int64(1), res[2])
-		suite.IsType(&errors.RequestError{}, res[1])
-		suite.IsType(&errors.RequestError{}, res[3])
-		suite.Contains(res[1].(*errors.RequestError).Error(), "wrong kind of value")
-		suite.Contains(res[3].(*errors.RequestError).Error(), "no such key")
+		suite.ErrorContains(glide.IsError(res[1]), "wrong kind of value")
+		suite.ErrorContains(glide.IsError(res[3]), "no such key")
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchDumpRestore() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := "{prefix}" + uuid.NewString()
+
+		// Dump
+		transaction := pipeline.NewClusterBatch(true).
+			Set(key, "someValue").
+			Dump(key)
+
+		res1, err1 := runBatchOnClient(client, transaction, true, nil)
+
+		suite.verifyOK(res1[0].(string), err1)
+		suite.NotNil(res1[1])
+
+		// Restore
+		transaction = pipeline.NewClusterBatch(true).
+			Del([]string{key}).
+			Restore(key, 0, res1[1].(string))
+
+		res2, err2 := runBatchOnClient(client, transaction, true, nil)
+
+		suite.NoError(err2)
+		suite.Equal(int64(1), res2[0].(int64))
+		suite.verifyOK(res2[1].(string), err2)
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchMove() {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+		key := "{prefix}-" + uuid.NewString()
+		switch c := client.(type) {
+		case *glide.ClusterClient:
+			return // Move is not supported in cluster client
+		case *glide.Client:
+			batch := pipeline.NewStandaloneBatch(isAtomic).
+				Set(key, "val").
+				Move(key, 2)
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			suite.verifyOK(res[0].(string), err)
+			suite.True(res[1].(bool))
+		}
 	})
 }
 
@@ -122,9 +147,8 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		value := uuid.NewString()
 		ctx := context.Background()
 		suite.verifyOK(client1.Set(ctx, key1, value))
+
 		var client2 interfaces.BaseClientCommands
-		var transactionResult []any
-		var err error
 		switch client1.(type) {
 		case *glide.ClusterClient:
 			client2 = suite.defaultClusterClient()
@@ -139,14 +163,9 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		suite.NoError(err)
 		suite.Equal(value, res.Value())
 
-		switch client := client1.(type) {
-		case *glide.ClusterClient:
-			transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		case *glide.Client:
-			transaction := pipeline.NewStandaloneBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		}
+		transaction := pipeline.NewClusterBatch(true).Get(key1).Set(key1, uuid.NewString()).Get(key2)
+		transactionResult, err := runBatchOnClient(client1, transaction, true, nil)
+
 		suite.NoError(err)
 		suite.Equal([]any{value, "OK", nil}, transactionResult)
 
@@ -157,14 +176,9 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 		suite.verifyOK(client1.Watch(ctx, []string{key1}))
 		suite.verifyOK(client2.Set(ctx, key1, uuid.NewString()))
 
-		switch client := client1.(type) {
-		case *glide.ClusterClient:
-			transaction := pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		case *glide.Client:
-			transaction := pipeline.NewStandaloneBatch(true).Set(key1, uuid.NewString())
-			transactionResult, err = client.Exec(ctx, *transaction, true)
-		}
+		transaction = pipeline.NewClusterBatch(true).Set(key1, uuid.NewString())
+		transactionResult, err = runBatchOnClient(client1, transaction, true, nil)
+
 		suite.NoError(err)
 		suite.Nil(transactionResult)
 
@@ -172,7 +186,7 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch() {
 
 		// WATCH errors if no keys are given
 		_, err = client1.Watch(ctx, []string{})
-		suite.IsType(&errors.RequestError{}, err)
+		suite.Error(err)
 	})
 }
 
@@ -182,6 +196,156 @@ func (suite *GlideTestSuite) TestWatch_and_Unwatch_cross_slot() {
 
 	suite.verifyOK(client.Watch(ctx, []string{"abc", "klm", "xyz"}))
 	suite.verifyOK(client.UnwatchWithOptions(ctx, options.RouteOption{Route: config.AllNodes}))
+}
+
+func (suite *GlideTestSuite) TestBatchCommandArgsError() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := "{prefix}" + uuid.NewString()
+
+		opts := options.NewGetExOptions().
+			SetExpiry(options.NewExpiryIn(10 * time.Second).SetType(constants.ExpiryType("pewpew")))
+		transaction := pipeline.NewClusterBatch(true).
+			Get(key).
+			GetExWithOptions(key, *opts).
+			Get(key).
+			GetExWithOptions(key, *opts)
+
+		res, err := runBatchOnClient(client, transaction, true, nil)
+
+		suite.Nil(res)
+		suite.ErrorContains(err, "error processing arguments for 2'th command ('GetExWithOptions')")
+		suite.ErrorContains(err, "error processing arguments for 4'th command ('GetExWithOptions')")
+	})
+}
+
+func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key1 := "{prefix}" + uuid.NewString()
+		key2 := "{prefix}" + uuid.NewString()
+		suite.verifyOK(client.Set(context.Background(), key1, uuid.NewString()))
+		hset, err := client.HSet(context.Background(), key2, map[string]string{"a": "b"})
+		suite.Equal(int64(1), hset)
+		suite.NoError(err)
+
+		// Run all commands on a wrong key type - so they all return an error each.
+		// Commands' converters should return these errors intact.
+		// skipping blocking commands
+		transaction := pipeline.NewClusterBatch(true).
+			GeoHash(key1, []string{"A"}).
+			GeoPos(key1, []string{"A"}).
+			GeoDist(key1, "a", "b").
+			GeoDistWithUnit(key1, "a", "b", constants.GeoUnitFeet).
+			GeoSearch(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet)).
+			GeoSearchWithInfoOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchInfoOptions().SetWithDist(true)).
+			GeoSearchWithResultOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchResultOptions().SetCount(1)).
+			GeoSearchWithFullOptions(key1, &options.GeoMemberOrigin{Member: "a"}, *options.NewCircleSearchShape(2, constants.GeoUnitFeet), *options.NewGeoSearchResultOptions().SetCount(1), *options.NewGeoSearchInfoOptions().SetWithDist(true)).
+			HGet(key1, "f").
+			HGetAll(key1).
+			HMGet(key1, []string{"A"}).
+			HVals(key1).
+			HKeys(key1).
+			HScan(key1, "0").
+			HRandField(key1).
+			HRandFieldWithCount(key1, 1).
+			HRandFieldWithCountWithValues(key1, 1).
+			HScanWithOptions(key1, "0", *options.NewHashScanOptions().SetCount(42)).
+			LPop(key1).
+			LPopCount(key1, 2).
+			LPos(key1, "e").
+			LPosWithOptions(key1, "e", *options.NewLPosOptions().SetMaxLen(42)).
+			LPosCount(key1, "e", 42).
+			LPosCountWithOptions(key1, "e", 42, *options.NewLPosOptions().SetMaxLen(42)).
+			LRange(key1, 0, 1).
+			LIndex(key1, 2).
+			RPop(key1).
+			RPopCount(key1, 2).
+			LMove(key1, key2, constants.Left, constants.Left).
+			SMembers(key1).
+			SRandMember(key1).
+			SRandMemberCount(key1, 2).
+			SPop(key1).
+			SMIsMember(key1, []string{"a"}).
+			SScan(key1, "0").
+			SScanWithOptions(key1, "0", *options.NewBaseScanOptions().SetMatch("abc")).
+			ZAddIncr(key1, "a", 2).
+			ZAddIncrWithOptions(key1, "a", 2, *options.NewZAddOptions().SetUpdateOptions(options.ScoreGreaterThanCurrent)).
+			ZPopMin(key1).
+			ZPopMinWithOptions(key1, *options.NewZPopOptions().SetCount(2)).
+			ZPopMax(key1).
+			ZPopMaxWithOptions(key1, *options.NewZPopOptions().SetCount(2)).
+			ZRange(key1, options.NewRangeByIndexQuery(0, 2)).
+			ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, 2)).
+			ZRank(key1, "d").
+			ZRevRank(key1, "d").
+			ZScore(key1, "d").
+			ZScan(key1, "0").
+			ZScanWithOptions(key1, "0", *options.NewZScanOptions().SetMatch("abc")).
+			ZDiff([]string{key1, key2}).
+			ZDiffWithScores([]string{key1, key2}).
+			ZRandMember(key1).
+			ZRandMemberWithCount(key1, 42).
+			ZRandMemberWithCountWithScores(key1, 42).
+			ZMScore(key1, []string{"a"}).
+			ZInter(options.KeyArray{Keys: []string{key1, key2}}).
+			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
+			ZUnion(options.KeyArray{Keys: []string{key1, key2}}).
+			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptions().SetAggregate(options.AggregateMax)).
+			XAdd(key1, [][]string{{"a", "b"}}).
+			XAddWithOptions(key1, [][]string{{"a", "b"}}, *options.NewXAddOptions().SetId("0-1")).
+			XAutoClaim(key1, "g", "c", 2, "0-0").
+			XAutoClaimWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
+			XAutoClaimJustId(key1, "g", "c", 2, "0-0").
+			XAutoClaimJustIdWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
+			XReadGroup("g", "c", map[string]string{key1: "0-0"}).
+			XReadGroupWithOptions("g", "c", map[string]string{key1: "0-0"}, *options.NewXReadGroupOptions().SetNoAck()).
+			XRead(map[string]string{key1: "0-0"}).
+			XReadWithOptions(map[string]string{key1: "0-0"}, *options.NewXReadOptions().SetCount(2)).
+			XPending(key1, "g").
+			XPendingWithOptions(key1, "g", *options.NewXPendingOptions("0-0", "2-2", 3)).
+			XClaim(key1, "g", "c", 2, []string{"0-0"}).
+			XClaimWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
+			XClaimJustId(key1, "g", "c", 2, []string{"0-0"}).
+			XClaimJustIdWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
+			XInfoStream(key1).
+			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptionsOptions().SetCount(2)).
+			XInfoConsumers(key1, "g").
+			XInfoGroups(key1).
+			XRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
+			XRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2)).
+			XRevRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
+			XRevRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2))
+
+		if suite.serverVersion >= "7.0.0" {
+			transaction.
+				ZMPop([]string{key1}, constants.MAX).
+				ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
+				LMPop([]string{key1}, constants.Left).
+				LMPopCount([]string{key1}, constants.Left, 42)
+		}
+		if suite.serverVersion >= "7.2.0" {
+			transaction.
+				ZRankWithScore(key1, "d").
+				ZRevRankWithScore(key1, "d")
+		}
+
+		res, err := runBatchOnClient(client, transaction, false, nil)
+		suite.NoError(err)
+		for i, resp := range res {
+			suite.Equal("WRONGTYPE: Operation against a key holding the wrong kind of value", resp.(error).Error(), i)
+		}
+
+		if suite.serverVersion < "7.0.0" {
+			return
+		}
+		// LCS has another error message
+		transaction = pipeline.NewClusterBatch(true).
+			LCSWithOptions(key1, key2, *options.NewLCSIdxOptions().SetIdx(true).SetMinMatchLen(2).SetWithMatchLen(true))
+		res, err = runBatchOnClient(client, transaction, false, nil)
+		suite.NoError(err)
+		for i, resp := range res {
+			suite.ErrorContains(glide.IsError(resp), "ResponseError", i)
+		}
+	})
 }
 
 func (suite *GlideTestSuite) TestBatchGeoSpatial() {
@@ -200,73 +364,39 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 			"Messina": {Longitude: 15.556349, Latitude: 38.194136},
 		}
 
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic)
+		batch := pipeline.NewClusterBatch(isAtomic)
 
-			key = prefix + key
+		key = prefix + key
 
-			batch.GeoAdd(key, membersToGeospatialData)
+		batch.GeoAdd(key, membersToGeospatialData)
 
-			geoAddOptions := options.GeoAddOptions{}
-			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
-			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
+		geoAddOptions := options.GeoAddOptions{}
+		geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
+		batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
 
-			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
+		batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
 
-			batch.GeoDist(key, "Palermo", "Catania")
+		batch.GeoDist(key, "Palermo", "Catania")
 
-			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
+		batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
 
-			searchFrom := &options.GeoCoordOrigin{
-				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
-			}
-			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
-			batch.GeoSearch(key, searchFrom, *searchByShape)
-
-			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
-			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
-
-			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
-			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
-
-			res, err = c.Exec(context.Background(), *batch, true)
-			suite.NoError(err)
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic)
-
-			batch.GeoAdd(key, membersToGeospatialData)
-
-			geoAddOptions := options.GeoAddOptions{}
-			geoAddOptions.SetConditionalChange(constants.OnlyIfDoesNotExist)
-			batch.GeoAddWithOptions(key, membersToGeospatialData2, geoAddOptions)
-
-			batch.GeoPos(key, []string{"Palermo", "NonExistingCity"})
-
-			batch.GeoDist(key, "Palermo", "Catania")
-
-			batch.GeoDistWithUnit(key, "Palermo", "Catania", constants.GeoUnitKilometers)
-
-			searchFrom := &options.GeoCoordOrigin{
-				GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
-			}
-			searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
-			batch.GeoSearch(key, searchFrom, *searchByShape)
-
-			infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
-			batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
-
-			resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
-			batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
-
-			res, err = c.Exec(context.Background(), *batch, true)
-			suite.NoError(err)
+		searchFrom := &options.GeoCoordOrigin{
+			GeospatialData: options.GeospatialData{Longitude: 15.0, Latitude: 37.0},
 		}
+		searchByShape := options.NewCircleSearchShape(200, constants.GeoUnitKilometers)
+		batch.GeoSearch(key, searchFrom, *searchByShape)
+
+		infoOptions := options.NewGeoSearchInfoOptions().SetWithDist(true)
+		batch.GeoSearchWithInfoOptions(key, searchFrom, *searchByShape, *infoOptions)
+
+		resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
+		batch.GeoSearchWithFullOptions(key, searchFrom, *searchByShape, *resultOptions, *infoOptions)
+
+		res, err := runBatchOnClient(client, batch, true, nil)
+		suite.NoError(err)
 
 		// Verify GeoPos results
-		geoPos := res[2].([]any)
+		geoPos := res[2].([][]float64)
 		suite.Len(geoPos, 2)
 		suite.NotNil(geoPos[0])
 		suite.Nil(geoPos[1])
@@ -286,155 +416,18 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 		suite.Contains(geoSearch, "Messina")
 
 		// Verify search with info results
-		geoSearchInfo := res[6].([]any)
+		geoSearchInfo := res[6]
 		suite.Len(geoSearchInfo, 3)
+		suite.IsType([]options.Location{}, geoSearchInfo)
 
 		// Verify full search results
-		geoSearchFull := res[7].([]any)
+		geoSearchFull := res[7]
 		suite.Len(geoSearchFull, 1)
-	})
-}
-
-func (suite *GlideTestSuite) TestBatchComplexFunctionCommands() {
-	// TODO: Make tests that test the functionality. For now, we test that they can be sent and have responses received.
-	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
-
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			batch := pipeline.NewClusterBatch(isAtomic).
-				FunctionKill().
-				FunctionDump().
-				FunctionRestore("payload").
-				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		case *glide.Client:
-			// Just test that they run
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				FunctionKill().
-				FunctionDump().
-				FunctionRestore("payload").
-				FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
-
-			if suite.serverVersion >= "7.0.0" {
-				batch.FunctionKill()
-			}
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		}
-		assert.IsType(suite.T(), &errors.RequestError{}, res[0])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[1])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[2])
-		assert.IsType(suite.T(), &errors.RequestError{}, res[3])
-	})
-}
-
-func (suite *GlideTestSuite) TestBatchFunctionCommands() {
-	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
-
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
-		libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
-		funcName := "myfunc"
-		libCode := `#!lua name=` + libName + `
-redis.register_function{ function_name = 'myfunc', callback = function() return 42 end, flags = { 'no-writes' } }`
-		query := models.FunctionListQuery{
-			LibraryName: libName,
-			WithCode:    false,
-		}
-		var res []any
-		var err error
-		switch c := client.(type) {
-		case *glide.ClusterClient:
-			opts := pipeline.NewClusterBatchOptions().WithRoute(config.NewSlotIdRoute(config.SlotTypePrimary, 42))
-			batch := pipeline.NewClusterBatch(isAtomic).
-				FunctionFlush().
-				FunctionFlushSync().
-				FunctionFlushAsync().
-				FunctionLoad(libCode, false).
-				FCall(funcName).
-				FCallReadOnly(funcName).
-				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
-				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-				FunctionStats().
-				FunctionDelete(libName).
-				FunctionLoad(libCode, false).
-				FunctionList(query)
-
-			res, err = c.ExecWithOptions(context.Background(), *batch, false, *opts)
-			assert.NoError(suite.T(), err)
-
-		case *glide.Client:
-			batch := pipeline.NewStandaloneBatch(isAtomic).
-				FunctionFlush().
-				FunctionFlushSync().
-				FunctionFlushAsync().
-				FunctionLoad(libCode, false).
-				FCall(funcName).
-				FCallReadOnly(funcName).
-				FCallWithKeysAndArgs(funcName, []string{}, []string{}).
-				FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{}).
-				FunctionStats().
-				FunctionDelete(libName).
-				FunctionLoad(libCode, false).
-				FunctionList(query)
-
-			res, err = c.Exec(context.Background(), *batch, false)
-			assert.NoError(suite.T(), err)
-		}
-		assert.Equal(suite.T(), "OK", res[0])
-		assert.Equal(suite.T(), "OK", res[1])
-		assert.Equal(suite.T(), "OK", res[2])
-		assert.Equal(suite.T(), libName, res[3])
-		assert.Equal(suite.T(), int64(42), res[4])
-		assert.Equal(suite.T(), int64(42), res[5])
-		assert.Equal(suite.T(), int64(42), res[6])
-		assert.Equal(suite.T(), int64(42), res[7])
-		assert.True(
-			suite.T(),
-			reflect.DeepEqual(
-				map[string]any{
-					"engines": map[string]any{
-						"LUA": map[string]any{
-							"functions_count": int64(1),
-							"libraries_count": int64(1),
-						},
-					},
-					"running_script": nil,
-				},
-				res[8],
-			),
-		)
-		assert.Equal(suite.T(), "OK", res[9])
-		assert.Equal(
-			suite.T(),
-			[]any{
-				map[string]any{
-					"engine": "LUA",
-					"functions": []any{
-						map[string]any{
-							"description": nil,
-							"flags": map[string]struct{}{
-								"no-writes": {},
-							},
-							"name": funcName,
-						},
-					},
-					"library_name": libName,
-				},
-			},
-			res[11],
-		)
+		suite.IsType([]options.Location{}, geoSearchFull)
 	})
 }
 
 func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
-	// TODO: replace 'any' type after converters have been added
-
 	// Just test that the execution works
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
 		switch c := client.(type) {
@@ -447,16 +440,15 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 
 			res, err := c.Exec(context.Background(), *batch, false)
 			suite.NoError(err)
-			suite.Equal(int64(0), res[0])
+			suite.Equal(int64(0), res[0], "Publish")
 			if suite.serverVersion >= "7.0.0" {
-				suite.Equal(([]any)(nil), res[1])
-				suite.Equal(([]any)(nil), res[2])
-				suite.Equal(map[string]any{}, res[3])
+				suite.Equal([]string{}, res[1], "PubSubShardChannels")
+				suite.Equal(map[string]int64{}, res[3], "PubSubShardNumSub")
 			} else {
 				// In 6.2.0, errors are raised instead
-				suite.IsType(&errors.RequestError{}, res[1])
-				suite.IsType(&errors.RequestError{}, res[2])
-				suite.IsType(&errors.RequestError{}, res[3])
+				suite.Error(glide.IsError(res[1]), "PubSubShardChannels")
+				suite.Error(glide.IsError(res[2]), "PubSubShardChannelsWithPattern")
+				suite.Error(glide.IsError(res[3]), "PubSubShardNumSub")
 			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
@@ -500,17 +492,21 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Set(atomicKey1, value1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey1, value1)"})
 	opts := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	batch.GetExWithOptions(atomicKey1, *opts)
 	testData = append(testData, CommandTestData{ExpectedResponse: value1, TestName: "GetExWithOptions(atomicKey1, opts)"})
 
 	batch.MSet(map[string]string{multiKey1: "value2"})
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MSet(multiKey1, value2)"})
 
-	batch.MGet([]string{multiKey1})
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value2"}, TestName: "MGet(key2)"})
+	batch.MGet([]string{multiKey1, multiKey2})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[string]{models.CreateStringResult("value2"), models.CreateNilStringResult()},
+			TestName:         "MGet(key2, key3)",
+		},
+	)
 
 	batch.MSetNX(map[string]string{multiKey2: "3"})
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "MSetNX(key3, 3)"})
@@ -622,19 +618,38 @@ func CreateBitmapTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.BitField(bitfieldkey1, commands)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{int64(0), int64(0), int64(1)}, TestName: "BitField(key, commands)"},
+		CommandTestData{
+			ExpectedResponse: []models.Result[int64]{
+				models.CreateInt64Result(0),
+				models.CreateInt64Result(0),
+				models.CreateInt64Result(1),
+			},
+			TestName: "BitField(key, commands)",
+		},
 	)
 
 	bfcommands := []options.BitFieldSubCommands{
 		options.NewBitFieldSet(options.UnsignedInt, 8, 0, 24),
 	}
 	batch.BitField(bitfieldkey2, bfcommands)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(0)}, TestName: "BitField(key, bfcommands)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[int64]{models.CreateInt64Result(0)},
+			TestName:         "BitField(bitfieldkey2, bfcommands)",
+		},
+	)
 	commands2 := []options.BitFieldROCommands{
 		options.NewBitFieldGet(options.UnsignedInt, 8, 0),
 	}
 	batch.BitFieldRO(bitfieldkey2, commands2)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{int64(24)}, TestName: "BitFieldRO(key, commands2)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[int64]{models.CreateInt64Result(24)},
+			TestName:         "BitFieldRO(bitfieldkey2, commands2)",
+		},
+	)
 
 	bitopkey1 = prefix + bitopkey1
 	bitopkey2 = prefix + bitopkey2
@@ -717,30 +732,30 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.Exists([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "Exists([slotHashedKey1])"})
 
-	batch.Expire(slotHashedKey1, 1)
+	batch.Expire(slotHashedKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "Expire(slotHashedKey1, 1)"})
-	batch.Expire(singleNodeKey1, 1)
+	batch.Expire(singleNodeKey1, 1*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(singleNodeKey1, 1)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.ExpireAt(slotHashedKey1, 0)
+	batch.ExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "ExpireAt(slotHashedKey1, 0)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpire(slotHashedKey1, int64(5*1000))
+	batch.PExpire(slotHashedKey1, 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpire(slotHashedKey1, 5000)"})
-	batch.PExpire(prefix+"nonExistentKey", int64(5*1000))
+	batch.PExpire(prefix+"nonExistentKey", 5000*time.Millisecond)
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "PExpire(badkey, 5000)"})
 
 	batch.Set(slotHashedKey1, "value")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-	batch.PExpireAt(slotHashedKey1, 0)
+	batch.PExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(slotHashedKey1, 0)"})
 
 	if serverVer >= "7.0.0" {
-		batch.ExpireWithOptions(singleNodeKey1, 1, constants.HasExistingExpiry)
+		batch.ExpireWithOptions(singleNodeKey1, 1*time.Second, constants.HasExistingExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireWithOptions(singleNodeKey1, 1, HasExistingExpiry)"},
@@ -748,7 +763,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.ExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.ExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "ExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -756,7 +771,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireWithOptions(slotHashedKey1, int64(5*1000), constants.HasNoExpiry)
+		batch.PExpireWithOptions(slotHashedKey1, 5000*time.Millisecond, constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireWithOptions(slotHashedKey1, 5000, HasNoExpiry)"},
@@ -764,7 +779,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.Set(slotHashedKey1, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value)"})
-		batch.PExpireAtWithOptions(slotHashedKey1, 0, constants.HasNoExpiry)
+		batch.PExpireAtWithOptions(slotHashedKey1, time.Now(), constants.HasNoExpiry)
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: true, TestName: "PExpireAtWithOptions(slotHashedKey1, 0, HasNoExpiry)"},
@@ -825,14 +840,12 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 	batch.Set(slotHashedKey1, "value1")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(slotHashedKey1, value1)"})
-	batch.Expire(slotHashedKey1, 100)
+	batch.Expire(slotHashedKey1, 100*time.Second)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Expire(slotHashedKey1, 100)"})
 	batch.Persist(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "Persist(slotHashedKey1)"})
 	batch.TTL(slotHashedKey1)
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "TTL(slotHashedKey1)"})
-
-	// TODO: TEST DUMP AND RESTORE
 
 	batch.Del([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
@@ -851,7 +864,17 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
 	batch.Sort(slotHashedKey1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "Sort(slotHashedKey1)"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[string]{
+				models.CreateStringResult("1"),
+				models.CreateStringResult("2"),
+				models.CreateStringResult("3"),
+			},
+			TestName: "Sort(slotHashedKey1)",
+		},
+	)
 
 	batch.Del([]string{slotHashedKey1})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
@@ -860,7 +883,14 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.SortWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"a", "b", "c"}, TestName: "SortWithOptions(slotHashedKey1, {Alpha: true})"},
+		CommandTestData{
+			ExpectedResponse: []models.Result[string]{
+				models.CreateStringResult("a"),
+				models.CreateStringResult("b"),
+				models.CreateStringResult("c"),
+			},
+			TestName: "SortWithOptions(slotHashedKey1, {Alpha: true})",
+		},
 	)
 
 	batch.Del([]string{slotHashedKey1})
@@ -896,7 +926,14 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 		batch.SortReadOnly(slotHashedKey1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{"1", "2", "3"}, TestName: "SortReadOnly(slotHashedKey1)"},
+			CommandTestData{
+				ExpectedResponse: []models.Result[string]{
+					models.CreateStringResult("1"),
+					models.CreateStringResult("2"),
+					models.CreateStringResult("3"),
+				},
+				TestName: "SortReadOnly(slotHashedKey1)",
+			},
 		)
 	}
 
@@ -910,8 +947,12 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{"a", "b", "c"},
-				TestName:         "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
+				ExpectedResponse: []models.Result[string]{
+					models.CreateStringResult("a"),
+					models.CreateStringResult("b"),
+					models.CreateStringResult("c"),
+				},
+				TestName: "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
 			},
 		)
 	}
@@ -960,8 +1001,6 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.RandomKey()
 	testData = append(testData, CommandTestData{ExpectedResponse: slotHashedKey1, TestName: "RandomKey()"})
 
-	// TODO: add Move in separate standalone batch tests
-
 	return BatchTestData{CommandTestData: testData, TestName: "Generic commands"}
 }
 
@@ -998,8 +1037,12 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 
 	batch.GeoHash(key, []string{"Palermo", "Catania", "NonExistingCity"})
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{"sqc8b49rny0", "sqdtr74hyu0", nil},
-		TestName:         "GeoHash(key, [Palermo, Catania, NonExistingCity])",
+		ExpectedResponse: []models.Result[string]{
+			models.CreateStringResult("sqc8b49rny0"),
+			models.CreateStringResult("sqdtr74hyu0"),
+			models.CreateNilStringResult(),
+		},
+		TestName: "GeoHash(key, [Palermo, Catania, NonExistingCity])",
 	})
 
 	searchFrom := &options.GeoCoordOrigin{
@@ -1010,7 +1053,7 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 	resultOptions := options.NewGeoSearchResultOptions().SetCount(1).SetSortOrder(options.ASC)
 	batch.GeoSearchWithResultOptions(key, searchFrom, *searchByShape, *resultOptions)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{"Catania"},
+		ExpectedResponse: []string{"Catania"},
 		TestName:         "GeoSearchWithResultOptions(key, searchFrom, searchByShape, resultOptions)",
 	})
 
@@ -1064,7 +1107,6 @@ func CreateGeospatialTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 }
 
 func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	// TODO: After adding and fixing converters, remove 'any' typing in ExpectedResponse
 	testData := make([]CommandTestData, 0)
 	prefix := "{HashKey}-"
 	if !isAtomic {
@@ -1080,10 +1122,16 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	testData = append(testData, CommandTestData{ExpectedResponse: "value", TestName: "HGet(key, k1)"})
 
 	batch.HGetAll(key)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"k1": "value"}, TestName: "HGetAll(key)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]string{"k1": "value"}, TestName: "HGetAll(key)"})
 
-	batch.HMGet(key, []string{"k1"})
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value"}, TestName: "HMGet(k1)"})
+	batch.HMGet(key, []string{"k1", "k2"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[string]{models.CreateStringResult("value"), models.CreateNilStringResult()},
+			TestName:         "HMGet(key, [k1, k2])",
+		},
+	)
 
 	batch.HSetNX(key, "k1", "value2")
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "HSetNX(key, k1, value2)"})
@@ -1099,7 +1147,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	batch.HDel(key, []string{"field2"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HDel(key, field2)"})
 	batch.HVals(key)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"value1"}, TestName: "HVals(key)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"value1"}, TestName: "HVals(key)"})
 
 	batch.HExists(key, "field1")
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "HExists(key, field1)"})
@@ -1107,7 +1155,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "HExists(key, nonexistent)"})
 
 	batch.HKeys(key)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"field1"}, TestName: "HKeys(key)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"field1"}, TestName: "HKeys(key)"})
 
 	batch.HStrLen(key, "field1")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(6), TestName: "HStrLen(key, field1)"})
@@ -1124,11 +1172,33 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		testData,
 		CommandTestData{ExpectedResponse: float64(12), TestName: "HIncrByFloat(key, float_counter, 1.5)"},
 	)
+	batch.HScan(key, "0")
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}},
+			TestName:         "HScan(key, 0)",
+		},
+	)
+	if serverVer >= "8.0.0" {
+		batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetNoValues(true))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []any{"0", []any{"field1", "counter", "float_counter"}},
+				TestName:         "HScanWithOptions(key, 0, options)",
+			},
+		)
+	} else {
+		batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetCount(42))
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}}, TestName: "HScanWithOptions(key, 0, options)"},
+		)
+	}
 
 	batch.FlushAll()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushAll()"})
-	batch.HScan(key, "0")
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", ([]any)(nil)}, TestName: "HScan(key, 0)"})
 
 	batch.HSet(key, map[string]string{"counter": "10"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(key, counter)"})
@@ -1136,18 +1206,15 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	testData = append(testData, CommandTestData{ExpectedResponse: "counter", TestName: "HRandField(key)"})
 
 	batch.HRandFieldWithCount(key, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"counter"}, TestName: "HRandFieldWithCount(key, 1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []string{"counter"}, TestName: "HRandFieldWithCount(key, 1)"},
+	)
 
 	batch.HRandFieldWithCountWithValues(key, 1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{[]any{"counter", "10"}}, TestName: "HRandFieldWithCountWithValues(key, 1)"},
-	)
-
-	batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetCount(1))
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"counter", "10"}}, TestName: "HScanWithOptions(key, 0, options)"},
+		CommandTestData{ExpectedResponse: [][]string{{"counter", "10"}}, TestName: "HRandFieldWithCountWithValues(key, 1)"},
 	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}
@@ -1179,7 +1246,6 @@ func CreateHyperLogLogTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVe
 }
 
 func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	// TODO: fix use more specific type than 'any' when converters are added
 	testData := make([]CommandTestData, 0)
 	prefix := "{listKey}-"
 	atomicPrefix := prefix
@@ -1196,7 +1262,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	testData = append(testData, CommandTestData{ExpectedResponse: "val2", TestName: "LPop(key)"})
 
 	batch.LPopCount(key, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"val1"}, TestName: "LPopCount(key, 1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"val1"}, TestName: "LPopCount(key, 1)"})
 
 	batch.RPush(key, []string{"elem1", "elem2", "elem3", "elem2"})
 	testData = append(
@@ -1216,14 +1282,14 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LPosCount(key, "elem2", 2)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{int64(1), int64(3)}, TestName: "LPosCount(key, elem2, 2)"},
+		CommandTestData{ExpectedResponse: []int64{1, 3}, TestName: "LPosCount(key, elem2, 2)"},
 	)
 
 	batch.LPosCountWithOptions(key, "elem2", 2, *options.NewLPosOptions().SetMaxLen(4))
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{int64(1), int64(3)},
+			ExpectedResponse: []int64{1, 3},
 			TestName:         "LPosCountWithOptions(key, elem2, 2, {MaxLen: 4})",
 		},
 	)
@@ -1231,7 +1297,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(key, 0, 2)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"elem1", "elem2", "elem3"}, TestName: "LRange(key, 0, 2)"},
+		CommandTestData{ExpectedResponse: []string{"elem1", "elem2", "elem3"}, TestName: "LRange(key, 0, 2)"},
 	)
 
 	batch.LIndex(key, 1)
@@ -1248,7 +1314,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(trimKey, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"two", "three"}, TestName: "LRange(trimKey, 0, -1) after trim"},
+		CommandTestData{ExpectedResponse: []string{"two", "three"}, TestName: "LRange(trimKey, 0, -1) after trim"},
 	)
 
 	batch.LLen(key)
@@ -1259,14 +1325,14 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(key, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"elem1", "elem3", "elem2"}, TestName: "LRange(key, 0, -1) after LRem"},
+		CommandTestData{ExpectedResponse: []string{"elem1", "elem3", "elem2"}, TestName: "LRange(key, 0, -1) after LRem"},
 	)
 
 	batch.RPop(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "elem2", TestName: "RPop(key)"})
 
 	batch.RPopCount(key, 2)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"elem3", "elem1"}, TestName: "RPopCount(key, 2)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"elem3", "elem1"}, TestName: "RPopCount(key, 2)"})
 
 	batch.RPush(key, []string{"hello", "world"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "RPush(key, [hello, world])"})
@@ -1275,14 +1341,14 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(key, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"hello", "there", "world"}, TestName: "LRange(key, 0, -1) after LInsert"},
+		CommandTestData{ExpectedResponse: []string{"hello", "there", "world"}, TestName: "LRange(key, 0, -1) after LInsert"},
 	)
 
 	batch.BLPop([]string{key}, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "hello"}, TestName: "BLPop([key], 1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{key, "hello"}, TestName: "BLPop([key], 1)"})
 
 	batch.BRPop([]string{key}, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{key, "world"}, TestName: "BRPop([key], 1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{key, "world"}, TestName: "BRPop([key], 1)"})
 
 	rpushxKey := atomicPrefix + "rpushx-" + uuid.NewString()
 	batch.RPush(rpushxKey, []string{"initial"})
@@ -1292,7 +1358,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(rpushxKey, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"},
+		CommandTestData{ExpectedResponse: []string{"initial", "added"}, TestName: "LRange(rpushxKey, 0, -1) after RPushX"},
 	)
 
 	lpushxKey := atomicPrefix + "lpushx-" + uuid.NewString()
@@ -1303,14 +1369,14 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(lpushxKey, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"},
+		CommandTestData{ExpectedResponse: []string{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"},
 	)
 
 	if serverVer >= "7.0.0" {
 		batch.LMPop([]string{key}, constants.Left)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string]any{key: []any{"there"}}, TestName: "LMPop([key], Left)"},
+			CommandTestData{ExpectedResponse: map[string][]string{key: {"there"}}, TestName: "LMPop([key], Left)"},
 		)
 
 		batch.RPush(key, []string{"hello"})
@@ -1318,7 +1384,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.LMPopCount([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "LMPopCount([key], Left, 1)"},
+			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "LMPopCount([key], Left, 1)"},
 		)
 
 		batch.RPush(key, []string{"hello", "world"})
@@ -1326,13 +1392,13 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.BLMPop([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string]any{key: []any{"hello"}}, TestName: "BLMPop([key], Left, 1)"},
+			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "BLMPop([key], Left, 1)"},
 		)
 
 		batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string]any{key: []any{"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"},
+			CommandTestData{ExpectedResponse: map[string][]string{key: {"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"},
 		)
 	}
 
@@ -1344,7 +1410,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LRange(lsetKey, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"},
+		CommandTestData{ExpectedResponse: []string{"one", "changed", "three"}, TestName: "LRange(lsetKey, 0, -1) after LSet"},
 	)
 
 	key = prefix + key
@@ -1356,22 +1422,28 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.LMove(key, destKey, constants.Right, constants.Left)
 	testData = append(testData, CommandTestData{ExpectedResponse: "second", TestName: "LMove(key, destKey, Right, Left)"})
 	batch.LRange(key, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"first"}, TestName: "LRange(key, 0, -1) after LMove"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []string{"first"}, TestName: "LRange(key, 0, -1) after LMove"},
+	)
 	batch.LRange(destKey, 0, -1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"second", "third", "fourth"}, TestName: "LRange(destKey, 0, -1) after LMove"},
+		CommandTestData{
+			ExpectedResponse: []string{"second", "third", "fourth"},
+			TestName:         "LRange(destKey, 0, -1) after LMove",
+		},
 	)
 
 	batch.BLMove(key, destKey, constants.Right, constants.Left, 1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "first", TestName: "BLMove(key, destKey, Right, Left, 1)"})
 	batch.LRange(key, 0, -1)
-	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "LRange(key, 0, -1) after BLMove"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{}, TestName: "LRange(key, 0, -1) after BLMove"})
 	batch.LRange(destKey, 0, -1)
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{"first", "second", "third", "fourth"},
+			ExpectedResponse: []string{"first", "second", "third", "fourth"},
 			TestName:         "LRange(destKey, 0, -1) after BLMove",
 		},
 	)
@@ -1380,22 +1452,20 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 }
 
 func CreatePubSubTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	// TODO: replace 'any' type after converters have been added
-
 	// Just test that the execution works
 	testData := make([]CommandTestData, 0)
 
 	batch.PubSubChannels()
-	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannels()"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{}, TestName: "PubSubChannels()"})
 
 	batch.PubSubChannelsWithPattern("")
-	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "PubSubChannelsWithPattern()"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{}, TestName: "PubSubChannelsWithPattern()"})
 
 	batch.PubSubNumPat()
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "PubSubNumPat()"})
 
 	batch.PubSubNumSub([]string{""})
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{"": int64(0)}, TestName: "PubSubNumSub()"})
+	testData = append(testData, CommandTestData{ExpectedResponse: map[string]int64{"": 0}, TestName: "PubSubNumSub()"})
 
 	return BatchTestData{CommandTestData: testData, TestName: "PubSub commands"}
 }
@@ -1484,7 +1554,7 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SRandMember(key)"})
 
 	batch.SRandMemberCount(key, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "SRandMemberCount(key, 1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"member1"}, TestName: "SRandMemberCount(key, 1)"})
 
 	batch.SPop(key)
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "SPop(key)"})
@@ -1502,7 +1572,7 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.SMIsMember(key, []string{"member1", "nonexistent"})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
+		CommandTestData{ExpectedResponse: []bool{true, false}, TestName: "SMIsMember(key, [member1, nonexistent])"},
 	)
 
 	batch.SUnionStore(dest, []string{prefix + key, prefix + key2})
@@ -1578,7 +1648,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZPopMin(key)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(2.5)}, TestName: "ZPopMin(key)"},
+		CommandTestData{ExpectedResponse: map[string]float64{"member1": 2.5}, TestName: "ZPopMin(key)"},
 	)
 
 	zPopOpts := options.NewZPopOptions().SetCount(2)
@@ -1586,7 +1656,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: map[string]any{"member2": float64(4.0), "member3": float64(4.0)},
+			ExpectedResponse: map[string]float64{"member2": 4.0, "member3": 4.0},
 			TestName:         "ZPopMinWithOptions(key, opts)",
 		},
 	)
@@ -1596,14 +1666,14 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZPopMax(key)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member2": float64(2.0)}, TestName: "ZPopMax(key)"},
+		CommandTestData{ExpectedResponse: map[string]float64{"member2": 2.0}, TestName: "ZPopMax(key)"},
 	)
 
 	zPopOpts.SetCount(1)
 	batch.ZPopMaxWithOptions(key, *zPopOpts)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": float64(1.0)}, TestName: "ZPopMaxWithOptions(key, opts)"},
+		CommandTestData{ExpectedResponse: map[string]float64{"member1": 1.0}, TestName: "ZPopMaxWithOptions(key, opts)"},
 	)
 
 	batch.ZAdd(key, membersScoreMap)
@@ -1617,7 +1687,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.BZPopMin([]string{key}, 1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{key, "member1", float64(1)}, TestName: "BZPopMin([key])"},
+		CommandTestData{
+			ExpectedResponse: models.KeyWithMemberAndScore{Key: key, Member: "member1", Score: 1},
+			TestName:         "BZPopMin([key])",
+		},
 	)
 
 	if serverVer >= "7.0.0" {
@@ -1627,8 +1700,15 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
-				TestName:         "BZMPop(key, MIN, 1)",
+				ExpectedResponse: models.CreateKeyWithArrayOfMembersAndScoresResult(
+					models.KeyWithArrayOfMembersAndScores{
+						Key: key,
+						MembersAndScores: []models.MemberAndScore{
+							{Member: "member1", Score: 1.0},
+						},
+					},
+				),
+				TestName: "BZMPop(key, MIN, 1)",
 			},
 		)
 
@@ -1641,8 +1721,15 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{key, map[string]any{"member1": float64(1)}},
-				TestName:         "BZMPopWithOptions(key, MIN, 1, opts",
+				ExpectedResponse: models.CreateKeyWithArrayOfMembersAndScoresResult(
+					models.KeyWithArrayOfMembersAndScores{
+						Key: key,
+						MembersAndScores: []models.MemberAndScore{
+							{Member: "member1", Score: 1.0},
+						},
+					},
+				),
+				TestName: "BZMPopWithOptions(key, MIN, 1, opts",
 			},
 		)
 	} else {
@@ -1652,12 +1739,15 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	rangeQuery := options.NewRangeByIndexQuery(0, -1)
 	batch.ZRange(key, rangeQuery)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member2"}, TestName: "ZRange(key, 0, -1)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"member2"}, TestName: "ZRange(key, 0, -1)"})
 
 	batch.BZPopMax([]string{key}, 1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{key, "member2", float64(2.0)}, TestName: "BZPopMax(key, 1)"},
+		CommandTestData{
+			ExpectedResponse: models.KeyWithMemberAndScore{Key: key, Member: "member2", Score: 2},
+			TestName:         "BZPopMax(key, 1)",
+		},
 	)
 
 	if serverVer >= "7.0.0" {
@@ -1670,8 +1760,15 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{key, map[string]any{"member1": float64(1.0)}},
-				TestName:         "ZMPop([key], min)",
+				ExpectedResponse: models.CreateKeyWithArrayOfMembersAndScoresResult(
+					models.KeyWithArrayOfMembersAndScores{
+						Key: key,
+						MembersAndScores: []models.MemberAndScore{
+							{Member: "member1", Score: 1.0},
+						},
+					},
+				),
+				TestName: "ZMPop([key], min)",
 			},
 		)
 
@@ -1679,8 +1776,15 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{key, map[string]any{"member2": float64(2.0)}},
-				TestName:         "ZMPopWithOptions([key], min, opts)",
+				ExpectedResponse: models.CreateKeyWithArrayOfMembersAndScoresResult(
+					models.KeyWithArrayOfMembersAndScores{
+						Key: key,
+						MembersAndScores: []models.MemberAndScore{
+							{Member: "member2", Score: 2.0},
+						},
+					},
+				),
+				TestName: "ZMPopWithOptions([key], min, opts)",
 			},
 		)
 	}
@@ -1690,7 +1794,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0}, TestName: "ZRangeWithScores(key, 0, -1)"},
+		CommandTestData{
+			ExpectedResponse: []models.MemberAndScore{{Member: "member1", Score: 1.0}},
+			TestName:         "ZRangeWithScores(key, 0, -1)",
+		},
 	)
 
 	dest := prefix + "dest-" + uuid.NewString()
@@ -1771,19 +1878,28 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	testData = append(testData, CommandTestData{ExpectedResponse: "member1", TestName: "ZRandMember(key)"})
 
 	batch.ZRandMemberWithCount(key, 1)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []string{"member1"}, TestName: "ZRandMemberWithCount(key, 1)"},
+	)
 
 	batch.ZRandMemberWithCountWithScores(key, 1)
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{[]any{"member1", float64(1.0)}},
+			ExpectedResponse: []models.MemberAndScore{{Member: "member1", Score: 1}},
 			TestName:         "ZRandMemberWithCountWithScores(key, 1)",
 		},
 	)
 
-	batch.ZMScore(key, []string{"member1"})
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{float64(1.0)}, TestName: "ZMScore(key, [member1])"})
+	batch.ZMScore(key, []string{"member1", "memberN"})
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: []models.Result[float64]{models.CreateFloat64Result(1), models.CreateNilFloat64Result()},
+			TestName:         "ZMScore(key, [member1, memberN])",
+		},
+	)
 
 	batch.ZAdd(prefix+key3, map[string]float64{"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(4), TestName: "ZAdd(prefix+key3, members)"})
@@ -1792,14 +1908,14 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZDiff([]string{prefix + key, prefix + key3})
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"},
+		CommandTestData{ExpectedResponse: []string{"member1"}, TestName: "ZDiff([prefix+key, prefix+key3])"},
 	)
 
 	batch.ZDiffWithScores([]string{prefix + key, prefix + key3})
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: map[string]any{"member1": float64(1.0)},
+			ExpectedResponse: []models.MemberAndScore{{Member: "member1", Score: 1.0}},
 			TestName:         "ZDiffWithScores([prefix+key, prefix+key3])",
 		},
 	)
@@ -1813,7 +1929,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZInter(options.KeyArray{
 		Keys: []string{prefix + key, prefix + key3},
 	})
-	testData = append(testData, CommandTestData{ExpectedResponse: ([]any)(nil), TestName: "ZInter(keys)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{}, TestName: "ZInter(keys)"})
 
 	batch.ZInterWithScores(
 		options.KeyArray{
@@ -1821,7 +1937,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		},
 		*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 	)
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]any{}, TestName: "ZInterWithScores(keys, opts)"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: []models.MemberAndScore{}, TestName: "ZInterWithScores(keys, opts)"},
+	)
 
 	batch.ZInterStore(
 		dest,
@@ -1851,15 +1970,18 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 			Keys: []string{prefix + key, key4},
 		},
 	)
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"member1", "b"}, TestName: "ZUnion(keys)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{"member1", "b"}, TestName: "ZUnion(keys)"})
 
 	batch.ZUnionWithScores(
 		options.KeyArray{Keys: []string{prefix + key, key4}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: map[string]any{"member1": 1.0, "b": 2.0}, TestName: "ZUnionWithScores(keys, opts)"},
+		CommandTestData{
+			ExpectedResponse: []models.MemberAndScore{{Member: "member1", Score: 1.0}, {Member: "b", Score: 2.0}},
+			TestName:         "ZUnionWithScores(keys, opts)",
+		},
 	)
 
 	batch.ZUnionStore(dest, options.KeyArray{Keys: []string{prefix + key, key4}})
@@ -1868,7 +1990,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZUnionStoreWithOptions(
 		dest,
 		options.KeyArray{Keys: []string{prefix + key, key4}},
-		*options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
 	testData = append(
 		testData,
@@ -1935,9 +2057,9 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadOpts := options.NewXReadOptions().SetCount(1)
 	batch.XReadWithOptions(map[string]string{streamKey1: "0-2"}, *xreadOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{
-			streamKey1: map[string]any{
-				"0-3": []any{[]any{"field3", "value3"}},
+		ExpectedResponse: map[string]map[string][][]string{
+			streamKey1: {
+				"0-3": {{"field3", "value3"}},
 			},
 		},
 		TestName: "XRead(streamKey1, 0-2)",
@@ -1947,8 +2069,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{
-			"0-1": []any{[]any{"field1", "value1"}},
+		ExpectedResponse: []models.XRangeResponse{
+			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
 		},
 		TestName: "XRange(streamKey1, 0-1, 0-1)",
 	})
@@ -1957,8 +2079,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{
-			"0-1": []any{[]any{"field1", "value1"}},
+		ExpectedResponse: []models.XRangeResponse{
+			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
 		},
 		TestName: "XRevRange(streamKey1, 0-1, 0-1)",
 	})
@@ -1977,7 +2099,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.XInfoConsumers(streamKey1, groupName1)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoConsumers(streamKey1, groupName1)"},
+		CommandTestData{ExpectedResponse: []models.XInfoConsumerInfo{}, TestName: "XInfoConsumers(streamKey1, groupName1)"},
 	)
 
 	// Create second group with makeStream option
@@ -1997,8 +2119,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadgroupOpts := options.NewXReadGroupOptions().SetCount(2)
 	batch.XReadGroupWithOptions(groupName1, consumer1, map[string]string{streamKey1: "0-3"}, *xreadgroupOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{
-			streamKey1: map[string]any{},
+		ExpectedResponse: map[string]map[string][][]string{
+			streamKey1: {},
 		},
 		TestName: "XReadGroup(streamKey1, 0-3, groupName1, consumer1)",
 	})
@@ -2007,14 +2129,14 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xclaimOpts := options.NewXClaimOptions().SetForce()
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-1"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{},
+		ExpectedResponse: map[string][][]string{},
 		TestName:         "XClaim(streamKey1, groupName1, consumer1, 0-1)",
 	})
 
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]any{
-			"0-3": []any{[]any{"field3", "value3"}},
+		ExpectedResponse: map[string][][]string{
+			"0-3": {{"field3", "value3"}},
 		},
 		TestName: "XClaim(streamKey1, groupName1, consumer1, 0-3)",
 	})
@@ -2022,33 +2144,53 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// XCLAIMJUSTID commands with options
 	batch.XClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{"0-3"},
+		ExpectedResponse: []string{"0-3"},
 		TestName:         "XClaimJustId(streamKey1, groupName1, consumer1, 0-3)",
 	})
 
 	batch.XClaimJustIdWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-4"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any(nil),
+		ExpectedResponse: []string{},
 		TestName:         "XClaimJustId(streamKey1, groupName1, consumer1, 0-4)",
 	})
 
 	// XPENDING command
 	batch.XPending(streamKey1, groupName1)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []any{int64(1), "0-3", "0-3", []any{[]any{consumer1, "1"}}},
-		TestName:         "XPending(streamKey1, groupName1)",
+		ExpectedResponse: models.XPendingSummary{
+			NumOfMessages:    1,
+			StartId:          models.CreateStringResult("0-3"),
+			EndId:            models.CreateStringResult("0-3"),
+			ConsumerMessages: []models.ConsumerPendingMessage{{ConsumerName: consumer1, MessageCount: 1}},
+		},
+		TestName: "XPending(streamKey1, groupName1)",
 	})
 
 	// XAUTOCLAIM commands
 	if serverVer >= "6.2.0" {
-		expectedXAutoClaimResponse := []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}}
-		if serverVer >= "7.0.0" {
-			expectedXAutoClaimResponse = []any{"0-0", map[string]any{"0-3": []any{[]any{"field3", "value3"}}}, []any(nil)}
+		expectedXAutoClaimResponse := models.XAutoClaimResponse{
+			NextEntry:      "0-0",
+			ClaimedEntries: map[string][][]string{"0-3": {{"field3", "value3"}}},
 		}
 
-		expectedXAutoClaimJustIdResponse := []any{"0-0", []any{"0-3"}}
 		if serverVer >= "7.0.0" {
-			expectedXAutoClaimJustIdResponse = []any{"0-0", []any{"0-3"}, []any(nil)}
+			expectedXAutoClaimResponse = models.XAutoClaimResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  map[string][][]string{"0-3": {{"field3", "value3"}}},
+				DeletedMessages: []string{},
+			}
+		}
+
+		expectedXAutoClaimJustIdResponse := models.XAutoClaimJustIdResponse{
+			NextEntry:      "0-0",
+			ClaimedEntries: []string{"0-3"},
+		}
+		if serverVer >= "7.0.0" {
+			expectedXAutoClaimJustIdResponse = models.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{"0-3"},
+				DeletedMessages: []string{},
+			}
 		}
 
 		xautoclaimOpts := options.NewXAutoClaimOptions().SetCount(1)
@@ -2072,8 +2214,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		xpendingOpts := options.NewXPendingOptions("-", "+", 1)
 		batch.XPendingWithOptions(streamKey1, groupName1, *xpendingOpts)
 		testData = append(testData, CommandTestData{
-			ExpectedResponse: []any(nil),
-			TestName:         "XPending(streamKey1, groupName1, MIN, MAX, 1)",
+			ExpectedResponse: []models.XPendingDetail{},
+			TestName:         "XPendingWithOptions(streamKey1, groupName1, MIN, MAX, 1)",
 		})
 
 		// XGROUP DELCONSUMER command
@@ -2107,7 +2249,10 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 		// XINFO GROUPS command
 		batch.XInfoGroups(streamKey1)
-		testData = append(testData, CommandTestData{ExpectedResponse: []any(nil), TestName: "XInfoGroups(streamKey1)"})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []models.XInfoGroupInfo{}, TestName: "XInfoGroups(streamKey1)"},
+		)
 	}
 
 	// Add entry to streamKey2 and create group
@@ -2133,15 +2278,167 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}
 }
 
+func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+
+	batch.ConfigSet(map[string]string{"timeout": "1000"})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigSet(timeout: 1000)"})
+	batch.ConfigGet([]string{"timeout"})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: map[string]string{"timeout": "1000"}, TestName: "ConfigGet(timeout)"},
+	)
+	batch.Info()
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "Info()"})
+	batch.InfoWithOptions(options.InfoOptions{})
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "InfoWithOptions()"})
+	batch.Time()
+	testData = append(testData, CommandTestData{ExpectedResponse: []string{}, CheckTypeOnly: true, TestName: "Time()"})
+	batch.FlushAll()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushAll()"})
+	batch.FlushAllWithOptions(options.SYNC)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushAllWithOptions(SYNC)"})
+	batch.FlushDB()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushDB()"})
+	batch.FlushDBWithOptions(options.SYNC)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FlushDBWithOptions(SYNC)"})
+	batch.DBSize()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "DBSize()"})
+	batch.Lolwut()
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "Lolwut()"})
+	batch.LolwutWithOptions(options.LolwutOptions{})
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "LolwutWithOptions()"})
+	batch.LastSave()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LastSave()"})
+	batch.ConfigResetStat()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigResetStat()"})
+	// ConfigRewrite skipped, because depends on config
+
+	return BatchTestData{CommandTestData: testData, TestName: "Server Management commands"}
+}
+
+func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+
+	batch.ScriptExists([]string{"abc"})
+	testData = append(testData, CommandTestData{ExpectedResponse: []bool{false}, TestName: "ScriptExists([abc])"})
+	batch.ScriptFlush()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlush()"})
+	batch.ScriptFlushWithMode(options.SYNC)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlushWithMode()"})
+	if serverVer >= "8.0.0" {
+		batch.ScriptShow("abc")
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptShow()"},
+		)
+	}
+	batch.ScriptKill()
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "ScriptKill()"},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Script commands"}
+}
+
+func CreateFunctionTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
+	testData := make([]CommandTestData, 0)
+	// adding a dummy command to avoid "empty pipeline" error on server < 7.0
+	batch.Ping()
+	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
+	if serverVer < "7.0.0" {
+		return BatchTestData{CommandTestData: testData, TestName: "Function commands"}
+	}
+
+	libName := "mylib_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	funcName := "myfunc"
+	libCode := "#!lua name=" + libName + "\nredis.register_function{ function_name = 'myfunc', callback = function() return 42 end, flags = { 'no-writes' } }"
+	query := models.FunctionListQuery{
+		LibraryName: libName,
+		WithCode:    false,
+	}
+
+	batch.FunctionFlush()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FunctionFlush()"})
+	batch.FunctionFlushSync()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FunctionFlushSync()"})
+	batch.FunctionFlushAsync()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FunctionFlushAsync()"})
+	batch.FunctionLoad(libCode, false)
+	testData = append(testData, CommandTestData{ExpectedResponse: libName, TestName: "FunctionLoad(libCode, false)"})
+	batch.FCall(funcName)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(42), TestName: "FCall(funcName)"})
+	batch.FCallReadOnly(funcName)
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(42), TestName: "FCallReadOnly(funcName)"})
+	batch.FCallWithKeysAndArgs(funcName, []string{}, []string{})
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(42), TestName: "FCallWithKeysAndArgs(funcName)"})
+	batch.FCallReadOnlyWithKeysAndArgs(funcName, []string{}, []string{})
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: int64(42), TestName: "FCallReadOnlyWithKeysAndArgs(funcName)"},
+	)
+	batch.FunctionStats()
+	testData = append(testData, CommandTestData{ExpectedResponse: models.FunctionStatsResult{
+		Engines: map[string]models.Engine{
+			"LUA": {
+				Language:      "LUA",
+				FunctionCount: 1,
+				LibraryCount:  1,
+			},
+		},
+	}, TestName: "FunctionStats()"})
+	batch.FunctionDelete(libName)
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "FunctionDelete(libName)"})
+	batch.FunctionLoad(libCode, false)
+	testData = append(testData, CommandTestData{ExpectedResponse: libName, TestName: "FunctionLoad(libCode, false)"})
+	batch.FunctionList(query)
+	testData = append(testData, CommandTestData{ExpectedResponse: []models.LibraryInfo{
+		{
+			Engine: "LUA",
+			Functions: []models.FunctionInfo{
+				{
+					Flags: []string{"no-writes"},
+					Name:  funcName,
+				},
+			},
+			Name: libName,
+		},
+	}, TestName: "FunctionList(query)"})
+
+	batch.FunctionKill()
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "FunctionKill()"},
+	)
+	batch.FunctionDump()
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "FunctionDump()"})
+	batch.FunctionRestore("payload")
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: errors.New(""), CheckTypeOnly: true, TestName: "FunctionRestore()"},
+	)
+	batch.FunctionRestoreWithPolicy("payload", constants.FlushPolicy)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: errors.New(""),
+			CheckTypeOnly:    true,
+			TestName:         "FunctionRestoreWithPolicy(constants.FlushPolicy)",
+		},
+	)
+
+	return BatchTestData{CommandTestData: testData, TestName: "Function commands"}
+}
+
 // ClusterBatch - The Batch object
 // bool - isAtomic flag. True for transactions, false for pipeline
 // string - The server version we are running on
 type BatchTestDataProvider func(*pipeline.ClusterBatch, bool, string) BatchTestData
 
-func GetCommandGroupTestProviders() []BatchTestDataProvider {
+func GetKeyCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateBitmapTest,
-		CreateConnectionManagementTests,
 		CreateGenericCommandTests,
 		CreateGeospatialTests,
 		CreateHashTest,
@@ -2155,9 +2452,18 @@ func GetCommandGroupTestProviders() []BatchTestDataProvider {
 	}
 }
 
+func GetKeyLessCommandGroupTestProviders() []BatchTestDataProvider {
+	return []BatchTestDataProvider{
+		CreateConnectionManagementTests,
+		CreateServerManagementTests,
+		CreateScriptTest,
+		CreateFunctionTest,
+	}
+}
+
 type CommandTestData struct {
 	ExpectedResponse any
-	CheckTypeOnly    bool
+	CheckTypeOnly    bool // don't validate the commmand response, only the response type
 	TestName         string
 }
 
@@ -2168,24 +2474,24 @@ type BatchTestData struct {
 
 func (suite *GlideTestSuite) TestBatchCommandGroups() {
 	for _, client := range suite.getDefaultClients() {
-		clientType := fmt.Sprintf("%T", client)[7:]
 		for _, isAtomic := range []bool{true, false} {
-			for _, testProvider := range GetCommandGroupTestProviders() {
+			for _, testProvider := range GetKeyCommandGroupTestProviders() {
 				batch := pipeline.NewClusterBatch(isAtomic)
 				testData := testProvider(batch, isAtomic, suite.serverVersion)
 
-				suite.T().Run(fmt.Sprintf("%s %s isAtomic = %v", testData.TestName, clientType, isAtomic), func(t *testing.T) {
-					var res []any
-					var err error
-					switch c := client.(type) {
-					case *glide.ClusterClient:
-						res, err = c.Exec(context.Background(), *batch, true)
-					case *glide.Client:
-						// hacky hack ©
-						standaloneBatch := pipeline.StandaloneBatch{BaseBatch: pipeline.BaseBatch[pipeline.StandaloneBatch]{Batch: batch.BaseBatch.Batch}}
-						res, err = c.Exec(context.Background(), standaloneBatch, true)
-					}
-					suite.NoError(err)
+				suite.T().Run(makeFullTestName(client, testData.TestName, isAtomic), func(t *testing.T) {
+					res, err := runBatchOnClient(client, batch, true, nil)
+					suite.NoError(err, testData.TestName)
+					suite.verifyBatchTestResult(res, testData.CommandTestData)
+				})
+			}
+			for _, testProvider := range GetKeyLessCommandGroupTestProviders() {
+				batch := pipeline.NewClusterBatch(isAtomic)
+				testData := testProvider(batch, isAtomic, suite.serverVersion)
+
+				suite.T().Run(makeFullTestName(client, testData.TestName, isAtomic), func(t *testing.T) {
+					res, err := runBatchOnClient(client, batch, false, config.NewSlotIdRoute(config.SlotTypePrimary, 42))
+					suite.NoError(err, testData.TestName)
 					suite.verifyBatchTestResult(res, testData.CommandTestData)
 				})
 			}
@@ -2202,4 +2508,38 @@ func (suite *GlideTestSuite) verifyBatchTestResult(result []any, testData []Comm
 		}
 		suite.Equal(testData[i].ExpectedResponse, result[i], testData[i].TestName)
 	}
+}
+
+func runBatchOnClient(
+	client interfaces.BaseClientCommands,
+	batch *pipeline.ClusterBatch,
+	raiseOnError bool,
+	route config.SingleNodeRoute,
+) ([]any, error) {
+	switch c := client.(type) {
+	case *glide.ClusterClient:
+		if route != nil {
+			opts := pipeline.NewClusterBatchOptions().WithRoute(route)
+			return c.ExecWithOptions(context.Background(), *batch, raiseOnError, *opts)
+		}
+		return c.Exec(context.Background(), *batch, raiseOnError)
+	case *glide.Client:
+		// hacky hack ©
+		standaloneBatch := pipeline.StandaloneBatch{BaseBatch: pipeline.BaseBatch[pipeline.StandaloneBatch]{Batch: batch.BaseBatch.Batch}}
+		return c.Exec(context.Background(), standaloneBatch, raiseOnError)
+	}
+	return nil, nil
+}
+
+func makeFullTestName(client interfaces.BaseClientCommands, testName string, isAtomic bool) string {
+	fullTestName := fmt.Sprintf("%T", client)[7:]
+	if testName != "" {
+		fullTestName += "/" + testName
+	}
+	if isAtomic {
+		fullTestName += "/transaction"
+	} else {
+		fullTestName += "/pipeline"
+	}
+	return fullTestName
 }

@@ -2,13 +2,15 @@
 
 package constants
 
-import "github.com/valkey-io/valkey-glide/go/v2/internal/errors"
+import (
+	"errors"
+)
 
 const (
 	CountKeyword      string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
 	FullKeyword       string = "FULL"       // Valkey API keyword used in XINFO STREAM
 	MatchKeyword      string = "MATCH"      // Valkey API keyword used to indicate the match filter.
-	NoValueKeyword    string = "NOVALUE"    // Valkey API keyword for the no value option for hcsan command.
+	NoValuesKeyword   string = "NOVALUES"   // Valkey API keyword for the no value option for hcsan command.
 	WithScoreKeyword  string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
 	WithScoresKeyword string = "WITHSCORES" // Valkey API keyword for ZRandMember and ZDiff command to return scores along with members.
 	NoScoresKeyword   string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.
@@ -93,7 +95,7 @@ func (expireCondition ExpireCondition) ToString() (string, error) {
 	case NewExpiryLessThanCurrent:
 		return string(NewExpiryLessThanCurrent), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid expire condition"}
+		return "", errors.New("invalid expire condition")
 	}
 }
 
@@ -136,7 +138,7 @@ func (insertPosition InsertPosition) ToString() (string, error) {
 	case After:
 		return string(After), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid insert position"}
+		return "", errors.New("invalid insert position")
 	}
 }
 
@@ -157,7 +159,7 @@ func (listDirection ListDirection) ToString() (string, error) {
 	case Right:
 		return string(Right), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid list direction"}
+		return "", errors.New("invalid list direction")
 	}
 }
 
@@ -179,7 +181,7 @@ func (scoreFilter ScoreFilter) ToString() (string, error) {
 	case MIN:
 		return string(MIN), nil
 	default:
-		return "", &errors.RequestError{Msg: "Invalid score filter"}
+		return "", errors.New("invalid score filter")
 	}
 }
 

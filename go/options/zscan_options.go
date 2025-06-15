@@ -17,6 +17,7 @@ func NewZScanOptions() *ZScanOptions {
 // SetNoScores sets the noScores flag for the ZSCAN command.
 // If this value is set to true, the ZSCAN command will be called with NOSCORES option.
 // In the NOSCORES option, scores are not included in the response.
+// Supported from Valkey 8.0.0 and above.
 func (zScanOptions *ZScanOptions) SetNoScores(noScores bool) *ZScanOptions {
 	zScanOptions.noScores = noScores
 	return zScanOptions

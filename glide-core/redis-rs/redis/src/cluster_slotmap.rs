@@ -122,7 +122,7 @@ impl SlotMap {
     pub fn is_primary(&self, address: &String) -> bool {
         self.nodes_map
             .get(address)
-            .map_or(false, |shard_addrs| *shard_addrs.primary() == *address)
+            .is_some_and(|shard_addrs| *shard_addrs.primary() == *address)
     }
 
     pub fn slot_value_for_route(&self, route: &Route) -> Option<&SlotMapValue> {
