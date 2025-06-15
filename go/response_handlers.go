@@ -1693,7 +1693,39 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 		return models.XInfoStreamResponse{},
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
+	return getXInfoStreamFields(infoMap)
+}
 
+func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return models.XInfoStreamFullOptionsResponse{}, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	infoMap, ok := result.(map[string]any)
+
+	if !ok {
+		return models.XInfoStreamFullOptionsResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
+
+	streamInfo, err := getXInfoStreamFullOptionFields(infoMap)
+	if err != nil {
+		fmt.Println(err)
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	return streamInfo, nil
+}
+
+func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, error) {
 	streamInfo := models.XInfoStreamResponse{}
 
 	// Parse integer fields
@@ -1709,16 +1741,24 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if val, ok := infoMap["groups"].(int64); ok {
 		streamInfo.Groups = val
 	}
-	if val, ok := infoMap["entries-added"].(int64); ok {
-		streamInfo.EntriesAdded = val
+
+	switch EntriesAdded := infoMap["entries-added"].(type) {
+	case int64:
+		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
+	default:
+		streamInfo.EntriesAdded = models.CreateNilInt64Result()
 	}
 
 	// Parse string fields
 	if val, ok := infoMap["last-generated-id"].(string); ok {
 		streamInfo.LastGeneratedID = val
 	}
-	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
-		streamInfo.MaxDeletedEntryID = val
+
+	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
+	case string:
+		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
+	default:
+		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
 	}
 
 	// Get First Entry
@@ -1730,6 +1770,159 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	entry = createEntry(infoMap, "last-entry")
 	if entry.ID != "" {
 		streamInfo.LastEntry = entry
+	}
+
+	return streamInfo, nil
+}
+
+func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamFullOptionsResponse, error) {
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+	// Parse integer fields
+	if val, ok := infoMap["length"].(int64); ok {
+		streamInfo.Length = val
+	}
+	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
+		streamInfo.RadixTreeKeys = val
+	}
+	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
+		streamInfo.RadixTreeNodes = val
+	}
+	switch EntriesAdded := infoMap["entries-added"].(type) {
+	case int64:
+		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
+	default:
+		streamInfo.EntriesAdded = models.CreateNilInt64Result()
+	}
+	// Parse string fields
+	if val, ok := infoMap["last-generated-id"].(string); ok {
+		streamInfo.LastGeneratedID = val
+	}
+	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
+	case string:
+		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
+	default:
+		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
+	}
+
+	// Get First Entry
+	entry := createEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+	// Get Last Entry
+	entry = createEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	if groups, ok := infoMap["groups"].([]any); ok {
+		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
+		for _, group := range groups {
+			groupInfo := models.XInfoStreamGroupInfo{}
+			if groupMap, ok := group.(map[string]any); ok {
+				if consumers, ok := groupMap["consumers"].([]any); ok {
+					consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
+					for _, consumerMap := range consumers {
+						consumerInfo := models.XInfoStreamConsumerInfo{}
+						if consumer, ok := consumerMap.(map[string]any); ok {
+							if name, ok := consumer["name"].(string); ok {
+								consumerInfo.Name = name
+							}
+							if seenTime, ok := consumer["seen-time"].(int64); ok {
+								consumerInfo.SeenTime = seenTime
+							}
+
+							switch activeTime := consumer["active-time"].(type) {
+							case int64:
+								consumerInfo.ActiveTime = models.CreateInt64Result(activeTime)
+							default:
+								consumerInfo.ActiveTime = models.CreateNilInt64Result()
+							}
+
+							if pelCount, ok := consumer["pel-count"].(int64); ok {
+								consumerInfo.PelCount = pelCount
+							}
+
+							if pending, ok := consumer["pending"].([]any); ok {
+								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
+								for _, entry := range pending {
+									if entryArr, ok := entry.([]any); ok {
+										pendingConsumerArr = append(
+											pendingConsumerArr,
+											models.ConsumerPendingEntry{
+												Id:             entryArr[0].(string),
+												DeliveredTime:  entryArr[1].(int64),
+												DeliveredCount: entryArr[2].(int64),
+											},
+										)
+									}
+								}
+								consumerInfo.Pending = pendingConsumerArr
+							}
+
+							consumersArr = append(consumersArr, consumerInfo)
+						}
+					}
+					groupInfo.Consumers = consumersArr
+				}
+				if name, ok := groupMap["name"].(string); ok {
+					groupInfo.Name = name
+				}
+				if lastDeliveredId, ok := groupMap["last-delivered-id"].(string); ok {
+					groupInfo.LastDeliveredId = lastDeliveredId
+				}
+				if pelCount, ok := groupMap["pel-count"].(int64); ok {
+					groupInfo.PelCount = pelCount
+				}
+				switch entriesRead := groupMap["entries-read"].(type) {
+				case int64:
+					groupInfo.EntriesRead = models.CreateInt64Result(entriesRead)
+				default:
+					groupInfo.EntriesRead = models.CreateNilInt64Result()
+				}
+				switch lag := groupMap["lag"].(type) {
+				case int64:
+					groupInfo.Lag = models.CreateInt64Result(lag)
+				default:
+					groupInfo.Lag = models.CreateNilInt64Result()
+				}
+				if pending, ok := groupMap["pending"].([]any); ok {
+					pendingArr := make([]models.PendingEntry, 0, len(pending))
+					for _, pendingEntry := range pending {
+						if pendingEntryArr, ok := pendingEntry.([]any); ok {
+							pendingArr = append(pendingArr, models.PendingEntry{
+								Id:             pendingEntryArr[0].(string),
+								Name:           pendingEntryArr[1].(string),
+								DeliveredTime:  pendingEntryArr[2].(int64),
+								DeliveredCount: pendingEntryArr[3].(int64),
+							})
+						}
+					}
+					groupInfo.Pending = pendingArr
+				}
+			}
+			groupsArr = append(groupsArr, groupInfo)
+		}
+		streamInfo.Groups = groupsArr
+	}
+	if val, ok := infoMap["entries"].([]any); ok {
+		entriesArr := make([]models.StreamEntry, 0, len(val))
+		for _, entry := range val {
+			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
+				entryInfo := models.StreamEntry{}
+				entryInfo.ID = streamEntry[0].(string)
+				entryInfo.Fields = createFieldInfoArray([]any{streamEntry[1]})
+				entriesArr = append(entriesArr, entryInfo)
+			}
+		}
+		streamInfo.Entries = entriesArr
+	}
+
+	switch RecordedFirstEntryId := infoMap["recorded-first-entry-id"].(type) {
+	case string:
+		streamInfo.RecordedFirstEntryId = models.CreateStringResult(RecordedFirstEntryId)
+	default:
+		streamInfo.RecordedFirstEntryId = models.CreateNilStringResult()
 	}
 
 	return streamInfo, nil

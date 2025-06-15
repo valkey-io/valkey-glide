@@ -1964,7 +1964,7 @@ func ExampleClient_XInfoStream() {
 	// }
 
 	// Output a few entries from the return object.
-	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
 	fmt.Printf("Groups: %d\n", response.Groups)
 	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
 	fmt.Printf("Length: %d\n", response.Length)
@@ -2019,7 +2019,7 @@ func ExampleClusterClient_XInfoStream() {
 	// }
 
 	// Output a few entries from the return object.
-	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
 	fmt.Printf("Groups: %d\n", response.Groups)
 	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
 	fmt.Printf("Length: %d\n", response.Length)
@@ -2054,36 +2054,32 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	jsonResult, _ := json.MarshalIndent(response, "", "  ")
-
-	fmt.Println(string(jsonResult))
+	// Print some of response values
+	fmt.Printf("Total entries: %d\n", len(response.Entries))
+	fmt.Printf("Entry 1 ID: %s\n", response.Entries[0].ID)
+	fmt.Printf("Entry 1 Field: %s\n", response.Entries[0].Fields[0])
+	fmt.Printf("Entry 2 ID: %s\n", response.Entries[1].ID)
+	fmt.Printf("Entry 2 Field: %s\n", response.Entries[1].Fields[0])
+	fmt.Printf("Last Generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
+	fmt.Printf("Length: %d\n", response.Length)
+	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID.Value())
+	fmt.Printf("Radix Tree Keys: %d\n", response.RadixTreeKeys)
+	fmt.Printf("Radix Tree Nodes: %d\n", response.RadixTreeNodes)
+	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId.Value())
 	// Output:
-	// {
-	//   "entries": [
-	//     [
-	//       "12345-1",
-	//       [
-	//         "field1",
-	//         "value1"
-	//       ]
-	//     ],
-	//     [
-	//       "12345-2",
-	//       [
-	//         "field2",
-	//         "value2"
-	//       ]
-	//     ]
-	//   ],
-	//   "entries-added": 5,
-	//   "groups": null,
-	//   "last-generated-id": "12345-5",
-	//   "length": 5,
-	//   "max-deleted-entry-id": "0-0",
-	//   "radix-tree-keys": 1,
-	//   "radix-tree-nodes": 2,
-	//   "recorded-first-entry-id": "12345-1"
-	// }
+	// Total entries: 2
+	// Entry 1 ID: 12345-1
+	// Entry 1 Field: {field1 value1}
+	// Entry 2 ID: 12345-2
+	// Entry 2 Field: {field2 value2}
+	// Last Generated Id: 12345-5
+	// Entries Added: 5
+	// Length: 5
+	// Max Deleted Entry id: 0-0
+	// Radix Tree Keys: 1
+	// Radix Tree Nodes: 2
+	// Recorded First Entry Id: 12345-1
 }
 
 func ExampleClusterClient_XInfoStreamFullWithOptions() {
@@ -2109,36 +2105,33 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	jsonResult, _ := json.MarshalIndent(response, "", "  ")
+	// Print some of response values
+	fmt.Printf("Total entries: %d\n", len(response.Entries))
+	fmt.Printf("Entry 1 ID: %s\n", response.Entries[0].ID)
+	fmt.Printf("Entry 1 Field: %s\n", response.Entries[0].Fields[0])
+	fmt.Printf("Entry 2 ID: %s\n", response.Entries[1].ID)
+	fmt.Printf("Entry 2 Field: %s\n", response.Entries[1].Fields[0])
+	fmt.Printf("Last Generated Id: %s\n", response.LastGeneratedID)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
+	fmt.Printf("Length: %d\n", response.Length)
+	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID.Value())
+	fmt.Printf("Radix Tree Keys: %d\n", response.RadixTreeKeys)
+	fmt.Printf("Radix Tree Nodes: %d\n", response.RadixTreeNodes)
+	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId.Value())
 
-	fmt.Println(string(jsonResult))
 	// Output:
-	// {
-	//   "entries": [
-	//     [
-	//       "12345-1",
-	//       [
-	//         "field1",
-	//         "value1"
-	//       ]
-	//     ],
-	//     [
-	//       "12345-2",
-	//       [
-	//         "field2",
-	//         "value2"
-	//       ]
-	//     ]
-	//   ],
-	//   "entries-added": 5,
-	//   "groups": null,
-	//   "last-generated-id": "12345-5",
-	//   "length": 5,
-	//   "max-deleted-entry-id": "0-0",
-	//   "radix-tree-keys": 1,
-	//   "radix-tree-nodes": 2,
-	//   "recorded-first-entry-id": "12345-1"
-	// }
+	// Total entries: 2
+	// Entry 1 ID: 12345-1
+	// Entry 1 Field: {field1 value1}
+	// Entry 2 ID: 12345-2
+	// Entry 2 Field: {field2 value2}
+	// Last Generated Id: 12345-5
+	// Entries Added: 5
+	// Length: 5
+	// Max Deleted Entry id: 0-0
+	// Radix Tree Keys: 1
+	// Radix Tree Nodes: 2
+	// Recorded First Entry Id: 12345-1
 }
 
 func ExampleClient_XInfoConsumers() {
