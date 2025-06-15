@@ -38,7 +38,7 @@ The client currently supports Python, Java, Node.js, and Go. Active development 
 - Go GA – Official stable release for production environments
 - OpenTelemetry Integration – Enhanced observability and tracing
 - Batching Support – Improved performance through batch operations
-- Lazy Connection – Deferred connection establishment for optimized resource usage
+- Lazy Connection – Allows client creation even when the server is not active, deferring connection establishment.
 
 ### Previous Releases
 
