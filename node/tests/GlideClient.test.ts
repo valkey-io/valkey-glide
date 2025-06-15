@@ -1807,6 +1807,42 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lazy connection with non-existent host_%p",
+        async (protocol) => {
+            const nonExistentHost = "non-existent-host-that-does-not-resolve";
+            const baseConfig = {
+                addresses: [{ host: nonExistentHost, port: 6379 }],
+                protocol,
+                requestTimeout: 1000,
+            };
+
+            // Test 1: Eager connection to non-existent host should fail immediately
+            await expect(
+                GlideClient.createClient({
+                    ...baseConfig,
+                    lazyConnect: false,
+                }),
+            ).rejects.toThrow(/connect|connection|resolve|network|host/i);
+
+            // Test 2: Lazy connection to non-existent host should succeed in client creation
+            const lazyClient = await GlideClient.createClient({
+                ...baseConfig,
+                lazyConnect: true,
+            });
+
+            try {
+                // But command execution should fail with appropriate error
+                await expect(lazyClient.ping()).rejects.toThrow(
+                    /connect|connection|resolve|network|host/i,
+                );
+            } finally {
+                lazyClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(
