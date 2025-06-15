@@ -53,6 +53,7 @@ APPROVED_PACKAGES = [
     "PyPI::certifi:2023.11.17",
     "Crate::ring:0.17.8",
     "Maven:org.json:json:20231013",
+    "Crate::webpki-root-certs:1.0.0"
 ]
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 
