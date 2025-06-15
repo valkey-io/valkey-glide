@@ -20,7 +20,6 @@ import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -35,47 +34,7 @@ public class ConnectionManager {
     // GlideClient.
 
     /** UDS connection representation. */
-    private ChannelHandler channel;
-
-    private Optional<BaseClientConfiguration> lazyConfig = Optional.empty();
-    private final Object lazyConnectionLock = new Object();
-
-    /**
-     * Creates a new ConnectionManager with the specified channel handler.
-     *
-     * @param channelHandler The channel handler to use, may be null for lazy initialization
-     */
-    public ConnectionManager(ChannelHandler channelHandler) {
-        this.channel = channelHandler;
-    }
-
-    /**
-     * Store configuration for lazy connection to be used later when the first command is executed.
-     *
-     * @param config The configuration to store
-     */
-    public void storeConfigForLazyConnection(BaseClientConfiguration config) {
-    synchronized (lazyConnectionLock) {
-        this.lazyConfig = Optional.of(config);
-    }
-}
-
-    /**
-     * Ensure connection is established before executing commands. If this is a lazy connection and no
-     * connection has been established yet, establish it now.
-     *
-     * @return A future that completes when the connection is established
-     */
-    public CompletableFuture<Void> ensureConnected() {
-        synchronized (lazyConnectionLock) {
-            return lazyConfig.map(config -> {
-                // Clear the optional (mark as connected)
-                lazyConfig = Optional.empty();
-                // Connect using stored config
-                return connectToValkey(config);
-            }).orElse(CompletableFuture.completedFuture(null));
-        }
-    }
+    private final ChannelHandler channel;
 
     /**
      * Make a connection request to Valkey Rust-core client.
@@ -356,15 +315,5 @@ public class ConnectionManager {
      */
     public Future<Void> closeConnection() {
         return channel.close();
-    }
-
-    /**
-     * Sets the channel handler for this connection manager. Required for circular dependency between
-     * ConnectionManager and ChannelHandler.
-     *
-     * @param channelHandler The channel handler to set
-     */
-    public void setChannelHandler(ChannelHandler channelHandler) {
-        this.channel = channelHandler;
     }
 }
