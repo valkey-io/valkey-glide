@@ -4,7 +4,6 @@ package glide.connectors.handlers;
 import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import glide.connectors.resources.ThreadPoolResource;
-import glide.managers.ConnectionManager;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -25,7 +24,6 @@ public class ChannelHandler {
     protected final Channel channel;
     protected final CallbackDispatcher callbackDispatcher;
     private AtomicBoolean isClosed = new AtomicBoolean(false);
-    protected final ConnectionManager connectionManager;
 
     public boolean isClosed() {
         return this.isClosed.get() || !this.channel.isOpen();
@@ -41,8 +39,7 @@ public class ChannelHandler {
     public ChannelHandler(
             CallbackDispatcher callbackDispatcher,
             String socketPath,
-            ThreadPoolResource threadPoolResource,
-            ConnectionManager connectionManager)
+            ThreadPoolResource threadPoolResource)
             throws InterruptedException {
 
         channel =
@@ -56,7 +53,6 @@ public class ChannelHandler {
                         .sync()
                         .channel();
         this.callbackDispatcher = callbackDispatcher;
-        this.connectionManager = connectionManager;
     }
 
     /**
@@ -90,16 +86,6 @@ public class ChannelHandler {
         var future = callbackDispatcher.registerConnection();
         channel.writeAndFlush(request).addListener(new NettyFutureErrorHandler(future));
         return future;
-    }
-
-    /**
-     * Ensure connection is established before executing commands. This is used for lazy connection
-     * support.
-     *
-     * @return A future that completes when the connection is established
-     */
-    public CompletableFuture<Void> ensureConnected() {
-        return connectionManager.ensureConnected();
     }
 
     /** Closes the UDS connection and frees corresponding resources. */

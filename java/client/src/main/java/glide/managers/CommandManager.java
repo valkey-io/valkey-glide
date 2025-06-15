@@ -80,14 +80,8 @@ public class CommandManager {
             String[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        // First ensure connection is established (if this is a lazy client)
-        return channel
-                .ensureConnected()
-                .thenCompose(
-                        ignored -> {
-                            CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
-                            return submitCommandToChannel(command, responseHandler);
-                        });
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
@@ -103,14 +97,8 @@ public class CommandManager {
             GlideString[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        // First ensure connection is established (if this is a lazy client)
-        return channel
-                .ensureConnected()
-                .thenCompose(
-                        ignored -> {
-                            CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
-                            return submitCommandToChannel(command, responseHandler);
-                        });
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
@@ -128,14 +116,8 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        // First ensure connection is established (if this is a lazy client)
-        return channel
-                .ensureConnected()
-                .thenCompose(
-                        ignored -> {
-                            CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
-                            return submitCommandToChannel(command, responseHandler);
-                        });
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
@@ -153,14 +135,8 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        // First ensure connection is established (if this is a lazy client)
-        return channel
-                .ensureConnected()
-                .thenCompose(
-                        ignored -> {
-                            CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
-                            return submitCommandToChannel(command, responseHandler);
-                        });
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
