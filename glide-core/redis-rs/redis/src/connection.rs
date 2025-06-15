@@ -22,15 +22,16 @@ use std::vec::IntoIter;
 
 use crate::commands::resp3_hello;
 
-use rustls::{RootCertStore, StreamOwned};
+use rustls::StreamOwned;
 use std::sync::Arc;
 
 use crate::push_manager::PushManager;
 use crate::PushInfo;
 
-use rustls_native_certs::load_native_certs;
-
 use crate::tls::TlsConnParams;
+use std::sync::OnceLock;
+
+static CRYPTO_PROVIDER: OnceLock<()> = OnceLock::new();
 
 static DEFAULT_PORT: u16 = 6379;
 
@@ -765,45 +766,77 @@ pub(crate) fn create_rustls_config(
     insecure: bool,
     tls_params: Option<TlsConnParams>,
 ) -> RedisResult<rustls::ClientConfig> {
+    // install the default (ring) crypto provider exactly once
+    CRYPTO_PROVIDER.get_or_init(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+
     use crate::tls::ClientTlsParams;
+    use rustls_platform_verifier::BuilderVerifierExt;
 
-    #[allow(unused_mut)]
-    let mut root_store = RootCertStore::empty();
-    for cert in load_native_certs().certs {
-        root_store.add(cert).map_err(|e| {
-            RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Failed to add certificate to root store",
-                format!("{}", e),
-            ))
-        })?;
-    }
-
-    let config = rustls::ClientConfig::builder();
     let config = if let Some(tls_params) = tls_params {
-        let config_builder =
-            config.with_root_certificates(tls_params.root_cert_store.unwrap_or(root_store));
+        if let Some(root_cert_store) = tls_params.root_cert_store {
+            // If custom root certificates are provided, use them instead of platform verifier
+            let config = rustls::ClientConfig::builder().with_root_certificates(root_cert_store);
 
-        if let Some(ClientTlsParams {
-            client_cert_chain: client_cert,
-            client_key,
-        }) = tls_params.client_tls_params
-        {
-            config_builder
-                .with_client_auth_cert(client_cert, client_key)
+            if let Some(ClientTlsParams {
+                client_cert_chain: client_cert,
+                client_key,
+            }) = tls_params.client_tls_params
+            {
+                config
+                    .with_client_auth_cert(client_cert, client_key)
+                    .map_err(|err| {
+                        RedisError::from((
+                            ErrorKind::InvalidClientConfig,
+                            "Unable to build client with TLS parameters provided.",
+                            err.to_string(),
+                        ))
+                    })?
+            } else {
+                config.with_no_client_auth()
+            }
+        } else {
+            // Use platform verifier when no custom root certificates are provided
+            let config = rustls::ClientConfig::builder()
+                .with_platform_verifier()
                 .map_err(|err| {
                     RedisError::from((
                         ErrorKind::InvalidClientConfig,
-                        "Unable to build client with TLS parameters provided.",
+                        "Unable to configure platform verifier.",
                         err.to_string(),
                     ))
-                })?
-        } else {
-            config_builder.with_no_client_auth()
+                })?;
+
+            if let Some(ClientTlsParams {
+                client_cert_chain: client_cert,
+                client_key,
+            }) = tls_params.client_tls_params
+            {
+                config
+                    .with_client_auth_cert(client_cert, client_key)
+                    .map_err(|err| {
+                        RedisError::from((
+                            ErrorKind::InvalidClientConfig,
+                            "Unable to build client with TLS parameters provided.",
+                            err.to_string(),
+                        ))
+                    })?
+            } else {
+                config.with_no_client_auth()
+            }
         }
     } else {
-        config
-            .with_root_certificates(root_store)
+        // Default case: use platform verifier
+        rustls::ClientConfig::builder()
+            .with_platform_verifier()
+            .map_err(|err| {
+                RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Unable to configure platform verifier.",
+                    err.to_string(),
+                ))
+            })?
             .with_no_client_auth()
     };
 
