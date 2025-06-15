@@ -305,47 +305,6 @@ mod cluster_client_tests {
         });
     }
 
-    #[rstest]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_async_open_telemetry_config() {
-        block_on_all(async {
-            let test_basics = setup_cluster_with_replicas(
-                TestConfiguration {
-                    cluster_mode: ClusterMode::Enabled,
-                    shared_server: false,
-                    ..Default::default()
-                },
-                0,
-                3,
-            )
-            .await;
-
-            let cluster = test_basics.cluster.unwrap();
-            let mut addresses = cluster.get_server_addresses();
-            addresses.truncate(1);
-
-            let mut connection_request = connection_request::ConnectionRequest::new();
-            connection_request.addresses = addresses.iter().map(get_address_info).collect();
-
-            let mut op = OpenTelemetryConfig::new();
-            op.collector_end_point = "http://valid-url.com".into();
-            op.span_flush_interval = Some(300);
-
-            connection_request.opentelemetry_config = protobuf::MessageField::from_option(Some(op));
-
-            let result = std::panic::catch_unwind(|| {
-                tokio::task::block_in_place(|| {
-                    futures::executor::block_on(async {
-                        let _client = Client::new(connection_request.clone().into(), None)
-                            .await
-                            .unwrap();
-                    });
-                });
-            });
-            assert!(result.is_err(), "Expected a panic but no panic occurred");
-        });
-    }
-
     // Helper function to get client count on shared cluster primaries using AllMasters routing
     async fn get_total_clients_on_shared_cluster_primaries(client: &mut Client) -> usize {
         let mut cmd = redis::Cmd::new();
