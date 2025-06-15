@@ -275,10 +275,11 @@ func (opts *LPosOptions) ToArgs() ([]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 type RestoreOptions struct {
-	// Subcommand string to replace existing key.
-	replace string
-	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	absTTL string
+	// Replace existing key.
+	Replace bool
+	// Set to `true` to specify that `ttl` argument of `Restore` command represents an absolute Unix timestamp (in
+	// milliseconds).
+	AbsTTL bool
 	// It represents the idletime/frequency of object.
 	eviction Eviction
 }
@@ -287,15 +288,15 @@ func NewRestoreOptions() *RestoreOptions {
 	return &RestoreOptions{}
 }
 
-// Custom setter methods to replace existing key.
+// Replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = constants.ReplaceKeyword
+	restoreOption.Replace = true
 	return restoreOption
 }
 
-// Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
+// Specify that `ttl` argument of `Restore` command represents an absolute Unix timestamp (in milliseconds).
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = constants.ABSTTLKeyword
+	restoreOption.AbsTTL = true
 	return restoreOption
 }
 
@@ -317,11 +318,11 @@ func (restoreOption *RestoreOptions) SetEviction(evictionType constants.Eviction
 func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.replace != "" {
-		args = append(args, string(opts.replace))
+	if opts.Replace {
+		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.absTTL != "" {
-		args = append(args, string(opts.absTTL))
+	if opts.AbsTTL {
+		args = append(args, string(constants.ABSTTLKeyword))
 	}
 	if (opts.eviction != Eviction{}) {
 		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
@@ -359,42 +360,42 @@ func (opts *InfoOptions) ToArgs() ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/Copy/
 type CopyOptions struct {
 	// The REPLACE option removes the destination key before copying the value to it.
-	replace bool
+	Replace bool
 	// Option allows specifying an alternative logical database index for the destination key
-	dbDestination int64
+	DbDestination int64
 }
 
 func NewCopyOptions() *CopyOptions {
-	return &CopyOptions{replace: false}
+	return &CopyOptions{Replace: false}
 }
 
 // Custom setter methods to removes the destination key before copying the value to it.
 func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
-	restoreOption.replace = true
+	restoreOption.Replace = true
 	return restoreOption
 }
 
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
 func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
-	copyOption.dbDestination = destinationDB
+	copyOption.DbDestination = destinationDB
 	return copyOption
 }
 
 func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.replace {
+	if opts.Replace {
 		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.dbDestination >= 0 {
-		args = append(args, "DB", utils.IntToString(opts.dbDestination))
+	if opts.DbDestination >= 0 {
+		args = append(args, "DB", utils.IntToString(opts.DbDestination))
 	}
 	return args, err
 }
 
 // Optional arguments for `ZPopMin` and `ZPopMax` commands.
 type ZPopOptions struct {
-	count int64
+	Count int64
 }
 
 func NewZPopOptions() *ZPopOptions {
@@ -403,17 +404,17 @@ func NewZPopOptions() *ZPopOptions {
 
 // The maximum number of popped elements. If not specified, pops one member.
 func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
-	opts.count = count
+	opts.Count = count
 	return opts
 }
 
 // `ZPopMax/Min` don't use the COUNT keyword, only ZMPop will use .
 func (opts *ZPopOptions) ToArgs(withKeyword bool) ([]string, error) {
-	if opts.count <= 0 {
+	if opts.Count <= 0 {
 		return []string{}, nil
 	}
 	if withKeyword {
-		return []string{"COUNT", strconv.FormatInt(opts.count, 10)}, nil
+		return []string{"COUNT", strconv.FormatInt(opts.Count, 10)}, nil
 	}
-	return []string{strconv.FormatInt(opts.count, 10)}, nil
+	return []string{strconv.FormatInt(opts.Count, 10)}, nil
 }

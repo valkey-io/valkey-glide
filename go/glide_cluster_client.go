@@ -2396,7 +2396,7 @@ func (client *ClusterClient) InvokeScriptWithClusterOptions(
 	script options.Script,
 	clusterScriptOptions options.ClusterScriptOptions,
 ) (models.ClusterValue[any], error) {
-	args := clusterScriptOptions.GetArgs()
+	args := clusterScriptOptions.Args
 	route := clusterScriptOptions.Route
 
 	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, args, route)
@@ -2519,7 +2519,7 @@ func (client *ClusterClient) ScriptFlushWithOptions(
 		}
 		return handleOkResponse(result)
 	}
-	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.Route.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.RouteOption.Route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

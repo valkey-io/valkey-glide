@@ -4,7 +4,7 @@ package options
 
 // This struct represents the optional arguments for the ZINTER command.
 type ZInterOptions struct {
-	aggregate Aggregate
+	Aggregate Aggregate
 }
 
 func NewZInterOptions() *ZInterOptions {
@@ -13,13 +13,13 @@ func NewZInterOptions() *ZInterOptions {
 
 // SetAggregate sets the aggregate method for the ZInter command.
 func (options *ZInterOptions) SetAggregate(aggregate Aggregate) *ZInterOptions {
-	options.aggregate = aggregate
+	options.Aggregate = aggregate
 	return options
 }
 
 func (options *ZInterOptions) ToArgs() ([]string, error) {
-	if options.aggregate != "" {
-		return options.aggregate.ToArgs()
+	if options.Aggregate != "" {
+		return options.Aggregate.ToArgs()
 	}
 
 	return []string{}, nil
