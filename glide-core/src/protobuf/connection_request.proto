@@ -60,7 +60,7 @@ message ConnectionRequest {
     bool cluster_mode_enabled = 3;
     uint32 request_timeout = 4;
     ReadFrom read_from = 5;
-    ConnectionRetryStrategy connection_retry_strategy = 6;
+    optional ConnectionRetryStrategy connection_retry_strategy = 6;
     AuthenticationInfo authentication_info = 7;
     uint32 database_id = 8;
     ProtocolVersion protocol = 9;
