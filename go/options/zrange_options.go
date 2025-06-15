@@ -13,6 +13,7 @@ import (
 //   - For range queries by score, use `RangeByScore`.
 type ZRangeQuery interface {
 	ToArgs() ([]string, error)
+	dummyZRangeQuery()
 }
 
 type ZRemRangeQuery interface {
@@ -115,6 +116,8 @@ func (rbi *RangeByIndex) ToArgs() ([]string, error) {
 	return args, nil
 }
 
+func (rbi *RangeByIndex) dummyZRangeQuery() {}
+
 // Queries a range of elements from a sorted set by theirs score.
 //
 // Parameters:
@@ -156,6 +159,8 @@ func (rbs *RangeByScore) ToArgs() ([]string, error) {
 func (rbs *RangeByScore) ToArgsRemRange() ([]string, error) {
 	return []string{string(rbs.start), string(rbs.end)}, nil
 }
+
+func (rbi *RangeByScore) dummyZRangeQuery() {}
 
 // Queries a range of elements from a sorted set by theirs lexicographical order.
 //
@@ -203,15 +208,18 @@ func (rbl *RangeByLex) ToArgsLexCount() []string {
 	return []string{string(rbl.start), string(rbl.end)}
 }
 
+func (rbi *RangeByLex) dummyZRangeQuery() {}
+
 // Query for `ZRangeWithScores` in [SortedSetCommands]
 //   - For range queries by index (rank), use `RangeByIndex`.
 //   - For range queries by score, use `RangeByScore`.
 type ZRangeQueryWithScores interface {
-	// A dummy interface to distinguish queries for `ZRange` and `ZRangeWithScores`
+	// A dummyZRangeQueryWithScores interface to distinguish queries for `ZRange` and `ZRangeWithScores`
 	// `ZRangeWithScores` does not support BYLEX
-	dummy()
+	dummyZRangeQueryWithScores()
+	dummyZRangeQuery()
 	ToArgs() ([]string, error)
 }
 
-func (q *RangeByIndex) dummy() {}
-func (q *RangeByScore) dummy() {}
+func (q *RangeByIndex) dummyZRangeQueryWithScores() {}
+func (q *RangeByScore) dummyZRangeQueryWithScores() {}

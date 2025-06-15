@@ -19,7 +19,7 @@ type Route interface {
 
 type SingleNodeRoute interface {
 	IsMultiNode() bool
-	dummy()
+	dummySingleNodeRoute()
 }
 
 type (
@@ -41,9 +41,9 @@ const (
 
 func (route SimpleNodeRoute) IsMultiNode() bool { return route != SimpleNodeRoute(RandomRoute) }
 
-func (route SimpleSingleNodeRoute) IsMultiNode() bool { return false }
-func (route SimpleMultiNodeRoute) IsMultiNode() bool  { return true }
-func (route SimpleSingleNodeRoute) dummy()            {}
+func (route SimpleSingleNodeRoute) IsMultiNode() bool     { return false }
+func (route SimpleMultiNodeRoute) IsMultiNode() bool      { return true }
+func (route SimpleSingleNodeRoute) dummySingleNodeRoute() {}
 
 func (snr SimpleSingleNodeRoute) ToPtr() *Route {
 	a := Route(snr)
@@ -79,8 +79,8 @@ func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
 	return &SlotIdRoute{SlotType: slotType, SlotID: slotId}
 }
 
-func (route SlotIdRoute) dummy()            {}
-func (route SlotIdRoute) IsMultiNode() bool { return false }
+func (route SlotIdRoute) dummySingleNodeRoute() {}
+func (route SlotIdRoute) IsMultiNode() bool     { return false }
 
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
@@ -95,8 +95,8 @@ func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 	return &SlotKeyRoute{SlotType: slotType, SlotKey: slotKey}
 }
 
-func (route SlotKeyRoute) dummy()            {}
-func (route SlotKeyRoute) IsMultiNode() bool { return false }
+func (route SlotKeyRoute) dummySingleNodeRoute() {}
+func (route SlotKeyRoute) IsMultiNode() bool     { return false }
 
 // Routes a request to a node by its address.
 type ByAddressRoute struct {
@@ -127,5 +127,5 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 	return &ByAddressRoute{Host: split[0], Port: int32(port)}, nil
 }
 
-func (route ByAddressRoute) dummy()            {}
-func (route ByAddressRoute) IsMultiNode() bool { return false }
+func (route ByAddressRoute) dummySingleNodeRoute() {}
+func (route ByAddressRoute) IsMultiNode() bool     { return false }
