@@ -1776,7 +1776,6 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @Disabled("flaky test") // Related to issue #2277, #2642
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
