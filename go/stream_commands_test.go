@@ -2061,12 +2061,12 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 	fmt.Printf("Entry 2 ID: %s\n", response.Entries[1].ID)
 	fmt.Printf("Entry 2 Field: %s\n", response.Entries[1].Fields[0])
 	fmt.Printf("Last Generated Id: %s\n", response.LastGeneratedID)
-	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
 	fmt.Printf("Length: %d\n", response.Length)
-	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID)
+	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID.Value())
 	fmt.Printf("Radix Tree Keys: %d\n", response.RadixTreeKeys)
 	fmt.Printf("Radix Tree Nodes: %d\n", response.RadixTreeNodes)
-	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId)
+	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId.Value())
 	// Output:
 	// Total entries: 2
 	// Entry 1 ID: 12345-1
@@ -2112,12 +2112,12 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 	fmt.Printf("Entry 2 ID: %s\n", response.Entries[1].ID)
 	fmt.Printf("Entry 2 Field: %s\n", response.Entries[1].Fields[0])
 	fmt.Printf("Last Generated Id: %s\n", response.LastGeneratedID)
-	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
+	fmt.Printf("Entries Added: %d\n", response.EntriesAdded.Value())
 	fmt.Printf("Length: %d\n", response.Length)
-	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID)
+	fmt.Printf("Max Deleted Entry id: %s\n", response.MaxDeletedEntryID.Value())
 	fmt.Printf("Radix Tree Keys: %d\n", response.RadixTreeKeys)
 	fmt.Printf("Radix Tree Nodes: %d\n", response.RadixTreeNodes)
-	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId)
+	fmt.Printf("Recorded First Entry Id: %s\n", response.RecordedFirstEntryId.Value())
 
 	// Output:
 	// Total entries: 2

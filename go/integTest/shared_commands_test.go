@@ -7747,13 +7747,13 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), infoFull.Length)
 		if suite.serverVersion >= "7.0.0" {
-			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId)
+			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId.Value())
 		} else {
-			assert.Nil(suite.T(), infoFull.RecordedFirstEntryId)
-			assert.Nil(suite.T(), infoFull.MaxDeletedEntryID)
-			assert.Nil(suite.T(), infoFull.EntriesAdded)
-			assert.Nil(suite.T(), infoFull.Groups[0].EntriesRead)
-			assert.Nil(suite.T(), infoFull.Groups[0].Lag)
+			assert.True(suite.T(), infoFull.RecordedFirstEntryId.IsNil())
+			assert.True(suite.T(), infoFull.MaxDeletedEntryID.IsNil())
+			assert.True(suite.T(), infoFull.EntriesAdded.IsNil())
+			assert.True(suite.T(), infoFull.Groups[0].EntriesRead.IsNil())
+			assert.True(suite.T(), infoFull.Groups[0].Lag.IsNil())
 		}
 		// first group
 		assert.Equal(suite.T(), len(infoFull.Groups), 1)
@@ -7767,16 +7767,16 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		// first consumer of first group
 		cns := infoFull.Groups[0].Consumers[0]
 		assert.NotNil(suite.T(), cns.SeenTime)
-		assert.NotNil(suite.T(), cns.ActiveTime)
+		assert.False(suite.T(), cns.ActiveTime.IsNil())
 		assert.Equal(suite.T(), cns.Name, consumer)
 		assert.Equal(suite.T(), cns.PelCount, int64(1))
 		assert.Equal(suite.T(), len(cns.Pending), int(1))
 		assert.Equal(suite.T(), cns.Pending[0].Id, "1-0")
 		assert.Equal(suite.T(), cns.Pending[0].DeliveredCount, int64(1))
 		if suite.serverVersion >= "7.2.0" {
-			assert.NotNil(suite.T(), cns.ActiveTime)
+			assert.False(suite.T(), cns.ActiveTime.IsNil())
 		} else {
-			assert.Nil(suite.T(), cns.ActiveTime)
+			assert.True(suite.T(), cns.ActiveTime.IsNil())
 		}
 	})
 }

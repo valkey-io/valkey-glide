@@ -1779,16 +1779,23 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
 		streamInfo.RadixTreeNodes = val
 	}
-	if val, ok := infoMap["entries-added"].(int64); ok {
-		streamInfo.EntriesAdded = val
+	switch EntriesAdded := infoMap["entries-added"].(type) {
+	case int64:
+		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
+	default:
+		streamInfo.EntriesAdded = models.CreateNilInt64Result()
 	}
 	// Parse string fields
 	if val, ok := infoMap["last-generated-id"].(string); ok {
 		streamInfo.LastGeneratedID = val
 	}
-	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
-		streamInfo.MaxDeletedEntryID = val
+	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
+	case string:
+		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
+	default:
+		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
 	}
+
 	// Get First Entry
 	entry := createEntry(infoMap, "first-entry")
 	if entry.ID != "" {
@@ -1816,8 +1823,12 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 							if seenTime, ok := consumer["seen-time"].(int64); ok {
 								consumerInfo.SeenTime = seenTime
 							}
-							if activeTime, ok := consumer["active-time"].(int64); ok {
-								consumerInfo.ActiveTime = activeTime
+
+							switch activeTime := consumer["active-time"].(type) {
+							case int64:
+								consumerInfo.ActiveTime = models.CreateInt64Result(activeTime)
+							default:
+								consumerInfo.ActiveTime = models.CreateNilInt64Result()
 							}
 
 							if pelCount, ok := consumer["pel-count"].(int64); ok {
@@ -1899,8 +1910,11 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 		streamInfo.Entries = entriesArr
 	}
 
-	if val, ok := infoMap["recorded-first-entry-id"].(string); ok {
-		streamInfo.RecordedFirstEntryId = val
+	switch RecordedFirstEntryId := infoMap["recorded-first-entry-id"].(type) {
+	case string:
+		streamInfo.RecordedFirstEntryId = models.CreateStringResult(RecordedFirstEntryId)
+	default:
+		streamInfo.RecordedFirstEntryId = models.CreateNilStringResult()
 	}
 
 	return streamInfo, nil

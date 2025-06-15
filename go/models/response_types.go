@@ -371,7 +371,7 @@ type XInfoStreamConsumerInfo struct {
 	// The time stamp of the last attempted interaction.
 	SeenTime int64
 	// The time stamp of the last successful interaction.
-	ActiveTime int64
+	ActiveTime Result[int64]
 	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
 	// to be acknowledged.
 	PelCount int64
@@ -413,9 +413,9 @@ type XInfoStreamFullOptionsResponse struct {
 	// The ID of the least-recently entry that was added to the stream
 	LastGeneratedID string
 	// The maximal entry ID that was deleted from the stream
-	MaxDeletedEntryID string
+	MaxDeletedEntryID Result[string]
 	// The count of all entries added to the stream during its lifetime
-	EntriesAdded int64
+	EntriesAdded Result[int64]
 	// The ID and field-value tuples of the first entry in the stream
 	FirstEntry StreamEntry
 	// The ID and field-value tuples of the last entry in the stream
@@ -425,5 +425,5 @@ type XInfoStreamFullOptionsResponse struct {
 	// The list of stream entries
 	Entries []StreamEntry
 	// The first entry id recorded
-	RecordedFirstEntryId string
+	RecordedFirstEntryId Result[string]
 }
