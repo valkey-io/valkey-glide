@@ -1741,16 +1741,24 @@ func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, e
 	if val, ok := infoMap["groups"].(int64); ok {
 		streamInfo.Groups = val
 	}
-	if val, ok := infoMap["entries-added"].(int64); ok {
-		streamInfo.EntriesAdded = val
+
+	switch EntriesAdded := infoMap["entries-added"].(type) {
+	case int64:
+		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
+	default:
+		streamInfo.EntriesAdded = models.CreateNilInt64Result()
 	}
 
 	// Parse string fields
 	if val, ok := infoMap["last-generated-id"].(string); ok {
 		streamInfo.LastGeneratedID = val
 	}
-	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
-		streamInfo.MaxDeletedEntryID = val
+
+	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
+	case string:
+		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
+	default:
+		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
 	}
 
 	// Get First Entry

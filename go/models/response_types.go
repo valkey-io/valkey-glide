@@ -333,9 +333,9 @@ type XInfoStreamResponse struct {
 	// The ID of the least-recently entry that was added to the stream
 	LastGeneratedID string
 	// The maximal entry ID that was deleted from the stream
-	MaxDeletedEntryID string
+	MaxDeletedEntryID Result[string]
 	// The count of all entries added to the stream during its lifetime
-	EntriesAdded int64
+	EntriesAdded Result[int64]
 	// The ID and field-value tuples of the first entry in the stream
 	FirstEntry StreamEntry
 	// The ID and field-value tuples of the last entry in the stream
