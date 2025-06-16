@@ -2686,10 +2686,10 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 //
 // Return value:
 //
-//	Always `"OK"`.
-//	If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-//	key to be removed).
-//	If end exceeds the actual end of the list, it will be treated like the last element of the list.
+//	Always "OK".
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+//	and the key is removed.
+//	If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 //	If key does not exist, `"OK"` will be returned without changes to the database.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
@@ -6929,18 +6929,18 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
 	opts options.XInfoStreamOptions,
-) (map[string]any, error) {
+) (models.XInfoStreamFullOptionsResponse, error) {
 	args := []string{key, constants.FullKeyword}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamFullOptionsResponse(result)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the

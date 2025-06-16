@@ -144,3 +144,18 @@ func (node keyValuesConverter) convert(data any) ([]models.KeyValues, error) {
 
 	return nil, fmt.Errorf("unexpected type received: %T", res)
 }
+
+func ReadValue[T any](data map[string]any, field string, into *T) {
+	if val, ok := data[field].(T); ok {
+		*into = val
+	}
+}
+
+func ReadResult[T any](data map[string]any, field string, info *models.Result[T]) {
+	switch val := data[field].(type) {
+	case T:
+		*info = models.CreateResultOf(val)
+	default:
+		*info = models.CreateNilResultOf[T]()
+	}
+}
