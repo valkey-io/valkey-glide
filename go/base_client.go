@@ -1207,8 +1207,11 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 // Return value:
 //
-//	A string containing all the longest common subsequences combined between the 2 strings.
-//	An empty string is returned if the keys do not exist or have no common subsequences.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: A string containing all the longest common subsequences combined between the 2 strings. An empty string is
+//		returned if the keys do not exist or have no common subsequences.
+//	- `Matches`: Empty array.
+//	- `Len`: 0
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error) {
@@ -1240,7 +1243,10 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*m
 //
 // Return value:
 //
-//	The total length of all the longest common subsequences the 2 strings.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Empty array.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*models.LCSMatch, error) {
@@ -1273,14 +1279,11 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*model
 //
 // Return value:
 //
-//	A Map containing the indices of the longest common subsequence between the 2 strings
-//	and the total length of all the longest common subsequences. The resulting map contains
-//	two keys, "matches" and "len":
-//	  - "len" is mapped to the total length of the all longest common subsequences between
-//	     the 2 strings.
-//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//	     of the common subsequences in the strings held by key1 and key2. If WithMatchLen is
-//	     specified, the array also contains the length of each match, otherwise the length is 0.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Array of [models.LCSMatchedPosition] objects with the common subsequences in the strings held by key1 and
+//		key2. If WithMatchLen is specified, the array also contains the length of each match, otherwise the length is 0.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(
