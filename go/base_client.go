@@ -4952,7 +4952,7 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A models.Result[models.RankAndScore] containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
 //	`nil` will be returned.
 //
@@ -4961,12 +4961,12 @@ func (client *baseClient) ZRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
@@ -5014,7 +5014,7 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A models.Result[models.RankAdnScore] containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
 //	`nil` will be returned.
 //
@@ -5023,12 +5023,12 @@ func (client *baseClient) ZRevRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Trims the stream by evicting older entries.

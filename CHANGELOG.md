@@ -126,6 +126,7 @@
 * Go: Change options arguments to not be pointers ([#4106](https://github.com/valkey-io/valkey-glide/pull/4106))
 * Go: Change `ZAddIncr` Return Type to be `float64` ([#4190](https://github.com/valkey-io/valkey-glide/pull/4190))
 * Go: Update return type for `LMPop` and related commands ([#4166](https://github.com/valkey-io/valkey-glide/pull/4166))
+* Go: `ZRankWithScore` and `ZRevRankWithScore` update response type ([#4196](https://github.com/valkey-io/valkey-glide/pull/4196))
 
 #### Fixes
 
