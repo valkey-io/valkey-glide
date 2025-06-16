@@ -403,6 +403,7 @@ type XInfoStreamGroupInfo struct {
 	Consumers []XInfoStreamConsumerInfo
 }
 
+// XInfoStreamFullOptionsResponse represents the information about a stream with the full option.
 type XInfoStreamFullOptionsResponse struct {
 	// The number of entries in the stream
 	Length int64
