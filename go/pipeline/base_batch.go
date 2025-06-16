@@ -3328,12 +3328,18 @@ func (b *BaseBatch[T]) ZRank(key string, member string) *T {
 //
 // Command Response:
 //
-//	A tuple containing the rank of member and its score.
-//	If key doesn't exist, or if member is not present in the set, `nil` will be returned.
+//	A [models.RankAndScore] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (b *BaseBatch[T]) ZRankWithScore(key string, member string) *T {
-	return b.addCmdAndTypeChecker(C.ZRank, []string{key, member, constants.WithScoreKeyword}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.ZRank,
+		[]string{key, member, constants.WithScoreKeyword},
+		reflect.Slice,
+		true,
+		internal.ConvertRankAndScoreResponse,
+	)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
@@ -3373,12 +3379,18 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 //
 // Command Response:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A [models.RankAndScore] containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (b *BaseBatch[T]) ZRevRankWithScore(key string, member string) *T {
-	return b.addCmdAndTypeChecker(C.ZRevRank, []string{key, member, constants.WithScoreKeyword}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.ZRevRank,
+		[]string{key, member, constants.WithScoreKeyword},
+		reflect.Slice,
+		true,
+		internal.ConvertRankAndScoreResponse,
+	)
 }
 
 // Trims the stream by evicting older entries.
@@ -4872,11 +4884,20 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 //
 // Command Response:
 //
-//	A stream information for the given `key`.
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
+//	- Length: the number of entries in the stream
+//	- RadixTreeKeys: the number of keys in the underlying radix data structure
+//	- RadixTreeNodes: the number of nodes in the underlying radix data structure
+//	- Groups: the number of consumer groups defined for the stream
+//	- LastGeneratedID: the ID of the least-recently entry that was added to the stream
+//	- MaxDeletedEntryID: the maximal entry ID that was deleted from the stream
+//	- EntriesAdded: the count of all entries added to the stream during its lifetime
+//	- FirstEntry: the ID and field-value tuples of the first entry in the stream
+//	- LastEntry: the ID and field-value tuples of the last entry in the stream
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStream(key string) *T {
-	return b.addCmdAndTypeChecker(C.XInfoStream, []string{key}, reflect.Map, false)
+	return b.addCmdAndConverter(C.XInfoStream, []string{key}, reflect.Map, false, internal.ConvertXInfoStreamResponse)
 }
 
 // Returns detailed information about the stream stored at `key`.
@@ -4890,7 +4911,7 @@ func (b *BaseBatch[T]) XInfoStream(key string) *T {
 //
 // Command Response:
 //
-//	A detailed stream information for the given `key`.
+//	A detailed stream information for the given `key`. See [models.XInfoStreamFullOptionsResponse].
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInfoStreamOptions) *T {
@@ -4902,7 +4923,7 @@ func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInf
 		}
 		args = append(args, optionArgs...)
 	}
-	return b.addCmdAndTypeChecker(C.XInfoStream, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.XInfoStream, args, reflect.Map, false, internal.ConvertXInfoStreamFullResponse)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the

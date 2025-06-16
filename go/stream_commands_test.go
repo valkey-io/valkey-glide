@@ -2048,7 +2048,7 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 		)
 	}
 
-	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
+	options := options.NewXInfoStreamOptions().SetCount(2)
 	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -2099,7 +2099,7 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 		)
 	}
 
-	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
+	options := options.NewXInfoStreamOptions().SetCount(2)
 	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

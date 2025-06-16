@@ -4928,8 +4928,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 // Return value:
 //
 //	The rank of `member` in the sorted set.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -4957,9 +4956,8 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A models.Result[models.RankAndScore] containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(
@@ -4988,10 +4986,8 @@ func (client *baseClient) ZRankWithScore(
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set, where ranks are ordered from high to
-//	low based on scores.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -5019,9 +5015,8 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A models.Result[models.RankAdnScore] containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
@@ -6895,7 +6890,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A models.XInfoStreamResponse containing information about the stream stored at key:
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
 //	- Length: the number of entries in the stream
 //	- RadixTreeKeys: the number of keys in the underlying radix data structure
 //	- RadixTreeNodes: the number of nodes in the underlying radix data structure

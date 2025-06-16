@@ -7741,7 +7741,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		infoFull, _ := client.XInfoStreamFullWithOptions(
 			context.Background(),
 			key,
-			*options.NewXInfoStreamOptionsOptions().SetCount(1),
+			*options.NewXInfoStreamOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), infoFull.Length)

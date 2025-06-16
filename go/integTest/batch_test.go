@@ -307,7 +307,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			XClaimJustId(key1, "g", "c", 2, []string{"0-0"}).
 			XClaimJustIdWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
 			XInfoStream(key1).
-			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptionsOptions().SetCount(2)).
+			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptions().SetCount(2)).
 			XInfoConsumers(key1, "g").
 			XInfoGroups(key1).
 			XRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
@@ -1848,7 +1848,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.ZRankWithScore(key, "member1")
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRankWithScore(key, member1)",
+			},
 		)
 	}
 
@@ -1859,7 +1862,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.ZRevRankWithScore(key, "member1")
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRevRankWithScore(key, member2)",
+			},
 		)
 	}
 
@@ -2314,6 +2320,25 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 			CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"},
 		)
 	}
+
+	batch.XInfoStream(streamKey1)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: models.XInfoStreamResponse{},
+			CheckTypeOnly:    true,
+			TestName:         "XInfoStream(streamKey1)",
+		},
+	)
+	batch.XInfoStreamFullWithOptions(streamKey1, options.NewXInfoStreamOptions().SetCount(1))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: models.XInfoStreamFullOptionsResponse{},
+			CheckTypeOnly:    true,
+			TestName:         "XInfoStreamFullWithOptions(streamKey1)",
+		},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}
 }

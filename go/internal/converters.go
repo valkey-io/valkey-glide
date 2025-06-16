@@ -606,3 +606,146 @@ func ConvertXClaimResponse(data any) (any, error) {
 
 	return result, nil
 }
+
+// ZRankWithScore and ZRevRankWithScore
+func ConvertRankAndScoreResponse(data any) (any, error) {
+	arr := data.([]any)
+	return models.RankAndScore{Rank: arr[0].(int64), Score: arr[1].(float64)}, nil
+}
+
+// XInfoStream
+func ConvertXInfoStreamResponse(data any) (any, error) {
+	infoMap := data.(map[string]any)
+
+	streamInfo := models.XInfoStreamResponse{}
+	// Parse integer fields
+	ReadValue(infoMap, "length", &streamInfo.Length)
+	ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	ReadValue(infoMap, "groups", &streamInfo.Groups)
+	ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
+	// Parse string fields
+	ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
+
+	// Get First Entry
+	entry := CreateStreamEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+
+	entry = CreateStreamEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	return streamInfo, nil
+}
+
+// XInfoStreamFullWithOptions
+func ConvertXInfoStreamFullResponse(data any) (any, error) {
+	infoMap := data.(map[string]any)
+
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+
+	// Parse integer fields
+	ReadValue(infoMap, "length", &streamInfo.Length)
+	ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
+	// Parse string fields
+	ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
+
+	// Get First Entry
+	entry := CreateStreamEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+	// Get Last Entry
+	entry = CreateStreamEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	if groups, ok := infoMap["groups"].([]any); ok {
+		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
+		for _, group := range groups {
+			groupInfo := models.XInfoStreamGroupInfo{}
+			if groupMap, ok := group.(map[string]any); ok {
+				if consumers, ok := groupMap["consumers"].([]any); ok {
+					consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
+					for _, consumerMap := range consumers {
+						consumerInfo := models.XInfoStreamConsumerInfo{}
+						if consumer, ok := consumerMap.(map[string]any); ok {
+							ReadValue(consumer, "name", &consumerInfo.Name)
+							ReadValue(consumer, "seen-time", &consumerInfo.SeenTime)
+							ReadResult(consumer, "active-time", &consumerInfo.ActiveTime)
+							ReadValue(consumer, "pel-count", &consumerInfo.PelCount)
+
+							if pending, ok := consumer["pending"].([]any); ok {
+								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
+								for _, entry := range pending {
+									if entryArr, ok := entry.([]any); ok {
+										pendingConsumerArr = append(
+											pendingConsumerArr,
+											models.ConsumerPendingEntry{
+												Id:             entryArr[0].(string),
+												DeliveredTime:  entryArr[1].(int64),
+												DeliveredCount: entryArr[2].(int64),
+											},
+										)
+									}
+								}
+								consumerInfo.Pending = pendingConsumerArr
+							}
+
+							consumersArr = append(consumersArr, consumerInfo)
+						}
+					}
+					groupInfo.Consumers = consumersArr
+				}
+				ReadValue(groupMap, "name", &groupInfo.Name)
+				ReadValue(groupMap, "last-delivered-id", &groupInfo.LastDeliveredId)
+				ReadValue(groupMap, "pel-count", &groupInfo.PelCount)
+				ReadResult(groupMap, "entries-read", &groupInfo.EntriesRead)
+				ReadResult(groupMap, "lag", &groupInfo.Lag)
+
+				if pending, ok := groupMap["pending"].([]any); ok {
+					pendingArr := make([]models.PendingEntry, 0, len(pending))
+					for _, pendingEntry := range pending {
+						if pendingEntryArr, ok := pendingEntry.([]any); ok {
+							pendingArr = append(pendingArr, models.PendingEntry{
+								Id:             pendingEntryArr[0].(string),
+								Name:           pendingEntryArr[1].(string),
+								DeliveredTime:  pendingEntryArr[2].(int64),
+								DeliveredCount: pendingEntryArr[3].(int64),
+							})
+						}
+					}
+					groupInfo.Pending = pendingArr
+				}
+			}
+			groupsArr = append(groupsArr, groupInfo)
+		}
+		streamInfo.Groups = groupsArr
+	}
+	if val, ok := infoMap["entries"].([]any); ok {
+		entriesArr := make([]models.StreamEntry, 0, len(val))
+		for _, entry := range val {
+			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
+				entryInfo := models.StreamEntry{}
+				entryInfo.ID = streamEntry[0].(string)
+				entryInfo.Fields = CreateFieldInfoArray([]any{streamEntry[1]})
+				entriesArr = append(entriesArr, entryInfo)
+			}
+		}
+		streamInfo.Entries = entriesArr
+	}
+
+	ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
+
+	return streamInfo, nil
+}
