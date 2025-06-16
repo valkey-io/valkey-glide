@@ -315,10 +315,7 @@ func parseLCSMatchedPositions(matches any) ([]models.LCSMatchedPosition, error) 
 		}
 
 		var matchLen int64
-		if len(matchArray) == 2 {
-			// Calculate match length (end - start + 1)
-			matchLen = key1End - key1Start + 1
-		} else if len(matchArray) == 3 {
+		if len(matchArray) == 3 {
 			matchLen, err = convertToInt64(matchArray[2])
 			if err != nil {
 				return nil, fmt.Errorf("expected match length to be a number, got %T", matchArray[2])

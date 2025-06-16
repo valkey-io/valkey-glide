@@ -456,19 +456,31 @@ type RankAndScore struct {
 	Score float64
 }
 
+// LCSMatch represents a longest common subsequence match.
 type LCSMatch struct {
+	// MatchString is the actual longest common subsequence string.
 	MatchString string
-	Matches     []LCSMatchedPosition
-	Len         int64
+	// Matches is a slice of LCSMatchedPosition objects.
+	Matches []LCSMatchedPosition
+	// Len is the total length of all the longest common subsequences.
+	Len int64
 }
 
+// LCSMatchedPosition represents the position of a longest common subsequence match.
 type LCSMatchedPosition struct {
-	Key1     LCSPosition
-	Key2     LCSPosition
+	// Key1 is the position in the first string.
+	Key1 LCSPosition
+	// Key2 is the position in the second string.
+	Key2 LCSPosition
+
+	// if WithMatchLen is specified, the array also contains the length of each match, otherwise the length is 0.
 	MatchLen int64
 }
 
+// LCSPosition represents a position in a longest common subsequence match.
 type LCSPosition struct {
+	// Start is the starting index of the match.
 	Start int64
-	End   int64
+	// End is the ending index of the match.
+	End int64
 }

@@ -1279,7 +1279,8 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*model
 //	  - "len" is mapped to the total length of the all longest common subsequences between
 //	     the 2 strings.
 //	  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//	     of the common subsequences in the strings held by key1 and key2.
+//	     of the common subsequences in the strings held by key1 and key2. If WithMatchLen is
+//	     specified, the array also contains the length of each match, otherwise the length is 0.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(
