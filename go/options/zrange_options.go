@@ -75,14 +75,13 @@ func NewInfiniteLexBoundary(bound constants.InfBoundary) lexBoundary {
 	return lexBoundary(string(bound))
 }
 
-// TODO re-use limit from `SORT` https://github.com/valkey-io/valkey-glide/pull/2888
 // Limit struct represents the range of elements to retrieve
 // The LIMIT argument is commonly used to specify a subset of results from the matching elements, similar to the
 // LIMIT clause in SQL (e.g., `SELECT LIMIT offset, count`).
 type Limit struct {
 	// The starting position of the range, zero based.
 	Offset int64
-	// The maximum number of elements to include in the range. A negative Count returns all elementsnfrom the offset.
+	// The maximum number of elements to include in the range. A negative Count returns all elements from the offset.
 	Count int64
 }
 

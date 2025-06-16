@@ -281,7 +281,7 @@ type RestoreOptions struct {
 	// milliseconds).
 	AbsTTL bool
 	// It represents the idletime/frequency of object.
-	eviction Eviction
+	Eviction Eviction
 }
 
 func NewRestoreOptions() *RestoreOptions {
@@ -310,8 +310,8 @@ type Eviction struct {
 
 // Custom setter methods set the idletime/frequency of object.
 func (restoreOption *RestoreOptions) SetEviction(evictionType constants.EvictionType, count int64) *RestoreOptions {
-	restoreOption.eviction.Type = evictionType
-	restoreOption.eviction.Count = count
+	restoreOption.Eviction.Type = evictionType
+	restoreOption.Eviction.Count = count
 	return restoreOption
 }
 
@@ -324,8 +324,8 @@ func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	if opts.AbsTTL {
 		args = append(args, string(constants.ABSTTLKeyword))
 	}
-	if (opts.eviction != Eviction{}) {
-		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
+	if (opts.Eviction != Eviction{}) {
+		args = append(args, string(opts.Eviction.Type), utils.IntToString(opts.Eviction.Count))
 	}
 	return args, err
 }

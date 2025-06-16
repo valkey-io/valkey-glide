@@ -37,19 +37,7 @@ func (options *BitPosOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType
 
 // ToArgs converts the options to a list of arguments.
 func (opts *BitPosOptions) ToArgs() ([]string, error) {
-	args := []string{}
-
-	if opts.Start == 0 {
-		return args, nil
-	}
-
-	args = append(args, utils.IntToString(opts.Start))
-
-	if opts.End == 0 {
-		return args, nil
-	}
-
-	args = append(args, utils.IntToString(opts.End))
+	args := []string{utils.IntToString(opts.Start), utils.IntToString(opts.End)}
 
 	if opts.BitMapIndexType == BIT || opts.BitMapIndexType == BYTE {
 		args = append(args, string(opts.BitMapIndexType))
