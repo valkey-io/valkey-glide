@@ -586,18 +586,18 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 
 		res, err := client.LCS(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), "", res)
+		assert.Equal(suite.T(), "", res.MatchString)
 
 		suite.verifyOK(client.Set(context.Background(), key1, "Dummy string"))
 		suite.verifyOK(client.Set(context.Background(), key2, "Dummy value"))
 
 		res, err = client.LCS(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), "Dummy ", res)
+		assert.Equal(suite.T(), "Dummy ", res.MatchString)
 	})
 }
 
-func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+func (suite *GlideTestSuite) TestLCS_len_existingAndNonExistingKeys() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -606,14 +606,14 @@ func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
 
 		res, err := client.LCSLen(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.Equal(suite.T(), int64(0), res.Len)
 
 		suite.verifyOK(client.Set(context.Background(), key1, "ohmytext"))
 		suite.verifyOK(client.Set(context.Background(), key2, "mynewtext"))
 
 		res, err = client.LCSLen(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(6), res)
+		assert.Equal(suite.T(), int64(6), res.Len)
 	})
 }
 
@@ -633,19 +633,21 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 		suite.NoError(err)
 		assert.NotNil(suite.T(), lcsIdxResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxResult.Len)
 
-		matches := lcsIdxResult["matches"].([]any)
+		matches := lcsIdxResult.Matches
 		assert.Len(suite.T(), matches, 2)
 
-		expectedMatches := []any{
-			[]any{
-				[]any{int64(4), int64(7)},
-				[]any{int64(5), int64(8)},
+		expectedMatches := []models.LCSMatchedPosition{
+			{
+				Key1:     models.LCSPosition{Start: 4, End: 7},
+				Key2:     models.LCSPosition{Start: 5, End: 8},
+				MatchLen: 0,
 			},
-			[]any{
-				[]any{int64(2), int64(3)},
-				[]any{int64(0), int64(1)},
+			{
+				Key1:     models.LCSPosition{Start: 2, End: 3},
+				Key2:     models.LCSPosition{Start: 0, End: 1},
+				MatchLen: 0,
 			},
 		}
 		assert.Equal(suite.T(), expectedMatches, matches)
@@ -671,14 +673,15 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 		suite.NoError(err)
 		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult.Len)
 
-		matches := lcsIdxMinMatchResult["matches"].([]any)
+		matches := lcsIdxMinMatchResult.Matches
 		assert.Len(suite.T(), matches, 1)
 
-		expectedMatch := []any{
-			[]any{int64(4), int64(7)},
-			[]any{int64(5), int64(8)},
+		expectedMatch := models.LCSMatchedPosition{
+			Key1:     models.LCSPosition{Start: 4, End: 7},
+			Key2:     models.LCSPosition{Start: 5, End: 8},
+			MatchLen: 0,
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
@@ -702,17 +705,17 @@ func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 		lcsIdxFullOptionsResult, err := client.LCSWithOptions(context.Background(), "{lcs}key1", "{lcs}key2", *opts)
 
 		suite.NoError(err)
-		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
+		require.NotNil(suite.T(), lcsIdxFullOptionsResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult.Len)
 
-		matches := lcsIdxFullOptionsResult["matches"].([]any)
+		matches := lcsIdxFullOptionsResult.Matches
 		assert.Len(suite.T(), matches, 1)
 
-		expectedMatch := []any{
-			[]any{int64(4), int64(7)},
-			[]any{int64(5), int64(8)},
-			int64(4),
+		expectedMatch := models.LCSMatchedPosition{
+			Key1:     models.LCSPosition{Start: 4, End: 7},
+			Key2:     models.LCSPosition{Start: 5, End: 8},
+			MatchLen: 4,
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})

@@ -5,6 +5,7 @@ package internal
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
@@ -157,5 +158,128 @@ func ReadResult[T any](data map[string]any, field string, info *models.Result[T]
 		*info = models.CreateResultOf(val)
 	default:
 		*info = models.CreateNilResultOf[T]()
+	}
+}
+
+// ParseLCSMatchedPositions converts the nested array structure from LCSWithOptions into a slice of LCSMatchedPosition structs
+// The input structure has the shape of:
+// ```
+// 1) 1) 1) (integer) 4
+//  2. (integer) 7
+//  2. 1) (integer) 5
+//  2. (integer) 8
+//  2. 1) 1) (integer) 2
+//  2. (integer) 3
+//  2. 1) (integer) 0
+//  2. (integer) 1
+//
+// ```
+// which represents matched positions between two strings
+func ParseLCSMatchedPositions(matches any) ([]models.LCSMatchedPosition, error) {
+	if matches == nil {
+		return []models.LCSMatchedPosition{}, nil
+	}
+
+	matchesArray, ok := matches.([]any)
+	if !ok {
+		return nil, fmt.Errorf("expected matches to be an array, got %T", matches)
+	}
+
+	result := make([]models.LCSMatchedPosition, len(matchesArray))
+	for i, match := range matchesArray {
+		matchArray, ok := match.([]any)
+		if !ok {
+			return nil, fmt.Errorf("expected match to be an array, got %T ", match)
+		}
+
+		if len(matchArray) != 2 && len(matchArray) != 3 {
+			return nil, fmt.Errorf(
+				"expected match to be an array of length 2 or 3, got %T with length %d",
+				matchArray,
+				len(matchArray),
+			)
+		}
+
+		// Parse Key1 position
+		key1Array, ok := matchArray[0].([]any)
+		if !ok || len(key1Array) != 2 {
+			return nil, fmt.Errorf(
+				"expected key1 to be an array of length 2, got %T with length %d",
+				matchArray[0],
+				len(key1Array),
+			)
+		}
+
+		key1Start, err := ConvertToInt64(key1Array[0])
+		if err != nil {
+			return nil, fmt.Errorf("expected key1 start to be a number, got %T", key1Array[0])
+		}
+
+		key1End, err := ConvertToInt64(key1Array[1])
+		if err != nil {
+			return nil, fmt.Errorf("expected key1 end to be a number, got %T", key1Array[1])
+		}
+
+		// Parse Key2 position
+		key2Array, ok := matchArray[1].([]any)
+		if !ok || len(key2Array) != 2 {
+			return nil, fmt.Errorf(
+				"expected key2 to be an array of length 2, got %T with length %d",
+				matchArray[1],
+				len(key2Array),
+			)
+		}
+
+		key2Start, err := ConvertToInt64(key2Array[0])
+		if err != nil {
+			return nil, fmt.Errorf("expected key2 start to be a number, got %T", key2Array[0])
+		}
+
+		key2End, err := ConvertToInt64(key2Array[1])
+		if err != nil {
+			return nil, fmt.Errorf("expected key2 end to be a number, got %T", key2Array[1])
+		}
+
+		var matchLen int64
+		if len(matchArray) == 3 {
+			matchLen, err = ConvertToInt64(matchArray[2])
+			if err != nil {
+				return nil, fmt.Errorf("expected match length to be a number, got %T", matchArray[2])
+			}
+		}
+
+		result[i] = models.LCSMatchedPosition{
+			Key1: models.LCSPosition{
+				Start: key1Start,
+				End:   key1End,
+			},
+			Key2: models.LCSPosition{
+				Start: key2Start,
+				End:   key2End,
+			},
+			MatchLen: matchLen,
+		}
+	}
+
+	return result, nil
+}
+
+// toInt64 converts any numeric value to int64
+func ConvertToInt64(value any) (int64, error) {
+	switch v := value.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	case string:
+		parsed, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("cannot convert string %q to int64: %w", v, err)
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("cannot convert %T to int64", value)
 	}
 }

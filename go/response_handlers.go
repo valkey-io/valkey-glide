@@ -1400,11 +1400,64 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	if typeErr != nil {
 		return nil, typeErr
 	}
+
 	result, err := parseMap(response)
 	if err != nil {
 		return nil, err
 	}
 	return result.(map[string]any), nil
+}
+
+func handleLCSMatchResponse(
+	response *C.struct_CommandResponse,
+	lcsResponseType internal.LCSResponseType,
+) (*models.LCSMatch, error) {
+	switch lcsResponseType {
+	case internal.SimpleLCSString:
+		lcsResp, err := handleStringResponse(response)
+		if err != nil {
+			return nil, err
+		}
+		return &models.LCSMatch{
+			MatchString: lcsResp,
+			Matches:     make([]models.LCSMatchedPosition, 0),
+			Len:         0,
+		}, nil
+	case internal.SimpleLCSLength:
+		lcsResp, err := handleIntResponse(response)
+		if err != nil {
+			return nil, err
+		}
+		return &models.LCSMatch{
+			MatchString: models.DefaultStringResponse,
+			Matches:     make([]models.LCSMatchedPosition, 0),
+			Len:         lcsResp,
+		}, nil
+	case internal.ComplexLCSMatch:
+		lcsResp, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return nil, err
+		}
+
+		lenVal, err := internal.ConvertToInt64(lcsResp["len"])
+		if err != nil {
+			return nil, fmt.Errorf("expected len to be a number, got %T", lcsResp["len"])
+		}
+
+		// Parse the matches array using the helper function
+		matches, err := internal.ParseLCSMatchedPositions(lcsResp["matches"])
+		if err != nil {
+			return nil, err
+		}
+
+		return &models.LCSMatch{
+			MatchString: models.DefaultStringResponse,
+			Matches:     matches,
+			Len:         lenVal,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown LCS response type: %d", lcsResponseType)
+	}
 }
 
 func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
