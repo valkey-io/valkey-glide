@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -2579,7 +2578,7 @@ func (b *BaseBatch[T]) RenameNX(key string, newKey string) *T {
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
+func (b *BaseBatch[T]) XAdd(key string, values []models.KeyValue) *T {
 	return b.XAddWithOptions(key, values, *options.NewXAddOptions())
 }
 
@@ -2595,11 +2594,11 @@ func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
 //
 // Command Response:
 //
-//	The id of the added entry, or `nil` if `options.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options options.XAddOptions) *T {
+func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.KeyValue, options options.XAddOptions) *T {
 	args := []string{}
 	args = append(args, key)
 	optionArgs, err := options.ToArgs()
@@ -2608,13 +2607,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return b.addError("XAddWithOptions", fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			))
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Key, pair.Value}...)
 	}
 	return b.addCmdAndTypeChecker(C.XAdd, args, reflect.String, true)
 }
@@ -4811,7 +4804,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.ConvertStreamEntryArray)
+	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.MakeConvertStreamEntryArray(false))
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4872,7 +4865,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.ConvertStreamEntryArray)
+	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.MakeConvertStreamEntryArray(true))
 }
 
 // Returns information about the stream stored at `key`.

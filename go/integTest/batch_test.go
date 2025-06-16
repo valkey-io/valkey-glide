@@ -290,8 +290,8 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
 			ZUnion(options.KeyArray{Keys: []string{key1, key2}}).
 			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptions().SetAggregate(options.AggregateMax)).
-			XAdd(key1, [][]string{{"a", "b"}}).
-			XAddWithOptions(key1, [][]string{{"a", "b"}}, *options.NewXAddOptions().SetId("0-1")).
+			XAdd(key1, []models.KeyValue{{Key: "a", Value: "b"}}).
+			XAddWithOptions(key1, []models.KeyValue{{Key: "a", Value: "b"}}, *options.NewXAddOptions().SetId("0-1")).
 			XAutoClaim(key1, "g", "c", 2, "0-0").
 			XAutoClaimWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
 			XAutoClaimJustId(key1, "g", "c", 2, "0-0").
@@ -2080,19 +2080,23 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XADD commands with options
 	xaddOpts1 := options.NewXAddOptions().SetId("0-1")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field1", "value1"}}, *xaddOpts1)
+	batch.XAddWithOptions(streamKey1, []models.KeyValue{{Key: "field1", Value: "value1"}}, *xaddOpts1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-1", TestName: "XAdd(streamKey1, field1=value1, 0-1)"})
 
 	xaddOpts2 := options.NewXAddOptions().SetId("0-2")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field2", "value2"}}, *xaddOpts2)
+	batch.XAddWithOptions(streamKey1, []models.KeyValue{{Key: "field2", Value: "value2"}}, *xaddOpts2)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-2", TestName: "XAdd(streamKey1, field2=value2, 0-2)"})
 
 	xaddOpts3 := options.NewXAddOptions().SetId("0-3")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field3", "value3"}}, *xaddOpts3)
+	batch.XAddWithOptions(streamKey1, []models.KeyValue{{Key: "field3", Value: "value3"}}, *xaddOpts3)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-3", TestName: "XAdd(streamKey1, field3=value3, 0-3)"})
 
 	xaddOpts4 := options.NewXAddOptions().SetId("0-4")
-	batch.XAddWithOptions(streamKey4, [][]string{{"field4", "value4"}, {"field4", "value5"}}, *xaddOpts4)
+	batch.XAddWithOptions(
+		streamKey4,
+		[]models.KeyValue{{Key: "field4", Value: "value4"}, {Key: "field4", Value: "value5"}},
+		*xaddOpts4,
+	)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-4", TestName: "XAdd(streamKey4, field4=value4,5, 0-4)"})
 
 	// XLEN command
@@ -2286,7 +2290,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 		// Add entry to streamKey3 and create group
 		xaddOpts5 := options.NewXAddOptions().SetId("1-0")
-		batch.XAddWithOptions(streamKey3, [][]string{{"f0", "v0"}}, *xaddOpts5)
+		batch.XAddWithOptions(streamKey3, []models.KeyValue{{Key: "f0", Value: "v0"}}, *xaddOpts5)
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey3, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey3, groupName3, "0")
@@ -2306,7 +2310,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// Add entry to streamKey2 and create group
 	if serverVer >= "7.0.0" {
 		xaddOpts6 := options.NewXAddOptions().SetId("1-0")
-		batch.XAddWithOptions(streamKey2, [][]string{{"f0", "v0"}}, *xaddOpts6)
+		batch.XAddWithOptions(streamKey2, []models.KeyValue{{Key: "f0", Value: "v0"}}, *xaddOpts6)
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey2, groupName3, "0")

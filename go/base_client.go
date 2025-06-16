@@ -3994,7 +3994,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (string, error) {
+func (client *baseClient) XAdd(ctx context.Context, key string, values []models.KeyValue) (string, error) {
 	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -4015,14 +4015,14 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values [][]strin
 //
 // Return value:
 //
-//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
 	ctx context.Context,
 	key string,
-	values [][]string,
+	values []models.KeyValue,
 	options options.XAddOptions,
 ) (models.Result[string], error) {
 	args := []string{}
@@ -4033,13 +4033,7 @@ func (client *baseClient) XAddWithOptions(
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return models.CreateNilStringResult(), fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			)
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Key, pair.Value}...)
 	}
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
@@ -6801,7 +6795,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRangeResponse(result)
+	return handleXRangeResponse(result, false)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6876,7 +6870,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRangeResponse(result)
+	return handleXRangeResponse(result, true)
 }
 
 // Returns information about the stream stored at `key`.

@@ -958,7 +958,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	return res.(map[string]models.XClaimResponse), err
 }
 
-func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.StreamEntry, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse, reverse bool) ([]models.StreamEntry, error) {
 	defer C.free_command_response(response)
 
 	if response.response_type == uint32(C.Null) {
@@ -974,7 +974,7 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.StreamEn
 		return nil, err
 	}
 
-	res, err := internal.ConvertStreamEntryArray(mapData)
+	res, err := internal.MakeConvertStreamEntryArray(reverse)(mapData)
 	return res.([]models.StreamEntry), err
 }
 

@@ -136,7 +136,7 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	if len < 2 || len > 3 {
 		return nil, fmt.Errorf("unexpected response array length: %d", len)
 	}
-	claimedEntries, err := ConvertStreamEntryArray(arr[1])
+	claimedEntries, err := MakeConvertStreamEntryArray(false)(arr[1])
 	if err != nil {
 		return nil, err
 	}
@@ -431,14 +431,22 @@ func ConvertFunctionListResponse(data any) (any, error) {
 }
 
 // XRange, XRangeWithOptions, XRevRange, XRevRangeWithOptions
-func ConvertStreamEntryArray(data any) (any, error) {
-	claimedEntries := data.(map[string]any)
-	result := make([]models.StreamEntry, 0, len(claimedEntries))
+func MakeConvertStreamEntryArray(reverse bool) func(data any) (any, error) {
+	return func(data any) (any, error) {
+		claimedEntries := data.(map[string]any)
+		result := make([]models.StreamEntry, 0, len(claimedEntries))
 
-	for k, v := range claimedEntries {
-		result = append(result, models.StreamEntry{ID: k, Fields: CreateFieldInfoArray(v)})
+		for k, v := range claimedEntries {
+			result = append(result, models.StreamEntry{ID: k, Fields: CreateFieldInfoArray(v)})
+		}
+		sort.Slice(result, func(i, j int) bool {
+			if reverse {
+				return result[i].ID > result[j].ID
+			}
+			return result[i].ID < result[j].ID
+		})
+		return result, nil
 	}
-	return result, nil
 }
 
 func ConvertFunctionStatsResponse(data any) (any, error) {
