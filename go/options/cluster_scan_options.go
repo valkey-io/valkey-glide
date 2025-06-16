@@ -2,47 +2,9 @@
 
 package options
 
-// #include "../lib.h"
-import "C"
-
 import (
-	"unsafe"
-
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
-
-var FINISHED_SCAN_CURSOR = "finished"
-
-// This struct is used to keep track of the cursor of a cluster scan.
-type ClusterScanCursor struct {
-	cursor string
-}
-
-// Create a new ClusterScanCursor with a default value
-func NewClusterScanCursor() *ClusterScanCursor {
-	cStr := C.CString("0")
-	C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
-	return &ClusterScanCursor{cursor: "0"}
-}
-
-// Create a new ClusterScanCursor with a specified value
-func NewClusterScanCursorWithId(newCursor string) *ClusterScanCursor {
-	cStr := C.CString(newCursor)
-	C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
-	return &ClusterScanCursor{cursor: newCursor}
-}
-
-// Returns the cursor ID associated with this cursor object.
-func (clusterScanCursor *ClusterScanCursor) GetCursor() string {
-	return clusterScanCursor.cursor
-}
-
-// Checks to see if the cursor ID indicates the scan has finished.
-func (clusterScanCursor *ClusterScanCursor) HasFinished() bool {
-	return clusterScanCursor.cursor == FINISHED_SCAN_CURSOR
-}
 
 // The options used for performing a Cluster scan.
 type ClusterScanOptions struct {

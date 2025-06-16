@@ -88,6 +88,7 @@
 * Core: Refactor socket listener to use a runtime that lives for the application lifetime [#3842](https://github.com/valkey-io/valkey-glide/pull/3842)
 * Go: Add Function Dump & Restore ([#3721](https://github.com/valkey-io/valkey-glide/pull/3721))
 * Python: Fix restore command ([#3853](https://github.com/valkey-io/valkey-glide/pull/3853))
+* Update Go Ort ([#3469](https://github.com/valkey-io/valkey-glide/pull/3469))
 * Go: Remove redundant implementations of echo ([#3859](https://github.com/valkey-io/valkey-glide/pull/3859))
 * Java: Add toArgs() to restore batch command ([#3883](https://github.com/valkey-io/valkey-glide/pull/3883))
 * Java: Add error restore command ([#3905](https://github.com/valkey-io/valkey-glide/pull/3905))
@@ -101,6 +102,7 @@
 * Java: OTEL fix for script ([#4065](https://github.com/valkey-io/valkey-glide/pull/4065))
 * Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
 * Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
+* Go: XInfoStream example fix ([#4185](https://github.com/valkey-io/valkey-glide/pull/4185))
 
 #### Breaking Changes
 
@@ -121,6 +123,9 @@
 * Go: Modify most commands to use type `time.Duration` (check PR for list of commands modified) ([#4105](https://github.com/valkey-io/valkey-glide/pull/4105))
 * Go: XInfoStream update response ([#4136](https://github.com/valkey-io/valkey-glide/pull/4136))
 * Go: Update return type for `XAdd` without optional arguments ([#4141](https://github.com/valkey-io/valkey-glide/pull/4141))
+* Go: Change options arguments to not be pointers ([#4106](https://github.com/valkey-io/valkey-glide/pull/4106))
+* Go: Change `ZAddIncr` Return Type to be `float64` ([#4190](https://github.com/valkey-io/valkey-glide/pull/4190))
+* Go: Update return type for `LMPop` and related commands ([#4166](https://github.com/valkey-io/valkey-glide/pull/4166))
 
 #### Fixes
 

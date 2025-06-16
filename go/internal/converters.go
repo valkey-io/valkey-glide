@@ -552,6 +552,12 @@ func ConvertFunctionStatsResponse(data any) (any, error) {
 	}, nil
 }
 
+func ConvertScanResult(data any) (any, error) {
+	arr := data.([]any)
+	scanData, err := ConvertArrayOf[string](arr[1])
+	return models.ScanResult{Cursor: models.NewCursorFromString(arr[0].(string)), Data: scanData.([]string)}, err
+}
+
 func ConverterAndTypeChecker(
 	data any,
 	expectedType reflect.Kind,
@@ -574,4 +580,8 @@ func ConverterAndTypeChecker(
 	// data lost even though it was incorrect
 	// TODO maybe still return the data?
 	return nil, fmt.Errorf("unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType)
+}
+
+func ConvertKeyValuesArrayOrNil(data any) ([]models.KeyValues, error) {
+	return keyValuesConverter{canBeNil: true}.convert(data)
 }

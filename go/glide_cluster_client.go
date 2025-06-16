@@ -240,7 +240,7 @@ func (client *ClusterClient) Info(ctx context.Context) (map[string]string, error
 }
 
 // Gets information and statistics about the server.
-// The command will be routed to all primary nodes, unless `route` in [ClusterInfoOptions] is provided.
+// The command will be routed to all primary nodes, unless `route` in [options.ClusterInfoOptions] is provided.
 //
 // Note:
 //
@@ -614,7 +614,7 @@ func (client *ClusterClient) EchoWithOptions(
 // Helper function to perform the cluster scan.
 func (client *ClusterClient) clusterScan(
 	ctx context.Context,
-	cursor *options.ClusterScanCursor,
+	cursor models.ClusterScanCursor,
 	opts options.ClusterScanOptions,
 ) (*C.struct_CommandResponse, error) {
 	// Check if context is already done
@@ -640,9 +640,8 @@ func (client *ClusterClient) clusterScan(
 	}
 	client.pending[resultChannelPtr] = struct{}{}
 
-	cStr := C.CString(cursor.GetCursor())
-	c_cursor := C.new_cluster_cursor(cStr)
-	defer C.free(unsafe.Pointer(cStr))
+	c_cursor := C.CString(cursor.GetCursor())
+	defer C.free(unsafe.Pointer(c_cursor))
 
 	args, err := opts.ToArgs()
 	if err != nil {
@@ -720,24 +719,26 @@ func (client *ClusterClient) clusterScan(
 //
 //	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
-//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	   To start a new scan, create a new empty `ClusterScanCursor` using [models.NewClusterScanCursor()].
 //
 // Returns:
 //
-//	The ID of the next cursor and a list of keys found for this cursor ID.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *ClusterClient) Scan(
 	ctx context.Context,
-	cursor options.ClusterScanCursor,
-) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(ctx, &cursor, *options.NewClusterScanOptions())
+	cursor models.ClusterScanCursor,
+) (models.ClusterScanResult, error) {
+	response, err := client.clusterScan(ctx, cursor, *options.NewClusterScanOptions())
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return models.ClusterScanResult{}, err
 	}
 
-	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	res, err := handleScanResponse(response)
+	return models.ClusterScanResult{Cursor: models.NewClusterScanCursorWithId(res.Cursor.String()), Keys: res.Data}, err
 }
 
 // Incrementally iterates over the keys in the cluster.
@@ -759,26 +760,28 @@ func (client *ClusterClient) Scan(
 //
 //	ctx - The context for controlling the command execution.
 //	cursor - The [ClusterScanCursor] object that wraps the scan state.
-//	   To start a new scan, create a new empty ClusterScanCursor using NewClusterScanCursor().
+//	   To start a new scan, create a new empty `ClusterScanCursor` using [models.NewClusterScanCursor()].
 //	opts - The scan options. Can specify MATCH, COUNT, and TYPE configurations.
 //
 // Returns:
 //
-//	The ID of the next cursor and a list of keys found for this cursor ID.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *ClusterClient) ScanWithOptions(
 	ctx context.Context,
-	cursor options.ClusterScanCursor,
+	cursor models.ClusterScanCursor,
 	opts options.ClusterScanOptions,
-) (options.ClusterScanCursor, []string, error) {
-	response, err := client.clusterScan(ctx, &cursor, opts)
+) (models.ClusterScanResult, error) {
+	response, err := client.clusterScan(ctx, cursor, opts)
 	if err != nil {
-		return *options.NewClusterScanCursorWithId("finished"), []string{}, err
+		return models.ClusterScanResult{}, err
 	}
 
-	nextCursor, keys, err := handleScanResponse(response)
-	return *options.NewClusterScanCursorWithId(nextCursor), keys, err
+	res, err := handleScanResponse(response)
+	return models.ClusterScanResult{Cursor: models.NewClusterScanCursorWithId(res.Cursor.String()), Keys: res.Data}, err
 }
 
 // Displays a piece of generative computer art of the specific Valkey version and it's optional arguments.
@@ -1469,7 +1472,7 @@ func (client *ClusterClient) FunctionFlushAsyncWithRoute(ctx context.Context, ro
 }
 
 // Invokes a previously loaded function.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -2159,7 +2162,7 @@ func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A [ClusterValue] containing the serialized payload of all loaded libraries.
+//	A [models.ClusterValue] containing the serialized payload of all loaded libraries.
 //
 // [valkey.io]: https://valkey.io/commands/function-dump/
 func (client *ClusterClient) FunctionDumpWithRoute(

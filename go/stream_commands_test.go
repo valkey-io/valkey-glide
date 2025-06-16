@@ -492,7 +492,7 @@ func ExampleClient_XReadGroupWithOptions() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-1
-	// Entry fields: map[entry1_field1:entry1_value1 entry1_field2:entry1_value2]
+	// Entry fields: [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]
 }
 
 func ExampleClusterClient_XReadGroupWithOptions() {
@@ -534,7 +534,7 @@ func ExampleClusterClient_XReadGroupWithOptions() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-1
-	// Entry fields: map[entry1_field1:entry1_value1 entry1_field2:entry1_value2]
+	// Entry fields: [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]
 }
 
 func ExampleClient_XRead() {
@@ -571,7 +571,7 @@ func ExampleClient_XRead() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-1
-	// Entry fields: map[field1:value1 field2:value2]
+	// Entry fields: [{field1 value1} {field2 value2}]
 }
 
 func ExampleClusterClient_XRead() {
@@ -608,7 +608,7 @@ func ExampleClusterClient_XRead() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-1
-	// Entry fields: map[field1:value1 field2:value2]
+	// Entry fields: [{field1 value1} {field2 value2}]
 }
 
 func ExampleClient_XReadWithOptions() {
@@ -655,7 +655,7 @@ func ExampleClient_XReadWithOptions() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-2
-	// Entry fields: map[field3:value3 field4:value4]
+	// Entry fields: [{field3 value3} {field4 value4}]
 }
 
 func ExampleClusterClient_XReadWithOptions() {
@@ -702,7 +702,7 @@ func ExampleClusterClient_XReadWithOptions() {
 	// Stream exists: true
 	// Number of entries: 1
 	// Entry ID: 12345-2
-	// Entry fields: map[field3:value3 field4:value4]
+	// Entry fields: [{field3 value3} {field4 value4}]
 }
 
 func ExampleClient_XDel() {
@@ -1486,6 +1486,7 @@ func ExampleClient_XClaimWithOptions() {
 
 	// Output: Claimed 1 message
 	// Message ID: 12345-1 with retry count: 3
+	// Field: entry1_field1, Value: entry1_value1
 }
 
 func ExampleClusterClient_XClaimWithOptions() {
@@ -1964,7 +1965,7 @@ func ExampleClient_XInfoStream() {
 
 	// Output a few entries from the return object.
 	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
-	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Groups: %d\n", response.Groups)
 	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
 	fmt.Printf("Length: %d\n", response.Length)
 
@@ -2019,7 +2020,7 @@ func ExampleClusterClient_XInfoStream() {
 
 	// Output a few entries from the return object.
 	fmt.Printf("Entries Added: %d\n", response.EntriesAdded)
-	fmt.Printf("Groups:  %d\n", response.Groups)
+	fmt.Printf("Groups: %d\n", response.Groups)
 	fmt.Printf("Last generated Id: %s\n", response.LastGeneratedID)
 	fmt.Printf("Length: %d\n", response.Length)
 
@@ -2048,7 +2049,7 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
-	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, options)
+	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -2103,7 +2104,7 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 	}
 
 	options := options.NewXInfoStreamOptionsOptions().SetCount(2)
-	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, options)
+	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -6,7 +6,7 @@ type ZUnionOptions struct {
 	Aggregate Aggregate
 }
 
-func NewZUnionOptionsBuilder() *ZUnionOptions {
+func NewZUnionOptions() *ZUnionOptions {
 	return &ZUnionOptions{}
 }
 
