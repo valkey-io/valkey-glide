@@ -1675,59 +1675,53 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	return zRangeResponseArray, nil
 }
 
-func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+func handleXInfoStreamCResponse(response *C.struct_CommandResponse) (any, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return models.XInfoStreamResponse{}, typeErr
 	}
+	return parseMap(response)
+}
 
-	result, err := parseMap(response)
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
 	if err != nil {
 		return models.XInfoStreamResponse{}, err
 	}
-
-	infoMap, ok := result.(map[string]any)
-	if !ok {
-		return models.XInfoStreamResponse{},
-			fmt.Errorf("unexpected type of map: %T", result)
+	streamInfo, err := getXInfoStreamFields(result)
+	if err != nil {
+		return models.XInfoStreamResponse{}, err
 	}
-	return getXInfoStreamFields(infoMap)
+	return streamInfo, nil
 }
 
 func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
-	defer C.free_command_response(response)
-
-	typeErr := checkResponseType(response, C.Map, false)
-	if typeErr != nil {
-		return models.XInfoStreamFullOptionsResponse{}, typeErr
-	}
-
-	result, err := parseMap(response)
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
 	if err != nil {
 		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 
-	infoMap, ok := result.(map[string]any)
-
-	if !ok {
-		return models.XInfoStreamFullOptionsResponse{},
-			fmt.Errorf("unexpected type of map: %T", result)
-	}
-
-	streamInfo, err := getXInfoStreamFullOptionFields(infoMap)
+	streamInfo, err := getXInfoStreamFullOptionFields(result)
 	if err != nil {
-		fmt.Println(err)
 		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 
 	return streamInfo, nil
 }
 
-func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, error) {
+func getXInfoStreamFields(result any) (models.XInfoStreamResponse, error) {
+	infoMap, ok := result.(map[string]any)
+	if !ok {
+		return models.XInfoStreamResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
 	streamInfo := models.XInfoStreamResponse{}
-
+	// response, err := getCommonXInfoStreamFields(infoMap, streamInfo)
+	// streamInfo = response.(models.XInfoStreamResponse)
 	// Parse integer fields
 	if val, ok := infoMap["length"].(int64); ok {
 		streamInfo.Length = val
@@ -1775,7 +1769,13 @@ func getXInfoStreamFields(infoMap map[string]any) (models.XInfoStreamResponse, e
 	return streamInfo, nil
 }
 
-func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamFullOptionsResponse, error) {
+func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsResponse, error) {
+	infoMap, ok := result.(map[string]any)
+
+	if !ok {
+		return models.XInfoStreamFullOptionsResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
 	streamInfo := models.XInfoStreamFullOptionsResponse{}
 	// Parse integer fields
 	if val, ok := infoMap["length"].(int64); ok {
@@ -1927,6 +1927,9 @@ func getXInfoStreamFullOptionFields(infoMap map[string]any) (models.XInfoStreamF
 
 	return streamInfo, nil
 }
+
+// func getCommonXInfoStreamFields(infoMap map[string]any, streamResponse interface{}) (interface{}, error) {
+// }
 
 // Parse entry - it's an array where first element is ID and second is array of field-value pairs
 func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
