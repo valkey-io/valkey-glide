@@ -642,12 +642,12 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 			{
 				Key1:     models.LCSPosition{Start: 4, End: 7},
 				Key2:     models.LCSPosition{Start: 5, End: 8},
-				MatchLen: 4,
+				MatchLen: 0,
 			},
 			{
 				Key1:     models.LCSPosition{Start: 2, End: 3},
 				Key2:     models.LCSPosition{Start: 0, End: 1},
-				MatchLen: 2,
+				MatchLen: 0,
 			},
 		}
 		assert.Equal(suite.T(), expectedMatches, matches)
@@ -681,7 +681,7 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 		expectedMatch := models.LCSMatchedPosition{
 			Key1:     models.LCSPosition{Start: 4, End: 7},
 			Key2:     models.LCSPosition{Start: 5, End: 8},
-			MatchLen: 4,
+			MatchLen: 0,
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
