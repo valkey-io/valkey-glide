@@ -1807,23 +1807,10 @@ func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsRe
 					for _, consumerMap := range consumers {
 						consumerInfo := models.XInfoStreamConsumerInfo{}
 						if consumer, ok := consumerMap.(map[string]any); ok {
-							if name, ok := consumer["name"].(string); ok {
-								consumerInfo.Name = name
-							}
-							if seenTime, ok := consumer["seen-time"].(int64); ok {
-								consumerInfo.SeenTime = seenTime
-							}
-
-							switch activeTime := consumer["active-time"].(type) {
-							case int64:
-								consumerInfo.ActiveTime = models.CreateInt64Result(activeTime)
-							default:
-								consumerInfo.ActiveTime = models.CreateNilInt64Result()
-							}
-
-							if pelCount, ok := consumer["pel-count"].(int64); ok {
-								consumerInfo.PelCount = pelCount
-							}
+							internal.ReadValue(consumer, "name", &consumerInfo.Name)
+							internal.ReadValue(consumer, "seen-time", &consumerInfo.SeenTime)
+							internal.ReadResult(consumer, "active-time", &consumerInfo.ActiveTime)
+							internal.ReadValue(consumer, "pel-count", &consumerInfo.PelCount)
 
 							if pending, ok := consumer["pending"].([]any); ok {
 								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
