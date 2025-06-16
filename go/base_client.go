@@ -2984,7 +2984,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -2992,7 +2992,7 @@ func (client *baseClient) LMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3013,7 +3013,7 @@ func (client *baseClient) LMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -3037,7 +3037,7 @@ func (client *baseClient) LMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped elements.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -3046,7 +3046,7 @@ func (client *baseClient) LMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3067,7 +3067,7 @@ func (client *baseClient) LMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
@@ -3092,7 +3092,7 @@ func (client *baseClient) LMPopCount(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3102,7 +3102,7 @@ func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection constants.ListDirection,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3123,7 +3123,7 @@ func (client *baseClient) BLMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
@@ -3151,7 +3151,7 @@ func (client *baseClient) BLMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3162,7 +3162,7 @@ func (client *baseClient) BLMPopCount(
 	listDirection constants.ListDirection,
 	count int64,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3183,7 +3183,7 @@ func (client *baseClient) BLMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Sets the list element at index to element.

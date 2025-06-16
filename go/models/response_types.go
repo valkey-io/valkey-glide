@@ -342,6 +342,7 @@ type XInfoStreamResponse struct {
 	LastEntry StreamEntry
 }
 
+<<<<<<< go/xinfo-stream-update-command-full-options
 // The information for each pending entry for each group in `XInfoStream` command with full option
 type PendingEntry struct {
 	// The ID of the message
@@ -426,4 +427,12 @@ type XInfoStreamFullOptionsResponse struct {
 	Entries []StreamEntry
 	// The first entry id recorded
 	RecordedFirstEntryId Result[string]
+=======
+// KeyValues represents a key and a list of associated values
+type KeyValues struct {
+	// The key associated with the values
+	Key string
+	// The slice of string values associated with the key
+	Values []string
+>>>>>>> release-2.0
 }
