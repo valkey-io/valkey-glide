@@ -36,7 +36,6 @@ type arrayConverter[T any] struct {
 }
 
 type keyValuesConverter struct {
-	next     responseConverter
 	canBeNil bool
 }
 
