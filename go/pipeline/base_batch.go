@@ -1801,7 +1801,7 @@ func (b *BaseBatch[T]) LPushX(key string, elements []string) *T {
 // Command Response:
 //
 //	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
-//	If no elements could be popped, returns 'nil'.
+//	If no elements could be popped, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirection) *T {
@@ -1840,7 +1840,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 // Command Response:
 //
 //	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
-//	If no elements could be popped, returns 'nil'.
+//	If no elements could be popped, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDirection, count int64) *T {

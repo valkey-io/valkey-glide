@@ -1864,7 +1864,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 			testData,
 			CommandTestData{
 				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
-				TestName:         "ZRevRankWithScore(key, member2)",
+				TestName:         "ZRevRankWithScore(key, member1)",
 			},
 		)
 	}
