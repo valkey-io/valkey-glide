@@ -5924,14 +5924,14 @@ func (suite *GlideTestSuite) TestZRank() {
 		assert.Equal(suite.T(), int64(1), res.Value())
 
 		if suite.serverVersion >= "7.2.0" {
-			res2Rank, res2Score, err := client.ZRankWithScore(context.Background(), key, "one")
+			res2, err := client.ZRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(0), res2Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
-			res4Rank, res4Score, err := client.ZRankWithScore(context.Background(), key, "non-existing-member")
+			assert.Equal(suite.T(), int64(0), res2.Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2.Score.Value())
+			res4, err := client.ZRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4Rank.IsNil())
-			assert.True(suite.T(), res4Score.IsNil())
+			assert.True(suite.T(), res4.Rank.IsNil())
+			assert.True(suite.T(), res4.Score.IsNil())
 		}
 
 		res3, err := client.ZRank(context.Background(), key, "non-existing-member")
@@ -5956,14 +5956,14 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		assert.Equal(suite.T(), int64(1), res.Value())
 
 		if suite.serverVersion >= "7.2.0" {
-			res2Rank, res2Score, err := client.ZRevRankWithScore(context.Background(), key, "one")
+			res2, err := client.ZRevRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(2), res2Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
-			res4Rank, res4Score, err := client.ZRevRankWithScore(context.Background(), key, "non-existing-member")
+			assert.Equal(suite.T(), int64(2), res2.Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2.Score.Value())
+			res4, err := client.ZRevRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4Rank.IsNil())
-			assert.True(suite.T(), res4Score.IsNil())
+			assert.True(suite.T(), res4.Rank.IsNil())
+			assert.True(suite.T(), res4.Score.IsNil())
 		}
 
 		res3, err := client.ZRevRank(context.Background(), key, "non-existing-member")

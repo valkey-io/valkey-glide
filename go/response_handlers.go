@@ -615,18 +615,24 @@ func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]models
 	return slice, nil
 }
 
-func handleLongAndDoubleOrNullResponse(
+func handleZRankWithScoreResponse(
 	response *C.struct_CommandResponse,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.ZRankWithScoreResponse, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), typeErr
+		return models.ZRankWithScoreResponse{
+			Rank:  models.CreateNilInt64Result(),
+			Score: models.CreateNilFloat64Result(),
+		}, typeErr
 	}
 
 	if response.response_type == C.Null {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), nil
+		return models.ZRankWithScoreResponse{
+			Rank:  models.CreateNilInt64Result(),
+			Score: models.CreateNilFloat64Result(),
+		}, nil
 	}
 
 	rank := models.CreateNilInt64Result()
@@ -640,7 +646,10 @@ func handleLongAndDoubleOrNullResponse(
 		}
 	}
 
-	return rank, score, nil
+	return models.ZRankWithScoreResponse{
+		Rank:  rank,
+		Score: score,
+	}, nil
 }
 
 func handleBoolResponse(response *C.struct_CommandResponse) (bool, error) {

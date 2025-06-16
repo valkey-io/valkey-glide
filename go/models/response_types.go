@@ -349,3 +349,11 @@ type KeyValues struct {
 	// The slice of string values associated with the key
 	Values []string
 }
+
+// ZRankWithScoreResponse represents the rank and score of a given member
+type ZRankWithScoreResponse struct {
+	// The rank of the member
+	Rank Result[int64]
+	// The score of the member
+	Score Result[float64]
+}

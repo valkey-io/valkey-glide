@@ -4952,21 +4952,24 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A ZRankWithScoreResponse containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	`nil` values will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.ZRankWithScoreResponse, error) {
 	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.ZRankWithScoreResponse{
+			Rank:  models.CreateNilInt64Result(),
+			Score: models.CreateNilFloat64Result(),
+		}, err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleZRankWithScoreResponse(result)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
@@ -5014,21 +5017,24 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A ZRankWithScoreResponse containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	`nil` values will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.ZRankWithScoreResponse, error) {
 	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.ZRankWithScoreResponse{
+			Rank:  models.CreateNilInt64Result(),
+			Score: models.CreateNilFloat64Result(),
+		}, err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleZRankWithScoreResponse(result)
 }
 
 // Trims the stream by evicting older entries.
