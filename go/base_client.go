@@ -2686,10 +2686,10 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 //
 // Return value:
 //
-//	Always `"OK"`.
-//	If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-//	key to be removed).
-//	If end exceeds the actual end of the list, it will be treated like the last element of the list.
+//	Always "OK".
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+//	and the key is removed.
+//	If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 //	If key does not exist, `"OK"` will be returned without changes to the database.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/

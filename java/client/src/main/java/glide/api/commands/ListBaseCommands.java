@@ -458,7 +458,7 @@ public interface ListBaseCommands {
      * @param end The end of the range.
      * @return Always <code>OK</code>.<br>
      *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
-     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     <code>end</code>, the list is emptied and the key is removed.<br>
      *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.

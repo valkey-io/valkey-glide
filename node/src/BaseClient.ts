@@ -3100,7 +3100,7 @@ export class BaseClient {
      * @param start - The starting point of the range.
      * @param end - The end of the range.
      * @returns always "OK".
-     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied and the key is removed.
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      *
