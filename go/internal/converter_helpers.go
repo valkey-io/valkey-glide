@@ -304,8 +304,8 @@ func CreateStreamEntry(infoMap map[string]any, entryKey string) models.StreamEnt
 	return entry
 }
 
-func CreateFieldInfoArray(entriesArray any) []models.KeyValue {
-	keyValues := make([]models.KeyValue, 0)
+func CreateFieldInfoArray(entriesArray any) []models.FieldValue {
+	keyValues := make([]models.FieldValue, 0)
 	entriesData, ok := entriesArray.([]any)
 
 	if !ok {
@@ -321,8 +321,8 @@ func CreateFieldInfoArray(entriesArray any) []models.KeyValue {
 			fieldName, okField := fieldValuePairs[i].(string)
 			fieldValue, okValue := fieldValuePairs[i+1].(string)
 			if okField && okValue {
-				keyValues = append(keyValues, models.KeyValue{
-					Key:   fieldName,
+				keyValues = append(keyValues, models.FieldValue{
+					Field: fieldName,
 					Value: fieldValue,
 				})
 			}

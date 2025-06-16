@@ -21,9 +21,9 @@ import (
 func ExampleClient_XAdd() {
 	var client *Client = getExampleClient() // example helper function
 
-	result, err := client.XAdd(context.Background(), "mystream", []models.KeyValue{
-		{Key: "key1", Value: "value1"},
-		{Key: "key2", Value: "value2"},
+	result, err := client.XAdd(context.Background(), "mystream", []models.FieldValue{
+		{Field: "key1", Value: "value1"},
+		{Field: "key2", Value: "value2"},
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -40,9 +40,9 @@ func ExampleClient_XAdd() {
 func ExampleClusterClient_XAdd() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	result, err := client.XAdd(context.Background(), "mystream", []models.KeyValue{
-		{Key: "key1", Value: "value1"},
-		{Key: "key2", Value: "value2"},
+	result, err := client.XAdd(context.Background(), "mystream", []models.FieldValue{
+		{Field: "key1", Value: "value1"},
+		{Field: "key2", Value: "value2"},
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -60,9 +60,9 @@ func ExampleClient_XAddWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewXAddOptions().SetId("1000-50")
-	values := []models.KeyValue{
-		{Key: "key1", Value: "value1"},
-		{Key: "key2", Value: "value2"},
+	values := []models.FieldValue{
+		{Field: "key1", Value: "value1"},
+		{Field: "key2", Value: "value2"},
 	}
 	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
 	if err != nil {
@@ -77,9 +77,9 @@ func ExampleClusterClient_XAddWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewXAddOptions().SetId("1000-50")
-	values := []models.KeyValue{
-		{Key: "key1", Value: "value1"},
-		{Key: "key2", Value: "value2"},
+	values := []models.FieldValue{
+		{Field: "key1", Value: "value1"},
+		{Field: "key2", Value: "value2"},
 	}
 	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
 	if err != nil {
@@ -96,12 +96,12 @@ func ExampleClient_XTrim() {
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field1", Value: "foo4"}, {Key: "field2", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field1", Value: "foo4"}, {Field: "field2", Value: "bar4"}},
 	)
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field3", Value: "foo4"}, {Key: "field4", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field3", Value: "foo4"}, {Field: "field4", Value: "bar4"}},
 	)
 
 	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
@@ -119,12 +119,12 @@ func ExampleClusterClient_XTrim() {
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field1", Value: "foo4"}, {Key: "field2", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field1", Value: "foo4"}, {Field: "field2", Value: "bar4"}},
 	)
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field3", Value: "foo4"}, {Key: "field4", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field3", Value: "foo4"}, {Field: "field4", Value: "bar4"}},
 	)
 
 	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
@@ -142,7 +142,7 @@ func ExampleClient_XLen() {
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field1", Value: "foo4"}, {Key: "field2", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field1", Value: "foo4"}, {Field: "field2", Value: "bar4"}},
 	)
 	count, err := client.XLen(context.Background(), "mystream")
 	if err != nil {
@@ -159,7 +159,7 @@ func ExampleClusterClient_XLen() {
 	client.XAdd(
 		context.Background(),
 		"mystream",
-		[]models.KeyValue{{Key: "field1", Value: "foo4"}, {Key: "field2", Value: "bar4"}},
+		[]models.FieldValue{{Field: "field1", Value: "foo4"}, {Field: "field2", Value: "bar4"}},
 	)
 	count, err := client.XLen(context.Background(), "mystream")
 	if err != nil {
@@ -178,14 +178,18 @@ func ExampleClient_XAutoClaim() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -208,14 +212,18 @@ func ExampleClusterClient_XAutoClaim() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -238,14 +246,18 @@ func ExampleClient_XAutoClaimWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -268,14 +280,18 @@ func ExampleClusterClient_XAutoClaimWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -298,14 +314,18 @@ func ExampleClient_XAutoClaimJustId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -327,14 +347,18 @@ func ExampleClusterClient_XAutoClaimJustId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -356,14 +380,18 @@ func ExampleClient_XAutoClaimJustIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -386,14 +414,18 @@ func ExampleClusterClient_XAutoClaimJustIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -417,9 +449,13 @@ func ExampleClient_XReadGroup() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -451,9 +487,13 @@ func ExampleClusterClient_XReadGroup() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -485,9 +525,13 @@ func ExampleClient_XReadGroupWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -527,9 +571,13 @@ func ExampleClusterClient_XReadGroupWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -567,7 +615,7 @@ func ExampleClient_XRead() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -604,7 +652,7 @@ func ExampleClusterClient_XRead() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 
@@ -643,12 +691,12 @@ func ExampleClient_XReadWithOptions() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field3", Value: "value3"}, {Key: "field4", Value: "value4"}},
+		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
@@ -690,12 +738,12 @@ func ExampleClusterClient_XReadWithOptions() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field3", Value: "value3"}, {Key: "field4", Value: "value4"}},
+		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
@@ -734,7 +782,7 @@ func ExampleClient_XDel() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 
@@ -753,7 +801,7 @@ func ExampleClusterClient_XDel() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 
@@ -775,9 +823,13 @@ func ExampleClient_XPending() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -801,9 +853,13 @@ func ExampleClusterClient_XPending() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -827,9 +883,13 @@ func ExampleClient_XPendingWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -869,9 +929,13 @@ func ExampleClusterClient_XPendingWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -911,9 +975,13 @@ func ExampleClient_XGroupSetId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -950,9 +1018,13 @@ func ExampleClusterClient_XGroupSetId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -992,12 +1064,12 @@ func ExampleClient_XGroupSetIdWithOptions() {
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field3", Value: "value3"}, {Key: "field4", Value: "value4"}},
+		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -1044,12 +1116,12 @@ func ExampleClusterClient_XGroupSetIdWithOptions() {
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field3", Value: "value3"}, {Key: "field4", Value: "value4"}},
+		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -1092,7 +1164,7 @@ func ExampleClient_XGroupCreate() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	) // This will create the stream if it does not exist
 
@@ -1113,7 +1185,7 @@ func ExampleClusterClient_XGroupCreate() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	) // This will create the stream if it does not exist
 
@@ -1247,7 +1319,7 @@ func ExampleClient_XGroupDelConsumer() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
@@ -1273,7 +1345,7 @@ func ExampleClusterClient_XGroupDelConsumer() {
 
 	client.XAddWithOptions(context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
@@ -1296,9 +1368,13 @@ func ExampleClient_XAck() {
 	group := "g12345"
 	consumer := "c12345"
 
-	streamId, _ := client.XAdd(context.Background(),
+	streamId, _ := client.XAdd(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
@@ -1324,9 +1400,13 @@ func ExampleClusterClient_XAck() {
 	group := "g12345"
 	consumer := "c12345"
 
-	streamId, _ := client.XAdd(context.Background(),
+	streamId, _ := client.XAdd(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 	)
 	client.XGroupCreate(context.Background(), key, group, "0")
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
@@ -1356,9 +1436,13 @@ func ExampleClient_XClaim() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1408,9 +1492,13 @@ func ExampleClusterClient_XClaim() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1460,9 +1548,13 @@ func ExampleClient_XClaimWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1500,8 +1592,8 @@ func ExampleClient_XClaimWithOptions() {
 		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
 		// Print a sample field if available
 		if len(claimResponse.Fields) > 0 {
-			for _, keyValue := range claimResponse.Fields {
-				fmt.Printf("Field: %s, Value: %s\n", keyValue.Key, keyValue.Value)
+			for _, pair := range claimResponse.Fields {
+				fmt.Printf("Field: %s, Value: %s\n", pair.Field, pair.Value)
 				break // Just print the first field as an example
 			}
 		}
@@ -1522,9 +1614,13 @@ func ExampleClusterClient_XClaimWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1557,7 +1653,21 @@ func ExampleClusterClient_XClaimWithOptions() {
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
+	// Access fields from the claimed message
+	for id, claimResponse := range response {
+		fmt.Printf("Message ID: %s with retry count: %d\n", id, 3)
+		// Print a sample field if available
+		if len(claimResponse.Fields) > 0 {
+			for _, pair := range claimResponse.Fields {
+				fmt.Printf("Field: %s, Value: %s\n", pair.Field, pair.Value)
+				break // Just print the first field as an example
+			}
+		}
+	}
+
 	// Output: Claimed 1 message
+	// Message ID: 12345-1 with retry count: 3
+	// Field: entry1_field1, Value: entry1_value1
 }
 
 func ExampleClient_XClaimJustId() {
@@ -1570,9 +1680,13 @@ func ExampleClient_XClaimJustId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1616,9 +1730,13 @@ func ExampleClusterClient_XClaimJustId() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1662,9 +1780,13 @@ func ExampleClient_XClaimJustIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1710,9 +1832,13 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer1)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+		[]models.FieldValue{
+			{Field: "entry1_field1", Value: "entry1_value1"},
+			{Field: "entry1_field2", Value: "entry1_value2"},
+		},
 		*options.NewXAddOptions().SetId(streamId),
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
@@ -1752,8 +1878,8 @@ func ExampleClient_XRange() {
 	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
-	client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
-	client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
+	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 	response, err := client.XRange(context.Background(), key,
 		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
@@ -1770,8 +1896,8 @@ func ExampleClusterClient_XRange() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
-	client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
-	client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
+	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 	response, err := client.XRange(context.Background(), key,
 		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
@@ -1788,8 +1914,8 @@ func ExampleClient_XRangeWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
-	streamId1, _ := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
-	streamId2, _ := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+	streamId1, _ := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
+	streamId2, _ := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 	response, err := client.XRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId1, true),
@@ -1807,8 +1933,8 @@ func ExampleClusterClient_XRangeWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
-	streamId1, _ := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
-	streamId2, _ := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+	streamId1, _ := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
+	streamId2, _ := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 	response, err := client.XRangeWithOptions(context.Background(), key,
 		options.NewStreamBoundary(streamId1, true),
@@ -1831,13 +1957,13 @@ func ExampleClient_XRevRange() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 
@@ -1861,13 +1987,13 @@ func ExampleClusterClient_XRevRange() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 
@@ -1891,13 +2017,13 @@ func ExampleClient_XRevRangeWithOptions() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 
@@ -1922,13 +2048,13 @@ func ExampleClusterClient_XRevRangeWithOptions() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field2", Value: "value2"}},
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId2),
 	)
 
@@ -1952,7 +2078,7 @@ func ExampleClient_XInfoStream() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	response, err := client.XInfoStream(context.Background(), key)
@@ -2007,7 +2133,7 @@ func ExampleClusterClient_XInfoStream() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "field1", Value: "value1"}},
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
 	response, err := client.XInfoStream(context.Background(), key)
@@ -2066,7 +2192,7 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 		client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: field, Value: value}},
+			[]models.FieldValue{{Field: field, Value: value}},
 			*options.NewXAddOptions().SetId(streamId),
 		)
 	}
@@ -2117,7 +2243,7 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 		client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: field, Value: value}},
+			[]models.FieldValue{{Field: field, Value: value}},
 			*options.NewXAddOptions().SetId(streamId),
 		)
 	}
@@ -2168,13 +2294,13 @@ func ExampleClient_XInfoConsumers() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+		[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+		[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
@@ -2211,13 +2337,13 @@ func ExampleClusterClient_XInfoConsumers() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+		[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+		[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
@@ -2259,13 +2385,13 @@ func ExampleClient_XInfoGroups() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+		[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+		[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them
@@ -2305,13 +2431,13 @@ func ExampleClusterClient_XInfoGroups() {
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+		[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
 	client.XAddWithOptions(
 		context.Background(),
 		key,
-		[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+		[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 		*options.NewXAddOptions().SetId("0-2"),
 	)
 	// read them

@@ -3994,7 +3994,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values []models.KeyValue) (string, error) {
+func (client *baseClient) XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error) {
 	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -4022,7 +4022,7 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values []models.
 func (client *baseClient) XAddWithOptions(
 	ctx context.Context,
 	key string,
-	values []models.KeyValue,
+	values []models.FieldValue,
 	options options.XAddOptions,
 ) (models.Result[string], error) {
 	args := []string{}
@@ -4033,7 +4033,7 @@ func (client *baseClient) XAddWithOptions(
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		args = append(args, []string{pair.Key, pair.Value}...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
@@ -4063,7 +4063,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry.
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4091,7 +4091,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -6457,7 +6457,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6490,7 +6490,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(

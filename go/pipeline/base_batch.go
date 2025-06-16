@@ -2578,7 +2578,7 @@ func (b *BaseBatch[T]) RenameNX(key string, newKey string) *T {
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAdd(key string, values []models.KeyValue) *T {
+func (b *BaseBatch[T]) XAdd(key string, values []models.FieldValue) *T {
 	return b.XAddWithOptions(key, values, *options.NewXAddOptions())
 }
 
@@ -2598,7 +2598,7 @@ func (b *BaseBatch[T]) XAdd(key string, values []models.KeyValue) *T {
 //	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.KeyValue, options options.XAddOptions) *T {
+func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.FieldValue, options options.XAddOptions) *T {
 	args := []string{}
 	args = append(args, key)
 	optionArgs, err := options.ToArgs()
@@ -2607,7 +2607,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.KeyValue, opt
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		args = append(args, []string{pair.Key, pair.Value}...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 	return b.addCmdAndTypeChecker(C.XAdd, args, reflect.String, true)
 }
@@ -2627,7 +2627,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.KeyValue, opt
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry.
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
@@ -2650,7 +2650,7 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry.
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {
@@ -4543,7 +4543,7 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
@@ -4568,7 +4568,7 @@ func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdle
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaimWithOptions(

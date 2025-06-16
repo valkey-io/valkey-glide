@@ -4634,23 +4634,23 @@ func (suite *GlideTestSuite) TestXAdd() {
 		_, err := client.XAdd(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field1", Value: "value1"}, {Key: "field1", Value: "value2"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field1", Value: "value2"}},
 		)
 		suite.NoError(err)
 		// don't check the value, because it contains server's timestamp
 
 		// adding data to existing stream
-		_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field3", Value: "value3"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		suite.NoError(err)
 
 		// incorrect input
-		_, err = client.XAdd(context.Background(), key, []models.KeyValue{})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{})
 		suite.Error(err)
 
 		// key is not a string
 		key = uuid.NewString()
 		client.Set(context.Background(), key, "abc")
-		_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "f", Value: "v"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "f", Value: "v"}})
 		suite.Error(err)
 	})
 }
@@ -4661,7 +4661,7 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		// stream does not exist
 		res, err := client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field1", Value: "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
 		)
 		suite.NoError(err)
@@ -4671,18 +4671,18 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		res, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field1", Value: "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "0-1", res.Value())
 
-		client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+		client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		// TODO run XLen there
 		// this will trim the first entry.
 		res, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field3", Value: "value3"}},
+			[]models.FieldValue{{Field: "field3", Value: "value3"}},
 			*options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
 		)
 		suite.NoError(err)
@@ -4727,16 +4727,20 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			"Can't send XGROUP CREATECONSUMER as a custom command",
 		)
 
-		xadd, err := client.XAddWithOptions(context.Background(),
+		xadd, err := client.XAddWithOptions(
+			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "entry1_field1", Value: "entry1_value1"}, {Key: "entry1_field2", Value: "entry1_value2"}},
+			[]models.FieldValue{
+				{Field: "entry1_field1", Value: "entry1_value1"},
+				{Field: "entry1_field2", Value: "entry1_value2"},
+			},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "entry2_field1", Value: "entry2_value1"}},
+			[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -4758,15 +4762,15 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: "0-1",
-				Fields: []models.KeyValue{{
-					Key: "entry1_field1", Value: "entry1_value1",
+				Fields: []models.FieldValue{{
+					Field: "entry1_field1", Value: "entry1_value1",
 				}, {
-					Key: "entry1_field2", Value: "entry1_value2",
+					Field: "entry1_field2", Value: "entry1_value2",
 				}},
 			}, {
 				ID: "0-2",
-				Fields: []models.KeyValue{{
-					Key: "entry2_field1", Value: "entry2_value1",
+				Fields: []models.FieldValue{{
+					Field: "entry2_field1", Value: "entry2_value1",
 				}},
 			}},
 		})
@@ -4785,9 +4789,9 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 				ClaimedEntries: []models.StreamEntry{
 					{
 						ID: "0-1",
-						Fields: []models.KeyValue{
-							{Key: "entry1_field1", Value: "entry1_value1"},
-							{Key: "entry1_field2", Value: "entry1_value2"},
+						Fields: []models.FieldValue{
+							{Field: "entry1_field1", Value: "entry1_value1"},
+							{Field: "entry1_field2", Value: "entry1_value2"},
 						},
 					},
 				},
@@ -4811,7 +4815,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		// add one more entry
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "entry3_field1", Value: "entry3_value1"}},
+			[]models.FieldValue{{Field: "entry3_field1", Value: "entry3_value1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -4871,9 +4875,9 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 			"Can't send XGROUP CREATECONSUMER as a custom command",
 		)
 
-		entry1, err := client.XAdd(context.Background(), key1, []models.KeyValue{{Key: "a", Value: "b"}})
+		entry1, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "a", Value: "b"}})
 		assert.NoError(suite.T(), err)
-		entry2, err := client.XAdd(context.Background(), key1, []models.KeyValue{{Key: "c", Value: "d"}})
+		entry2, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "c", Value: "d"}})
 		assert.NoError(suite.T(), err)
 
 		// read the entire stream for the consumer and mark messages as pending
@@ -4893,13 +4897,13 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: entry1,
-				Fields: []models.KeyValue{{
-					Key: "a", Value: "b",
+				Fields: []models.FieldValue{{
+					Field: "a", Value: "b",
 				}},
 			}, {
 				ID: entry2,
-				Fields: []models.KeyValue{{
-					Key: "c", Value: "d",
+				Fields: []models.FieldValue{{
+					Field: "c", Value: "d",
 				}},
 			}},
 		})
@@ -4916,7 +4920,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		streamResponse, exists = res[key1]
 		assert.True(suite.T(), exists)
 		// Check entries
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -4927,7 +4931,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Verify entry2 has the correct fields
 		assert.Contains(suite.T(), entryMap, entry2)
-		assert.Equal(suite.T(), entryMap[entry2], []models.KeyValue{{Key: "c", Value: "d"}})
+		assert.Equal(suite.T(), entryMap[entry2], []models.FieldValue{{Field: "c", Value: "d"}})
 
 		// try to read new messages only
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4935,7 +4939,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Empty(suite.T(), res)
 
 		// add a message and read it with ">"
-		entry3, err := client.XAdd(context.Background(), key1, []models.KeyValue{{Key: "e", Value: "f"}})
+		entry3, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "e", Value: "f"}})
 		assert.NoError(suite.T(), err)
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
 		assert.NoError(suite.T(), err)
@@ -4951,8 +4955,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
 			Entries: []models.StreamEntry{{
 				ID: entry3,
-				Fields: []models.KeyValue{{
-					Key: "e", Value: "f",
+				Fields: []models.FieldValue{{
+					Field: "e", Value: "f",
 				}},
 			}},
 		})
@@ -4984,7 +4988,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 3, len(streamResponse1.Entries))
 
 		// Create a map of entry IDs to their fields for key1
-		entryMap1 := make(map[string][]models.KeyValue)
+		entryMap1 := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse1.Entries {
 			entryMap1[entry.ID] = entry.Fields
 		}
@@ -4995,10 +4999,10 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check for field "c" with value "d" in entry2
 		assert.Contains(suite.T(), entryMap1, entry2)
-		assert.Equal(suite.T(), entryMap1[entry2], []models.KeyValue{{Key: "c", Value: "d"}})
+		assert.Equal(suite.T(), entryMap1[entry2], []models.FieldValue{{Field: "c", Value: "d"}})
 
 		assert.Contains(suite.T(), entryMap1, entry3)
-		assert.NotContains(suite.T(), entryMap1[entry3], []models.KeyValue{{Key: "e", Value: "f"}})
+		assert.NotContains(suite.T(), entryMap1[entry3], []models.FieldValue{{Field: "e", Value: "f"}})
 
 		// Check key2 stream (should be empty)
 		streamResponse2, exists := res[key2]
@@ -5017,7 +5021,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), del)
 		// group and consumer don't exist
-		xadd, err := client.XAdd(context.Background(), key3, []models.KeyValue{{Key: "a", Value: "b"}})
+		xadd, err := client.XAdd(context.Background(), key3, []models.FieldValue{{Field: "a", Value: "b"}})
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), xadd)
 		_, err = client.XReadGroup(context.Background(), "_", "_", map[string]string{key3: "0"})
@@ -5055,7 +5059,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		res, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: "k1_field1", Value: "k1_value1"}, {Key: "k1_field1", Value: "k1_value2"}},
+			[]models.FieldValue{{Field: "k1_field1", Value: "k1_value1"}, {Field: "k1_field1", Value: "k1_value2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		suite.NoError(err)
@@ -5063,7 +5067,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		res, err = client.XAddWithOptions(context.Background(),
 			key2,
-			[]models.KeyValue{{Key: "k2_field1", Value: "k2_value1"}},
+			[]models.FieldValue{{Field: "k2_field1", Value: "k2_value1"}},
 			*options.NewXAddOptions().SetId("2-0"),
 		)
 		suite.NoError(err)
@@ -5086,7 +5090,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Equal(suite.T(), 1, len(streamResponse1.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse1.Entries[0].ID)
 		assert.Equal(suite.T(), streamResponse1.Entries[0].Fields,
-			[]models.KeyValue{{Key: "k1_field1", Value: "k1_value1"}, {Key: "k1_field1", Value: "k1_value2"}})
+			[]models.FieldValue{{Field: "k1_field1", Value: "k1_value1"}, {Field: "k1_field1", Value: "k1_value2"}})
 
 		// Check key2 stream
 		streamResponse2, exists := read[key2]
@@ -5095,7 +5099,7 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.Equal(suite.T(), "2-0", streamResponse2.Entries[0].ID)
 
 		assert.Equal(suite.T(), streamResponse2.Entries[0].Fields,
-			[]models.KeyValue{{Key: "k2_field1", Value: "k2_value1"}})
+			[]models.FieldValue{{Field: "k2_field1", Value: "k2_value1"}})
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
@@ -5153,21 +5157,21 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "f0", Value: "v0"}},
+			[]models.FieldValue{{Field: "f0", Value: "v0"}},
 			*options.NewXAddOptions().SetId("1-0"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-0", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "f1", Value: "v1"}},
+			[]models.FieldValue{{Field: "f1", Value: "v1"}},
 			*options.NewXAddOptions().SetId("1-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "f2", Value: "v2"}},
+			[]models.FieldValue{{Field: "f2", Value: "v2"}},
 			*options.NewXAddOptions().SetId("1-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -5189,7 +5193,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -5197,19 +5201,19 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// // Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
 		assert.Equal(suite.T(), entryMap["1-0"],
-			[]models.KeyValue{{Key: "f0", Value: "v0"}},
+			[]models.FieldValue{{Field: "f0", Value: "v0"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-1")
 		// Check for field "f1" with value "v1" in entry 1-1
 		assert.Equal(suite.T(), entryMap["1-1"],
-			[]models.KeyValue{{Key: "f1", Value: "v1"}},
+			[]models.FieldValue{{Field: "f1", Value: "v1"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-2")
 		// Check for field "f2" with value "v2" in entry 1-2
 		assert.Equal(suite.T(), entryMap["1-2"],
-			[]models.KeyValue{{Key: "f2", Value: "v2"}},
+			[]models.FieldValue{{Field: "f2", Value: "v2"}},
 		)
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
@@ -5237,7 +5241,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Check entries
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "1-2", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), []models.KeyValue{{Key: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), []models.FieldValue{{Field: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
@@ -5998,7 +6002,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		t := suite.T()
 		xAddResult, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: field1, Value: "foo"}, {Key: field2, Value: "bar"}},
+			[]models.FieldValue{{Field: field1, Value: "foo"}, {Field: field2, Value: "bar"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
 		)
 		assert.NoError(t, err)
@@ -6006,7 +6010,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: field1, Value: "foo1"}, {Key: field2, Value: "bar1"}},
+			[]models.FieldValue{{Field: field1, Value: "foo1"}, {Field: field2, Value: "bar1"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(t, err)
@@ -6014,7 +6018,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 
 		_, err = client.XAdd(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: field1, Value: "foo2"}, {Key: field2, Value: "bar2"}},
+			[]models.FieldValue{{Field: field1, Value: "foo2"}, {Field: field2, Value: "bar2"}},
 		)
 		assert.NoError(t, err)
 
@@ -6025,7 +6029,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		// Trim the first entry.
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: field1, Value: "foo3"}, {Key: field2, Value: "bar2"}},
+			[]models.FieldValue{{Field: field1, Value: "foo3"}, {Field: field2, Value: "bar2"}},
 			*options.NewXAddOptions().SetTrimOptions(
 				options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming(),
 			),
@@ -6040,7 +6044,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		// Trim the second entry.
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: field1, Value: "foo4"}, {Key: field2, Value: "bar4"}},
+			[]models.FieldValue{{Field: field1, Value: "foo4"}, {Field: field2, Value: "bar4"}},
 			*options.NewXAddOptions().SetTrimOptions(
 				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 			),
@@ -6209,7 +6213,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 
 		xAddResult, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: "f1", Value: "foo1"}, {Key: "f2", Value: "bar2"}},
+			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId1),
 		)
 		assert.NoError(t, err)
@@ -6217,7 +6221,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[]models.KeyValue{{Key: "f1", Value: "foo1"}, {Key: "f2", Value: "bar2"}},
+			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId2),
 		)
 		assert.NoError(t, err)
@@ -6435,19 +6439,19 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			streamid_1, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+			streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			streamid_2, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+			streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field3", Value: "value3"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field4", Value: "value4"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 			assert.NoError(suite.T(), err)
-			streamid_5, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field5", Value: "value5"}})
+			streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer2, map[string]string{key: ">"})
@@ -6509,19 +6513,19 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.SingleValue().(bool))
 
-			streamid_1, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+			streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			streamid_2, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+			streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field3", Value: "value3"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field4", Value: "value4"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 			assert.NoError(suite.T(), err)
-			streamid_5, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field5", Value: "value5"}})
+			streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer2, map[string]string{key: ">"})
@@ -6609,9 +6613,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			// no pending messages yet...
@@ -6762,9 +6766,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.SingleValue().(bool))
 
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			// no pending messages yet...
@@ -7576,9 +7580,9 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.Equal(int64(0), respInt64)
 
 		// Add two stream entries
-		streamId1, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+		streamId1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		suite.NoError(err)
-		streamId2, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+		streamId2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		suite.NoError(err)
 
 		// read the stream for the consumer and mark messages as pending
@@ -7594,7 +7598,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7602,11 +7606,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, streamId1)
 		// Check for field "field1" with value "value1" in entry
-		assert.Equal(suite.T(), entryMap[streamId1], []models.KeyValue{{Key: "field1", Value: "value1"}})
+		assert.Equal(suite.T(), entryMap[streamId1], []models.FieldValue{{Field: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamId2)
 		// Check for field "field2" with value "value2" in entry
-		assert.Equal(suite.T(), entryMap[streamId2], []models.KeyValue{{Key: "field2", Value: "value2"}})
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(context.Background(), key, []string{streamId1})
@@ -7623,7 +7627,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap = make(map[string][]models.KeyValue)
+		entryMap = make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7635,10 +7639,10 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Contains(suite.T(), entryMap, streamId2)
 
 		// Check for field "field2" with value "value2" in entry
-		assert.Equal(suite.T(), entryMap[streamId2], []models.KeyValue{{Key: "field2", Value: "value2"}})
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// add a new stream entry
-		streamId3, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field3", Value: "value3"}})
+		streamId3, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		suite.NoError(err)
 		suite.NotNil(streamId3)
 
@@ -7669,7 +7673,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), streamId3, streamResponse.Entries[0].ID)
 
 		// Check for field "field3" with value "value3" in entry
-		assert.Equal(suite.T(), []models.KeyValue{{Key: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), []models.FieldValue{{Field: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
 
 		// Use non existent group, so xack streamid_3 returns 0
 		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3})
@@ -7701,7 +7705,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		xadd, err := client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "a", Value: "b"}, {Key: "c", Value: "d"}},
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
 			*options.NewXAddOptions().SetId("1-0"),
 		)
 		suite.NoError(err)
@@ -7724,7 +7728,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(
 			suite.T(),
 			infoSmall.FirstEntry.Fields,
-			[]models.KeyValue{{Key: "a", Value: "b"}, {Key: "c", Value: "d"}},
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
 		)
 
 		// Check the last entry
@@ -7734,13 +7738,13 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(
 			suite.T(),
 			infoSmall.LastEntry.Fields,
-			[]models.KeyValue{{Key: "a", Value: "b"}, {Key: "c", Value: "d"}},
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
 		)
 
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e", Value: "f"}},
+			[]models.FieldValue{{Field: "e", Value: "f"}},
 			*options.NewXAddOptions().SetId("1-1"),
 		)
 		suite.NoError(err)
@@ -7798,14 +7802,14 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7813,7 +7817,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e3_f1", Value: "e3_v1"}},
+			[]models.FieldValue{{Field: "e3_f1", Value: "e3_v1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7842,7 +7846,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(
 			suite.T(),
 			streamResponse.Entries[0].Fields,
-			[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		)
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
@@ -7876,7 +7880,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -7895,15 +7899,15 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 				Entries: []models.StreamEntry{
 					{
 						ID: "0-2",
-						Fields: []models.KeyValue{
-							{Key: "e2_f1", Value: "e2_v1"},
-							{Key: "e2_f2", Value: "e2_v2"},
+						Fields: []models.FieldValue{
+							{Field: "e2_f1", Value: "e2_v1"},
+							{Field: "e2_f2", Value: "e2_v2"},
 						},
 					},
 					{
 						ID: "0-3",
-						Fields: []models.KeyValue{
-							{Key: "e3_f1", Value: "e3_v1"},
+						Fields: []models.FieldValue{
+							{Field: "e3_f1", Value: "e3_v1"},
 						},
 					},
 				},
@@ -7927,7 +7931,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		// Passing a non-existing group raises an error
 		key = uuid.NewString()
-		_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "a", Value: "b"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "a", Value: "b"}})
 		suite.NoError(err)
 		_, err = client.XInfoConsumers(context.Background(), key, "_")
 		suite.Error(err)
@@ -7985,14 +7989,14 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e1_f1", Value: "e1_v1"}, {Key: "e1_f2", Value: "e1_v2"}},
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e2_f1", Value: "e2_v1"}, {Key: "e2_f2", Value: "e2_v2"}},
+			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -8000,7 +8004,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "e3_f1", Value: "e3_v1"}},
+			[]models.FieldValue{{Field: "e3_f1", Value: "e3_v1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -8045,7 +8049,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.Equal(suite.T(), 3, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
@@ -8065,22 +8069,22 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 				Entries: []models.StreamEntry{
 					{
 						ID: "0-1",
-						Fields: []models.KeyValue{
-							{Key: "e1_f1", Value: "e1_v1"},
-							{Key: "e1_f2", Value: "e1_v2"},
+						Fields: []models.FieldValue{
+							{Field: "e1_f1", Value: "e1_v1"},
+							{Field: "e1_f2", Value: "e1_v2"},
 						},
 					},
 					{
 						ID: "0-2",
-						Fields: []models.KeyValue{
-							{Key: "e2_f1", Value: "e2_v1"},
-							{Key: "e2_f2", Value: "e2_v2"},
+						Fields: []models.FieldValue{
+							{Field: "e2_f1", Value: "e2_v1"},
+							{Field: "e2_f2", Value: "e2_v2"},
 						},
 					},
 					{
 						ID: "0-3",
-						Fields: []models.KeyValue{
-							{Key: "e3_f1", Value: "e3_v1"},
+						Fields: []models.FieldValue{
+							{Field: "e3_f1", Value: "e3_v1"},
 						},
 					},
 				},
@@ -8157,7 +8161,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		// create a second stream
 		key = uuid.NewString()
-		_, err = client.XAdd(context.Background(), key, []models.KeyValue{{Key: "1", Value: "2"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "1", Value: "2"}})
 		assert.NoError(suite.T(), err)
 		// no group yet exists
 		xinfo, err = client.XInfoGroups(context.Background(), key)
@@ -8484,9 +8488,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.True(suite.T(), respBool)
 
 		// Add two stream entries for consumer 1
-		streamid_1, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+		streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		assert.NoError(suite.T(), err)
-		streamid_2, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field2", Value: "value2"}})
+		streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		assert.NoError(suite.T(), err)
 
 		// Read the stream entries for consumer 1 and mark messages as pending
@@ -8502,7 +8506,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string][]models.KeyValue)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
@@ -8514,21 +8518,21 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_1],
-			[]models.KeyValue{{Key: "field1", Value: "value1"}})
+			[]models.FieldValue{{Field: "field1", Value: "value1"}})
 
 		assert.Contains(suite.T(), entryMap, streamid_2)
 		// Check for field "field2" with value "value2" in entry
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_2],
-			[]models.KeyValue{{Key: "field2", Value: "value2"}})
+			[]models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// Add 3 more stream entries for consumer 2
-		streamid_3, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field3", Value: "value3"}})
+		streamid_3, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		assert.NoError(suite.T(), err)
-		streamid_4, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field4", Value: "value4"}})
+		streamid_4, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 		assert.NoError(suite.T(), err)
-		streamid_5, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field5", Value: "value5"}})
+		streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 		assert.NoError(suite.T(), err)
 
 		// read the entire stream for consumer 2 and mark messages as pending
@@ -8544,7 +8548,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 3, len(streamResponse2.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap2 := make(map[string][]models.KeyValue)
+		entryMap2 := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse2.Entries {
 			entryMap2[entry.ID] = entry.Fields
 		}
@@ -8557,9 +8561,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			return streamResponse2.Entries[i].ID < streamResponse2.Entries[j].ID
 		})
 		entries := []models.StreamEntry{
-			{ID: streamid_3, Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
-			{ID: streamid_4, Fields: []models.KeyValue{{Key: "field4", Value: "value4"}}},
-			{ID: streamid_5, Fields: []models.KeyValue{{Key: "field5", Value: "value5"}}},
+			{ID: streamid_3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
+			{ID: streamid_4, Fields: []models.FieldValue{{Field: "field4", Value: "value4"}}},
+			{ID: streamid_5, Fields: []models.FieldValue{{Field: "field5", Value: "value5"}}},
 		}
 		sort.Slice(entries, func(i, j int) bool {
 			return entries[i].ID < entries[j].ID
@@ -8632,13 +8636,13 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
 			streamid_3: {
-				Fields: []models.KeyValue{
-					{Key: "field3", Value: "value3"},
+				Fields: []models.FieldValue{
+					{Field: "field3", Value: "value3"},
 				},
 			},
 			streamid_5: {
-				Fields: []models.KeyValue{
-					{Key: "field5", Value: "value5"},
+				Fields: []models.FieldValue{
+					{Field: "field5", Value: "value5"},
 				},
 			},
 		}
@@ -8655,7 +8659,7 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), []string{streamid_3, streamid_5}, claimResultJustId)
 
 		// add one more stream
-		streamid_6, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field6", Value: "value6"}})
+		streamid_6, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field6", Value: "value6"}})
 		assert.NoError(suite.T(), err)
 
 		// using force, we can xclaim the message without reading it
@@ -8672,8 +8676,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			suite.T(),
 			map[string]models.XClaimResponse{
 				streamid_6: {
-					Fields: []models.KeyValue{
-						{Key: "field6", Value: "value6"},
+					Fields: []models.FieldValue{
+						{Field: "field6", Value: "value6"},
 					},
 				},
 			},
@@ -8751,7 +8755,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.True(suite.T(), consumerCreateResult)
 
 		// Add stream entry and mark as pending
-		streamid_1, err := client.XAdd(context.Background(), key, []models.KeyValue{{Key: "field1", Value: "value1"}})
+		streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamid_1)
 
@@ -8921,14 +8925,14 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// add stream entries
 		streamId1, err := client.XAdd(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field1", Value: "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId1)
 
 		streamId2, err := client.XAdd(context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field2", Value: "value2"}},
+			[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId2)
@@ -8948,8 +8952,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Equal(
 			suite.T(),
 			[]models.StreamEntry{
-				{ID: streamId1, Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
-				{ID: streamId2, Fields: []models.KeyValue{{Key: "field2", Value: "value2"}}},
+				{ID: streamId1, Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
+				{ID: streamId2, Fields: []models.FieldValue{{Field: "field2", Value: "value2"}}},
 			},
 			xrangeResult,
 		)
@@ -8965,8 +8969,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.Equal(
 			suite.T(),
 			[]models.StreamEntry{
-				{ID: streamId2, Fields: []models.KeyValue{{Key: "field2", Value: "value2"}}},
-				{ID: streamId1, Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
+				{ID: streamId2, Fields: []models.FieldValue{{Field: "field2", Value: "value2"}}},
+				{ID: streamId1, Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
 			},
 			xrevrangeResult,
 		)
@@ -8994,7 +8998,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		streamId3, err := client.XAdd(
 			context.Background(),
 			key,
-			[]models.KeyValue{{Key: "field3", Value: "value3"}},
+			[]models.FieldValue{{Field: "field3", Value: "value3"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId3)
@@ -9013,7 +9017,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.Equal(
 				suite.T(),
 				[]models.StreamEntry{
-					{ID: streamId3, Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
+					{ID: streamId3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
 				},
 				xrangeResult,
 			)
@@ -9030,7 +9034,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.Equal(
 				suite.T(),
 				[]models.StreamEntry{
-					{ID: streamId3, Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
+					{ID: streamId3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
 				},
 				xrevrangeResult,
 			)

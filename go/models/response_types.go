@@ -302,13 +302,13 @@ type StreamEntry struct {
 	// The unique identifier of the entry
 	ID string
 	// The fields associated with the entry
-	Fields []KeyValue
+	Fields []FieldValue
 }
 
-// KeyValue represents the Key-value pairs added to the entry.
-type KeyValue struct {
+// FieldValue represents the Key-value pairs added to the entry.
+type FieldValue struct {
 	// The name of the field
-	Key string
+	Field string
 	// The value of the field
 	Value string
 }
@@ -322,7 +322,7 @@ type StreamResponse struct {
 // XClaimResponse represents a claimed entry in a stream
 type XClaimResponse struct {
 	// The fields associated with the claimed entry
-	Fields []KeyValue
+	Fields []FieldValue
 }
 
 // XInfoStreamResponse represents the information about a stream

@@ -16,12 +16,12 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#stream
 type StreamCommands interface {
-	XAdd(ctx context.Context, key string, values []models.KeyValue) (string, error)
+	XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error)
 
 	XAddWithOptions(
 		ctx context.Context,
 		key string,
-		values []models.KeyValue,
+		values []models.FieldValue,
 		options options.XAddOptions,
 	) (models.Result[string], error)
 
