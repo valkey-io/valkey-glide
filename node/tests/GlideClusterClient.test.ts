@@ -49,7 +49,6 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getClientCount,
-    getExpectedNewConnections,
     getFirstResult,
     getRandomKey,
     getServerVersion,
@@ -57,7 +56,7 @@ import {
     intoString,
     parseEndpoints,
     validateBatchResponse,
-    waitForNotBusy,
+    waitForNotBusy
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -2756,15 +2755,6 @@ describe("GlideClusterClient", () => {
                 // Get initial client count
                 const clientsBeforeLazyInit =
                     await getClientCount(monitoringClient);
-
-                // Get expected new connections (2 per node)
-                const expectedNewConnections =
-                    await getExpectedNewConnections(monitoringClient);
-
-                // Get CLUSTER NODES output for debugging
-                const clusterNodesOutput = await monitoringClient.customCommand(
-                    ["CLUSTER", "NODES"],
-                );
 
                 // Create lazy client
                 const lazyClient = await GlideClusterClient.createClient(

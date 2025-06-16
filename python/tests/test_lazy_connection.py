@@ -2,13 +2,11 @@
 
 from typing import Any, Union, cast
 
-import anyio
 import pytest
 
-from glide.config import ProtocolVersion
+from glide.config import NodeAddress, ProtocolVersion
 from glide.glide_client import GlideClient, GlideClusterClient
 from glide.routes import AllNodes
-from glide.config import NodeAddress
 from tests.conftest import create_client
 
 
@@ -45,7 +43,7 @@ async def get_client_count(client: Union[GlideClient, GlideClusterClient]) -> in
 
 
 async def get_expected_new_connections(
-    client: Union[GlideClient, GlideClusterClient]
+    client: Union[GlideClient, GlideClusterClient],
 ) -> int:
     """Get the expected number of new connections when a lazy client is initialized."""
 
@@ -182,7 +180,6 @@ class TestLazyConnection:
         1. Eager connection to non-existent host - should fail immediately during client creation
         2. Lazy connection to non-existent host - should succeed in client creation but fail on command execution
         """
-        mode_str = "Cluster" if cluster_mode else "Standalone"
         non_existent_host = "non-existent-host-that-does-not-resolve"
 
         # First create a monitoring client to ensure the test environment is working
