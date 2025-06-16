@@ -35,16 +35,10 @@ type MemberAndScore struct {
 	Score  float64
 }
 
-// Response type of [XRange] and [XRevRange] commands.
-type XRangeResponse struct {
-	StreamId string
-	Entries  [][]string
-}
-
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string
-	ClaimedEntries  map[string][][]string
+	ClaimedEntries  []StreamEntry
 	DeletedMessages []string
 }
 

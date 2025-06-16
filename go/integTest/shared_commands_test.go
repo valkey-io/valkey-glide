@@ -4780,8 +4780,14 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			suite.T(),
 			models.XAutoClaimResponse{
 				NextEntry: "0-2",
-				ClaimedEntries: map[string][][]string{
-					"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				ClaimedEntries: []models.StreamEntry{
+					{
+						ID: "0-1",
+						Fields: []models.KeyValue{
+							{Key: "entry1_field1", Value: "entry1_value1"},
+							{Key: "entry1_field2", Value: "entry1_value2"},
+						},
+					},
 				},
 				DeletedMessages: deletedEntries,
 			},
@@ -4816,7 +4822,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			suite.T(),
 			models.XAutoClaimResponse{
 				NextEntry:       "0-0",
-				ClaimedEntries:  map[string][][]string{},
+				ClaimedEntries:  []models.StreamEntry{},
 				DeletedMessages: deletedEntries,
 			},
 			xautoclaim,
@@ -8939,9 +8945,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			[]models.XRangeResponse{
-				{StreamId: streamId1, Entries: [][]string{{"field1", "value1"}}},
-				{StreamId: streamId2, Entries: [][]string{{"field2", "value2"}}},
+			[]models.StreamEntry{
+				{ID: streamId1, Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
+				{ID: streamId2, Fields: []models.KeyValue{{Key: "field2", Value: "value2"}}},
 			},
 			xrangeResult,
 		)
@@ -8956,9 +8962,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			[]models.XRangeResponse{
-				{StreamId: streamId2, Entries: [][]string{{"field2", "value2"}}},
-				{StreamId: streamId1, Entries: [][]string{{"field1", "value1"}}},
+			[]models.StreamEntry{
+				{ID: streamId2, Fields: []models.KeyValue{{Key: "field2", Value: "value2"}}},
+				{ID: streamId1, Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
 			},
 			xrevrangeResult,
 		)
@@ -9004,8 +9010,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-				[]models.XRangeResponse{
-					{StreamId: streamId3, Entries: [][]string{{"field3", "value3"}}},
+				[]models.StreamEntry{
+					{ID: streamId3, Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
 				},
 				xrangeResult,
 			)
@@ -9021,8 +9027,8 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-				[]models.XRangeResponse{
-					{StreamId: streamId3, Entries: [][]string{{"field3", "value3"}}},
+				[]models.StreamEntry{
+					{ID: streamId3, Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
 				},
 				xrevrangeResult,
 			)

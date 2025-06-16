@@ -2115,8 +2115,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.XRangeResponse{
-			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
+		ExpectedResponse: []models.StreamEntry{
+			{ID: "0-1", Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
 		},
 		TestName: "XRange(streamKey1, 0-1, 0-1)",
 	})
@@ -2125,8 +2125,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.XRangeResponse{
-			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
+		ExpectedResponse: []models.StreamEntry{
+			{ID: "0-1", Fields: []models.KeyValue{{Key: "field1", Value: "value1"}}},
 		},
 		TestName: "XRevRange(streamKey1, 0-1, 0-1)",
 	})
@@ -2216,13 +2216,15 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	if serverVer >= "6.2.0" {
 		expectedXAutoClaimResponse := models.XAutoClaimResponse{
 			NextEntry:      "0-0",
-			ClaimedEntries: map[string][][]string{"0-3": {{"field3", "value3"}}},
+			ClaimedEntries: []models.StreamEntry{{ID: "0-3", Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}}},
 		}
 
 		if serverVer >= "7.0.0" {
 			expectedXAutoClaimResponse = models.XAutoClaimResponse{
-				NextEntry:       "0-0",
-				ClaimedEntries:  map[string][][]string{"0-3": {{"field3", "value3"}}},
+				NextEntry: "0-0",
+				ClaimedEntries: []models.StreamEntry{
+					{ID: "0-3", Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
+				},
 				DeletedMessages: []string{},
 			}
 		}

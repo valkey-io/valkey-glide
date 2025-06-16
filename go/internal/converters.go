@@ -136,24 +136,13 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	if len < 2 || len > 3 {
 		return nil, fmt.Errorf("unexpected response array length: %d", len)
 	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(arr[1])
+	claimedEntries, err := ConvertStreamEntryArray(arr[1])
 	if err != nil {
 		return nil, err
 	}
-
-	claimedEntries := converted.(map[string][][]string)
 	var deletedMessages []string = nil
 	if len == 3 {
-		converted, err = arrayConverter[string]{
+		converted, err := arrayConverter[string]{
 			nil,
 			false,
 		}.convert(arr[2])
@@ -164,7 +153,7 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	}
 	return models.XAutoClaimResponse{
 		NextEntry:       arr[0].(string),
-		ClaimedEntries:  claimedEntries,
+		ClaimedEntries:  claimedEntries.([]models.StreamEntry),
 		DeletedMessages: deletedMessages,
 	}, nil
 }
@@ -441,31 +430,14 @@ func ConvertFunctionListResponse(data any) (any, error) {
 	return result, nil
 }
 
-func ConvertXRangeResponse(data any) (any, error) {
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries := converted.(map[string][][]string)
-
-	result := make([]models.XRangeResponse, 0, len(claimedEntries))
+// XRange, XRangeWithOptions, XRevRange, XRevRangeWithOptions
+func ConvertStreamEntryArray(data any) (any, error) {
+	claimedEntries := data.(map[string]any)
+	result := make([]models.StreamEntry, 0, len(claimedEntries))
 
 	for k, v := range claimedEntries {
-		result = append(result, models.XRangeResponse{StreamId: k, Entries: v})
+		result = append(result, models.StreamEntry{ID: k, Fields: CreateFieldInfoArray(v)})
 	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].StreamId < result[j].StreamId
-	})
 	return result, nil
 }
 

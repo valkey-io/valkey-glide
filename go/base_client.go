@@ -5103,7 +5103,7 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -5144,7 +5144,7 @@ func (client *baseClient) XAutoClaim(
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -6748,7 +6748,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -6757,7 +6757,7 @@ func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6779,7 +6779,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6790,7 +6790,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6822,7 +6822,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -6831,7 +6831,7 @@ func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6854,7 +6854,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6865,7 +6865,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6876,7 +6876,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRevRangeResponse(result)
+	return handleXRangeResponse(result)
 }
 
 // Returns information about the stream stored at `key`.

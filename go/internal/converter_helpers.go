@@ -307,6 +307,7 @@ func CreateStreamEntry(infoMap map[string]any, entryKey string) models.StreamEnt
 func CreateFieldInfoArray(entriesArray any) []models.KeyValue {
 	keyValues := make([]models.KeyValue, 0)
 	entriesData, ok := entriesArray.([]any)
+
 	if !ok {
 		entriesData = []any{}
 	}

@@ -958,7 +958,7 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	return res.(map[string]models.XClaimResponse), err
 }
 
-func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.StreamEntry, error) {
 	defer C.free_command_response(response)
 
 	if response.response_type == uint32(C.Null) {
@@ -973,82 +973,9 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	if err != nil {
 		return nil, err
 	}
-	if mapData == nil {
-		return nil, nil
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
 
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId < XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
-}
-
-func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
-	defer C.free_command_response(response)
-
-	if response.response_type == uint32(C.Null) {
-		return nil, nil
-	}
-
-	typeErr := checkResponseType(response, C.Map, false)
-	if typeErr != nil {
-		return nil, typeErr
-	}
-	mapData, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId > XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
+	res, err := internal.ConvertStreamEntryArray(mapData)
+	return res.([]models.StreamEntry), err
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoClaimResponse, error) {
@@ -1062,48 +989,9 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	if err != nil {
 		return null, err
 	}
-	arr := slice.([]any)
-	len := len(arr)
-	if len < 2 || len > 3 {
-		return null, fmt.Errorf("unexpected response array length: %d", len)
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(arr[1])
-	if err != nil {
-		return null, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return null, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-	var deletedMessages []string
-	deletedMessages = nil
-	if len == 3 {
-		converted, err = arrayConverter[string]{
-			nil,
-			false,
-		}.convert(arr[2])
-		if err != nil {
-			return null, err
-		}
-		deletedMessages, ok = converted.([]string)
-		if !ok {
-			return null, fmt.Errorf("unexpected type of third element: %T", converted)
-		}
-	}
-	return models.XAutoClaimResponse{
-		NextEntry:       arr[0].(string),
-		ClaimedEntries:  claimedEntries,
-		DeletedMessages: deletedMessages,
-	}, nil
+
+	res, err := internal.ConvertXAutoClaimResponse(slice)
+	return res.(models.XAutoClaimResponse), err
 }
 
 func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.XAutoClaimJustIdResponse, error) {

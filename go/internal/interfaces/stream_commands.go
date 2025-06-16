@@ -183,7 +183,7 @@ type StreamCommands interface {
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRangeWithOptions(
 		ctx context.Context,
@@ -191,14 +191,14 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRevRange(
 		ctx context.Context,
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRevRangeWithOptions(
 		ctx context.Context,
@@ -206,5 +206,5 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 }

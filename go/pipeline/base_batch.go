@@ -3454,7 +3454,7 @@ func (b *BaseBatch[T]) XLen(key string) *T {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -3487,7 +3487,7 @@ func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, min
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -4769,7 +4769,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -4794,7 +4794,7 @@ func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end opti
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -4811,7 +4811,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
+	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.ConvertStreamEntryArray)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4830,7 +4830,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -4855,8 +4855,9 @@ func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end o
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRangeWithOptions(
@@ -4871,7 +4872,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
+	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.ConvertStreamEntryArray)
 }
 
 // Returns information about the stream stored at `key`.
