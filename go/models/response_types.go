@@ -333,13 +333,100 @@ type XInfoStreamResponse struct {
 	// The ID of the least-recently entry that was added to the stream
 	LastGeneratedID string
 	// The maximal entry ID that was deleted from the stream
-	MaxDeletedEntryID string
+	MaxDeletedEntryID Result[string]
 	// The count of all entries added to the stream during its lifetime
-	EntriesAdded int64
+	EntriesAdded Result[int64]
 	// The ID and field-value tuples of the first entry in the stream
 	FirstEntry StreamEntry
 	// The ID and field-value tuples of the last entry in the stream
 	LastEntry StreamEntry
+}
+
+// The information for each pending entry for each group in `XInfoStream` command with full option
+type PendingEntry struct {
+	// The ID of the message
+	Id string
+	// The name of consumer
+	Name string
+	// The unix timestamp when the message was delivered to the consumer
+	DeliveredTime int64
+	// The number of times the message was delivered
+	DeliveredCount int64
+}
+
+// The information for each pending entry for each consumer item in `XInfoStream` command with full option
+type ConsumerPendingEntry struct {
+	// The ID of the message
+	Id string
+	// The unix timestamp when the message was delivered to the consumer
+	DeliveredTime int64
+	// The number of times the message was delivered
+	DeliveredCount int64
+}
+
+// XInfoStreamConsumerInfo represents a consumer information returned by `XInfoStream` command with full option.
+type XInfoStreamConsumerInfo struct {
+	// The consumer's name.
+	Name string
+	// The time stamp of the last attempted interaction.
+	SeenTime int64
+	// The time stamp of the last successful interaction.
+	ActiveTime Result[int64]
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	PelCount int64
+	// A list containing the pending entries information.
+	Pending []ConsumerPendingEntry
+}
+
+// XInfoGroupInfo represents a group information returned by `XInfoStream` command with full option
+// in full mode.
+type XInfoStreamGroupInfo struct {
+	// The consumer group's name.
+	Name string
+	// The ID of the last entry delivered to the group's consumers.
+	LastDeliveredId string
+	// The logical "read counter" of the last entry delivered to the group's consumers.
+	// Included in the response only on valkey 7.0.0 and above.
+	EntriesRead Result[int64]
+	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
+	// that number can't be determined.
+	// Included in the response only on valkey 7.0.0 and above.
+	Lag Result[int64]
+	// The count of the group's Pending Entries List (PEL), which are messages that were delivered
+	// but are yet to be acknowledged.
+	PelCount int64
+	// The group's Pending Entries List (PEL), which are messages that were delivered but are yet to be
+	// acknowledged.
+	Pending []PendingEntry
+	// The list of consumer information for the stream
+	Consumers []XInfoStreamConsumerInfo
+}
+
+// XInfoStreamFullOptionsResponse represents the information about a stream with the full option.
+type XInfoStreamFullOptionsResponse struct {
+	// The number of entries in the stream
+	Length int64
+	// The number of keys in the underlying radix data structure
+	RadixTreeKeys int64
+	// The number of nodes in the underlying radix data structure
+	RadixTreeNodes int64
+	// The ID of the least-recently entry that was added to the stream
+	LastGeneratedID string
+	// The maximal entry ID that was deleted from the stream
+	MaxDeletedEntryID Result[string]
+	// The count of all entries added to the stream during its lifetime
+	EntriesAdded Result[int64]
+	// The ID and field-value tuples of the first entry in the stream
+	FirstEntry StreamEntry
+	// The ID and field-value tuples of the last entry in the stream
+	LastEntry StreamEntry
+	// The list of consumer groups defined for the stream
+	Groups []XInfoStreamGroupInfo
+	// The list of stream entries
+	Entries []StreamEntry
+	// The first entry id recorded
+	RecordedFirstEntryId Result[string]
 }
 
 // KeyValues represents a key and a list of associated values

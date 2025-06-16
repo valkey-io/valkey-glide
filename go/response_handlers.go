@@ -1697,51 +1697,61 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	return zRangeResponseArray, nil
 }
 
-func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+func handleXInfoStreamCResponse(response *C.struct_CommandResponse) (any, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return models.XInfoStreamResponse{}, typeErr
 	}
+	return parseMap(response)
+}
 
-	result, err := parseMap(response)
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
 	if err != nil {
 		return models.XInfoStreamResponse{}, err
 	}
+	streamInfo, err := getXInfoStreamFields(result)
+	if err != nil {
+		return models.XInfoStreamResponse{}, err
+	}
+	return streamInfo, nil
+}
 
+func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	streamInfo, err := getXInfoStreamFullOptionFields(result)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
+	}
+
+	return streamInfo, nil
+}
+
+func getXInfoStreamFields(result any) (models.XInfoStreamResponse, error) {
 	infoMap, ok := result.(map[string]any)
 	if !ok {
 		return models.XInfoStreamResponse{},
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
-
 	streamInfo := models.XInfoStreamResponse{}
-
 	// Parse integer fields
-	if val, ok := infoMap["length"].(int64); ok {
-		streamInfo.Length = val
-	}
-	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
-		streamInfo.RadixTreeKeys = val
-	}
-	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
-		streamInfo.RadixTreeNodes = val
-	}
-	if val, ok := infoMap["groups"].(int64); ok {
-		streamInfo.Groups = val
-	}
-	if val, ok := infoMap["entries-added"].(int64); ok {
-		streamInfo.EntriesAdded = val
-	}
+	internal.ReadValue(infoMap, "length", &streamInfo.Length)
+	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	internal.ReadValue(infoMap, "groups", &streamInfo.Groups)
+	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
 
 	// Parse string fields
-	if val, ok := infoMap["last-generated-id"].(string); ok {
-		streamInfo.LastGeneratedID = val
-	}
-	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
-		streamInfo.MaxDeletedEntryID = val
-	}
+	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
 
 	// Get First Entry
 	entry := createEntry(infoMap, "first-entry")
@@ -1753,6 +1763,116 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if entry.ID != "" {
 		streamInfo.LastEntry = entry
 	}
+
+	return streamInfo, nil
+}
+
+func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsResponse, error) {
+	infoMap, ok := result.(map[string]any)
+
+	if !ok {
+		return models.XInfoStreamFullOptionsResponse{},
+			fmt.Errorf("unexpected type of map: %T", result)
+	}
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+
+	// Parse integer fields
+	internal.ReadValue(infoMap, "length", &streamInfo.Length)
+	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
+	// Parse string fields
+	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
+
+	// Get First Entry
+	entry := createEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+	// Get Last Entry
+	entry = createEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	if groups, ok := infoMap["groups"].([]any); ok {
+		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
+		for _, group := range groups {
+			groupInfo := models.XInfoStreamGroupInfo{}
+			if groupMap, ok := group.(map[string]any); ok {
+				if consumers, ok := groupMap["consumers"].([]any); ok {
+					consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
+					for _, consumerMap := range consumers {
+						consumerInfo := models.XInfoStreamConsumerInfo{}
+						if consumer, ok := consumerMap.(map[string]any); ok {
+							internal.ReadValue(consumer, "name", &consumerInfo.Name)
+							internal.ReadValue(consumer, "seen-time", &consumerInfo.SeenTime)
+							internal.ReadResult(consumer, "active-time", &consumerInfo.ActiveTime)
+							internal.ReadValue(consumer, "pel-count", &consumerInfo.PelCount)
+
+							if pending, ok := consumer["pending"].([]any); ok {
+								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
+								for _, entry := range pending {
+									if entryArr, ok := entry.([]any); ok {
+										pendingConsumerArr = append(
+											pendingConsumerArr,
+											models.ConsumerPendingEntry{
+												Id:             entryArr[0].(string),
+												DeliveredTime:  entryArr[1].(int64),
+												DeliveredCount: entryArr[2].(int64),
+											},
+										)
+									}
+								}
+								consumerInfo.Pending = pendingConsumerArr
+							}
+
+							consumersArr = append(consumersArr, consumerInfo)
+						}
+					}
+					groupInfo.Consumers = consumersArr
+				}
+				internal.ReadValue(groupMap, "name", &groupInfo.Name)
+				internal.ReadValue(groupMap, "last-delivered-id", &groupInfo.LastDeliveredId)
+				internal.ReadValue(groupMap, "pel-count", &groupInfo.PelCount)
+				internal.ReadResult(groupMap, "entries-read", &groupInfo.EntriesRead)
+				internal.ReadResult(groupMap, "lag", &groupInfo.Lag)
+
+				if pending, ok := groupMap["pending"].([]any); ok {
+					pendingArr := make([]models.PendingEntry, 0, len(pending))
+					for _, pendingEntry := range pending {
+						if pendingEntryArr, ok := pendingEntry.([]any); ok {
+							pendingArr = append(pendingArr, models.PendingEntry{
+								Id:             pendingEntryArr[0].(string),
+								Name:           pendingEntryArr[1].(string),
+								DeliveredTime:  pendingEntryArr[2].(int64),
+								DeliveredCount: pendingEntryArr[3].(int64),
+							})
+						}
+					}
+					groupInfo.Pending = pendingArr
+				}
+			}
+			groupsArr = append(groupsArr, groupInfo)
+		}
+		streamInfo.Groups = groupsArr
+	}
+	if val, ok := infoMap["entries"].([]any); ok {
+		entriesArr := make([]models.StreamEntry, 0, len(val))
+		for _, entry := range val {
+			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
+				entryInfo := models.StreamEntry{}
+				entryInfo.ID = streamEntry[0].(string)
+				entryInfo.Fields = createFieldInfoArray([]any{streamEntry[1]})
+				entriesArr = append(entriesArr, entryInfo)
+			}
+		}
+		streamInfo.Entries = entriesArr
+	}
+
+	internal.ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
 
 	return streamInfo, nil
 }
