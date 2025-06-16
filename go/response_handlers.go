@@ -988,6 +988,9 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	if err != nil {
 		return nil, err
 	}
+	if mapData == nil {
+		return nil, nil
+	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
 			arrayConverter[string]{

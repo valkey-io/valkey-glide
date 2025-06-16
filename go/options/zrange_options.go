@@ -22,21 +22,21 @@ type ZRemRangeQuery interface {
 
 // Queries a range of elements from a sorted set by theirs index.
 type RangeByIndex struct {
-	start, end int64
-	reverse    bool
+	Start, End int64
+	Reverse    bool
 }
 
 // Queries a range of elements from a sorted set by theirs score.
 type RangeByScore struct {
-	start, end scoreBoundary
-	reverse    bool
+	Start, End scoreBoundary
+	Reverse    bool
 	Limit      *Limit
 }
 
 // Queries a range of elements from a sorted set by theirs lexicographical order.
 type RangeByLex struct {
-	start, end lexBoundary
-	reverse    bool
+	Start, End lexBoundary
+	Reverse    bool
 	Limit      *Limit
 }
 
@@ -76,19 +76,18 @@ func NewInfiniteLexBoundary(bound constants.InfBoundary) lexBoundary {
 	return lexBoundary(string(bound))
 }
 
-// TODO re-use limit from `SORT` https://github.com/valkey-io/valkey-glide/pull/2888
 // Limit struct represents the range of elements to retrieve
 // The LIMIT argument is commonly used to specify a subset of results from the matching elements, similar to the
 // LIMIT clause in SQL (e.g., `SELECT LIMIT offset, count`).
 type Limit struct {
 	// The starting position of the range, zero based.
-	offset int64
-	// The maximum number of elements to include in the range. A negative count returns all elementsnfrom the offset.
-	count int64
+	Offset int64
+	// The maximum number of elements to include in the range. A negative Count returns all elements from the offset.
+	Count int64
 }
 
 func (limit *Limit) toArgs() ([]string, error) {
-	return []string{"LIMIT", utils.IntToString(limit.offset), utils.IntToString(limit.count)}, nil
+	return []string{"LIMIT", utils.IntToString(limit.Offset), utils.IntToString(limit.Count)}, nil
 }
 
 // Queries a range of elements from a sorted set by theirs index.
@@ -103,14 +102,14 @@ func NewRangeByIndexQuery(start int64, end int64) *RangeByIndex {
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
 func (rbi *RangeByIndex) SetReverse() *RangeByIndex {
-	rbi.reverse = true
+	rbi.Reverse = true
 	return rbi
 }
 
 func (rbi *RangeByIndex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 3)
-	args = append(args, utils.IntToString(rbi.start), utils.IntToString(rbi.end))
-	if rbi.reverse {
+	args = append(args, utils.IntToString(rbi.Start), utils.IntToString(rbi.End))
+	if rbi.Reverse {
 		args = append(args, "REV")
 	}
 	return args, nil
@@ -130,7 +129,7 @@ func NewRangeByScoreQuery(start scoreBoundary, end scoreBoundary) *RangeByScore 
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
 func (rbs *RangeByScore) SetReverse() *RangeByScore {
-	rbs.reverse = true
+	rbs.Reverse = true
 	return rbs
 }
 
@@ -142,8 +141,8 @@ func (rbs *RangeByScore) SetLimit(offset, count int64) *RangeByScore {
 
 func (rbs *RangeByScore) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
-	args = append(args, string(rbs.start), string(rbs.end), "BYSCORE")
-	if rbs.reverse {
+	args = append(args, string(rbs.Start), string(rbs.End), "BYSCORE")
+	if rbs.Reverse {
 		args = append(args, "REV")
 	}
 	if rbs.Limit != nil {
@@ -157,7 +156,7 @@ func (rbs *RangeByScore) ToArgs() ([]string, error) {
 }
 
 func (rbs *RangeByScore) ToArgsRemRange() ([]string, error) {
-	return []string{string(rbs.start), string(rbs.end)}, nil
+	return []string{string(rbs.Start), string(rbs.End)}, nil
 }
 
 func (rbi *RangeByScore) dummyZRangeQuery() {}
@@ -174,7 +173,7 @@ func NewRangeByLexQuery(start lexBoundary, end lexBoundary) *RangeByLex {
 
 // Reverses the sorted set, with index `0` as the element with the highest score.
 func (rbl *RangeByLex) SetReverse() *RangeByLex {
-	rbl.reverse = true
+	rbl.Reverse = true
 	return rbl
 }
 
@@ -186,8 +185,8 @@ func (rbl *RangeByLex) SetLimit(offset, count int64) *RangeByLex {
 
 func (rbl *RangeByLex) ToArgs() ([]string, error) {
 	args := make([]string, 0, 7)
-	args = append(args, string(rbl.start), string(rbl.end), "BYLEX")
-	if rbl.reverse {
+	args = append(args, string(rbl.Start), string(rbl.End), "BYLEX")
+	if rbl.Reverse {
 		args = append(args, "REV")
 	}
 	if rbl.Limit != nil {
@@ -201,11 +200,11 @@ func (rbl *RangeByLex) ToArgs() ([]string, error) {
 }
 
 func (rbl *RangeByLex) ToArgsRemRange() ([]string, error) {
-	return []string{string(rbl.start), string(rbl.end)}, nil
+	return []string{string(rbl.Start), string(rbl.End)}, nil
 }
 
 func (rbl *RangeByLex) ToArgsLexCount() []string {
-	return []string{string(rbl.start), string(rbl.end)}
+	return []string{string(rbl.Start), string(rbl.End)}
 }
 
 func (rbi *RangeByLex) dummyZRangeQuery() {}

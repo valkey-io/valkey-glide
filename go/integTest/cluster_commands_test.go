@@ -1156,7 +1156,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	options := options.ClusterLolwutOptions{
 		LolwutOptions: &options.LolwutOptions{
 			Version: 6,
-			Args:    &[]int{10, 20},
+			Args:    []int{10, 20},
 		},
 		RouteOption: &options.RouteOption{Route: config.AllNodes},
 	}
