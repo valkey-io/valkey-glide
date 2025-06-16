@@ -729,8 +729,10 @@ func ExampleClient_LCSWithOptions() {
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
 
 	// Output:
-	// Basic LCS result: {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4},{"Key1":{"Start":2,"End":3},"Key2":{"Start":0,"End":1},"MatchLen":2}],"Len":6}
-	// With MinMatchLen 4: {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4}],"Len":6}
+	// Basic LCS result:
+	// {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4},{"Key1":{"Start":2,"End":3},"Key2":{"Start":0,"End":1},"MatchLen":2}],"Len":6}
+	// With MinMatchLen 4:
+	// {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4}],"Len":6}
 }
 
 func ExampleClusterClient_LCSWithOptions() {
@@ -761,6 +763,8 @@ func ExampleClusterClient_LCSWithOptions() {
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
 
 	// Output:
-	// Basic LCS result: {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4},{"Key1":{"Start":2,"End":3},"Key2":{"Start":0,"End":1},"MatchLen":2}],"Len":6}
-	// With MinMatchLen 4: {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4}],"Len":6}
+	// Basic LCS result:
+	// {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4},{"Key1":{"Start":2,"End":3},"Key2":{"Start":0,"End":1},"MatchLen":2}],"Len":6}
+	// With MinMatchLen 4:
+	// {"MatchString":"","Matches":[{"Key1":{"Start":4,"End":7},"Key2":{"Start":5,"End":8},"MatchLen":4}],"Len":6}
 }

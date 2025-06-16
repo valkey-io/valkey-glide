@@ -456,15 +456,6 @@ type RankAndScore struct {
 	Score float64
 }
 
-type LCSResponseType int
-
-const (
-	SimpleLCSString LCSResponseType = iota
-	SimpleLCSLength
-	ComplexLCSMatch
-)
-
-
 type LCSMatch struct {
 	MatchString string
 	Matches     []LCSMatchedPosition

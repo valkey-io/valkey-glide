@@ -267,13 +267,21 @@ func parseLCSMatchedPositions(matches any) ([]models.LCSMatchedPosition, error) 
 		}
 
 		if len(matchArray) != 2 && len(matchArray) != 3 {
-			return nil, fmt.Errorf("expected match to be an array of length 2 or 3, got %T with length %d", matchArray, len(matchArray))
+			return nil, fmt.Errorf(
+				"expected match to be an array of length 2 or 3, got %T with length %d",
+				matchArray,
+				len(matchArray),
+			)
 		}
 
 		// Parse Key1 position
 		key1Array, ok := matchArray[0].([]any)
 		if !ok || len(key1Array) != 2 {
-			return nil, fmt.Errorf("expected key1 to be an array of length 2, got %T with length %d", matchArray[0], len(key1Array))
+			return nil, fmt.Errorf(
+				"expected key1 to be an array of length 2, got %T with length %d",
+				matchArray[0],
+				len(key1Array),
+			)
 		}
 
 		key1Start, err := convertToInt64(key1Array[0])
@@ -289,7 +297,11 @@ func parseLCSMatchedPositions(matches any) ([]models.LCSMatchedPosition, error) 
 		// Parse Key2 position
 		key2Array, ok := matchArray[1].([]any)
 		if !ok || len(key2Array) != 2 {
-			return nil, fmt.Errorf("expected key2 to be an array of length 2, got %T with length %d", matchArray[1], len(key2Array))
+			return nil, fmt.Errorf(
+				"expected key2 to be an array of length 2, got %T with length %d",
+				matchArray[1],
+				len(key2Array),
+			)
 		}
 
 		key2Start, err := convertToInt64(key2Array[0])
@@ -1522,10 +1534,12 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	return result.(map[string]any), nil
 }
 
-func handleLCSMatchResponse(response *C.struct_CommandResponse, lcsResponseType models.LCSResponseType) (*models.LCSMatch, error) {
-
+func handleLCSMatchResponse(
+	response *C.struct_CommandResponse,
+	lcsResponseType internal.LCSResponseType,
+) (*models.LCSMatch, error) {
 	switch lcsResponseType {
-	case models.SimpleLCSString:
+	case internal.SimpleLCSString:
 		lcsResp, err := handleStringResponse(response)
 		if err != nil {
 			return nil, err
@@ -1535,7 +1549,7 @@ func handleLCSMatchResponse(response *C.struct_CommandResponse, lcsResponseType 
 			Matches:     make([]models.LCSMatchedPosition, 0),
 			Len:         0,
 		}, nil
-	case models.SimpleLCSLength:
+	case internal.SimpleLCSLength:
 		lcsResp, err := handleIntResponse(response)
 		if err != nil {
 			return nil, err
@@ -1545,7 +1559,7 @@ func handleLCSMatchResponse(response *C.struct_CommandResponse, lcsResponseType 
 			Matches:     make([]models.LCSMatchedPosition, 0),
 			Len:         lcsResp,
 		}, nil
-	case models.ComplexLCSMatch:
+	case internal.ComplexLCSMatch:
 		lcsResp, err := handleStringToAnyMapResponse(response)
 		if err != nil {
 			return nil, err
@@ -1570,7 +1584,6 @@ func handleLCSMatchResponse(response *C.struct_CommandResponse, lcsResponseType 
 	default:
 		return nil, fmt.Errorf("unknown LCS response type: %d", lcsResponseType)
 	}
-
 }
 
 func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {

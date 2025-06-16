@@ -1217,7 +1217,7 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*m
 		return nil, err
 	}
 
-	return handleLCSMatchResponse(result, models.SimpleLCSString)
+	return handleLCSMatchResponse(result, internal.SimpleLCSString)
 }
 
 // Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
@@ -1249,7 +1249,7 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*model
 		return nil, err
 	}
 
-	return handleLCSMatchResponse(result, models.SimpleLCSLength)
+	return handleLCSMatchResponse(result, internal.SimpleLCSLength)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
@@ -1296,7 +1296,7 @@ func (client *baseClient) LCSWithOptions(
 		return nil, err
 	}
 
-	return handleLCSMatchResponse(response, models.ComplexLCSMatch)
+	return handleLCSMatchResponse(response, internal.ComplexLCSMatch)
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
