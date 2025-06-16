@@ -39,7 +39,9 @@ async def get_client_count(client: Union[GlideClient, GlideClusterClient]) -> in
     else:
         # For standalone client, execute CLIENT LIST directly
         result_standalone: Any = await client.custom_command(["CLIENT", "LIST"])
-        return await get_client_list_output_count(cast(Union[bytes, str, None], result_standalone))
+        return await get_client_list_output_count(
+            cast(Union[bytes, str, None], result_standalone)
+        )
 
 
 async def get_expected_new_connections(
@@ -50,14 +52,14 @@ async def get_expected_new_connections(
     if isinstance(client, GlideClusterClient):
         # For cluster, get node count and multiply by 2 (2 connections per node)
         result = await client.custom_command(["CLUSTER", "NODES"])
-        
+
         # Handle the type explicitly before calling decode()
         if isinstance(result, bytes):
             nodes_info = result.decode().strip().split("\n")
         else:
             # Fall back to string conversion if it's not bytes
             nodes_info = str(result).strip().split("\n")
-            
+
         return len(nodes_info) * 2
     else:
         # For standalone, always expect 1 new connection
