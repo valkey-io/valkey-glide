@@ -1742,40 +1742,16 @@ func getXInfoStreamFields(result any) (models.XInfoStreamResponse, error) {
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
 	streamInfo := models.XInfoStreamResponse{}
-	// response, err := getCommonXInfoStreamFields(infoMap, streamInfo)
-	// streamInfo = response.(models.XInfoStreamResponse)
 	// Parse integer fields
-	if val, ok := infoMap["length"].(int64); ok {
-		streamInfo.Length = val
-	}
-	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
-		streamInfo.RadixTreeKeys = val
-	}
-	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
-		streamInfo.RadixTreeNodes = val
-	}
-	if val, ok := infoMap["groups"].(int64); ok {
-		streamInfo.Groups = val
-	}
-
-	switch EntriesAdded := infoMap["entries-added"].(type) {
-	case int64:
-		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
-	default:
-		streamInfo.EntriesAdded = models.CreateNilInt64Result()
-	}
+	internal.ReadValue(infoMap, "length", &streamInfo.Length)
+	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	internal.ReadValue(infoMap, "groups", &streamInfo.Groups)
+	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
 
 	// Parse string fields
-	if val, ok := infoMap["last-generated-id"].(string); ok {
-		streamInfo.LastGeneratedID = val
-	}
-
-	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
-	case string:
-		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
-	default:
-		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
-	}
+	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
 
 	// Get First Entry
 	entry := createEntry(infoMap, "first-entry")
@@ -1799,32 +1775,16 @@ func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsRe
 			fmt.Errorf("unexpected type of map: %T", result)
 	}
 	streamInfo := models.XInfoStreamFullOptionsResponse{}
+
 	// Parse integer fields
-	if val, ok := infoMap["length"].(int64); ok {
-		streamInfo.Length = val
-	}
-	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
-		streamInfo.RadixTreeKeys = val
-	}
-	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
-		streamInfo.RadixTreeNodes = val
-	}
-	switch EntriesAdded := infoMap["entries-added"].(type) {
-	case int64:
-		streamInfo.EntriesAdded = models.CreateInt64Result(EntriesAdded)
-	default:
-		streamInfo.EntriesAdded = models.CreateNilInt64Result()
-	}
+	internal.ReadValue(infoMap, "length", &streamInfo.Length)
+	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
 	// Parse string fields
-	if val, ok := infoMap["last-generated-id"].(string); ok {
-		streamInfo.LastGeneratedID = val
-	}
-	switch MaxDeletedEntryID := infoMap["max-deleted-entry-id"].(type) {
-	case string:
-		streamInfo.MaxDeletedEntryID = models.CreateStringResult(MaxDeletedEntryID)
-	default:
-		streamInfo.MaxDeletedEntryID = models.CreateNilStringResult()
-	}
+	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
 
 	// Get First Entry
 	entry := createEntry(infoMap, "first-entry")
@@ -1887,27 +1847,12 @@ func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsRe
 					}
 					groupInfo.Consumers = consumersArr
 				}
-				if name, ok := groupMap["name"].(string); ok {
-					groupInfo.Name = name
-				}
-				if lastDeliveredId, ok := groupMap["last-delivered-id"].(string); ok {
-					groupInfo.LastDeliveredId = lastDeliveredId
-				}
-				if pelCount, ok := groupMap["pel-count"].(int64); ok {
-					groupInfo.PelCount = pelCount
-				}
-				switch entriesRead := groupMap["entries-read"].(type) {
-				case int64:
-					groupInfo.EntriesRead = models.CreateInt64Result(entriesRead)
-				default:
-					groupInfo.EntriesRead = models.CreateNilInt64Result()
-				}
-				switch lag := groupMap["lag"].(type) {
-				case int64:
-					groupInfo.Lag = models.CreateInt64Result(lag)
-				default:
-					groupInfo.Lag = models.CreateNilInt64Result()
-				}
+				internal.ReadValue(groupMap, "name", &groupInfo.Name)
+				internal.ReadValue(groupMap, "last-delivered-id", &groupInfo.LastDeliveredId)
+				internal.ReadValue(groupMap, "pel-count", &groupInfo.PelCount)
+				internal.ReadResult(groupMap, "entries-read", &groupInfo.EntriesRead)
+				internal.ReadResult(groupMap, "lag", &groupInfo.Lag)
+
 				if pending, ok := groupMap["pending"].([]any); ok {
 					pendingArr := make([]models.PendingEntry, 0, len(pending))
 					for _, pendingEntry := range pending {
@@ -1940,18 +1885,10 @@ func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsRe
 		streamInfo.Entries = entriesArr
 	}
 
-	switch RecordedFirstEntryId := infoMap["recorded-first-entry-id"].(type) {
-	case string:
-		streamInfo.RecordedFirstEntryId = models.CreateStringResult(RecordedFirstEntryId)
-	default:
-		streamInfo.RecordedFirstEntryId = models.CreateNilStringResult()
-	}
+	internal.ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
 
 	return streamInfo, nil
 }
-
-// func getCommonXInfoStreamFields(infoMap map[string]any, streamResponse interface{}) (interface{}, error) {
-// }
 
 // Parse entry - it's an array where first element is ID and second is array of field-value pairs
 func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
