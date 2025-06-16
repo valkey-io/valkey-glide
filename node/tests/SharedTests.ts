@@ -4109,7 +4109,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    describe.skip("script flush is flaky - https://github.com/valkey-io/valkey-glide/issues/4158", () => {
+    describe("script flush is flaky - https://github.com/valkey-io/valkey-glide/issues/4158", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "script flush test_%p",
             async (protocol) => {
