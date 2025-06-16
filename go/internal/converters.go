@@ -441,14 +441,6 @@ func ConvertFunctionListResponse(data any) (any, error) {
 	return result, nil
 }
 
-func ConvertLMPopResponse(data any) (any, error) {
-	return mapConverter[[]string]{
-		arrayConverter[string]{},
-		false,
-	}.convert(data)
-	// actually returns a map[string][]string
-}
-
 func ConvertXReadResponse(data any) (any, error) {
 	return mapConverter[map[string][][]string]{
 		mapConverter[[][]string]{
@@ -558,6 +550,25 @@ func ConvertScanResult(data any) (any, error) {
 	return models.ScanResult{Cursor: models.NewCursorFromString(arr[0].(string)), Data: scanData.([]string)}, err
 }
 
+func ConvertLCSResult(data any) (any, error) {
+	lcsResp := data.(map[string]any)
+	lenVal, err := ConvertToInt64(lcsResp["len"])
+	if err != nil {
+		return nil, fmt.Errorf("expected len to be a number, got %T", lcsResp["len"])
+	}
+
+	// Parse the matches array using the helper function
+	matches, err := ParseLCSMatchedPositions(lcsResp["matches"])
+	if err != nil {
+		return nil, err
+	}
+	return models.LCSMatch{
+		MatchString: models.DefaultStringResponse,
+		Matches:     matches,
+		Len:         lenVal,
+	}, nil
+}
+
 func ConverterAndTypeChecker(
 	data any,
 	expectedType reflect.Kind,
@@ -582,6 +593,11 @@ func ConverterAndTypeChecker(
 	return nil, fmt.Errorf("unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType)
 }
 
+// LMPop, LMPopCount, BLMPop, BLMPopCount
 func ConvertKeyValuesArrayOrNil(data any) ([]models.KeyValues, error) {
 	return keyValuesConverter{canBeNil: true}.convert(data)
+}
+
+func ConvertKeyValuesArrayOrNilForBatch(data any) (any, error) {
+	return ConvertKeyValuesArrayOrNil(data)
 }

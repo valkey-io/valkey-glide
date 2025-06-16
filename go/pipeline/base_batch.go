@@ -456,7 +456,7 @@ func (b *BaseBatch[T]) LCSWithOptions(key1 string, key2 string, opts options.LCS
 	if err != nil {
 		return b.addError("LCSWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.LCS, append([]string{key1, key2}, optArgs...), reflect.Map, false)
+	return b.addCmdAndConverter(C.LCS, append([]string{key1, key2}, optArgs...), reflect.Map, false, internal.ConvertLCSResult)
 }
 
 // Gets the value associated with the given key and deletes the key.
@@ -744,15 +744,14 @@ func (b *BaseBatch[T]) HIncrByFloat(key string, field string, increment float64)
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (b *BaseBatch[T]) HScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.HScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.HScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates fields of Hash types and their associated values with options.
@@ -769,11 +768,10 @@ func (b *BaseBatch[T]) HScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (b *BaseBatch[T]) HScanWithOptions(key string, cursor string, options options.HashScanOptions) *T {
@@ -781,7 +779,13 @@ func (b *BaseBatch[T]) HScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("HScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.HScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.HScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Returns a random field name from the hash value stored at `key`.
@@ -1420,13 +1424,13 @@ func (b *BaseBatch[T]) SUnion(keys []string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (b *BaseBatch[T]) SScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.SScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.SScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates incrementally over a set with options.
@@ -1443,9 +1447,9 @@ func (b *BaseBatch[T]) SScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options options.BaseScanOptions) *T {
@@ -1453,7 +1457,13 @@ func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("SScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.SScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.SScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -1791,8 +1801,8 @@ func (b *BaseBatch[T]) LPushX(key string, elements []string) *T {
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
-//	If no elements could be popped, returns `nil`.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirection) *T {
@@ -1811,7 +1821,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -1830,8 +1840,8 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped elements.
-//	If no elements could be popped, returns `nil`.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
+//	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDirection, count int64) *T {
@@ -1850,7 +1860,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
@@ -1874,7 +1884,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -1895,7 +1905,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list.
@@ -1920,7 +1930,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -1946,7 +1956,7 @@ func (b *BaseBatch[T]) BLMPopCount(
 	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Sets the list element at index to element.
@@ -3608,14 +3618,14 @@ func (b *BaseBatch[T]) ZScore(key string, member string) *T {
 //
 // Command Response:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (b *BaseBatch[T]) ZScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.ZScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates incrementally over a sorted set.
@@ -3632,11 +3642,10 @@ func (b *BaseBatch[T]) ZScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (b *BaseBatch[T]) ZScanWithOptions(key string, cursor string, options options.ZScanOptions) *T {
@@ -3644,7 +3653,13 @@ func (b *BaseBatch[T]) ZScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("ZScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.ZScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Returns stream message summary information for pending messages matching a stream and group.

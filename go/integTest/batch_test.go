@@ -554,8 +554,12 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
-				TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
+				ExpectedResponse: models.LCSMatch{
+					Len:         2,
+					MatchString: models.DefaultStringResponse,
+					Matches:     []models.LCSMatchedPosition{},
+				},
+				TestName: "LCSWithOptions(multiKey1, multiKey2, opts)",
 			},
 		)
 	}
@@ -1176,8 +1180,11 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}},
-			TestName:         "HScan(key, 0)",
+			ExpectedResponse: models.ScanResult{
+				Cursor: models.NewCursorFromString("0"),
+				Data:   []string{"field1", "value1", "counter", "15", "float_counter", "12"},
+			},
+			TestName: "HScan(key, 0)",
 		},
 	)
 	if serverVer >= "8.0.0" {
@@ -1185,15 +1192,21 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{"0", []any{"field1", "counter", "float_counter"}},
-				TestName:         "HScanWithOptions(key, 0, options)",
+				ExpectedResponse: models.ScanResult{
+					Cursor: models.NewCursorFromString("0"),
+					Data:   []string{"field1", "counter", "float_counter"},
+				},
+				TestName: "HScanWithOptions(key, 0, options)",
 			},
 		)
 	} else {
 		batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetCount(42))
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}}, TestName: "HScanWithOptions(key, 0, options)"},
+			CommandTestData{ExpectedResponse: models.ScanResult{
+				Cursor: models.NewCursorFromString("0"),
+				Data:   []string{"field1", "value1", "counter", "15", "float_counter", "12"},
+			}},
 		)
 	}
 
@@ -1376,7 +1389,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.LMPop([]string{key}, constants.Left)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"there"}}, TestName: "LMPop([key], Left)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"there"}}},
+				TestName:         "LMPop([key], Left)",
+			},
 		)
 
 		batch.RPush(key, []string{"hello"})
@@ -1384,7 +1400,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.LMPopCount([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "LMPopCount([key], Left, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"hello"}}},
+				TestName:         "LMPopCount([key], Left, 1)",
+			},
 		)
 
 		batch.RPush(key, []string{"hello", "world"})
@@ -1392,13 +1411,19 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.BLMPop([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "BLMPop([key], Left, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"hello"}}},
+				TestName:         "BLMPop([key], Left, 1)",
+			},
 		)
 
 		batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"world"}}},
+				TestName:         "BLMPopCount([key], Left, 1, 1)",
+			},
 		)
 	}
 
@@ -1591,13 +1616,22 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	)
 
 	batch.SScan(key, "0")
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScan(key, 0)"})
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1"},
+		},
+		TestName: "SScan(key, 0)",
+	})
 
 	scanOptions := options.NewBaseScanOptions().SetMatch("mem*")
 	batch.SScanWithOptions(key, "0", *scanOptions)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1"},
+		}, TestName: "SScanWithOptions(key, 0, options)"},
 	)
 
 	batch.SAdd(prefix+key2, []string{"newmember"})
@@ -1842,14 +1876,20 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZScan(key, "0")
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScan(key, 0)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1", "1"},
+		}, TestName: "ZScan(key, 0)"},
 	)
 
 	zScanOpts := options.NewZScanOptions().SetCount(1)
 	batch.ZScanWithOptions(key, "0", *zScanOpts)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScanWithOptions(key, 0, opts)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1", "1"},
+		}, TestName: "ZScanWithOptions(key, 0, opts)"},
 	)
 
 	key3 := atomicPrefix + "key3-" + uuid.NewString()
