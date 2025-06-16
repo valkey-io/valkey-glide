@@ -2629,8 +2629,12 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
@@ -2648,8 +2652,12 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs
-//	mapped to an array entries or `nil` if a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: []KeyValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {
@@ -2672,8 +2680,12 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[string]string) *T {
@@ -2693,8 +2705,12 @@ func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (b *BaseBatch[T]) XReadGroupWithOptions(
@@ -2707,7 +2723,7 @@ func (b *BaseBatch[T]) XReadGroupWithOptions(
 	if err != nil {
 		return b.addError("XReadGroupWithOptions", err)
 	}
-	return b.addCmdAndConverter(C.XReadGroup, args, reflect.Map, true, internal.ConvertXReadGroupResponse)
+	return b.addCmdAndConverter(C.XReadGroup, args, reflect.Map, true, internal.ConvertXReadResponse)
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
@@ -4519,8 +4535,10 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //
 // Command Response:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
@@ -4542,7 +4560,10 @@ func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdle
 //
 // Command Response:
 //
-//	A map of message entries that were claimed by the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaimWithOptions(

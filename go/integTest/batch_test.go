@@ -2097,10 +2097,10 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadOpts := options.NewXReadOptions().SetCount(1)
 	batch.XReadWithOptions(map[string]string{streamKey1: "0-2"}, *xreadOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]map[string][][]string{
-			streamKey1: {
-				"0-3": {{"field3", "value3"}},
-			},
+		ExpectedResponse: map[string]models.StreamResponse{
+			streamKey1: {Entries: []models.StreamEntry{{
+				ID: "0-3", Fields: []models.KeyValue{{Key: "field3", Value: "value3"}},
+			}}},
 		},
 		TestName: "XRead(streamKey1, 0-2)",
 	})
@@ -2159,8 +2159,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadgroupOpts := options.NewXReadGroupOptions().SetCount(2)
 	batch.XReadGroupWithOptions(groupName1, consumer1, map[string]string{streamKey1: "0-3"}, *xreadgroupOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]map[string][][]string{
-			streamKey1: {},
+		ExpectedResponse: map[string]models.StreamResponse{
+			streamKey1: {Entries: []models.StreamEntry{}},
 		},
 		TestName: "XReadGroup(streamKey1, 0-3, groupName1, consumer1)",
 	})
@@ -2169,14 +2169,14 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xclaimOpts := options.NewXClaimOptions().SetForce()
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-1"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string][][]string{},
+		ExpectedResponse: map[string]models.XClaimResponse{},
 		TestName:         "XClaim(streamKey1, groupName1, consumer1, 0-1)",
 	})
 
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string][][]string{
-			"0-3": {{"field3", "value3"}},
+		ExpectedResponse: map[string]models.XClaimResponse{
+			"0-3": {Fields: []models.KeyValue{{Key: "field3", Value: "value3"}}},
 		},
 		TestName: "XClaim(streamKey1, groupName1, consumer1, 0-3)",
 	})

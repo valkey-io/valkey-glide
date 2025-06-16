@@ -283,3 +283,49 @@ func ConvertToInt64(value any) (int64, error) {
 		return 0, fmt.Errorf("cannot convert %T to int64", value)
 	}
 }
+
+// Parse entry - it's an array where first element is ID and second is array of field-value pairs
+func CreateStreamEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
+	entry := models.StreamEntry{}
+	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
+	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
+		// First element is the ID
+		if id, ok := firstEntryArray[0].(string); ok {
+			// Create field info array.
+			entryArray := []any{firstEntryArray[1]}
+			keyValues := CreateFieldInfoArray(entryArray)
+			// Create a StreamEntry with the ID
+			entry = models.StreamEntry{
+				ID:     id,
+				Fields: keyValues,
+			}
+		}
+	}
+	return entry
+}
+
+func CreateFieldInfoArray(entriesArray any) []models.KeyValue {
+	keyValues := make([]models.KeyValue, 0)
+	entriesData, ok := entriesArray.([]any)
+	if !ok {
+		entriesData = []any{}
+	}
+
+	for _, entryData := range entriesData {
+		fieldValuePairs, ok := entryData.([]any)
+		if !ok || len(fieldValuePairs) < 2 {
+			continue
+		}
+		for i := 0; i+1 < len(fieldValuePairs); i += 2 {
+			fieldName, okField := fieldValuePairs[i].(string)
+			fieldValue, okValue := fieldValuePairs[i+1].(string)
+			if okField && okValue {
+				keyValues = append(keyValues, models.KeyValue{
+					Key:   fieldName,
+					Value: fieldValue,
+				})
+			}
+		}
+	}
+	return keyValues
+}

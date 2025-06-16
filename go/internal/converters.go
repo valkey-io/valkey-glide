@@ -441,42 +441,8 @@ func ConvertFunctionListResponse(data any) (any, error) {
 	return result, nil
 }
 
-func ConvertXReadResponse(data any) (any, error) {
-	return mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	// actually returns a map[string]map[string][][]string
-}
-
-func ConvertXReadGroupResponse(data any) (any, error) {
-	return mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				true,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	// actually returns a map[string]map[string][][]string
-}
-
-func ConvertXClaimResponse(data any) (any, error) {
-	return mapConverter[[][]string]{
+func ConvertXRangeResponse(data any) (any, error) {
+	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
 			arrayConverter[string]{
 				nil,
@@ -486,11 +452,6 @@ func ConvertXClaimResponse(data any) (any, error) {
 		},
 		false,
 	}.convert(data)
-	// actually returns a map[string][][]string
-}
-
-func ConvertXRangeResponse(data any) (any, error) {
-	converted, err := ConvertXClaimResponse(data)
 	if err != nil {
 		return nil, err
 	}
@@ -600,4 +561,48 @@ func ConvertKeyValuesArrayOrNil(data any) ([]models.KeyValues, error) {
 
 func ConvertKeyValuesArrayOrNilForBatch(data any) (any, error) {
 	return ConvertKeyValuesArrayOrNil(data)
+}
+
+// XRead, XReadGroup
+func ConvertXReadResponse(data any) (any, error) {
+	result := make(map[string]models.StreamResponse)
+	// Process the map data directly
+	streamMap := data.(map[string]any)
+	for streamName, streamData := range streamMap {
+		streamResponse := models.StreamResponse{
+			Entries: make([]models.StreamEntry, 0),
+		}
+		// Process fields
+		for id, entriesArray := range streamData.(map[string]any) {
+			// Process stream entries
+			fieldInfos := CreateFieldInfoArray(entriesArray)
+			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
+				ID:     id,
+				Fields: fieldInfos,
+			})
+		}
+
+		result[streamName] = streamResponse
+	}
+	return result, nil
+}
+
+func ConvertXClaimResponse(data any) (any, error) {
+	result := make(map[string]models.XClaimResponse)
+
+	// Process the map data directly
+	claimMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type received: %T", data)
+	}
+
+	for id, entriesArray := range claimMap {
+		// Process fields
+		fieldInfos := CreateFieldInfoArray(entriesArray)
+		result[id] = models.XClaimResponse{
+			Fields: fieldInfos,
+		}
+	}
+
+	return result, nil
 }
