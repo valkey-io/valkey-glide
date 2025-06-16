@@ -789,6 +789,28 @@ func handleStringToStringArrayMapOrNilResponse(
 	return nil, fmt.Errorf("unexpected type received: %T", res)
 }
 
+func handleKeyValuesArrayOrNilResponse(
+	response *C.struct_CommandResponse,
+) ([]models.KeyValues, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return internal.ConvertKeyValuesArrayOrNil(data)
+}
+
 func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]struct{}, error) {
 	defer C.free_command_response(response)
 
