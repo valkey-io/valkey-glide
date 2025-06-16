@@ -758,7 +758,7 @@ func ExampleClusterClient_LCSWithOptions_basic() {
 
 	// Basic LCS IDX without additional options
 	opts := options.NewLCSIdxOptions()
-	result, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *opts)
+	result, err := client.LCSWithOptions(context.Background(), "{key}1", "{key}2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -847,7 +847,7 @@ func ExampleClusterClient_LCSWithOptions_minmatchlen() {
 	// LCS IDX with MINMATCHLEN = 4
 	optsWithMin := options.NewLCSIdxOptions()
 	optsWithMin.SetMinMatchLen(4)
-	result2, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *optsWithMin)
+	result2, err := client.LCSWithOptions(context.Background(), "{key}1", "{key}2", *optsWithMin)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
