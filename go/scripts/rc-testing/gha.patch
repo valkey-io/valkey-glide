@@ -1,8 +1,8 @@
 diff --git a/.github/workflows/go.yml b/.github/workflows/go.yml
-index 05f572abf..6eb9046ba 100644
+index 689d7f69e..d9a12cfc2 100644
 --- a/.github/workflows/go.yml
 +++ b/.github/workflows/go.yml
-@@ -137,8 +137,8 @@ jobs:
+@@ -142,8 +142,8 @@ jobs:
              - name: Install & build & test
                working-directory: go
                run: |
@@ -13,13 +13,14 @@ index 05f572abf..6eb9046ba 100644
                    make -k pubsub-test
                    make -k opentelemetry-test
  
-@@ -164,45 +164,6 @@ jobs:
+@@ -169,46 +169,6 @@ jobs:
                        benchmarks/results/**
                        go/reports/**
  
 -    lint:
 -        timeout-minutes: 10
 -        runs-on: ubuntu-latest
+-        needs: rc-patch
 -        if: ${{ github.event.inputs.rc-test != 'true' }}
 -        steps:
 -            - uses: actions/checkout@v4
@@ -59,7 +60,7 @@ index 05f572abf..6eb9046ba 100644
      get-containers:
          runs-on: ubuntu-latest
          if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-@@ -279,8 +240,8 @@ jobs:
+@@ -277,8 +237,8 @@ jobs:
                working-directory: go
                if: ${{ github.event.inputs.rc-test != 'true' }}
                run: |
@@ -70,7 +71,7 @@ index 05f572abf..6eb9046ba 100644
                    make -k pubsub-test
  
              - name: Upload test reports
-@@ -336,7 +297,7 @@ jobs:
+@@ -327,7 +287,7 @@ jobs:
              - name: Build and test
                working-directory: ./go
                run: |
@@ -79,7 +80,7 @@ index 05f572abf..6eb9046ba 100644
  
              - name: Upload test reports
                if: always()
-@@ -402,7 +363,7 @@ jobs:
+@@ -385,7 +345,7 @@ jobs:
              - name: Install & build & test
                working-directory: go
                run: |
