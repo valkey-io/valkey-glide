@@ -201,7 +201,7 @@ func ExampleClient_XAutoClaim() {
 	fmt.Println(response)
 
 	// Output:
-	// {0-0 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]] 0-2:[[entry2_field1 entry2_value1]]] []}
+	// {0-0 [{0-1 [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]} {0-2 [{entry2_field1 entry2_value1}]}] []}
 }
 
 func ExampleClusterClient_XAutoClaim() {
@@ -235,7 +235,7 @@ func ExampleClusterClient_XAutoClaim() {
 	fmt.Println(response)
 
 	// Output:
-	// {0-0 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]] 0-2:[[entry2_field1 entry2_value1]]] []}
+	// {0-0 [{0-1 [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]} {0-2 [{entry2_field1 entry2_value1}]}] []}
 }
 
 func ExampleClient_XAutoClaimWithOptions() {
@@ -269,7 +269,7 @@ func ExampleClient_XAutoClaimWithOptions() {
 	}
 	fmt.Println(response)
 
-	// Output: {0-2 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]] []}
+	// Output: {0-2 [{0-1 [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]}] []}
 }
 
 func ExampleClusterClient_XAutoClaimWithOptions() {
@@ -303,7 +303,7 @@ func ExampleClusterClient_XAutoClaimWithOptions() {
 	}
 	fmt.Println(response)
 
-	// Output: {0-2 map[0-1:[[entry1_field1 entry1_value1] [entry1_field2 entry1_value2]]] []}
+	// Output: {0-2 [{0-1 [{entry1_field1 entry1_value1} {entry1_field2 entry1_value2}]}] []}
 }
 
 func ExampleClient_XAutoClaimJustId() {
@@ -1877,9 +1877,21 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 func ExampleClient_XRange() {
 	var client *Client = getExampleClient() // example helper function
 	key := "12345"
+	streamId1 := "12345-1"
+	streamId2 := "12345-2"
 
-	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
-	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
+	client.XAddWithOptions(
+		context.Background(),
+		key,
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
+		*options.NewXAddOptions().SetId(streamId1),
+	)
+	client.XAddWithOptions(
+		context.Background(),
+		key,
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
+		*options.NewXAddOptions().SetId(streamId2),
+	)
 
 	response, err := client.XRange(context.Background(), key,
 		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
@@ -1887,17 +1899,29 @@ func ExampleClient_XRange() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(len(response))
+	fmt.Println(response)
 
-	// Output: 2
+	// Output: [{12345-1 [{field1 value1}]} {12345-2 [{field2 value2}]}]
 }
 
 func ExampleClusterClient_XRange() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
+	streamId1 := "12345-1"
+	streamId2 := "12345-2"
 
-	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
-	client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
+	client.XAddWithOptions(
+		context.Background(),
+		key,
+		[]models.FieldValue{{Field: "field1", Value: "value1"}},
+		*options.NewXAddOptions().SetId(streamId1),
+	)
+	client.XAddWithOptions(
+		context.Background(),
+		key,
+		[]models.FieldValue{{Field: "field2", Value: "value2"}},
+		*options.NewXAddOptions().SetId(streamId2),
+	)
 
 	response, err := client.XRange(context.Background(), key,
 		options.NewInfiniteStreamBoundary(constants.NegativeInfinity),
@@ -1905,9 +1929,9 @@ func ExampleClusterClient_XRange() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(len(response))
+	fmt.Println(response)
 
-	// Output: 2
+	// Output: [{12345-1 [{field1 value1}]} {12345-2 [{field2 value2}]}]
 }
 
 func ExampleClient_XRangeWithOptions() {
@@ -1975,7 +1999,7 @@ func ExampleClient_XRevRange() {
 	}
 	fmt.Println(response)
 
-	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
+	// Output: [{12345-2 [{field2 value2}]} {12345-1 [{field1 value1}]}]
 }
 
 func ExampleClusterClient_XRevRange() {
@@ -2005,7 +2029,7 @@ func ExampleClusterClient_XRevRange() {
 	}
 	fmt.Println(response)
 
-	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
+	// Output: [{12345-2 [{field2 value2}]} {12345-1 [{field1 value1}]}]
 }
 
 func ExampleClient_XRevRangeWithOptions() {
@@ -2036,7 +2060,7 @@ func ExampleClient_XRevRangeWithOptions() {
 	}
 	fmt.Println(response)
 
-	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
+	// Output: [{12345-2 [{field2 value2}]} {12345-1 [{field1 value1}]}]
 }
 
 func ExampleClusterClient_XRevRangeWithOptions() {
@@ -2067,7 +2091,7 @@ func ExampleClusterClient_XRevRangeWithOptions() {
 	}
 	fmt.Println(response)
 
-	// Output: [{12345-2 [[field2 value2]]} {12345-1 [[field1 value1]]}]
+	// Output: [{12345-2 [{field2 value2}]} {12345-1 [{field1 value1}]}]
 }
 
 func ExampleClient_XInfoStream() {
