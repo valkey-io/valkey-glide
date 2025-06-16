@@ -566,13 +566,13 @@ func ExampleClient_ZRankWithScore() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(res.Rank)
-	fmt.Println(res.Score)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 3
-	// {1 false}
-	// {2 false}
+	// 1
+	// 2
 }
 
 func ExampleClusterClient_ZRankWithScore() {
@@ -584,13 +584,13 @@ func ExampleClusterClient_ZRankWithScore() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(res.Rank)
-	fmt.Println(res.Score)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 3
-	// {1 false}
-	// {2 false}
+	// 1
+	// 2
 }
 
 func ExampleClient_ZRevRank() {
@@ -646,13 +646,13 @@ func ExampleClient_ZRevRankWithScore() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(res.Rank)
-	fmt.Println(res.Score)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 4
-	// {2 false}
-	// {2 false}
+	// 2
+	// 2
 }
 
 func ExampleClusterClient_ZRevRankWithScore() {
@@ -668,13 +668,13 @@ func ExampleClusterClient_ZRevRankWithScore() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(res.Rank)
-	fmt.Println(res.Score)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 4
-	// {2 false}
-	// {2 false}
+	// 2
+	// 2
 }
 
 func ExampleClient_ZScore() {

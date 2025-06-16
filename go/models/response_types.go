@@ -113,6 +113,17 @@ func CreateNilKeyWithArrayOfMembersAndScoresResult() Result[KeyWithArrayOfMember
 	return Result[KeyWithArrayOfMembersAndScores]{val: KeyWithArrayOfMembersAndScores{"", nil}, isNil: true}
 }
 
+func CreateRankAndScoreResult(
+	rank int64,
+	score float64,
+) Result[RankAndScore] {
+	return Result[RankAndScore]{val: RankAndScore{Rank: rank, Score: score}, isNil: false}
+}
+
+func CreateNilRankAndScoreResult() Result[RankAndScore] {
+	return Result[RankAndScore]{val: RankAndScore{Rank: 0, Score: 0}, isNil: true}
+}
+
 // Enum to distinguish value types stored in `ClusterValue`
 type ValueType int
 
@@ -350,10 +361,10 @@ type KeyValues struct {
 	Values []string
 }
 
-// ZRankWithScoreResponse represents the rank and score of a given member
-type ZRankWithScoreResponse struct {
+// RankAndScore represents the rank and score of a given member
+type RankAndScore struct {
 	// The rank of the member
-	Rank Result[int64]
+	Rank int64
 	// The score of the member
-	Score Result[float64]
+	Score float64
 }

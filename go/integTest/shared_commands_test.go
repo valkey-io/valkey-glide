@@ -5926,12 +5926,12 @@ func (suite *GlideTestSuite) TestZRank() {
 		if suite.serverVersion >= "7.2.0" {
 			res2, err := client.ZRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(0), res2.Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2.Score.Value())
+			assert.Equal(suite.T(), int64(0), res2.Value().Rank)
+			assert.Equal(suite.T(), float64(1.5), res2.Value().Score)
 			res4, err := client.ZRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4.Rank.IsNil())
-			assert.True(suite.T(), res4.Score.IsNil())
+			assert.True(suite.T(), res4.IsNil())
+			assert.True(suite.T(), res4.IsNil())
 		}
 
 		res3, err := client.ZRank(context.Background(), key, "non-existing-member")
@@ -5958,12 +5958,12 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		if suite.serverVersion >= "7.2.0" {
 			res2, err := client.ZRevRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(2), res2.Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2.Score.Value())
+			assert.Equal(suite.T(), int64(2), res2.Value().Rank)
+			assert.Equal(suite.T(), float64(1.5), res2.Value().Score)
 			res4, err := client.ZRevRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4.Rank.IsNil())
-			assert.True(suite.T(), res4.Score.IsNil())
+			assert.True(suite.T(), res4.IsNil())
+			assert.True(suite.T(), res4.IsNil())
 		}
 
 		res3, err := client.ZRevRank(context.Background(), key, "non-existing-member")

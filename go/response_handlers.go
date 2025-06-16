@@ -615,41 +615,32 @@ func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]models
 	return slice, nil
 }
 
-func handleZRankWithScoreResponse(
+func handleRankAndScoreOrNilResponse(
 	response *C.struct_CommandResponse,
-) (models.ZRankWithScoreResponse, error) {
+) (models.Result[models.RankAndScore], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
-		return models.ZRankWithScoreResponse{
-			Rank:  models.CreateNilInt64Result(),
-			Score: models.CreateNilFloat64Result(),
-		}, typeErr
+		return models.CreateNilRankAndScoreResult(), typeErr
 	}
 
 	if response.response_type == C.Null {
-		return models.ZRankWithScoreResponse{
-			Rank:  models.CreateNilInt64Result(),
-			Score: models.CreateNilFloat64Result(),
-		}, nil
+		return models.CreateNilRankAndScoreResult(), nil
 	}
 
-	rank := models.CreateNilInt64Result()
-	score := models.CreateNilFloat64Result()
+	rank := int64(0)
+	score := float64(0)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		if v.response_type == C.Int {
-			rank = models.CreateInt64Result(int64(v.int_value))
+			rank = int64(v.int_value)
 		}
 		if v.response_type == C.Float {
-			score = models.CreateFloat64Result(float64(v.float_value))
+			score = float64(v.float_value)
 		}
 	}
 
-	return models.ZRankWithScoreResponse{
-		Rank:  rank,
-		Score: score,
-	}, nil
+	return models.CreateRankAndScoreResult(rank, score), nil
 }
 
 func handleBoolResponse(response *C.struct_CommandResponse) (bool, error) {

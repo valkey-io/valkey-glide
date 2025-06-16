@@ -94,11 +94,11 @@ type SortedSetCommands interface {
 
 	ZRank(ctx context.Context, key string, member string) (models.Result[int64], error)
 
-	ZRankWithScore(ctx context.Context, key string, member string) (models.ZRankWithScoreResponse, error)
+	ZRankWithScore(ctx context.Context, key string, member string) (models.Result[models.RankAndScore], error)
 
 	ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error)
 
-	ZRevRankWithScore(ctx context.Context, key string, member string) (models.ZRankWithScoreResponse, error)
+	ZRevRankWithScore(ctx context.Context, key string, member string) (models.Result[models.RankAndScore], error)
 
 	ZScore(ctx context.Context, key string, member string) (models.Result[float64], error)
 
