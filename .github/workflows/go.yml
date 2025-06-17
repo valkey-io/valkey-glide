@@ -95,6 +95,12 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
+            - name: Upload patched go directory
+              uses: actions/upload-artifact@v4
+              with:
+                  name: patched-go-directory
+                  path: go/
+
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: [get-matrices, rc-patch]
@@ -109,6 +115,13 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Download patched go directory
+              if: ${{ github.event.inputs.rc-version }}
+              uses: actions/download-artifact@v4
+              with:
+                  name: patched-go-directory
+                  path: go/
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -251,6 +264,13 @@ jobs:
               with:
                   submodules: recursive
 
+            - name: Download patched go directory
+              if: ${{ github.event.inputs.rc-version }}
+              uses: actions/download-artifact@v4
+              with:
+                  name: patched-go-directory
+                  path: go/
+
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
               with:
@@ -352,6 +372,13 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Download patched go directory
+              if: ${{ github.event.inputs.rc-version }}
+              uses: actions/download-artifact@v4
+              with:
+                  name: patched-go-directory
+                  path: go/
 
             - name: Output Matrix Parameters for this job
               run: |
