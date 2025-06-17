@@ -95,11 +95,13 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Upload patched go directory
+            - name: Upload patched directories
               uses: actions/upload-artifact@v4
               with:
-                  name: patched-go-directory
-                  path: go/
+                  name: patched-directories
+                  path: |
+                      go/
+                      .github/
 
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -116,12 +118,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Download patched go directory
+            - name: Download patched directories
               if: ${{ github.event.inputs.rc-version }}
               uses: actions/download-artifact@v4
               with:
-                  name: patched-go-directory
-                  path: go/
+                  name: patched-directories
+                  path: |
+                      go/
+                      .github/
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -264,12 +268,14 @@ jobs:
               with:
                   submodules: recursive
 
-            - name: Download patched go directory
+            - name: Download patched directories
               if: ${{ github.event.inputs.rc-version }}
               uses: actions/download-artifact@v4
               with:
-                  name: patched-go-directory
-                  path: go/
+                  name: patched-directories
+                  path: |
+                      go/
+                      .github/
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -373,12 +379,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Download patched go directory
+            - name: Download patched directories
               if: ${{ github.event.inputs.rc-version }}
               uses: actions/download-artifact@v4
               with:
-                  name: patched-go-directory
-                  path: go/
+                  name: patched-directories
+                  path: |
+                      go/
+                      .github/
 
             - name: Output Matrix Parameters for this job
               run: |

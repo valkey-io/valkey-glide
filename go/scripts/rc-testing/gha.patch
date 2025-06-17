@@ -1,19 +1,8 @@
 diff --git a/.github/workflows/go.yml b/.github/workflows/go.yml
-index da71340f4..e5c817fb0 100644
+index 73ecaf70a..9f5a0568e 100644
 --- a/.github/workflows/go.yml
 +++ b/.github/workflows/go.yml
-@@ -155,8 +155,8 @@ jobs:
-             - name: Install & build & test
-               working-directory: go
-               run: |
--                  make install-tools build
--                  make -k unit-test integ-test
-+                  make install-tools
-+                  make -k integ-test
-                   make -k pubsub-test
-                   make -k opentelemetry-test
- 
-@@ -182,46 +182,6 @@ jobs:
+@@ -186,46 +186,6 @@ jobs:
                        benchmarks/results/**
                        go/reports/**
  
@@ -60,32 +49,3 @@ index da71340f4..e5c817fb0 100644
      get-containers:
          runs-on: ubuntu-latest
          if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-@@ -297,8 +257,8 @@ jobs:
-               working-directory: go
-               if: ${{ github.event.inputs.rc-test != 'true' }}
-               run: |
--                  make install-tools build
--                  make -k unit-test integ-test
-+                  make install-tools
-+                  make -k integ-test
-                   make -k pubsub-test
- 
-             - name: Upload test reports
-@@ -347,7 +307,7 @@ jobs:
-             - name: Build and test
-               working-directory: ./go
-               run: |
--                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
-+                  make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
- 
-             - name: Upload test reports
-               if: always()
-@@ -412,7 +372,7 @@ jobs:
-             - name: Install & build & test
-               working-directory: go
-               run: |
--                  make install-tools build
-+                  make install-tools
-                   make -k long-timeout-test test-filter=TestLongTimeout
- 
-             - name: Upload logs and reports
