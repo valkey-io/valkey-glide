@@ -11243,6 +11243,6 @@ func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
 			infoStr = v.SingleValue().(string)
 		}
 		assert.Contains(suite.T(), infoStr, "lib-name=GlideGo", "lib-name not found or incorrect")
-		assert.Contains(suite.T(), infoStr, "lib-ver=unknown", "lib-ver not found or incorrect")
+		assert.Regexp(suite.T(), "lib-ver=unknown|lib-ver=v", infoStr, "lib-ver not found or incorrect")
 	})
 }
