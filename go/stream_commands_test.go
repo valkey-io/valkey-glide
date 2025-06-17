@@ -1599,7 +1599,8 @@ func ExampleClient_XClaimWithOptions() {
 		}
 	}
 
-	// Output: Claimed 1 message
+	// Output:
+	// Claimed 1 message
 	// Message ID: 12345-1 with retry count: 3
 	// Field: entry1_field1, Value: entry1_value1
 }
@@ -1665,7 +1666,8 @@ func ExampleClusterClient_XClaimWithOptions() {
 		}
 	}
 
-	// Output: Claimed 1 message
+	// Output:
+	// Claimed 1 message
 	// Message ID: 12345-1 with retry count: 3
 	// Field: entry1_field1, Value: entry1_value1
 }
