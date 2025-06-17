@@ -1720,13 +1720,21 @@ export class BaseClient {
      * ```typescript
      * await client.set("mykey", "This is a string")
      * let result = await client.getrange("mykey", 0, 3)
-     * console.log(result); // Output: "This"
+     * console.log(result);
+     * // Output: "This"
+     *
      * result = await client.getrange("mykey", -3, -1)
-     * console.log(result); // Output: "ing" // extracted last 3 characters of a string
+     * console.log(result);
+     * // Output: "ing"
+     * // extracted last 3 characters of a string
+     *
      * result = await client.getrange("mykey", 0, 100)
-     * console.log(result); // Output: "This is a string"
+     * console.log(result);
+     * // Output: "This is a string"
+     *
      * result = await client.getrange("mykey", 5, 6)
-     * console.log(result); // Output: ""
+     * console.log(result);
+     * // Output: ""
      * ```
      */
     public async getrange(
@@ -1844,13 +1852,15 @@ export class BaseClient {
      * @example
      * ```typescript
      * let result = await client.dump("myKey");
-     * console.log(result); // Output: the serialized value of `myKey`
+     * console.log(result);
+     * // Result contains the serialized value of `myKey`
      * ```
      *
      * @example
      * ```typescript
      * result = await client.dump("nonExistingKey");
-     * console.log(result); // Output: `null`
+     * console.log(result);
+     * // Output: `null`
      * ```
      */
     public async dump(key: GlideString): Promise<Buffer | null> {
@@ -2337,7 +2347,7 @@ export class BaseClient {
      * // Example usage of the hget method on a non-existing field
      * const result = await client.hget("my_hash", "nonexistent_field");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Indicates non existent key.
      * ```
      */
@@ -2550,9 +2560,9 @@ export class BaseClient {
      * // Example usage of the hgetall method
      * const result = await client.hgetall("my_hash");
      * console.log(result);
-     * // Output:
+     * // Output: all fields and values stored at `my_hash`
      * // [
-     * //     { field: "field1", value: "value1"},  // Returned all fields and values stored at `my_hash`.
+     * //     { field: "field1", value: "value1"},
      * //     { field: "field2", value: "value2"}
      * // ]
      * ```
@@ -2766,7 +2776,8 @@ export class BaseClient {
      * // Cursor:  39 // The cursor after the second interation.
      * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162'] // The next 3 hash field-value pairs at key `key1`
      * // Cursor:  0 // The cursor after the last batch of elements is fetched.
-     * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113'] // You can get more than `count` elements in the result set. Read the count documentation for more information.
+     * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113']
+     * // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      * @example
      * ```typescript
@@ -2789,7 +2800,8 @@ export class BaseClient {
      * // Cursor:  39 // The cursor after the second interation.
      * // Members:  ['field 63', 'field 293', 'field 162'] // Next 3 hash fields stored at the key `key1`
      * // Cursor:  0 // The cursor after the last batch of elements is fetched.
-     * // Members:  ['field 55', 'field 24', 'field 90', 'field 113'] // You can get more than `count` elements in the result set. Read the count documentation for more information.
+     * // Members:  ['field 55', 'field 24', 'field 90', 'field 113']
+     * // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      */
     public async hscan(
@@ -2951,7 +2963,7 @@ export class BaseClient {
      * // Example usage of the lpop method with a non-existing list
      * const result = await client.lpop("non_exiting_key");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Returns null for non-existent key.
      * ```
      */
@@ -2986,7 +2998,7 @@ export class BaseClient {
      * // Example usage of the lpopCount method with a non-existing list
      * const result = await client.lpopCount("non_exiting_key", 3);
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Returns null in case of non-existent key.
      * ```
      */
@@ -3349,7 +3361,7 @@ export class BaseClient {
      * // Example usage of the rpop method with a non-existing list
      * const result = await client.rpop("non_exiting_key");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Returns null for non-existent key.
      * ```
      */
@@ -3384,7 +3396,7 @@ export class BaseClient {
      * // Example usage of the rpopCount method with a non-existing list
      * const result = await client.rpopCount("non_exiting_key", 7);
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Returns null for a non-existing key.
      * ```
      */
@@ -3507,7 +3519,7 @@ export class BaseClient {
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
      * console.log(result);
-     * // Output: Set {'member1', 'member2', 'member3'}
+     * // Output: Set(3) {'member1', 'member2', 'member3'}
      * ```
      */
     public async smembers(
@@ -3583,7 +3595,7 @@ export class BaseClient {
      * // Example usage of sinter method when member exists
      * const result = await client.sinter(["my_set1", "my_set2"]);
      * console.log(result);
-     * // Output: Set {'member2'}
+     * // Output: Set(1) {'member2'}
      * // Indicates that sets have one common member
      * ```
      *
@@ -3592,7 +3604,7 @@ export class BaseClient {
      * // Example usage of sinter method with non-existing key
      * const result = await client.sinter(["my_set", "non_existing_key"]);
      * console.log(result);
-     * // Output: Set {}
+     * // Output: Set(0) {}
      * // An empty set is returned since the key does not exist.
      * ```
      */
@@ -3682,7 +3694,7 @@ export class BaseClient {
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiff(["set1", "set2"]);
      * console.log(result);
-     * // Output: Set {"member1"}
+     * // Output: Set(1) {"member1"}
      * // `member2` is in `set1` but not `set2`
      * ```
      */
@@ -3740,12 +3752,12 @@ export class BaseClient {
      * await client.sadd("my_set2", ["member2", "member3"]);
      * const result1 = await client.sunion(["my_set1", "my_set2"]);
      * console.log(result1);
-     * // Output: Set {'member1', 'member2', 'member3'}
+     * // Output: Set(3) {'member1', 'member2', 'member3'}
      * // Sets `my_set1` and `my_set2` have three unique members.
      *
      * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
      * console.log(result2);
-     * // Output: Set {'member1', 'member2'}
+     * // Output: Set(2) {'member1', 'member2'}
      * ```
      */
     public async sunion(
@@ -3868,7 +3880,7 @@ export class BaseClient {
      * // Example usage of spop method with non-existing key
      * const result = await client.spop("non_existing_key");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * ```
      */
     public async spop(
@@ -3893,7 +3905,7 @@ export class BaseClient {
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
      * console.log(result);
-     * // Output: Set {'member2', 'member3'}
+     * // Output: Set(2) {'member2', 'member3'}
      * // Removes and returns 2 random members from the set `my_set`.
      * ```
      *
@@ -3902,7 +3914,7 @@ export class BaseClient {
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
      * console.log(result);
-     * // Output: Set {}
+     * // Output: Set(0) {}
      * // An empty set is returned since the key does not exist.
      * ```
      */
@@ -3940,7 +3952,7 @@ export class BaseClient {
      * // Example usage of srandmember method with non-existing key
      * const result = await client.srandmember("non_existing_set");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * ```
      */
     public async srandmember(
@@ -4153,7 +4165,7 @@ export class BaseClient {
      * const result3 = await client.expireTime(myKey);
      * console.log(result3);
      * // Output: 123456
-     * // the Unix timestamp (in seconds) when "myKey" will expire.
+     * // The Unix timestamp (in seconds) when "myKey" will expire.
      * ```
      */
     public async expiretime(key: GlideString): Promise<number> {
@@ -4254,7 +4266,7 @@ export class BaseClient {
      * const result3 = client.pexpireTime(myKey);
      * console.log(result3);
      * // Output: 123456789
-     * // the Unix timestamp (in milliseconds) when `myKey` will expire.
+     * // The Unix timestamp (in milliseconds) when `myKey` will expire.
      * ```
      */
     public async pexpiretime(key: GlideString): Promise<number> {
@@ -4404,7 +4416,8 @@ export class BaseClient {
      * // {
      * //     "0-1": [["field1", "value1"]],
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
+     * // }
+     * // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrange(
@@ -4450,7 +4463,8 @@ export class BaseClient {
      * // {
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
      * //     "0-1": [["field1", "value1"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
+     * // }
+     * // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrevrange(
@@ -4539,7 +4553,7 @@ export class BaseClient {
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
      * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { updateOptions: UpdateByScore.LESS_THAN });
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Indicates that the member in the sorted set haven't been updated.
      * ```
      */
@@ -4777,7 +4791,7 @@ export class BaseClient {
      * // Example usage of the zscore method when the member does not exist in the sorted set
      * const result = await client.zscore("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * ```
      *
      * @example
@@ -4785,7 +4799,7 @@ export class BaseClient {
      * // Example usage of the zscore method with non existimng key
      * const result = await client.zscore("non_existing_set", "member");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * ```
      */
     public async zscore(
@@ -5302,7 +5316,7 @@ export class BaseClient {
      * ```typescript
      * const payload2 = await client.zrandmember("nonExistingSortedSet");
      * console.log(payload2);
-     * // Output: null
+     * // Output: `null`
      * // Since the sorted set does not exist.
      * ```
      */
@@ -5821,7 +5835,7 @@ export class BaseClient {
      * // Example usage of zrank method with a non-existing member
      * const result = await client.zrank("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
@@ -5857,7 +5871,7 @@ export class BaseClient {
      * // Example usage of zrank_withscore method with a non-existing member
      * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
@@ -6215,10 +6229,10 @@ export class BaseClient {
      * // Output:
      * // [
      * //     {
-     * //         "name": "Alice",  // The consumer name.
-     * //         "pending": 1,     // The number of entries in Pending entries list.
-     * //         "idle": 9104628,   // The time passed since last attempted interaction.
-     * //         "inactive": 18104698  // The time passed since last successful interaction. // Added in 7.2.0
+     * //         "name": "Alice",      // The consumer name.
+     * //         "pending": 1,         // The number of entries in Pending entries list.
+     * //         "idle": 9104628,      // The time passed since last attempted interaction.
+     * //         "inactive": 18104698  // The time passed since last successful interaction. Added in Valkey 7.2.0.
      * //     },
      * //     ...
      * // ]
@@ -6251,20 +6265,20 @@ export class BaseClient {
      * // Output:
      * // [
      * //     {
-     * //         "name": "mygroup",   // The consumer group name.
-     * //         "consumers": 2,      // Number of consumers in the group.
-     * //         "pending": 2,        // The length of the group's pending entry list.
+     * //         "name": "mygroup",                      // The consumer group name.
+     * //         "consumers": 2,                         // Number of consumers in the group.
+     * //         "pending": 2,                           // The length of the group's pending entry list.
      * //         "last-delivered-id": "1638126030001-0", // The id of the last delivered entry to the consumers.
-     * //         "entries-read": 2,       // The read counter // Added in version 7.0.0
-     * //         "lag": 0                 // The number of entries that are still waiting to be delivered // Added in version 7.0.0
+     * //         "entries-read": 2,                      // The read counter. Added in Valkey 7.0.0.
+     * //         "lag": 0                                // The number of entries that are still waiting to be delivered. Added in Valkey 7.0.0.
      * //     },
      * //     {
      * //         "name": "some-other-group",
      * //         "consumers": 1,
      * //         "pending": 0,
      * //         "last-delivered-id": "0-0",
-     * //         "entries-read": null,                    // Added in version 7.0.0
-     * //         "lag": 1                                 // Added in version 7.0.0
+     * //         "entries-read": null,                    // Added in Valkey 7.0.0.
+     * //         "lag": 1                                 // Added in Valkey 7.0.0.
      * //     }
      * // ]
      * ```
@@ -6300,7 +6314,7 @@ export class BaseClient {
      * console.log(result);
      * // Output:
      * // {
-     * //     "2-0": [                   // Stream Entry id
+     * //     "2-0": [                    // Stream Entry id
      * //         ["duration", "1532"],   // Entry data tuple containing the field and associated value.
      * //         ["event-id", "5"],
      * //         ["user-id", "7782813"]
@@ -6564,6 +6578,7 @@ export class BaseClient {
      * - (Optional) `fullOptions`: If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
+     * @remark `fullOptions` - Available since Valkey version 6.0.0
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
@@ -6573,45 +6588,45 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream");
      * console.log(infoResult);
      * // Output: {
-     * //   length: 2,  // The number of entries in the stream.
-     * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
-     * //   "radix-tree-nodes": 2,  // The number of nodes in the underlying radix data structure.
-     * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream
-     * //   "max-deleted-entry-id": "0-0", // The maximal entry ID that was deleted from the stream // Added in version 7.0.0
-     * //   "entries-added": 2, // The count of all entries added to the stream during its lifetime // Added in version 7.0.0
-     * //   "recorded-first-entry-id": "1719877599564-0", // Recorded first entry id. // Added in version 7.0.0
-     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the first entry in the stream
-     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the last entry in the stream
-     * //   "groups": 1, // The number of consumer groups defined for the stream
+     * //   length: 2,                                                                // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,                                                     // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2,                                                    // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1",                                   // The ID of the least-recently entry that was added to the stream.
+     * //   "max-deleted-entry-id": "0-0",                                            // The maximal entry ID that was deleted from the stream. Added in Valkey 7.0.0.
+     * //   "entries-added": 2,                                                       // The count of all entries added to the stream during its lifetime. Added in Valkey 7.0.0.
+     * //   "recorded-first-entry-id": "1719877599564-0",                             // Recorded first entry id. Added in Valkey 7.0.0.
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],  // The ID and field-value tuples of the first entry in the stream.
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],   // The ID and field-value tuples of the last entry in the stream.
+     * //   "groups": 1,                                                              // The number of consumer groups defined for the stream
      * // }
      * ```
      *
      * @example
      * ```typescript
      * const infoResult = await client.xinfoStream("my_stream", true); // default limit of 10 entries
-     * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
+     * const infoResult = await client.xinfoStream("my_stream", 15);   // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   "length": 2,           // The number of entries in the stream.
-     * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
-     * //   "radix-tree-nodes": 2, // The number of nodes in the underlying radix data structure.
-     * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream.
-     * //   "max-deleted-entry-id": "0-0",          // The maximal entry ID that was deleted from the stream. // Added in version 7.0.0
-     * //   "entries-added": 2,                     // The count of all entries added to the stream during its lifetime. // Added in version 7.0.0
-     * //   "recorded-first-entry-id": "1719877599564-0",                            // Recorded first entry id. // Added in version 7.0.0
-     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ], // Array of the stream entries (ID and field-value tuples) in ascending order.
-     * //   "groups': [ {                                                            // An array of groups containing information about each consumer group.
-     * //     "name': "group",                              // The consumer group's name.
-     * //     "last-delivered-id": "1719877599564-0",       // The ID of the last entry delivered to the group's consumers.
-     * //     "entries-read": 1,                            // The logical "read counter" of the last entry delivered to the group's consumers. // Added in version 7.0.0
-     * //     "lag": 1,                                     // The number of entries in the stream that are still waiting to be delivered. // Added in version 7.0.0
-     * //     "pel-count": 1,                               // The length of the group's pending entries list (PEL).
-     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries.
+     * //   "length": 2,                                                              // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,                                                     // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2,                                                    // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1",                                   // The ID of the least-recently entry that was added to the stream.
+     * //   "max-deleted-entry-id": "0-0",                                            // The maximal entry ID that was deleted from the stream. Added in Valkey 7.0.0.
+     * //   "entries-added": 2,                                                       // The count of all entries added to the stream during its lifetime. Added in Valkey 7.0.0.
+     * //   "recorded-first-entry-id": "1719877599564-0",                             // Recorded first entry id. Added in Valkey 7.0.0.
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],  // Array of the stream entries (ID and field-value tuples) in ascending order.
+     * //   "groups': [ {                                                             // An array of groups containing information about each consumer group.
+     * //     "name': "group",                                                        // The consumer group's name.
+     * //     "last-delivered-id": "1719877599564-0",                                 // The ID of the last entry delivered to the group's consumers.
+     * //     "entries-read": 1,                                                      // The logical "read counter" of the last entry delivered to the group's consumers. Added in Valkey 7.0.0.
+     * //     "lag": 1,                                                               // The number of entries in the stream that are still waiting to be delivered. Added in Valkey 7.0.0.
+     * //     "pel-count": 1,                                                         // The length of the group's pending entries list (PEL).
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],     // An array with pending entries.
      * //     "consumers": [ {
-     * //         "name": "consumer",             // The consumer's name.
-     * //         "seen-time": 1722624726802,     // The UNIX timestamp of the last attempted interaction.
-     * //         "active-time": 1722624726802,   // The UNIX timestamp of the last successful interaction. // Added in version 7.2.0
-     * //         "pel-count": 1,                 // The number of entries in the PEL.
+     * //         "name": "consumer",                                                 // The consumer's name.
+     * //         "seen-time": 1722624726802,                                         // The UNIX timestamp of the last attempted interaction.
+     * //         "active-time": 1722624726802,                                       // The UNIX timestamp of the last successful interaction. Added in Valkey 7.2.0.
+     * //         "pel-count": 1,                                                     // The number of entries in the PEL.
      * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries information.
      * //         }
      * //       ]
@@ -7980,7 +7995,7 @@ export class BaseClient {
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result);
-     * // Output: null
+     * // Output: `null`
      * // null is returned when the watched key is modified before transaction execution.
      * ```
      */
