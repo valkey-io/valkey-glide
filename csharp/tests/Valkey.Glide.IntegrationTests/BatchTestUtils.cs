@@ -8,18 +8,18 @@ namespace Valkey.Glide.IntegrationTests;
 
 internal class BatchTestUtils
 {
-    public static List<(object? expected, string test)> CreateStringTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateStringTest(IBatch batch, bool isAtomic)
     {
-        List<(object? expected, string test)> testData = [];
+        List<TestInfo> testData = [];
         string prefix = isAtomic ? "{stringKey}-" : "";
         string key1 = $"{prefix}1-{Guid.NewGuid()}";
 
         string value1 = $"value-1-{Guid.NewGuid()}";
 
         _ = batch.Set(key1, value1);
-        testData.Add(("OK", "Set(key1, value1)"));
+        testData.Add(new("OK", "Set(key1, value1)"));
         _ = batch.Get(key1);
-        testData.Add((new gs(value1), "Get(key1)"));
+        testData.Add(new(new gs(value1), "Get(key1)"));
 
         return testData;
     }
@@ -31,7 +31,7 @@ internal class BatchTestUtils
             }))];
 }
 
-internal delegate List<(object? expected, string test)> BatchTestDataProvider(IBatch batch, bool isAtomic);
+internal delegate List<TestInfo> BatchTestDataProvider(IBatch batch, bool isAtomic);
 
 internal record BatchTestData(string TestName, BaseClient Client, BatchTestDataProvider TestDataProvider, bool IsAtomic)
 {
@@ -41,4 +41,11 @@ internal record BatchTestData(string TestName, BaseClient Client, BatchTestDataP
     public bool IsAtomic = IsAtomic;
 
     public override string? ToString() => $"{TestName} {Client} IsAtomic = {IsAtomic}";
+}
+
+internal record TestInfo(object? Expected, string TestName, bool CheckTypeOnly = false)
+{
+    public object? ExpectedValue = Expected;
+    public string TestName = TestName;
+    public bool CheckTypeOnly = CheckTypeOnly;
 }
