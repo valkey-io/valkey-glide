@@ -169,13 +169,13 @@ func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
 //
 // Command Response:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (b *StandaloneBatch) Scan(cursor int64) *StandaloneBatch {
-	return b.addCmdAndTypeChecker(C.Scan, []string{utils.IntToString(cursor)}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.Scan, []string{utils.IntToString(cursor)}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates incrementally over a database for matching keys.
@@ -190,9 +190,9 @@ func (b *StandaloneBatch) Scan(cursor int64) *StandaloneBatch {
 //
 // Command Response:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.ScanOptions) *StandaloneBatch {
@@ -200,7 +200,13 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 	if err != nil {
 		return b.addError("ScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.Scan,
+		append([]string{utils.IntToString(cursor)}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.

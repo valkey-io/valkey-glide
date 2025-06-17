@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -456,7 +455,7 @@ func (b *BaseBatch[T]) LCSWithOptions(key1 string, key2 string, opts options.LCS
 	if err != nil {
 		return b.addError("LCSWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.LCS, append([]string{key1, key2}, optArgs...), reflect.Map, false)
+	return b.addCmdAndConverter(C.LCS, append([]string{key1, key2}, optArgs...), reflect.Map, false, internal.ConvertLCSResult)
 }
 
 // Gets the value associated with the given key and deletes the key.
@@ -744,15 +743,14 @@ func (b *BaseBatch[T]) HIncrByFloat(key string, field string, increment float64)
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (b *BaseBatch[T]) HScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.HScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.HScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates fields of Hash types and their associated values with options.
@@ -769,11 +767,10 @@ func (b *BaseBatch[T]) HScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (b *BaseBatch[T]) HScanWithOptions(key string, cursor string, options options.HashScanOptions) *T {
@@ -781,7 +778,13 @@ func (b *BaseBatch[T]) HScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("HScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.HScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.HScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Returns a random field name from the hash value stored at `key`.
@@ -1420,13 +1423,13 @@ func (b *BaseBatch[T]) SUnion(keys []string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (b *BaseBatch[T]) SScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.SScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.SScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates incrementally over a set with options.
@@ -1443,9 +1446,9 @@ func (b *BaseBatch[T]) SScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options options.BaseScanOptions) *T {
@@ -1453,7 +1456,13 @@ func (b *BaseBatch[T]) SScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("SScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.SScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.SScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -1791,7 +1800,7 @@ func (b *BaseBatch[T]) LPushX(key string, elements []string) *T {
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -1811,7 +1820,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -1830,7 +1839,7 @@ func (b *BaseBatch[T]) LMPop(keys []string, listDirection constants.ListDirectio
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped elements.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -1850,7 +1859,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.LMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
@@ -1874,7 +1883,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -1895,7 +1904,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
-	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list.
@@ -1920,7 +1929,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //
 // Command Response:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -1946,7 +1955,7 @@ func (b *BaseBatch[T]) BLMPopCount(
 	args = append(args, utils.FloatToString(timeout.Seconds()), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, constants.CountKeyword, utils.IntToString(count))
-	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertLMPopResponse)
+	return b.addCmdAndConverter(C.BLMPop, args, reflect.Map, true, internal.ConvertKeyValuesArrayOrNilForBatch)
 }
 
 // Sets the list element at index to element.
@@ -2569,7 +2578,7 @@ func (b *BaseBatch[T]) RenameNX(key string, newKey string) *T {
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
+func (b *BaseBatch[T]) XAdd(key string, values []models.FieldValue) *T {
 	return b.XAddWithOptions(key, values, *options.NewXAddOptions())
 }
 
@@ -2585,11 +2594,11 @@ func (b *BaseBatch[T]) XAdd(key string, values [][]string) *T {
 //
 // Command Response:
 //
-//	The id of the added entry, or `nil` if `options.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options options.XAddOptions) *T {
+func (b *BaseBatch[T]) XAddWithOptions(key string, values []models.FieldValue, options options.XAddOptions) *T {
 	args := []string{}
 	args = append(args, key)
 	optionArgs, err := options.ToArgs()
@@ -2598,13 +2607,7 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return b.addError("XAddWithOptions", fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			))
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 	return b.addCmdAndTypeChecker(C.XAdd, args, reflect.String, true)
 }
@@ -2619,8 +2622,12 @@ func (b *BaseBatch[T]) XAddWithOptions(key string, values [][]string, options op
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
@@ -2638,8 +2645,12 @@ func (b *BaseBatch[T]) XRead(keysAndIds map[string]string) *T {
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs
-//	mapped to an array entries or `nil` if a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts options.XReadOptions) *T {
@@ -2662,8 +2673,12 @@ func (b *BaseBatch[T]) XReadWithOptions(keysAndIds map[string]string, opts optio
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[string]string) *T {
@@ -2683,8 +2698,12 @@ func (b *BaseBatch[T]) XReadGroup(group string, consumer string, keysAndIds map[
 //
 // Command Response:
 //
-//	A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-//	a key does not exist or does not contain requested entries.
+//	A map[string]models.StreamResponse where:
+//	- Each key is a stream name
+//	- Each value is a StreamResponse containing:
+//	  - Entries: []StreamEntry, where each StreamEntry has:
+//	    - ID: The unique identifier of the entry
+//	    - Fields: map[string]string of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (b *BaseBatch[T]) XReadGroupWithOptions(
@@ -2697,7 +2716,7 @@ func (b *BaseBatch[T]) XReadGroupWithOptions(
 	if err != nil {
 		return b.addError("XReadGroupWithOptions", err)
 	}
-	return b.addCmdAndConverter(C.XReadGroup, args, reflect.Map, true, internal.ConvertXReadGroupResponse)
+	return b.addCmdAndConverter(C.XReadGroup, args, reflect.Map, true, internal.ConvertXReadResponse)
 }
 
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
@@ -3302,12 +3321,18 @@ func (b *BaseBatch[T]) ZRank(key string, member string) *T {
 //
 // Command Response:
 //
-//	A tuple containing the rank of member and its score.
-//	If key doesn't exist, or if member is not present in the set, `nil` will be returned.
+//	A [models.RankAndScore] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (b *BaseBatch[T]) ZRankWithScore(key string, member string) *T {
-	return b.addCmdAndTypeChecker(C.ZRank, []string{key, member, constants.WithScoreKeyword}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.ZRank,
+		[]string{key, member, constants.WithScoreKeyword},
+		reflect.Slice,
+		true,
+		internal.ConvertRankAndScoreResponse,
+	)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
@@ -3347,12 +3372,18 @@ func (b *BaseBatch[T]) ZRevRank(key string, member string) *T {
 //
 // Command Response:
 //
-//	A tuple containing the rank of `member` and its score.
+//	A [models.RankAndScore] containing the rank of `member` and its score.
 //	If `key` doesn't exist, or if `member` is not present in the set, `nil` will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (b *BaseBatch[T]) ZRevRankWithScore(key string, member string) *T {
-	return b.addCmdAndTypeChecker(C.ZRevRank, []string{key, member, constants.WithScoreKeyword}, reflect.Slice, true)
+	return b.addCmdAndConverter(
+		C.ZRevRank,
+		[]string{key, member, constants.WithScoreKeyword},
+		reflect.Slice,
+		true,
+		internal.ConvertRankAndScoreResponse,
+	)
 }
 
 // Trims the stream by evicting older entries.
@@ -3416,7 +3447,7 @@ func (b *BaseBatch[T]) XLen(key string) *T {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -3449,7 +3480,7 @@ func (b *BaseBatch[T]) XAutoClaim(key string, group string, consumer string, min
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -3608,14 +3639,14 @@ func (b *BaseBatch[T]) ZScore(key string, member string) *T {
 //
 // Command Response:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (b *BaseBatch[T]) ZScan(key string, cursor string) *T {
-	return b.addCmdAndTypeChecker(C.ZScan, []string{key, cursor}, reflect.Slice, false)
+	return b.addCmdAndConverter(C.ZScan, []string{key, cursor}, reflect.Slice, false, internal.ConvertScanResult)
 }
 
 // Iterates incrementally over a sorted set.
@@ -3632,11 +3663,10 @@ func (b *BaseBatch[T]) ZScan(key string, cursor string) *T {
 //
 // Command Response:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (b *BaseBatch[T]) ZScanWithOptions(key string, cursor string, options options.ZScanOptions) *T {
@@ -3644,7 +3674,13 @@ func (b *BaseBatch[T]) ZScanWithOptions(key string, cursor string, options optio
 	if err != nil {
 		return b.addError("ZScanWithOptions", err)
 	}
-	return b.addCmdAndTypeChecker(C.ZScan, append([]string{key, cursor}, optionArgs...), reflect.Slice, false)
+	return b.addCmdAndConverter(
+		C.ZScan,
+		append([]string{key, cursor}, optionArgs...),
+		reflect.Slice,
+		false,
+		internal.ConvertScanResult,
+	)
 }
 
 // Returns stream message summary information for pending messages matching a stream and group.
@@ -4504,8 +4540,10 @@ func (b *BaseBatch[T]) BitCountWithOptions(key string, opts options.BitCountOpti
 //
 // Command Response:
 //
-//	A map of message entries with the format `{"entryId": [["entry", "data"], ...], ...}` that were claimed by
-//	the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdleTime time.Duration, ids []string) *T {
@@ -4527,7 +4565,10 @@ func (b *BaseBatch[T]) XClaim(key string, group string, consumer string, minIdle
 //
 // Command Response:
 //
-//	A map of message entries that were claimed by the consumer.
+//	A map[string]models.XClaimResponse where:
+//	- Each key is a message/entry ID
+//	- Each value is an XClaimResponse containing:
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (b *BaseBatch[T]) XClaimWithOptions(
@@ -4721,7 +4762,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -4746,7 +4787,7 @@ func (b *BaseBatch[T]) XRange(key string, start options.StreamBoundary, end opti
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -4763,7 +4804,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 		return b.addError("XRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
+	return b.addCmdAndConverter(C.XRange, args, reflect.Map, true, internal.MakeConvertStreamEntryArray(false))
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -4782,7 +4823,7 @@ func (b *BaseBatch[T]) XRangeWithOptions(
 //
 // Command Response:
 //
-//	An array of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -4807,8 +4848,9 @@ func (b *BaseBatch[T]) XRevRange(key string, start options.StreamBoundary, end o
 //
 // Command Response:
 //
-//	A `Map` of key to stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
+//	Returns `nil` if `count` is non-positive.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
 func (b *BaseBatch[T]) XRevRangeWithOptions(
@@ -4823,7 +4865,7 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 		return b.addError("XRevRangeWithOptions", err)
 	}
 	args = append(args, optionArgs...)
-	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.ConvertXRangeResponse)
+	return b.addCmdAndConverter(C.XRevRange, args, reflect.Map, true, internal.MakeConvertStreamEntryArray(true))
 }
 
 // Returns information about the stream stored at `key`.
@@ -4836,11 +4878,20 @@ func (b *BaseBatch[T]) XRevRangeWithOptions(
 //
 // Command Response:
 //
-//	A stream information for the given `key`.
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
+//	- Length: the number of entries in the stream
+//	- RadixTreeKeys: the number of keys in the underlying radix data structure
+//	- RadixTreeNodes: the number of nodes in the underlying radix data structure
+//	- Groups: the number of consumer groups defined for the stream
+//	- LastGeneratedID: the ID of the least-recently entry that was added to the stream
+//	- MaxDeletedEntryID: the maximal entry ID that was deleted from the stream
+//	- EntriesAdded: the count of all entries added to the stream during its lifetime
+//	- FirstEntry: the ID and field-value tuples of the first entry in the stream
+//	- LastEntry: the ID and field-value tuples of the last entry in the stream
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStream(key string) *T {
-	return b.addCmdAndTypeChecker(C.XInfoStream, []string{key}, reflect.Map, false)
+	return b.addCmdAndConverter(C.XInfoStream, []string{key}, reflect.Map, false, internal.ConvertXInfoStreamResponse)
 }
 
 // Returns detailed information about the stream stored at `key`.
@@ -4854,7 +4905,7 @@ func (b *BaseBatch[T]) XInfoStream(key string) *T {
 //
 // Command Response:
 //
-//	A detailed stream information for the given `key`.
+//	A detailed stream information for the given `key`. See [models.XInfoStreamFullOptionsResponse].
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
 func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInfoStreamOptions) *T {
@@ -4866,7 +4917,7 @@ func (b *BaseBatch[T]) XInfoStreamFullWithOptions(key string, opts *options.XInf
 		}
 		args = append(args, optionArgs...)
 	}
-	return b.addCmdAndTypeChecker(C.XInfoStream, args, reflect.Map, false)
+	return b.addCmdAndConverter(C.XInfoStream, args, reflect.Map, false, internal.ConvertXInfoStreamFullResponse)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the
