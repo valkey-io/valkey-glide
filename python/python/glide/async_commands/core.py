@@ -6992,7 +6992,7 @@ class CoreCommands(Protocol):
         See [valkey.io](https://valkey.io/commands/watch) for more details.
 
         Note:
-            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            In cluster mode, if keys in `keys` map to different hash slots,
             the command will be split across these slots and executed separately for each.
             This means the command is atomic only at the slot level. If one or more slot-specific
             requests fail, the entire call will return the first encountered error, even
@@ -7011,7 +7011,7 @@ class CoreCommands(Protocol):
                 'OK'
             >>> transaction.set("sampleKey", "foobar")
             >>> await client.exec(transaction)
-                'OK' # Executes successfully and keys are unwatched.
+                ['OK'] # Executes successfully and keys are unwatched.
 
             >>> await client.watch("sampleKey")
                 'OK'

@@ -2478,6 +2478,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.
      *
+     * @since Valkey 7.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
@@ -2520,6 +2521,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
+     * @since Valkey 7.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.

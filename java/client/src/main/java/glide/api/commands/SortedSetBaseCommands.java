@@ -1144,6 +1144,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
+     * @since Valkey 7.2.0 and above.
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
@@ -1166,6 +1167,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
+     * @since Valkey 7.2.0 and above.
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
@@ -1234,6 +1236,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
+     * @since Valkey 7.2.0 and above.
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
@@ -1257,6 +1260,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
+     * @since Valkey 7.2.0 and above.
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
