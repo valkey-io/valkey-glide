@@ -7,6 +7,11 @@ from glide.async_commands.batch import (
     TBatch,
     Transaction,
 )
+from glide.async_commands.batch_options import (
+    BatchOptions,
+    BatchRetryStrategy,
+    ClusterBatchOptions,
+)
 from glide.async_commands.bitmap import (
     BitEncoding,
     BitFieldGet,
@@ -125,6 +130,7 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.constants import (
     OK,
@@ -168,7 +174,13 @@ from glide.routes import (
     SlotType,
 )
 
-from .glide import ClusterScanCursor, Script
+from .glide import (
+    ClusterScanCursor,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+    Script,
+)
 
 PubSubMsg = CoreCommands.PubSubMsg
 
@@ -182,6 +194,10 @@ __all__ = [
     "Transaction",
     "TGlideClient",
     "TBatch",
+    # Batch Options
+    "BatchOptions",
+    "BatchRetryStrategy",
+    "ClusterBatchOptions",
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
@@ -191,6 +207,9 @@ __all__ = [
     "ReadFrom",
     "ServerCredentials",
     "NodeAddress",
+    "OpenTelemetryConfig",
+    "OpenTelemetryTracesConfig",
+    "OpenTelemetryMetricsConfig",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
@@ -205,6 +224,7 @@ __all__ = [
     "TJsonUniversalResponse",
     "TOK",
     "TResult",
+    "TlsAdvancedConfiguration",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
     "FtAggregateResponse",

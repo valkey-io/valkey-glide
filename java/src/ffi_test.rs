@@ -1,15 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
+use crate::errors::{ExceptionType, FFIError, handle_errors, handle_panics, throw_java_exception};
 use jni::{
+    JNIEnv,
     objects::{JByteArray, JClass, JLongArray, JString},
     sys::{jboolean, jdouble, jlong},
-    JNIEnv,
 };
 use redis::Value;
 use std::ptr::from_mut;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -18,7 +18,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedSimpleString<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -29,7 +29,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedSimpleString<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedOkay<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -38,7 +38,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedOkay<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedInt<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -48,7 +48,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedInt<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBulkString<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -60,7 +60,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBulkString<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongArray<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -71,7 +71,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongArray<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedMap<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -85,7 +85,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedMap<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -95,7 +95,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBoolean<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -105,7 +105,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBoolean<'local>(
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedVerbatimString<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -120,7 +120,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedVerbatimString<'local>
     from_mut(Box::leak(Box::new(resp_value))) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongSet<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -146,7 +146,7 @@ fn java_long_array_to_value<'local>(
         .collect::<Vec<Value>>()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_handlePanics<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -172,7 +172,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_handlePanics<'local>(
     .unwrap_or(default_value)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_handleErrors<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -186,7 +186,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_handleErrors<'local>(
     handle_errors(&mut env, result).unwrap_or(default_value)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_FfiTest_throwException<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,

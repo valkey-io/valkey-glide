@@ -5,7 +5,6 @@ use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, thread::sleep,
     time::Duration,
 };
-#[cfg(feature = "tls-rustls")]
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -15,7 +14,6 @@ use std::{
 use futures::Future;
 use redis::{ConnectionAddr, InfoDict, Pipeline, ProtocolVersion, RedisConnectionInfo, Value};
 
-#[cfg(feature = "tls-rustls")]
 use redis::{ClientTlsConfig, TlsCertificates};
 
 use socket2::{Domain, Socket, Type};
@@ -150,7 +148,6 @@ impl RedisServer {
         RedisServer::with_modules(&[], false)
     }
 
-    #[cfg(feature = "tls-rustls")]
     pub fn new_with_mtls() -> RedisServer {
         RedisServer::with_modules(&[], true)
     }
@@ -229,7 +226,7 @@ impl RedisServer {
         let server_command = ["valkey-server", "redis-server"]
             .iter()
             .find(|cmd| which::which(cmd).is_ok())
-            .map(|&cmd| cmd)
+            .copied()
             .unwrap_or_else(|| {
                 panic!("Neither valkey-server nor redis-server exists in the system.")
             });
@@ -386,7 +383,7 @@ pub struct TestContext {
 }
 
 pub(crate) fn is_tls_enabled() -> bool {
-    cfg!(all(feature = "tls-rustls", not(feature = "tls-native-tls")))
+    true
 }
 
 impl TestContext {
@@ -394,7 +391,6 @@ impl TestContext {
         TestContext::with_modules(&[], false)
     }
 
-    #[cfg(feature = "tls-rustls")]
     pub fn new_with_mtls() -> TestContext {
         Self::with_modules(&[], true)
     }
@@ -442,11 +438,8 @@ impl TestContext {
             },
         );
 
-        #[cfg(feature = "tls-rustls")]
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
-        #[cfg(not(feature = "tls-rustls"))]
-        let client = redis::Client::open(server.connection_info()).unwrap();
 
         Self::connect_with_retries(&client);
 
@@ -460,11 +453,8 @@ impl TestContext {
     pub fn with_modules(modules: &[Module], mtls_enabled: bool) -> TestContext {
         let server = RedisServer::with_modules(modules, mtls_enabled);
 
-        #[cfg(feature = "tls-rustls")]
         let client =
             build_single_client(server.connection_info(), &server.tls_paths, mtls_enabled).unwrap();
-        #[cfg(not(feature = "tls-rustls"))]
-        let client = redis::Client::open(server.connection_info()).unwrap();
 
         Self::connect_with_retries(&client);
 
@@ -485,10 +475,7 @@ impl TestContext {
             },
         };
 
-        #[cfg(feature = "tls-rustls")]
         let client = build_single_client(con_info, &server.tls_paths, false).unwrap();
-        #[cfg(not(feature = "tls-rustls"))]
-        let client = redis::Client::open(con_info).unwrap();
 
         Self::connect_with_retries(&client);
 
@@ -758,7 +745,6 @@ pub fn is_version(expected_major_minor: (u16, u16), version: Version) -> bool {
         || (expected_major_minor.0 == version.0 && expected_major_minor.1 <= version.1)
 }
 
-#[cfg(feature = "tls-rustls")]
 fn load_certs_from_file(tls_file_paths: &TlsFilePaths) -> TlsCertificates {
     let ca_file = File::open(&tls_file_paths.ca_crt).expect("Cannot open CA cert file");
     let mut root_cert_vec = Vec::new();
@@ -787,7 +773,6 @@ fn load_certs_from_file(tls_file_paths: &TlsFilePaths) -> TlsCertificates {
     }
 }
 
-#[cfg(feature = "tls-rustls")]
 pub(crate) fn build_single_client<T: redis::IntoConnectionInfo>(
     connection_info: T,
     tls_file_params: &Option<TlsFilePaths>,
@@ -807,7 +792,6 @@ pub(crate) fn build_single_client<T: redis::IntoConnectionInfo>(
     }
 }
 
-#[cfg(feature = "tls-rustls")]
 pub(crate) mod mtls_test {
     use super::*;
     use redis::{cluster::ClusterClient, ConnectionInfo, RedisError};

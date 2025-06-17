@@ -55,12 +55,14 @@ utils/TestUtils.js
 
 # generaged files (e.g. protobuf)
 generated/
+protoc-*.zip
 
 # docs
 docs/markdown/node/**
 docs/site/**
 copilot.yml
 memory-bank/
+CLAUDE*
 #cpp files
 cpp/benchmarks/build/
 cpp/build/
@@ -69,3 +71,7 @@ cpp/include/glide/connection_request.pb.h
 
 cpp/include/glide/glide_base.h
 cpp/src/connection_request.pb.cc
+
+**/.claude/settings.local.json
+copilot-instructions.md
+**/.yarn

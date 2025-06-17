@@ -30,6 +30,8 @@ excluded_symbol_list = [
     "TRequest",  # Union
     # python/python/glide/glide_client.py
     "get_request_error_class",  # FunctionDef
+    "_CompatFuture",  # ClassDef
+    "_get_new_future_instance",  # FunctionDef
     "BaseClient",  # ClassDef
     # python/python/glide/routes.py
     "to_protobuf_slot_type",  # FunctionDef
@@ -41,6 +43,8 @@ excluded_symbol_list = [
     "PartialMessageException",  # Exception
     # python/python/glide/async_commands/batch.py
     "BaseBatch",  # ClassDef
+    # python/python/glide/async_commands/batch_options.py
+    "BaseBatchOptions",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
     # python/python/glide/async_commands/cluster_commands.py
