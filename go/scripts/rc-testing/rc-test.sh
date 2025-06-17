@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -e # Allow script to immediately exit if any command has a non-zero exit status.
 
 # Check if version parameter is provided
 if [ $# -ne 1 ]; then
