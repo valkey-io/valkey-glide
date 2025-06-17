@@ -31,7 +31,7 @@ type Client struct {
 	baseClient
 }
 
-// Creates a new `Client` instance and establishes a connection to a standalone Valkey server.
+// Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
 //
 // Parameters:
 //
@@ -41,7 +41,7 @@ type Client struct {
 //
 // Return value:
 //
-//	A connected `Client` instance.
+//	A connected [Client] instance.
 //
 // Remarks:
 //

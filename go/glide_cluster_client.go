@@ -32,7 +32,7 @@ type ClusterClient struct {
 	baseClient
 }
 
-// Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
+// Creates a new [ClusterClient] instance and establishes a connection to a Valkey Cluster.
 //
 // Parameters:
 //
@@ -42,7 +42,7 @@ type ClusterClient struct {
 //
 // Return value:
 //
-//	A connected `GlideClusterClient` instance.
+//	A connected [ClusterClient] instance.
 //
 // Remarks:
 //
