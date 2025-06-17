@@ -139,8 +139,6 @@ jobs:
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  echo "Printing output"
-                  echo $RC_VERSION
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
@@ -254,14 +252,6 @@ jobs:
               with:
                   submodules: recursive
 
-            - name: Run patch to test with RC
-              working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
-              env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
-              run: |
-                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
-
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
               with:
@@ -283,6 +273,14 @@ jobs:
                       glide-core/src/generated
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Install & build & test
               working-directory: go
@@ -327,14 +325,6 @@ jobs:
                   go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
-            - name: Run patch to test with RC
-              working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
-              env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
-              run: |
-                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
-
             - uses: actions/cache@v4
               with:
                   path: |
@@ -347,6 +337,14 @@ jobs:
 
             - name: Install zig
               uses: ./.github/workflows/install-zig
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Build and test
               working-directory: ./go
@@ -384,14 +382,6 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Run patch to test with RC
-              working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
-              env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
-              run: |
-                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
-
             - name: Output Matrix Parameters for this job
               run: |
                   echo "Job running with the following matrix configuration:"
@@ -420,6 +410,14 @@ jobs:
                   restore-keys: |
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Install & build & test
               working-directory: go
