@@ -1043,7 +1043,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                            host,
+                        host,
                     );
                 }
 
@@ -1109,8 +1109,8 @@ export class BaseClient {
                     err instanceof ValkeyError
                         ? err
                         : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
+                            `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                        ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -3398,7 +3398,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.smove("set1", "set2", "member1");
-     * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
+     * console.log(result); // Output: true // `member1` was moved from `set1` to `set2`.
      * ```
      */
     public async smove(
@@ -3443,7 +3443,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of sinter method when member exists
      * const result = await client.sinter(["my_set1", "my_set2"]);
-     * console.log(result); // Output: Set {'member2'} - Indicates that sets have one common member
+     * console.log(result); // Output: Set {'member2'} // Indicates that sets have one common member
      * ```
      *
      * @example
@@ -3480,7 +3480,7 @@ export class BaseClient {
      * await client.sadd("set1", ["a", "b", "c"]);
      * await client.sadd("set2", ["b", "c", "d"]);
      * const result1 = await client.sintercard(["set1", "set2"]);
-     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     * console.log(result1); // Output: 2 - The intersection of `set1` and `set2` contains 2 elements: `b` and `c`.
      *
      * const result2 = await client.sintercard(["set1", "set2"], { limit: 1 });
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
@@ -3506,7 +3506,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.sinterstore("my_set", ["set1", "set2"]);
-     * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+     * console.log(result); // Output: 2 - Two elements were stored at `my_set`, and those elements are the intersection of `set1` and `set2`.
      * ```
      */
     public async sinterstore(
@@ -3532,7 +3532,7 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiff(["set1", "set2"]);
-     * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
+     * console.log(result); // Output: Set {"member1"} // `member2` is in `set1` but not `set2`
      * ```
      */
     public async sdiff(
@@ -3560,7 +3560,7 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiffstore("set3", ["set1", "set2"]);
-     * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
+     * console.log(result); // Output: 1 - One member was stored in `set3`, and that member is the diff between `set1` and `set2`.
      * ```
      */
     public async sdiffstore(
@@ -3586,7 +3586,7 @@ export class BaseClient {
      * await client.sadd("my_set1", ["member1", "member2"]);
      * await client.sadd("my_set2", ["member2", "member3"]);
      * const result1 = await client.sunion(["my_set1", "my_set2"]);
-     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} - Sets "my_set1" and "my_set2" have three unique members.
+     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} // Sets `my_set1` and `my_set2` have three unique members.
      *
      * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
      * console.log(result2); // Output: Set {'member1', 'member2'}
@@ -3616,7 +3616,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const length = await client.sunionstore("mySet", ["set1", "set2"]);
-     * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
+     * console.log(length); // Output: 2 - Two elements were stored in `mySet`, and those two members are the union of `set1` and `set2`.
      * ```
      */
     public async sunionstore(
@@ -3639,14 +3639,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sismember method when member exists
      * const result = await client.sismember("my_set", "member1");
-     * console.log(result); // Output: true - Indicates that "member1" exists in the set "my_set".
+     * console.log(result); // Output: true - Indicates that `member1` exists in the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the sismember method when member does not exist
      * const result = await client.sismember("my_set", "non_existing_member");
-     * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
+     * console.log(result); // Output: false - Indicates that `non_existing_member` does not exist in the set `my_set`.
      * ```
      */
     public async sismember(
@@ -3670,7 +3670,7 @@ export class BaseClient {
      * ```typescript
      * await client.sadd("set1", ["a", "b", "c"]);
      * const result = await client.smismember("set1", ["b", "c", "d"]);
-     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * console.log(result); // Output: [true, true, false] // `b` and `c` are members of `set1`, but `d` is not.
      * ```
      */
     public async smismember(
@@ -3694,7 +3694,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spop method to remove and return a random member from a set
      * const result = await client.spop("my_set");
-     * console.log(result); // Output: 'member1' - Removes and returns a random member from the set "my_set".
+     * console.log(result); // Output: 'member1' - Removes and returns a random member from the set `my_set`.
      * ```
      *
      * @example
@@ -3725,7 +3725,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
+     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set `my_set`.
      * ```
      *
      * @example
@@ -3759,7 +3759,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmember method to return a random member from a set
      * const result = await client.srandmember("my_set");
-     * console.log(result); // Output: 'member1' - A random member of "my_set".
+     * console.log(result); // Output: 'member1' - A random member of `my_set`.
      * ```
      *
      * @example
@@ -3792,7 +3792,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmemberCount method to return multiple random members from a set
      * const result = await client.srandmemberCount("my_set", -3);
-     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of "my_set".
+     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of `my_set`.
      * ```
      *
      * @example
@@ -3886,14 +3886,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expire method
      * const result = await client.expire("my_key", 60);
-     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key".
+     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for `my_key`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the expire method with exisiting expiry
      * const result = await client.expire("my_key", 60, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
+     * console.log(result); // Output: false - Indicates that `my_key` has an existing expiry.
      * ```
      */
     public async expire(
@@ -3925,7 +3925,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expireAt method on a key with no previous expiry
      * const result = await client.expireAt("my_key", 1672531200, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * console.log(result); // Output: true - Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async expireAt(
@@ -3951,11 +3951,11 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = await client.expiretime("myKey");
-     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     * console.log(result1); // Output: -2 // `myKey` doesn't exist.
      *
      * const result2 = await client.set(myKey, "value");
      * const result3 = await client.expireTime(myKey);
-     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     * console.log(result2); // Output: -1 // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = await client.expireTime(myKey);
@@ -3985,7 +3985,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpire method on a key with no previous expiry
      * const result = await client.pexpire("my_key", 60000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
+     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for `my_key`.
      * ```
      */
     public async pexpire(
@@ -4017,7 +4017,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpireAt method on a key with no previous expiry
      * const result = await client.pexpireAt("my_key", 1672531200000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * console.log(result); // Output: true - Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async pexpireAt(
@@ -4042,15 +4042,15 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = client.pexpiretime("myKey");
-     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     * console.log(result1); // Output: -2 - `myKey` doesn't exist.
      *
      * const result2 = client.set(myKey, "value");
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     * console.log(result2); // Output: -1 // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
+     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when `myKey` will expire.
      * ```
      */
     public async pexpiretime(key: GlideString): Promise<number> {
@@ -4069,21 +4069,21 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ttl method with existing key
      * const result = await client.ttl("my_key");
-     * console.log(result); // Output: 3600 - Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     * console.log(result); // Output: 3600 - Indicates that `my_key` has a remaining time to live of 3600 seconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with existing key that has no associated expire.
      * const result = await client.ttl("key");
-     * console.log(result); // Output: -1 - Indicates that the key has no associated expire.
+     * console.log(result); // Output: -1 // Indicates that the key has no associated expire.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with a non-existing key
      * const result = await client.ttl("nonexistent_key");
-     * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
+     * console.log(result); // Output: -2 // Indicates that the key doesn't exist.
      * ```
      */
     public async ttl(key: GlideString): Promise<number> {
@@ -6339,12 +6339,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-        AZAffinityReplicasAndPrimary:
-            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+            AZAffinityReplicasAndPrimary:
+                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7654,8 +7654,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7697,8 +7697,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7905,11 +7905,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
