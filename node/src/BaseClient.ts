@@ -4155,17 +4155,17 @@ export class BaseClient {
      * // Output: -2
      * // `myKey` doesn't exist.
      *
-     * const result2 = await client.set(myKey, "value");
-     * const result3 = await client.expireTime(myKey);
-     * console.log(result2);
+     * const result2 = await client.set("myKey", "value");
+     * const result3 = await client.expireTime("myKey");
+     * console.log(result3);
      * // Output: -1
      * // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
-     * const result3 = await client.expireTime(myKey);
+     * const result3 = await client.expireTime("myKey");
      * console.log(result3);
      * // Output: 123456
-     * // The Unix timestamp (in seconds) when "myKey" will expire.
+     * // The Unix timestamp (in seconds) when `myKey` will expire.
      * ```
      */
     public async expiretime(key: GlideString): Promise<number> {
@@ -6012,8 +6012,8 @@ export class BaseClient {
      * // Output:
      * // [
      * //     {
-     * //         key: "my_stream",  // Stream key
-     * //         value: {  // Stream Ids mapped to entries array.
+     * //         key: "my_stream",                                                                         // Stream key
+     * //         value: {                                                                                  // Stream Ids mapped to entries array.
      * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]], // Each entry is a key/value tuple.
      * //             "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
      * //         }
