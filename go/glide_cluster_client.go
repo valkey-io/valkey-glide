@@ -57,6 +57,8 @@ type ClusterClient struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
+//	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
+//	      Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
 func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {

@@ -53,6 +53,7 @@ type Client struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
+//	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
 func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	client, err := createClient(config)
 	if err != nil {
