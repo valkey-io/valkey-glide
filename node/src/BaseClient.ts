@@ -1794,7 +1794,7 @@ export class BaseClient {
      *
      * const result6 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
      * console.log(result6);
-     * // Output: `null`
+     * // Output: null
      * // Value wasn't set because the comparisonValue is not equal to the current value of `key`. Value of `key` remains "new_value".
      * ```
      */
@@ -1860,7 +1860,7 @@ export class BaseClient {
      * ```typescript
      * result = await client.dump("nonExistingKey");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * ```
      */
     public async dump(key: GlideString): Promise<Buffer | null> {
@@ -2347,7 +2347,7 @@ export class BaseClient {
      * // Example usage of the hget method on a non-existing field
      * const result = await client.hget("my_hash", "nonexistent_field");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Indicates non existent key.
      * ```
      */
@@ -2963,7 +2963,7 @@ export class BaseClient {
      * // Example usage of the lpop method with a non-existing list
      * const result = await client.lpop("non_exiting_key");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Returns null for non-existent key.
      * ```
      */
@@ -2998,7 +2998,7 @@ export class BaseClient {
      * // Example usage of the lpopCount method with a non-existing list
      * const result = await client.lpopCount("non_exiting_key", 3);
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Returns null in case of non-existent key.
      * ```
      */
@@ -3361,7 +3361,7 @@ export class BaseClient {
      * // Example usage of the rpop method with a non-existing list
      * const result = await client.rpop("non_exiting_key");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Returns null for non-existent key.
      * ```
      */
@@ -3396,7 +3396,7 @@ export class BaseClient {
      * // Example usage of the rpopCount method with a non-existing list
      * const result = await client.rpopCount("non_exiting_key", 7);
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Returns null for a non-existing key.
      * ```
      */
@@ -3880,7 +3880,7 @@ export class BaseClient {
      * // Example usage of spop method with non-existing key
      * const result = await client.spop("non_existing_key");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * ```
      */
     public async spop(
@@ -3952,7 +3952,7 @@ export class BaseClient {
      * // Example usage of srandmember method with non-existing key
      * const result = await client.srandmember("non_existing_set");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * ```
      */
     public async srandmember(
@@ -4553,7 +4553,7 @@ export class BaseClient {
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
      * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { updateOptions: UpdateByScore.LESS_THAN });
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Indicates that the member in the sorted set haven't been updated.
      * ```
      */
@@ -4791,7 +4791,7 @@ export class BaseClient {
      * // Example usage of the zscore method when the member does not exist in the sorted set
      * const result = await client.zscore("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * ```
      *
      * @example
@@ -4799,7 +4799,7 @@ export class BaseClient {
      * // Example usage of the zscore method with non existimng key
      * const result = await client.zscore("non_existing_set", "member");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * ```
      */
     public async zscore(
@@ -5316,7 +5316,7 @@ export class BaseClient {
      * ```typescript
      * const payload2 = await client.zrandmember("nonExistingSortedSet");
      * console.log(payload2);
-     * // Output: `null`
+     * // Output: null
      * // Since the sorted set does not exist.
      * ```
      */
@@ -5835,7 +5835,7 @@ export class BaseClient {
      * // Example usage of zrank method with a non-existing member
      * const result = await client.zrank("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
@@ -5871,7 +5871,7 @@ export class BaseClient {
      * // Example usage of zrank_withscore method with a non-existing member
      * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
@@ -7995,7 +7995,7 @@ export class BaseClient {
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result);
-     * // Output: `null`
+     * // Output: null
      * // null is returned when the watched key is modified before transaction execution.
      * ```
      */
