@@ -3018,21 +3018,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lrange method with an existing list and positive indices
      * const result = await client.lrange("my_list", 0, 2);
-     * console.log(result); // Output: ["value1", "value2", "value3"] // Returns the first 3 elements of the list.
+     * console.log(result);
+     * // Output: ["value1", "value2", "value3"]
+     * // Returns the first 3 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with an existing list and negative indices
      * const result = await client.lrange("my_list", -2, -1);
-     * console.log(result); // Output: ["value2", "value3"] // Returns the last 2 elements of the list.
+     * console.log(result);
+     * // Output: ["value2", "value3"]
+     * // Returns the last 2 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with a non-existing list
      * const result = await client.lrange("non_exiting_key", 0, 2);
-     * console.log(result); // Output: [] // Returns an empty list for non-existent key.
+     * console.log(result);
+     * // Output: []
+     * // Returns an empty list for non-existent key.
      * ```
      */
     public async lrange(
@@ -3056,7 +3062,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the llen method
      * const result = await client.llen("my_list");
-     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that there are 3 elements in the list.
      * ```
      */
     public async llen(key: GlideString): Promise<number> {
@@ -3182,7 +3190,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lset method
      * const result = await client.lset("test_key", 1, "two");
-     * console.log(result); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
+     * console.log(result);
+     * // Output: 'OK'
+     * // Indicates that the second index of the list has been set to "two".
      * ```
      */
     public async lset(
@@ -3214,7 +3224,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ltrim method
      * const result = await client.ltrim("my_list", 0, 1);
-     * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
+     * console.log(result);
+     * // Output: 'OK'
+     * // Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
     public async ltrim(
@@ -3242,7 +3254,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lrem method
      * const result = await client.lrem("my_list", 2, "value");
-     * console.log(result); // Output: 2 - Removes the first 2 occurrences of "value" in the list.
+     * console.log(result);
+     * // Output: 2
+     * // Removes the first 2 occurrences of "value" in the list.
      * ```
      */
     public async lrem(
@@ -3267,14 +3281,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpush method with an existing list
      * const result = await client.rpush("my_list", ["value2", "value3"]);
-     * console.log(result); // Output: 3 - Indicates that the new length of the list is 3 after the push operation.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpush method with a non-existing list
      * const result = await client.rpush("nonexistent_list", ["new_value"]);
-     * console.log(result); // Output: 1
+     * console.log(result);
+     * // Output: 1
      * ```
      */
     public async rpush(
@@ -3296,7 +3313,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.rpushx("my_list", ["value1", "value2"]);
-     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that the list has two elements.
      * ```
      * */
     public async rpushx(
@@ -3320,14 +3339,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpop method with an existing list
      * const result = await client.rpop("my_list");
-     * console.log(result); // Output: 'value1' // Returns and removes the last element of the list stored at `my_list`.
+     * console.log(result);
+     * // Output: 'value1'
+     * // Returns and removes the last element of the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpop method with a non-existing list
      * const result = await client.rpop("non_exiting_key");
-     * console.log(result); // Output: null // Returns null for non-existent key.
+     * console.log(result);
+     * // Output: null
+     * // Returns null for non-existent key.
      * ```
      */
     public async rpop(
@@ -3351,14 +3374,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpopCount method with an existing list
      * const result = await client.rpopCount("my_list", 2);
-     * console.log(result); // Output: ["value1", "value2"] // Returns and removes the last 2 elements from the list stored at `my_list`.
+     * console.log(result);
+     * // Output: ["value1", "value2"]
+     * // Returns and removes the last 2 elements from the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpopCount method with a non-existing list
      * const result = await client.rpopCount("non_exiting_key", 7);
-     * console.log(result); // Output: null // Returns null for a non-existing key.
+     * console.log(result);
+     * // Output: null
+     * // Returns null for a non-existing key.
      * ```
      */
     public async rpopCount(
@@ -3382,7 +3409,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sadd method with an existing set
      * const result = await client.sadd("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2 // Adds 2 members to the set at key `my_set`
+     * console.log(result);
+     * // Output: 2
+     * // Adds 2 members to the set at key `my_set`
      * ```
      */
     public async sadd(
@@ -3405,7 +3434,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the srem method
      * const result = await client.srem("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2 // Removes `member1` and `member2` from the set at key `my_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Removes `member1` and `member2` from the set at key `my_set`.
      * ```
      */
     public async srem(
@@ -3475,7 +3506,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
+     * console.log(result);
+     * // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
     public async smembers(
@@ -3502,7 +3534,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.smove("set1", "set2", "member1");
-     * console.log(result); // Output: true // `member1` was moved from `set1` to `set2`.
+     * console.log(result);
+     * // Output: true
+     * // `member1` was moved from `set1` to `set2`.
      * ```
      */
     public async smove(
@@ -3526,7 +3560,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the scard method
      * const result = await client.scard("my_set");
-     * console.log(result); // Output: 3
+     * console.log(result);
+     * // Output: 3
      * ```
      */
     public async scard(key: GlideString): Promise<number> {
@@ -3547,14 +3582,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of sinter method when member exists
      * const result = await client.sinter(["my_set1", "my_set2"]);
-     * console.log(result); // Output: Set {'member2'} // Indicates that sets have one common member
+     * console.log(result);
+     * // Output: Set {'member2'}
+     * // Indicates that sets have one common member
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of sinter method with non-existing key
      * const result = await client.sinter(["my_set", "non_existing_key"]);
-     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * console.log(result);
+     * // Output: Set {}
+     * // An empty set is returned since the key does not exist.
      * ```
      */
     public async sinter(
@@ -3584,10 +3623,14 @@ export class BaseClient {
      * await client.sadd("set1", ["a", "b", "c"]);
      * await client.sadd("set2", ["b", "c", "d"]);
      * const result1 = await client.sintercard(["set1", "set2"]);
-     * console.log(result1); // Output: 2 - The intersection of `set1` and `set2` contains 2 elements: `b` and `c`.
+     * console.log(result1);
+     * // Output: 2
+     * // The intersection of `set1` and `set2` contains 2 elements: `b` and `c`.
      *
      * const result2 = await client.sintercard(["set1", "set2"], { limit: 1 });
-     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * console.log(result2);
+     * // Output: 1
+     * // The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
     public async sintercard(
@@ -3610,7 +3653,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.sinterstore("my_set", ["set1", "set2"]);
-     * console.log(result); // Output: 2 - Two elements were stored at `my_set`, and those elements are the intersection of `set1` and `set2`.
+     * console.log(result);
+     * // Output: 2
+     * // Two elements were stored at `my_set`, and those elements are the intersection of `set1` and `set2`.
      * ```
      */
     public async sinterstore(
@@ -3636,7 +3681,9 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiff(["set1", "set2"]);
-     * console.log(result); // Output: Set {"member1"} // `member2` is in `set1` but not `set2`
+     * console.log(result);
+     * // Output: Set {"member1"}
+     * // `member2` is in `set1` but not `set2`
      * ```
      */
     public async sdiff(
@@ -3664,7 +3711,9 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiffstore("set3", ["set1", "set2"]);
-     * console.log(result); // Output: 1 - One member was stored in `set3`, and that member is the diff between `set1` and `set2`.
+     * console.log(result);
+     * // Output: 1
+     * // One member was stored in `set3`, and that member is the diff between `set1` and `set2`.
      * ```
      */
     public async sdiffstore(
@@ -3690,10 +3739,13 @@ export class BaseClient {
      * await client.sadd("my_set1", ["member1", "member2"]);
      * await client.sadd("my_set2", ["member2", "member3"]);
      * const result1 = await client.sunion(["my_set1", "my_set2"]);
-     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} // Sets `my_set1` and `my_set2` have three unique members.
+     * console.log(result1);
+     * // Output: Set {'member1', 'member2', 'member3'}
+     * // Sets `my_set1` and `my_set2` have three unique members.
      *
      * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
-     * console.log(result2); // Output: Set {'member1', 'member2'}
+     * console.log(result2);
+     * // Output: Set {'member1', 'member2'}
      * ```
      */
     public async sunion(
@@ -3720,7 +3772,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const length = await client.sunionstore("mySet", ["set1", "set2"]);
-     * console.log(length); // Output: 2 - Two elements were stored in `mySet`, and those two members are the union of `set1` and `set2`.
+     * console.log(length);
+     * // Output: 2
+     * // Two elements were stored in `mySet`, and those two members are the union of `set1` and `set2`.
      * ```
      */
     public async sunionstore(
@@ -3743,14 +3797,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sismember method when member exists
      * const result = await client.sismember("my_set", "member1");
-     * console.log(result); // Output: true - Indicates that `member1` exists in the set `my_set`.
+     * console.log(result);
+     * // Output: true
+     * //Indicates that `member1` exists in the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the sismember method when member does not exist
      * const result = await client.sismember("my_set", "non_existing_member");
-     * console.log(result); // Output: false - Indicates that `non_existing_member` does not exist in the set `my_set`.
+     * console.log(result);
+     * // Output: false
+     * // Indicates that `non_existing_member` does not exist in the set `my_set`.
      * ```
      */
     public async sismember(
@@ -3774,7 +3832,9 @@ export class BaseClient {
      * ```typescript
      * await client.sadd("set1", ["a", "b", "c"]);
      * const result = await client.smismember("set1", ["b", "c", "d"]);
-     * console.log(result); // Output: [true, true, false] // `b` and `c` are members of `set1`, but `d` is not.
+     * console.log(result);
+     * // Output: [true, true, false]
+     * // `b` and `c` are members of `set1`, but `d` is not.
      * ```
      */
     public async smismember(
@@ -3798,14 +3858,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spop method to remove and return a random member from a set
      * const result = await client.spop("my_set");
-     * console.log(result); // Output: 'member1' - Removes and returns a random member from the set `my_set`.
+     * console.log(result);
+     * // Output: 'member1'
+     * // Removes and returns a random member from the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spop method with non-existing key
      * const result = await client.spop("non_existing_key");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async spop(
@@ -3829,14 +3892,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set `my_set`.
+     * console.log(result);
+     * // Output: Set {'member2', 'member3'}
+     * // Removes and returns 2 random members from the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * console.log(result);
+     * // Output: Set {}
+     * // An empty set is returned since the key does not exist.
      * ```
      */
     public async spopCount(
@@ -3863,14 +3930,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmember method to return a random member from a set
      * const result = await client.srandmember("my_set");
-     * console.log(result); // Output: 'member1' - A random member of `my_set`.
+     * console.log(result);
+     * // Output: 'member1'
+     * // A random member of `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of srandmember method with non-existing key
      * const result = await client.srandmember("non_existing_set");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async srandmember(
@@ -3896,14 +3966,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmemberCount method to return multiple random members from a set
      * const result = await client.srandmemberCount("my_set", -3);
-     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of `my_set`.
+     * console.log(result);
+     * // Output: ['member1', 'member1', 'member2']
+     * // Random members of `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of srandmemberCount method with non-existing key
      * const result = await client.srandmemberCount("non_existing_set", 3);
-     * console.log(result); // Output: [] - An empty list since the key does not exist.
+     * console.log(result);
+     * // Output: []
+     * // An empty list since the key does not exist.
      * ```
      */
     public async srandmemberCount(
@@ -3935,7 +4009,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the exists method
      * const result = await client.exists(["key1", "key2", "key3"]);
-     * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that all three keys exist in the database.
      * ```
      */
     public async exists(keys: GlideString[]): Promise<number> {
@@ -3964,7 +4040,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the unlink method
      * const result = await client.unlink(["key1", "key2", "key3"]);
-     * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that all three keys were unlinked from the database.
      * ```
      */
     public async unlink(keys: GlideString[]): Promise<number> {
@@ -3990,14 +4068,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expire method
      * const result = await client.expire("my_key", 60);
-     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for `my_key`.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a timeout of 60 seconds has been set for `my_key`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the expire method with exisiting expiry
      * const result = await client.expire("my_key", 60, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: false - Indicates that `my_key` has an existing expiry.
+     * console.log(result);
+     * // Output: false
+     * // Indicates that `my_key` has an existing expiry.
      * ```
      */
     public async expire(
@@ -4029,7 +4111,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expireAt method on a key with no previous expiry
      * const result = await client.expireAt("my_key", 1672531200, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for `my_key` was successfully set.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async expireAt(
@@ -4055,15 +4139,21 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = await client.expiretime("myKey");
-     * console.log(result1); // Output: -2 // `myKey` doesn't exist.
+     * console.log(result1);
+     * // Output: -2
+     * // `myKey` doesn't exist.
      *
      * const result2 = await client.set(myKey, "value");
      * const result3 = await client.expireTime(myKey);
-     * console.log(result2); // Output: -1 // `myKey` has no associated expiration.
+     * console.log(result2);
+     * // Output: -1
+     * // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = await client.expireTime(myKey);
-     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
+     * console.log(result3);
+     * // Output: 123456
+     * // the Unix timestamp (in seconds) when "myKey" will expire.
      * ```
      */
     public async expiretime(key: GlideString): Promise<number> {
@@ -4089,7 +4179,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpire method on a key with no previous expiry
      * const result = await client.pexpire("my_key", 60000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for `my_key`.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a timeout of 60,000 milliseconds has been set for `my_key`.
      * ```
      */
     public async pexpire(
@@ -4121,7 +4213,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpireAt method on a key with no previous expiry
      * const result = await client.pexpireAt("my_key", 1672531200000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for `my_key` was successfully set.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async pexpireAt(
@@ -4146,15 +4240,21 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = client.pexpiretime("myKey");
-     * console.log(result1); // Output: -2 - `myKey` doesn't exist.
+     * console.log(result1);
+     * // Output: -2
+     * // `myKey` doesn't exist.
      *
      * const result2 = client.set(myKey, "value");
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result2); // Output: -1 // `myKey` has no associated expiration.
+     * console.log(result2);
+     * // Output: -1
+     * // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when `myKey` will expire.
+     * console.log(result3);
+     * // Output: 123456789
+     * // the Unix timestamp (in milliseconds) when `myKey` will expire.
      * ```
      */
     public async pexpiretime(key: GlideString): Promise<number> {
@@ -4173,21 +4273,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ttl method with existing key
      * const result = await client.ttl("my_key");
-     * console.log(result); // Output: 3600 // Indicates that `my_key` has a remaining time to live of 3600 seconds.
+     * console.log(result);
+     * // Output: 3600
+     * // Indicates that `my_key` has a remaining time to live of 3600 seconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with existing key that has no associated expire.
      * const result = await client.ttl("key");
-     * console.log(result); // Output: -1 // Indicates that the key has no associated expire.
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that the key has no associated expire.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with a non-existing key
      * const result = await client.ttl("nonexistent_key");
-     * console.log(result); // Output: -2 // Indicates that the key doesn't exist.
+     * console.log(result);
+     * // Output: -2
+     * // Indicates that the key doesn't exist.
      * ```
      */
     public async ttl(key: GlideString): Promise<number> {
@@ -4218,7 +4324,9 @@ export class BaseClient {
      *      args: ["bar"],
      * };
      * const result = await invokeScript(luaScript, scriptOptions);
-     * console.log(result); // Output: ['foo', 'bar'] // The result for the script.
+     * console.log(result);
+     * // Output: ['foo', 'bar']
+     * // The result for the script.
      * ```
      */
     public async invokeScript(
@@ -4255,7 +4363,9 @@ export class BaseClient {
      * ```typescript
      * const scriptHash = script.getHash();
      * const scriptSource = await client.scriptShow(scriptHash);
-     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }" // The source for the script
+     * console.log(scriptSource);
+     * // Output: "return { KEYS[1], ARGV[1] }"
+     * // The source for the script
      * ```
      */
     public async scriptShow(
@@ -4377,7 +4487,8 @@ export class BaseClient {
      * const data = [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }]
      * const result = await client.zadd("my_sorted_set", data);
      * console.log(result);
-     * // Output: 2 // Indicates that two elements have been added to the sorted set `my_sorted_set`.
+     * // Output: 2
+     * // Indicates that two elements have been added to the sorted set `my_sorted_set`.
      * ```
      *
      * @example
@@ -4385,7 +4496,9 @@ export class BaseClient {
      * // Example usage of the zadd method to update scores in an existing sorted set
      * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
      * const result = await client.zadd("existing_sorted_set", { "member1": 10.5, "member2": 8.2 }, options);
-     * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set `existing_sorted_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Updates the scores of two existing members in the sorted set `existing_sorted_set`.
      * ```
      */
     public async zadd(
@@ -4416,14 +4529,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zaddIncr method to add a member with a score to a sorted set
      * const result = await client.zaddIncr("my_sorted_set", member, 5.0);
-     * console.log(result); // Output: 5.0 // Score of the member after being updated.
+     * console.log(result);
+     * // Output: 5.0
+     * // Score of the member after being updated.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
      * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { updateOptions: UpdateByScore.LESS_THAN });
-     * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
+     * console.log(result);
+     * // Output: null
+     * // Indicates that the member in the sorted set haven't been updated.
      * ```
      */
     public async zaddIncr(
@@ -4457,14 +4574,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zrem function to remove members from a sorted set
      * const result = await client.zrem("my_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2 - Indicates that two members have been removed from the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that two members have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zrem function when the sorted set does not exist
      * const result = await client.zrem("non_existing_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zrem(
@@ -4487,14 +4608,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcard method to get the cardinality of a sorted set
      * const result = await client.zcard("my_sorted_set");
-     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that there are 3 elements in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcard method with a non-existing key
      * const result = await client.zcard("non_existing_key");
-     * console.log(result); // Output: 0
+     * console.log(result);
+     * // Output: 0
      * ```
      */
     public async zcard(key: GlideString): Promise<number> {
@@ -4516,7 +4640,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const cardinality = await client.zintercard(["key1", "key2"], { limit: 10 });
-     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at `key1` and `key2` has a cardinality of 3.
+     * console.log(cardinality);
+     * // Output: 3
+     * // The intersection of the sorted sets at `key1` and `key2` has a cardinality of 3.
      * ```
      */
     public async zintercard(
@@ -4545,7 +4671,9 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: ["member1"] // `member1` is in `zset1` but not `zset2` or `zset3`.
+     * console.log(result);
+     * // Output: ["member1"]
+     * // `member1` is in `zset1` but not `zset2` or `zset3`.
      * ```
      */
     public async zdiff(
@@ -4574,7 +4702,8 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: [{ element: "member1", score: 1.0 }]
+     * console.log(result);
+     * // Output: [{ element: "member1", score: 1.0 }]
      * // `member1` is in `zset1` but not `zset2` or `zset3`
      * ```
      */
@@ -4606,11 +4735,13 @@ export class BaseClient {
      * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
      * await client.zadd("zset2", {"member1": 1.0});
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
-     * console.log(result1); // Output: 1
+     * console.log(result1);
+     * // Output: 1
      * // One member exists in `key1` but not `key2`, and this member was stored in `zset3`.
      *
      * const result2 = await client.zrange("zset3", {start: 0, end: -1});
-     * console.log(result2); // Output: ["member2"]
+     * console.log(result2);
+     * // Output: ["member2"]
      * // `member2` is now stored in `my_sorted_set`.
      * ```
      */
@@ -4636,21 +4767,25 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zscore method∂∂ to get the score of a member in a sorted set
      * const result = await client.zscore("my_sorted_set", "member");
-     * console.log(result); // Output: 10.5 - Indicates that the score of `member` in the sorted set `my_sorted_set` is 10.5.
+     * console.log(result);
+     * // Output: 10.5
+     * // Indicates that the score of `member` in the sorted set `my_sorted_set` is 10.5.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zscore method when the member does not exist in the sorted set
      * const result = await client.zscore("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zscore method with non existimng key
      * const result = await client.zscore("non_existing_set", "member");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async zscore(
@@ -4766,14 +4901,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zcount(
@@ -4807,7 +4946,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
-     * console.log(result1); // Output: ['member1', 'member2', 'member3']
+     * console.log(result1);
+     * // Output: ['member1', 'member2', 'member3']
      * // All members in ascending order
      * ```
      * @example
@@ -4818,8 +4958,9 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: ['member2', 'member1']
-     * // Output: members with scores within the range of negative infinity to 3, in descending order
+     * console.log(result);
+     * // Output: ['member2', 'member1']
+     * // Members with scores within the range of negative infinity to 3, in descending order
      * ```
      */
     public async zrange(
@@ -4857,7 +4998,8 @@ export class BaseClient {
      *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
      * // Members with scores between 10 and 20 with their scores
      * ```
      * @example
@@ -4868,7 +5010,8 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
      * // Members with scores within the range of negative infinity to 3, with their scores
      * ```
      */
@@ -4905,7 +5048,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
-     * console.log(result); // Output: 7
+     * console.log(result);
+     * // Output: 7
      * // `destination_key` contains a sorted set with the 7 members from `my_sorted_set`.
      * ```
      * @example
@@ -4916,7 +5060,8 @@ export class BaseClient {
      *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: 5
+     * console.log(result);
+     * // Output: 5
      * // Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in `destination_key`.
      * ```
      */
@@ -5002,7 +5147,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zinter(["key1", "key2"]);
-     * console.log(result); // Output: ['member1'] // The intersecting element for the sorted sets at `key1` and `key2`.
+     * console.log(result);
+     * // Output: ['member1']
+     * // The intersecting element for the sorted sets at `key1` and `key2`.
      * ```
      */
     public async zinter(
@@ -5038,11 +5185,13 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zinterWithScores(["key1", "key2"]);
-     * console.log(result1); // Output: [{ element: 'member1', score: 20 }]
+     * console.log(result1);
+     * // Output: [{ element: 'member1', score: 20 }]
      * // `member1` with score of 20 is the result
      *
      * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
-     * console.log(result2); // Output: [{ element: 'member1', score: 10.5 }]
+     * console.log(result2);
+     * // Output: [{ element: 'member1', score: 10.5 }]
      * // `member1` with score of 10.5 is the result
      * ```
      */
@@ -5075,7 +5224,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zunion(["key1", "key2"]);
-     * console.log(result); // Output: ['member1', 'member2'] // Union elements from sets stored at keys `key1` and `key2`.
+     * console.log(result);
+     * // Output: ['member1', 'member2']
+     * // Union elements from sets stored at keys `key1` and `key2`.
      * ```
      */
     public async zunion(
@@ -5150,7 +5301,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload2 = await client.zrandmember("nonExistingSortedSet");
-     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * console.log(payload2);
+     * // Output: null
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmember(
@@ -5251,14 +5404,16 @@ export class BaseClient {
      * // Example usage of strlen method with an existing key
      * await client.set("key", "GLIDE");
      * const length1 = await client.strlen("key");
-     * console.log(length1); // Output: 5
+     * console.log(length1);
+     * // Output: 5
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of strlen method with a non-existing key
      * const length2 = await client.strlen("non_existing_key");
-     * console.log(length2); // Output: 0
+     * console.log(length2);
+     * // Output: 0
      * ```
      */
     public async strlen(key: GlideString): Promise<number> {
@@ -5278,7 +5433,8 @@ export class BaseClient {
      * // Example usage of type method with a string value
      * await client.set("key", "value");
      * const type = await client.type("key");
-     * console.log(type); // Output: 'string'
+     * console.log(type);
+     * // Output: 'string'
      * ```
      *
      * @example
@@ -5286,7 +5442,8 @@ export class BaseClient {
      * // Example usage of type method with a list
      * await client.lpush("key", ["value"]);
      * const type = await client.type("key");
-     * console.log(type); // Output: 'list'
+     * console.log(type);
+     * // Output: 'list'
      * ```
      */
     public async type(key: GlideString): Promise<string> {
@@ -5314,7 +5471,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmin method to remove and return the member with the lowest score from a sorted set
      * const result = await client.zpopmin("my_sorted_set");
-     * console.log(result); // Output: [{ element: 'member1', score: 5.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 5.0 }]
      * // `member1` with a score of 5.0 has been removed from the sorted set
      * ```
      *
@@ -5322,7 +5480,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmin method to remove and return multiple members with the lowest scores from a sorted set
      * const result = await client.zpopmin("my_sorted_set", 2);
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     { element: 'member3', score: 7.5 },
      * //     { element: 'member2', score: 8.0 }
@@ -5391,7 +5550,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmax method to remove and return the member with the highest score from a sorted set
      * const result = await client.zpopmax("my_sorted_set");
-     * console.log(result); // Output: [{ element: 'member1', score: 10.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 10.0 }]
      * // `member1` with a score of 10.0 has been removed from the sorted set
      * ```
      *
@@ -5437,7 +5597,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const data = await client.bzpopmax(["zset1", "zset2"], 0.5);
-     * console.log(data); // Output: ["zset1", "c", 2];
+     * console.log(data);
+     * // Output: ["zset1", "c", 2];
      * ```
      */
     public async bzpopmax(
@@ -5460,21 +5621,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of pttl method with an existing key
      * const result = await client.pttl("my_key");
-     * console.log(result); // Output: 5000 // Indicates that the key `my_key` has a remaining time to live of 5000 milliseconds.
+     * console.log(result);
+     * // Output: 5000
+     * // Indicates that the key `my_key` has a remaining time to live of 5000 milliseconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with a non-existing key
      * const result = await client.pttl("non_existing_key");
-     * console.log(result); // Output: -2 // Indicates that the key `non_existing_key` does not exist.
+     * console.log(result);
+     * // Output: -2
+     * // Indicates that the key `non_existing_key` does not exist.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with an exisiting key that has no associated expire.
      * const result = await client.pttl("key");
-     * console.log(result); // Output: -1 // Indicates that the key `key` has no associated expire.
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that the key `key` has no associated expire.
      * ```
      */
     public async pttl(key: GlideString): Promise<number> {
@@ -5500,7 +5667,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByRank method
      * const result = await client.zremRangeByRank("my_sorted_set", 0, 2);
-     * console.log(result); // Output: 3 // Indicates that three elements have been removed from the sorted set `my_sorted_set` between ranks 0 and 2.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that three elements have been removed from the sorted set `my_sorted_set` between ranks 0 and 2.
      * ```
      */
     public async zremRangeByRank(
@@ -5527,14 +5696,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
      * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
-     * console.log(result); // Output: 4 // Indicates that 4 members, with lexicographical values ranging from `a` (exclusive) to `e` (inclusive), have been removed from `my_sorted_set`.
+     * console.log(result);
+     * // Output: 4
+     * // Indicates that 4 members, with lexicographical values ranging from `a` (exclusive) to `e` (inclusive), have been removed from `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
      * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
-     * console.log(result); // Output: 0 // Indicates that no elements were removed.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no elements were removed.
      * ```
      */
     public async zremRangeByLex(
@@ -5563,14 +5736,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
      * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
      * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zremRangeByScore(
@@ -5598,13 +5775,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between `c` (inclusive) and positive infinity in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that there are 2 members with lex scores between `c` (inclusive) and positive infinity in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
-     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between `c` (inclusive) and `k` (exclusive) in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that there is one member with a lex score between `c` (inclusive) and `k` (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zlexcount(
@@ -5630,14 +5811,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank method to retrieve the rank of a member in a sorted set
      * const result = await client.zrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 // Indicates that `member2` has the second-lowest score in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member2` has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank method with a non-existing member
      * const result = await client.zrank("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: null
+     * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrank(
@@ -5662,14 +5847,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank_withscore method to retrieve the rank and score of a member in a sorted set
      * const result = await client.zrank_withscore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] - Indicates that `member2` with score 6.0 has the second-lowest score in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: [1, 6.0]
+     * // Indicates that `member2` with score 6.0 has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank_withscore method with a non-existing member
      * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: null
+     * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrankWithScore(
@@ -5694,7 +5883,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 - Indicates that `member2` has the second-highest score in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member2` has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrank(
@@ -5720,7 +5911,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevankWithScore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] // Indicates that `member2` with score 6.0 has the second-highest score in the sorted set `my_sorted_set`.
+     * console.log(result);
+     * // Output: [1, 6.0]
+     * // Indicates that `member2` with score 6.0 has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrankWithScore(
@@ -5765,7 +5958,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
-     * // Output: 2 // the stream marked 2 entries as deleted.
+     * // Output: 2
+     * // the stream marked 2 entries as deleted.
      * ```
      */
     public async xdel(key: GlideString, ids: string[]): Promise<number> {
@@ -5800,7 +5994,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
      * //         key: "my_stream",  // Stream key
@@ -5919,7 +6114,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const numEntries = await client.xlen("my_stream");
-     * console.log(numEntries); // Output: 2 - `my_stream` contains 2 entries.
+     * console.log(numEntries);
+     * // Output: 2
+     * // `my_stream` contains 2 entries.
      * ```
      */
     public async xlen(key: GlideString): Promise<number> {
@@ -5973,7 +6170,8 @@ export class BaseClient {
      *     end: InfBoundary.PositiveInfinity,
      *     count: 2,
      *     consumer: "consumer1"
-     * }); // Output:
+     * });
+     * // Output:
      * // [
      * //     [
      * //         "1722643465939-0",  // The ID of the message
@@ -6049,7 +6247,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xinfoGroups("my_stream");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
      * //         "name": "mygroup",   // The consumer group name.
@@ -6284,7 +6483,8 @@ export class BaseClient {
      * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
      * console.log(result);
-     * // Output: [ "2-0", "3-0" ] // A list of entry ids.
+     * // Output: [ "2-0", "3-0" ]
+     * // A list of entry ids.
      * ```
      */
     public async xclaimJustId(
@@ -6315,7 +6515,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Create the consumer group "mygroup", using zero as the starting ID:
-     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output: "OK"
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0"));
+     * // Output: "OK"
      * ```
      */
     public async xgroupCreate(
@@ -6342,7 +6543,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Destroys the consumer group "mygroup"
-     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output: true
+     * console.log(await client.xgroupDestroy("mystream", "mygroup"));
+     * // Output: true
      * ```
      */
     public async xgroupDestroy(
@@ -6448,7 +6650,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
-     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")); // Output: true
+     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer"));
+     * // Output: true
      * ```
      */
     public async xgroupCreateConsumer(
@@ -6474,7 +6677,8 @@ export class BaseClient {
      * * @example
      * ```typescript
      * // Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
-     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer")); // Output: 5
+     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer"));
+     * // Output: 5
      * ```
      */
     public async xgroupDelConsumer(
@@ -6515,7 +6719,8 @@ export class BaseClient {
      * // read messages from streamId
      * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
      * // acknowledge messages on stream
-     * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1
+     * console.log(await client.xack("mystream", "mygroup", [entryId]));
+     * // Output: 1
      * ```
      */
     public async xack(
@@ -6541,7 +6746,8 @@ export class BaseClient {
      *
      * * @example
      * ```typescript
-     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", { entriesRead: 1 })); // Output: "OK"
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", { entriesRead: 1 }));
+     * // Output: "OK"
      * ```
      */
     public async xgroupSetId(
@@ -6573,14 +6779,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of lindex method to retrieve elements from a list by index
      * const result = await client.lindex("my_list", 0);
-     * console.log(result); // Output: 'value1' // Returns the first element in the list stored at `my_list`.
+     * console.log(result);
+     * // Output: 'value1'
+     * // Returns the first element in the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of lindex method to retrieve elements from a list by negative index
      * const result = await client.lindex("my_list", -1);
-     * console.log(result); // Output: 'value3' // Returns the last element in the list stored at `my_list`.
+     * console.log(result);
+     * // Output: 'value3'
+     * // Returns the last element in the list stored at `my_list`.
      * ```
      */
     public async lindex(
@@ -6609,7 +6819,8 @@ export class BaseClient {
      * ```typescript
      * const length = await client.linsert("my_list", InsertPosition.Before, "World", "There");
      * console.log(length);
-     * // Output: 2 // The list has a length of 2 after performing the insert.
+     * // Output: 2
+     * // The list has a length of 2 after performing the insert.
      * ```
      */
     public async linsert(
@@ -6661,7 +6872,8 @@ export class BaseClient {
      * // Example usage of rename method to rename a key
      * await client.set("old_key", "value");
      * const result = await client.rename("old_key", "new_key");
-     * console.log(result); // Output: OK
+     * console.log(result);
+     * // Output: OK
      * // Indicates successful renaming of the key `old_key` to `new_key`.
      * ```
      */
@@ -6687,7 +6899,8 @@ export class BaseClient {
      * // Example usage of renamenx method to rename a key
      * await client.set("old_key", "value");
      * const result = await client.renamenx("old_key", "new_key");
-     * console.log(result); // Output: true
+     * console.log(result);
+     * // Output: true
      * // Indicates successful renaming of the key `old_key` to `new_key`.
      * ```
      */
@@ -6859,7 +7072,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.objectEncoding("my_hash");
-     * console.log(result); // Output: "listpack"
+     * console.log(result);
+     * // Output: "listpack"
      * ```
      */
     public async objectEncoding(key: GlideString): Promise<string | null> {
@@ -7154,7 +7368,8 @@ export class BaseClient {
      *         withHash: true,
      *     },
      * );
-     * console.log(result2); // Output:
+     * console.log(result2);
+     * // Output:
      * // [
      * //     [
      * //         'Catania',                                       // location name
@@ -7219,7 +7434,8 @@ export class BaseClient {
      * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * // query the stored results
      * const result1 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
-     * console.log(result1); // Output:
+     * console.log(result1);
+     * // Output:
      * // {
      * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
      * //     Catania: 3479447370796909
@@ -7240,7 +7456,8 @@ export class BaseClient {
      * );
      * // query the stored results
      * const result2 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
-     * console.log(result2); // Output:
+     * console.log(result2);
+     * // Output:
      * // {
      * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
      * //     Catania: 56.4413,    // the distance is measured in units used for the search query (miles)
@@ -7526,7 +7743,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.geodist("mySortedSet", "Place1", "Place2", { unit: GeoUnit.KILOMETERS });
-     * console.log(num); // Output: the distance between Place1 and Place2.
+     * console.log(num);
+     * // Output: the distance between Place1 and Place2.
      * ```
      */
     public async geodist(
@@ -7743,16 +7961,20 @@ export class BaseClient {
      * @example
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
+     * console.log(response);
+     * // Output: "OK"
+     *
      * const transaction = new Batch(true).set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
      * console.log(result);
+     *
      * // Output: "OK"
      * // Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
+     * console.log(response);
+     * // Output: "OK"
      *
      * const transaction = new Batch(true).set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
@@ -7806,7 +8028,10 @@ export class BaseClient {
      * @example
      * ```typescript
      * const len = await client.setrange("key", 6, "GLIDE");
-     * console.log(len); // Output: 11 - New key was created with length of 11 symbols
+     * console.log(len);
+     * // Output: 11
+     * // New key was created with length of 11 symbols
+     *
      * const value = await client.get("key");
      * console.log(result);
      * // Output: "\0\0\0\0\0\0GLIDE"
@@ -7951,7 +8176,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const channels = await client.pubsubChannels();
-     * console.log(channels); // Output: ["channel1", "channel2"]
+     * console.log(channels);
+     * // Output: ["channel1", "channel2"]
      *
      * const newsChannels = await client.pubsubChannels("news.*");
      * console.log(newsChannels);
@@ -8122,7 +8348,10 @@ export class BaseClient {
      * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
      * await client.lpush("user_ids", ["2", "1"]);
      * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
+     * console.log(sortedElements);
+     * // Output: 2
+     * // number of elements sorted and stored
+     *
      * console.log(await client.lrange("sortedList", 0, -1));
      * // Output: [ 'Bob', 'Alice' ]
      * // Returns a list of the names sorted by age stored in `sortedList`
