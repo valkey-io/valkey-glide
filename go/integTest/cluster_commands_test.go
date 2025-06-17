@@ -739,7 +739,7 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 		_, err = client.ZAdd(context.Background(), zsetKey, map[string]float64{"value": 1})
 		assert.NoError(t, err)
 
-		_, err = client.XAdd(context.Background(), streamKey, [][]string{{"field", "value"}})
+		_, err = client.XAdd(context.Background(), streamKey, []models.FieldValue{{Field: "field", Value: "value"}})
 		assert.NoError(t, err)
 	}
 

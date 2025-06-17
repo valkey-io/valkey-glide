@@ -3994,7 +3994,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (string, error) {
+func (client *baseClient) XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error) {
 	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -4015,14 +4015,14 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values [][]strin
 //
 // Return value:
 //
-//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
 	ctx context.Context,
 	key string,
-	values [][]string,
+	values []models.FieldValue,
 	options options.XAddOptions,
 ) (models.Result[string], error) {
 	args := []string{}
@@ -4033,13 +4033,7 @@ func (client *baseClient) XAddWithOptions(
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return models.CreateNilStringResult(), fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			)
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
@@ -4069,7 +4063,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry.
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4097,7 +4091,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -4928,8 +4922,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 // Return value:
 //
 //	The rank of `member` in the sorted set.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -4957,9 +4950,8 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A models.Result[models.RankAndScore] containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(
@@ -4988,10 +4980,8 @@ func (client *baseClient) ZRankWithScore(
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set, where ranks are ordered from high to
-//	low based on scores.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -5019,9 +5009,8 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A models.Result[models.RankAdnScore] containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
@@ -5108,7 +5097,7 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -5149,7 +5138,7 @@ func (client *baseClient) XAutoClaim(
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -6468,7 +6457,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6501,7 +6490,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6753,7 +6742,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -6762,7 +6751,7 @@ func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6784,7 +6773,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6795,7 +6784,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6806,7 +6795,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRangeResponse(result)
+	return handleXRangeResponse(result, false)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6827,7 +6816,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -6836,7 +6825,7 @@ func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6859,7 +6848,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6870,7 +6859,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6881,7 +6870,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRevRangeResponse(result)
+	return handleXRangeResponse(result, true)
 }
 
 // Returns information about the stream stored at `key`.
@@ -6895,7 +6884,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A models.XInfoStreamResponse containing information about the stream stored at key:
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
 //	- Length: the number of entries in the stream
 //	- RadixTreeKeys: the number of keys in the underlying radix data structure
 //	- RadixTreeNodes: the number of nodes in the underlying radix data structure

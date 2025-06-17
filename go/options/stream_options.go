@@ -404,7 +404,7 @@ type XInfoStreamOptions struct {
 }
 
 // Create new empty `XInfoStreamOptions`
-func NewXInfoStreamOptionsOptions() *XInfoStreamOptions {
+func NewXInfoStreamOptions() *XInfoStreamOptions {
 	return &XInfoStreamOptions{-1}
 }
 

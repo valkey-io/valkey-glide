@@ -251,7 +251,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 //
 // For example:
 //
-//	config := NewGlideClientConfiguration().
+//	config := NewClientConfiguration().
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
@@ -392,7 +392,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 //
 // For example:
 //
-//	config := NewGlideClusterClientConfiguration().
+//	config := NewClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{

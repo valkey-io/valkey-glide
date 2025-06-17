@@ -226,11 +226,11 @@ jobs:
                   # change go/benchmarks/go.mod on the fly
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
-                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
-                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
+                      sed -i '' '\|replace github\.com/valkey-io/valkey-glide/go/v2|d' go.mod
+                      sed -i '' "s|github\.com/valkey-io/valkey-glide/go/v2 v.*|github.com/valkey-io/valkey-glide/go/v2 $RELEASE_VERSION|g" go.mod
                   else
-                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go|d' go.mod
-                      sed -i "s|github\.com/valkey-io/valkey-glide/go v.*|github.com/valkey-io/valkey-glide/go $RELEASE_VERSION|g" go.mod
+                      sed -i '\|replace github\.com/valkey-io/valkey-glide/go/v2|d' go.mod
+                      sed -i "s|github\.com/valkey-io/valkey-glide/go/v2 v.*|github.com/valkey-io/valkey-glide/go/v2 $RELEASE_VERSION|g" go.mod
                   fi
                   go mod tidy
                   go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}

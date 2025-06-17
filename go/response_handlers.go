@@ -954,26 +954,11 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	}
 
 	// Convert the raw response to the structured XClaimResponse format
-	result := make(map[string]models.XClaimResponse)
-
-	// Process the map data directly
-	claimMap, ok := data.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type received: %T", data)
-	}
-
-	for id, entriesArray := range claimMap {
-		// Process fields
-		fieldInfos := createFieldInfoArray(entriesArray)
-		result[id] = models.XClaimResponse{
-			Fields: fieldInfos,
-		}
-	}
-
-	return result, nil
+	res, err := internal.ConvertXClaimResponse(data)
+	return res.(map[string]models.XClaimResponse), err
 }
 
-func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse, reverse bool) ([]models.StreamEntry, error) {
 	defer C.free_command_response(response)
 
 	if response.response_type == uint32(C.Null) {
@@ -988,82 +973,9 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	if err != nil {
 		return nil, err
 	}
-	if mapData == nil {
-		return nil, nil
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
 
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId < XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
-}
-
-func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
-	defer C.free_command_response(response)
-
-	if response.response_type == uint32(C.Null) {
-		return nil, nil
-	}
-
-	typeErr := checkResponseType(response, C.Map, false)
-	if typeErr != nil {
-		return nil, typeErr
-	}
-	mapData, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId > XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
+	res, err := internal.MakeConvertStreamEntryArray(reverse)(mapData)
+	return res.([]models.StreamEntry), err
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoClaimResponse, error) {
@@ -1077,48 +989,9 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	if err != nil {
 		return null, err
 	}
-	arr := slice.([]any)
-	len := len(arr)
-	if len < 2 || len > 3 {
-		return null, fmt.Errorf("unexpected response array length: %d", len)
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(arr[1])
-	if err != nil {
-		return null, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return null, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-	var deletedMessages []string
-	deletedMessages = nil
-	if len == 3 {
-		converted, err = arrayConverter[string]{
-			nil,
-			false,
-		}.convert(arr[2])
-		if err != nil {
-			return null, err
-		}
-		deletedMessages, ok = converted.([]string)
-		if !ok {
-			return null, fmt.Errorf("unexpected type of third element: %T", converted)
-		}
-	}
-	return models.XAutoClaimResponse{
-		NextEntry:       arr[0].(string),
-		ClaimedEntries:  claimedEntries,
-		DeletedMessages: deletedMessages,
-	}, nil
+
+	res, err := internal.ConvertXAutoClaimResponse(slice)
+	return res.(models.XAutoClaimResponse), err
 }
 
 func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.XAutoClaimJustIdResponse, error) {
@@ -1180,31 +1053,8 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 		return nil, nil
 	}
 
-	// Convert the raw response to the structured StreamResponse format
-	result := make(map[string]models.StreamResponse)
-
-	// Process the map data directly
-	streamMap, ok := data.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type received: %T", data)
-	}
-	for streamName, streamData := range streamMap {
-		streamResponse := models.StreamResponse{
-			Entries: make([]models.StreamEntry, 0),
-		}
-		// Process fields
-		for id, entriesArray := range streamData.(map[string]any) {
-			// Process stream entries
-			fieldInfos := createFieldInfoArray(entriesArray)
-			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
-				ID:     id,
-				Fields: fieldInfos,
-			})
-		}
-
-		result[streamName] = streamResponse
-	}
-	return result, nil
+	res, err := internal.ConvertXReadResponse(data)
+	return res.(map[string]models.StreamResponse), err
 }
 
 func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (models.XPendingSummary, error) {
@@ -1769,11 +1619,8 @@ func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfo
 	if err != nil {
 		return models.XInfoStreamResponse{}, err
 	}
-	streamInfo, err := getXInfoStreamFields(result)
-	if err != nil {
-		return models.XInfoStreamResponse{}, err
-	}
-	return streamInfo, nil
+	streamInfo, err := internal.ConvertXInfoStreamResponse(result)
+	return streamInfo.(models.XInfoStreamResponse), err
 }
 
 func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
@@ -1783,198 +1630,6 @@ func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (m
 		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 
-	streamInfo, err := getXInfoStreamFullOptionFields(result)
-	if err != nil {
-		return models.XInfoStreamFullOptionsResponse{}, err
-	}
-
-	return streamInfo, nil
-}
-
-func getXInfoStreamFields(result any) (models.XInfoStreamResponse, error) {
-	infoMap, ok := result.(map[string]any)
-	if !ok {
-		return models.XInfoStreamResponse{},
-			fmt.Errorf("unexpected type of map: %T", result)
-	}
-	streamInfo := models.XInfoStreamResponse{}
-	// Parse integer fields
-	internal.ReadValue(infoMap, "length", &streamInfo.Length)
-	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
-	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
-	internal.ReadValue(infoMap, "groups", &streamInfo.Groups)
-	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
-
-	// Parse string fields
-	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
-	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
-
-	// Get First Entry
-	entry := createEntry(infoMap, "first-entry")
-	if entry.ID != "" {
-		streamInfo.FirstEntry = entry
-	}
-
-	entry = createEntry(infoMap, "last-entry")
-	if entry.ID != "" {
-		streamInfo.LastEntry = entry
-	}
-
-	return streamInfo, nil
-}
-
-func getXInfoStreamFullOptionFields(result any) (models.XInfoStreamFullOptionsResponse, error) {
-	infoMap, ok := result.(map[string]any)
-
-	if !ok {
-		return models.XInfoStreamFullOptionsResponse{},
-			fmt.Errorf("unexpected type of map: %T", result)
-	}
-	streamInfo := models.XInfoStreamFullOptionsResponse{}
-
-	// Parse integer fields
-	internal.ReadValue(infoMap, "length", &streamInfo.Length)
-	internal.ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
-	internal.ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
-	internal.ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
-
-	// Parse string fields
-	internal.ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
-	internal.ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
-
-	// Get First Entry
-	entry := createEntry(infoMap, "first-entry")
-	if entry.ID != "" {
-		streamInfo.FirstEntry = entry
-	}
-	// Get Last Entry
-	entry = createEntry(infoMap, "last-entry")
-	if entry.ID != "" {
-		streamInfo.LastEntry = entry
-	}
-
-	if groups, ok := infoMap["groups"].([]any); ok {
-		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
-		for _, group := range groups {
-			groupInfo := models.XInfoStreamGroupInfo{}
-			if groupMap, ok := group.(map[string]any); ok {
-				if consumers, ok := groupMap["consumers"].([]any); ok {
-					consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
-					for _, consumerMap := range consumers {
-						consumerInfo := models.XInfoStreamConsumerInfo{}
-						if consumer, ok := consumerMap.(map[string]any); ok {
-							internal.ReadValue(consumer, "name", &consumerInfo.Name)
-							internal.ReadValue(consumer, "seen-time", &consumerInfo.SeenTime)
-							internal.ReadResult(consumer, "active-time", &consumerInfo.ActiveTime)
-							internal.ReadValue(consumer, "pel-count", &consumerInfo.PelCount)
-
-							if pending, ok := consumer["pending"].([]any); ok {
-								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
-								for _, entry := range pending {
-									if entryArr, ok := entry.([]any); ok {
-										pendingConsumerArr = append(
-											pendingConsumerArr,
-											models.ConsumerPendingEntry{
-												Id:             entryArr[0].(string),
-												DeliveredTime:  entryArr[1].(int64),
-												DeliveredCount: entryArr[2].(int64),
-											},
-										)
-									}
-								}
-								consumerInfo.Pending = pendingConsumerArr
-							}
-
-							consumersArr = append(consumersArr, consumerInfo)
-						}
-					}
-					groupInfo.Consumers = consumersArr
-				}
-				internal.ReadValue(groupMap, "name", &groupInfo.Name)
-				internal.ReadValue(groupMap, "last-delivered-id", &groupInfo.LastDeliveredId)
-				internal.ReadValue(groupMap, "pel-count", &groupInfo.PelCount)
-				internal.ReadResult(groupMap, "entries-read", &groupInfo.EntriesRead)
-				internal.ReadResult(groupMap, "lag", &groupInfo.Lag)
-
-				if pending, ok := groupMap["pending"].([]any); ok {
-					pendingArr := make([]models.PendingEntry, 0, len(pending))
-					for _, pendingEntry := range pending {
-						if pendingEntryArr, ok := pendingEntry.([]any); ok {
-							pendingArr = append(pendingArr, models.PendingEntry{
-								Id:             pendingEntryArr[0].(string),
-								Name:           pendingEntryArr[1].(string),
-								DeliveredTime:  pendingEntryArr[2].(int64),
-								DeliveredCount: pendingEntryArr[3].(int64),
-							})
-						}
-					}
-					groupInfo.Pending = pendingArr
-				}
-			}
-			groupsArr = append(groupsArr, groupInfo)
-		}
-		streamInfo.Groups = groupsArr
-	}
-	if val, ok := infoMap["entries"].([]any); ok {
-		entriesArr := make([]models.StreamEntry, 0, len(val))
-		for _, entry := range val {
-			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
-				entryInfo := models.StreamEntry{}
-				entryInfo.ID = streamEntry[0].(string)
-				entryInfo.Fields = createFieldInfoArray([]any{streamEntry[1]})
-				entriesArr = append(entriesArr, entryInfo)
-			}
-		}
-		streamInfo.Entries = entriesArr
-	}
-
-	internal.ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
-
-	return streamInfo, nil
-}
-
-// Parse entry - it's an array where first element is ID and second is array of field-value pairs
-func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
-	entry := models.StreamEntry{}
-	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
-	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
-		// First element is the ID
-		if id, ok := firstEntryArray[0].(string); ok {
-			// Create field info array.
-			entryArray := []any{firstEntryArray[1]}
-			keyValues := createFieldInfoArray(entryArray)
-			// Create a StreamEntry with the ID
-			entry = models.StreamEntry{
-				ID:     id,
-				Fields: keyValues,
-			}
-		}
-	}
-	return entry
-}
-
-func createFieldInfoArray(entriesArray any) []models.KeyValue {
-	keyValues := make([]models.KeyValue, 0)
-	entriesData, ok := entriesArray.([]any)
-	if !ok {
-		entriesData = []any{}
-	}
-
-	for _, entryData := range entriesData {
-		fieldValuePairs, ok := entryData.([]any)
-		if !ok || len(fieldValuePairs) < 2 {
-			continue
-		}
-		for i := 0; i+1 < len(fieldValuePairs); i += 2 {
-			fieldName, okField := fieldValuePairs[i].(string)
-			fieldValue, okValue := fieldValuePairs[i+1].(string)
-			if okField && okValue {
-				keyValues = append(keyValues, models.KeyValue{
-					Key:   fieldName,
-					Value: fieldValue,
-				})
-			}
-		}
-	}
-	return keyValues
+	streamInfo, err := internal.ConvertXInfoStreamFullResponse(result)
+	return streamInfo.(models.XInfoStreamFullOptionsResponse), err
 }
