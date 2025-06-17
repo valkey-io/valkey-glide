@@ -2236,7 +2236,7 @@ export class BaseClient {
      * const result4 = await client.bitpos("key1", 1, { start: 2, end: 9, indexType: BitmapIndexType.BIT });
      * console.log(result4);
      * // Output: 7
-     * // The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+     * // The first occurrence of bit value 1 in the third to tenth bits of the string stored at `key1` is at the eighth position.
      * ```
      */
     public async bitpos(
@@ -2884,7 +2884,7 @@ export class BaseClient {
      * const result = await client.lpush("my_list", ["value2", "value3"]);
      * console.log(result);
      * // Output: 3
-     * / /Indicates that the new length of the list is 3 after the push operation.
+     * // Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
@@ -3799,7 +3799,7 @@ export class BaseClient {
      * const result = await client.sismember("my_set", "member1");
      * console.log(result);
      * // Output: true
-     * //Indicates that `member1` exists in the set `my_set`.
+     * // Indicates that `member1` exists in the set `my_set`.
      * ```
      *
      * @example
