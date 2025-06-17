@@ -137,11 +137,11 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  rc-version: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   echo "Printing output"
-                  echo $rc-version
-                  if [[ -n "$rc-version" ]]; then
+                  echo $RC_VERSION
+                  if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
                   else
@@ -287,9 +287,9 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  rc-version: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  if [[ -n "$rc-version" ]]; then
+                  if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
                   else
@@ -351,9 +351,9 @@ jobs:
             - name: Build and test
               working-directory: ./go
               env:
-                  rc-version: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  if [[ -n "$rc-version" ]]; then
+                  if [[ -n "$RC_VERSION" ]]; then
                     make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
                   else
                     make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
@@ -424,9 +424,9 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  rc-version: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  if [[ -n "$rc-version" ]]; then
+                  if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k long-timeout-test test-filter=TestLongTimeout
                   else
