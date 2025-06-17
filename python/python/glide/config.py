@@ -73,7 +73,7 @@ class BackoffStrategy:
     """
     Represents the strategy used to determine how and when to reconnect, in case of connection failures.
     The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
-    is the number of failed attempts.
+    is the number of failed attempts, and `rand(...)` applies a jitter of up to `jitter_percent`% to introduce randomness and reduce retry storms.
     Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
     successful.
     The client will attempt to reconnect indefinitely.
@@ -147,25 +147,66 @@ class PeriodicChecksStatus(Enum):
     """
 
 
+class TlsAdvancedConfiguration:
+    """
+    Represents advanced TLS configuration settings.
+
+    Attributes:
+        use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
+
+            - When set to True, the client skips certificate validation.
+              This is useful when connecting to servers or clusters using self-signed certificates,
+              or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+
+            - This setting is typically used in development or testing environments. **It is
+              strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+
+            - Only valid if TLS is already enabled in the base client configuration.
+              Enabling it without TLS will result in a `ConfigurationError`.
+
+            - Default: False (verification is enforced).
+    """
+
+    def __init__(self, use_insecure_tls: Optional[bool] = None):
+        self.use_insecure_tls = use_insecure_tls
+
+
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
 
     Attributes:
         connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
-            This applies both during initial client creation and any reconnections that may occur during request processing.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-            If not explicitly set, a default value of 250 milliseconds will be used.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
+        tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
+            This allows for more granular control of TLS behavior, such as enabling an insecure mode
+            that bypasses certificate validation.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
         self.connection_timeout = connection_timeout
+        self.tls_config = tls_config
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
+
+        if self.tls_config and self.tls_config.use_insecure_tls:
+            if request.tls_mode == TlsMode.SecureTls:
+                request.tls_mode = TlsMode.InsecureTls
+            elif request.tls_mode == TlsMode.NoTls:
+                raise ConfigurationError(
+                    "use_insecure_tls cannot be enabled when use_tls is disabled."
+                )
+
         return request
 
 
@@ -187,14 +228,15 @@ class BaseClientConfiguration:
                 ].
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
+            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+            For advanced tls configuration, please use `AdvancedBaseClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
             If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
             complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
             explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -317,9 +359,13 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Standalone Glide client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
 
-        super().__init__(connection_timeout)
+        super().__init__(connection_timeout, tls_config)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -337,12 +383,13 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                Please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required
-                reconnections or retries.
+                reconnection or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
                 If not explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -479,8 +526,12 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Glide Cluster client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
-        super().__init__(connection_timeout)
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
+        super().__init__(connection_timeout, tls_config)
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
@@ -497,12 +548,13 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                For advanced tls configuration, please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
             set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of

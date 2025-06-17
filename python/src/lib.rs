@@ -4,8 +4,13 @@ use bytes::Bytes;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::Telemetry;
 use glide_core::client::FINISHED_SCAN_CURSOR;
+use glide_core::client::get_or_init_runtime;
 use glide_core::errors::error_message;
 use glide_core::start_socket_listener;
+use glide_core::{
+    DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
+    GlideOpenTelemetrySignalsExporter, GlideSpan,
+};
 use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -13,11 +18,128 @@ use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyStri
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
+use std::str::FromStr;
 use std::sync::Arc;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
+pub const DEFAULT_FLUSH_INTERVAL_SIGNAL_MS: i64 = DEFAULT_FLUSH_SIGNAL_INTERVAL_MS as i64;
+pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
+
+/// Configuration for OpenTelemetry integration in the Python client.
+///
+/// This struct allows you to configure how telemetry data (traces and metrics) is exported to an OpenTelemetry collector.
+/// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+/// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+/// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+///
+/// At least one of traces or metrics must be provided.
+#[pyclass]
+#[derive(Clone)]
+pub struct OpenTelemetryConfig {
+    /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
+    traces: Option<OpenTelemetryTracesConfig>,
+    /// Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
+    metrics: Option<OpenTelemetryMetricsConfig>,
+    /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
+    #[pyo3(get, set)]
+    pub flush_interval_ms: Option<i64>,
+}
+
+#[pymethods]
+impl OpenTelemetryConfig {
+    #[new]
+    #[pyo3(signature = (traces=None, metrics=None, flush_interval_ms=None))]
+    fn new(
+        traces: Option<OpenTelemetryTracesConfig>,
+        metrics: Option<OpenTelemetryMetricsConfig>,
+        flush_interval_ms: Option<i64>,
+    ) -> Self {
+        OpenTelemetryConfig {
+            traces,
+            metrics,
+            flush_interval_ms,
+        }
+    }
+
+    fn get_traces(&self) -> Option<OpenTelemetryTracesConfig> {
+        self.traces.clone()
+    }
+
+    fn set_traces(&mut self, traces: OpenTelemetryTracesConfig) {
+        self.traces = Some(traces);
+    }
+
+    fn get_metrics(&self) -> Option<OpenTelemetryMetricsConfig> {
+        self.metrics.clone()
+    }
+}
+
+/// Configuration for exporting OpenTelemetry traces.
+///
+/// - `endpoint`: The endpoint to which trace data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+/// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
+///   Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+///   It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
+#[pyclass]
+#[derive(Clone)]
+pub struct OpenTelemetryTracesConfig {
+    /// The endpoint to which trace data will be exported.
+    endpoint: String,
+    /// The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
+    /// Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+    /// It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
+    sample_percentage: Option<u32>,
+}
+
+#[pymethods]
+impl OpenTelemetryTracesConfig {
+    #[new]
+    #[pyo3(signature = (endpoint, sample_percentage=DEFAULT_TRACE_SAMPLE_RATE))]
+    fn new(endpoint: String, sample_percentage: Option<u32>) -> Self {
+        OpenTelemetryTracesConfig {
+            endpoint,
+            sample_percentage,
+        }
+    }
+
+    fn get_endpoint(&self) -> String {
+        self.endpoint.clone()
+    }
+
+    fn get_sample_percentage(&self) -> Option<u32> {
+        self.sample_percentage
+    }
+}
+
+/// Configuration for exporting OpenTelemetry metrics.
+///
+/// - `endpoint`: The endpoint to which metrics data will be exported. Expected format:
+///   - For gRPC: `grpc://host:port`
+///   - For HTTP: `http://host:port` or `https://host:port`
+///   - For file exporter: `file:///absolute/path/to/folder/file.json`
+#[pyclass]
+#[derive(Clone)]
+pub struct OpenTelemetryMetricsConfig {
+    /// The endpoint to which metrics data will be exported.
+    endpoint: String,
+}
+
+#[pymethods]
+impl OpenTelemetryMetricsConfig {
+    #[new]
+    fn new(endpoint: String) -> Self {
+        OpenTelemetryMetricsConfig { endpoint }
+    }
+
+    fn get_endpoint(&self) -> String {
+        self.endpoint.clone()
+    }
+}
 
 #[pyclass(eq, eq_int)]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -112,9 +234,16 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add_class::<Script>()?;
     m.add_class::<ClusterScanCursor>()?;
+    m.add_class::<OpenTelemetryConfig>()?;
+    m.add_class::<OpenTelemetryTracesConfig>()?;
+    m.add_class::<OpenTelemetryMetricsConfig>()?;
     m.add(
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
         DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    )?;
+    m.add(
+        "DEFAULT_FLUSH_INTERVAL_SIGNAL_MS",
+        DEFAULT_FLUSH_INTERVAL_SIGNAL_MS,
     )?;
     m.add("MAX_REQUEST_ARGS_LEN", MAX_REQUEST_ARGS_LEN)?;
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
@@ -124,6 +253,9 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
     m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
+    m.add_function(wrap_pyfunction!(create_otel_span, m)?)?;
+    m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
+    m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -381,6 +513,96 @@ impl From<Level> for logger_core::Level {
             Level::Off => logger_core::Level::Off,
         }
     }
+}
+
+#[pyfunction]
+pub fn create_otel_span(name: String) -> usize {
+    let span = GlideOpenTelemetry::new_span(&name);
+    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
+    s as usize
+}
+
+#[pyfunction]
+pub fn drop_otel_span(span_ptr: usize) {
+    if span_ptr == 0 {
+        log(
+            Level::Error,
+            "OpenTelemetry".to_string(),
+            "Failed to drop span. Received a zero pointer value.".to_string(),
+        );
+        return;
+    }
+
+    unsafe {
+        Arc::from_raw(span_ptr as *const GlideSpan);
+    }
+}
+
+#[pyfunction]
+pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResult<()> {
+    // At least one of traces or metrics must be provided
+    if open_telemetry_config.traces.is_none() && open_telemetry_config.metrics.is_none() {
+        return Err(PyTypeError::new_err(
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration.",
+        ));
+    }
+
+    let mut config_builder = glide_core::GlideOpenTelemetryConfigBuilder::default();
+
+    // Initialize OpenTelemetry traces exporter
+    if let Some(traces) = open_telemetry_config.traces {
+        let exporter = GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
+            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {}", e)))?;
+        config_builder = config_builder.with_trace_exporter(exporter, traces.sample_percentage);
+    }
+
+    // Initialize OpenTelemetry metrics exporter
+    if let Some(metrics) = open_telemetry_config.metrics {
+        let exporter = GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
+            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {}", e)))?;
+        config_builder = config_builder.with_metrics_exporter(exporter);
+    }
+
+    let flush_interval_ms = open_telemetry_config
+        .flush_interval_ms
+        .unwrap_or(DEFAULT_FLUSH_INTERVAL_SIGNAL_MS);
+
+    // Set flush interval if provided
+    if flush_interval_ms <= 0 {
+        return Err(PyTypeError::new_err(format!(
+            "InvalidInput: flush_interval_ms must be a positive integer (got: {})",
+            flush_interval_ms
+        )));
+    }
+    config_builder = config_builder
+        .with_flush_interval(std::time::Duration::from_millis(flush_interval_ms as u64));
+
+    let glide_rt = match get_or_init_runtime() {
+        Ok(handle) => handle,
+        Err(err) => {
+            return Err(PyTypeError::new_err(format!(
+                "Failed to get or init runtime: {}",
+                err
+            )));
+        }
+    };
+
+    glide_rt.runtime.block_on(async {
+        if let Err(e) = GlideOpenTelemetry::initialise(config_builder.build()) {
+            log(
+                Level::Error,
+                "OpenTelemetry".to_string(),
+                format!("Failed to initialize OpenTelemetry: {}", e),
+            );
+            return Err(PyTypeError::new_err(format!(
+                "Failed to initialize OpenTelemetry: {}",
+                e
+            )));
+        }
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 #[pyfunction]

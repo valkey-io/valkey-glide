@@ -3,6 +3,9 @@
 
 reports
 
+# Compiled Test binaries
+*.test
+
 # cbindgen generated header file
 lib.h
 

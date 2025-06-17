@@ -16,6 +16,7 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.exceptions import ClosingError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -164,6 +165,20 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
+    pytest.valkey_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        load_module=load_module,
+        replica_count=2,
+    )
+    pytest.standalone_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=1,
+        load_module=load_module,
+    )
+
 
 @pytest.fixture(autouse=True, scope="session")
 def call_before_all_pytests(request):
@@ -199,6 +214,18 @@ def pytest_sessionfinish(session, exitstatus):
         del pytest.standalone_cluster
     except AttributeError:
         # standalone_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_tls_cluster
+    except AttributeError:
+        # valkey_tls_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.standalone_tls_cluster
+    except AttributeError:
+        # standalone_tls_cluster was not set, skip deletion
         pass
 
 
@@ -304,6 +331,36 @@ async def glide_client(
 
 
 @pytest.fixture(scope="function")
+async def glide_tls_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    tls_insecure: bool,
+) -> AsyncGenerator[TGlideClient, None]:
+    """
+    Get async socket client for tests with TLS enabled.
+    """
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        use_tls=True,
+        tls_insecure=tls_insecure,
+        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
+    )
+    yield client
+    await test_teardown(request, cluster_mode, protocol)
+    await client.close()
+
+
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)
+
+
+@pytest.fixture(scope="function")
 async def management_client(
     request,
     cluster_mode: bool,
@@ -339,6 +396,7 @@ async def acl_glide_client(
         cluster_mode,
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -366,9 +424,15 @@ async def create_client(
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
     valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
-    use_tls = request.config.getoption("--tls")
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -386,15 +450,16 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
         config = GlideClientConfiguration(
-            addresses=(
-                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
-            ),
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
@@ -405,7 +470,9 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
             reconnect_strategy=reconnect_strategy,
         )
         return await GlideClient.create(config)

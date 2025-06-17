@@ -5,6 +5,7 @@ use std::ffi::{CString, NulError};
 use std::fmt;
 use std::hash::{BuildHasher, Hash};
 use std::io;
+use std::num::ParseIntError;
 use std::str::{from_utf8, Utf8Error};
 use std::string::FromUtf8Error;
 
@@ -763,20 +764,6 @@ impl From<NulError> for RedisError {
     }
 }
 
-#[cfg(feature = "tls-native-tls")]
-impl From<native_tls::Error> for RedisError {
-    fn from(err: native_tls::Error) -> RedisError {
-        RedisError {
-            repr: ErrorRepr::WithDescriptionAndDetail(
-                ErrorKind::IoError,
-                "TLS error",
-                err.to_string(),
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "tls-rustls")]
 impl From<rustls::Error> for RedisError {
     fn from(err: rustls::Error) -> RedisError {
         RedisError {
@@ -789,7 +776,6 @@ impl From<rustls::Error> for RedisError {
     }
 }
 
-#[cfg(feature = "tls-rustls")]
 impl From<rustls_pki_types::InvalidDnsNameError> for RedisError {
     fn from(err: rustls_pki_types::InvalidDnsNameError) -> RedisError {
         RedisError {
@@ -819,6 +805,17 @@ impl From<FromUtf8Error> for RedisError {
     fn from(_: FromUtf8Error) -> RedisError {
         RedisError {
             repr: ErrorRepr::WithDescription(ErrorKind::TypeError, "Cannot convert from UTF-8"),
+        }
+    }
+}
+
+impl From<ParseIntError> for RedisError {
+    fn from(_: ParseIntError) -> RedisError {
+        RedisError {
+            repr: ErrorRepr::WithDescription(
+                ErrorKind::TypeError,
+                "Cannot parse string as an integer",
+            ),
         }
     }
 }
