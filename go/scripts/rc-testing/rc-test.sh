@@ -2,9 +2,9 @@
 set -e
 
 # Start by patching
-cd ../
-git apply -v go/scripts/rc-testing/gha.patch
-cd go
+# cd ../
+# git apply -v go/scripts/rc-testing/gha.patch
+# cd go
 
 # Check if version parameter is provided
 if [ $# -ne 1 ]; then
