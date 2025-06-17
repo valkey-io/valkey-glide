@@ -4114,7 +4114,7 @@ export class BaseClient {
      *      args: ["bar"],
      * };
      * const result = await invokeScript(luaScript, scriptOptions);
-     * console.log(result); // Output: ['foo', 'bar']
+     * console.log(result); // Output: ['foo', 'bar'] // The result for the script.
      * ```
      */
     public async invokeScript(
@@ -4151,7 +4151,7 @@ export class BaseClient {
      * ```typescript
      * const scriptHash = script.getHash();
      * const scriptSource = await client.scriptShow(scriptHash);
-     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
+     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }" // The source for the script
      * ```
      */
     public async scriptShow(
@@ -4190,7 +4190,7 @@ export class BaseClient {
      * // {
      * //     "0-1": [["field1", "value1"]],
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrange(
@@ -4236,7 +4236,7 @@ export class BaseClient {
      * // {
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
      * //     "0-1": [["field1", "value1"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrevrange(
@@ -4272,7 +4272,8 @@ export class BaseClient {
      * // Example usage of the zadd method to add elements to a sorted set
      * const data = [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }]
      * const result = await client.zadd("my_sorted_set", data);
-     * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
+     * console.log(result);
+     * // Output: 2 // Indicates that two elements have been added to the sorted set `my_sorted_set`.
      * ```
      *
      * @example
@@ -4280,7 +4281,7 @@ export class BaseClient {
      * // Example usage of the zadd method to update scores in an existing sorted set
      * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
      * const result = await client.zadd("existing_sorted_set", { "member1": 10.5, "member2": 8.2 }, options);
-     * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
+     * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set `existing_sorted_set`.
      * ```
      */
     public async zadd(
@@ -4311,7 +4312,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zaddIncr method to add a member with a score to a sorted set
      * const result = await client.zaddIncr("my_sorted_set", member, 5.0);
-     * console.log(result); // Output: 5.0
+     * console.log(result); // Output: 5.0 // Score of the member after being updated.
      * ```
      *
      * @example
@@ -4352,14 +4353,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zrem function to remove members from a sorted set
      * const result = await client.zrem("my_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2 - Indicates that two members have been removed from the sorted set "my_sorted_set."
+     * console.log(result); // Output: 2 - Indicates that two members have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zrem function when the sorted set does not exist
      * const result = await client.zrem("non_existing_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zrem(
@@ -4382,7 +4383,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcard method to get the cardinality of a sorted set
      * const result = await client.zcard("my_sorted_set");
-     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
@@ -4411,7 +4412,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const cardinality = await client.zintercard(["key1", "key2"], { limit: 10 });
-     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
+     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at `key1` and `key2` has a cardinality of 3.
      * ```
      */
     public async zintercard(
@@ -4440,7 +4441,7 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
+     * console.log(result); // Output: ["member1"] // `member1` is in `zset1` but not `zset2` or `zset3`.
      * ```
      */
     public async zdiff(
@@ -4469,8 +4470,8 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: "member1" is in "zset1" but not "zset2" or "zset3"
-     * // [{ element: "member1", score: 1.0 }]
+     * console.log(result); // Output: [{ element: "member1", score: 1.0 }]
+     * // `member1` is in `zset1` but not `zset2` or `zset3`
      * ```
      */
     public async zdiffWithScores(
@@ -4501,10 +4502,12 @@ export class BaseClient {
      * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
      * await client.zadd("zset2", {"member1": 1.0});
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
-     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     * console.log(result1); // Output: 1
+     * // One member exists in `key1` but not `key2`, and this member was stored in `zset3`.
      *
      * const result2 = await client.zrange("zset3", {start: 0, end: -1});
-     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * console.log(result2); // Output: ["member2"]
+     * // `member2` is now stored in `my_sorted_set`.
      * ```
      */
     public async zdiffstore(
@@ -4529,7 +4532,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zscore method∂∂ to get the score of a member in a sorted set
      * const result = await client.zscore("my_sorted_set", "member");
-     * console.log(result); // Output: 10.5 - Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
+     * console.log(result); // Output: 10.5 - Indicates that the score of `member` in the sorted set `my_sorted_set` is 10.5.
      * ```
      *
      * @example
@@ -4577,25 +4580,35 @@ export class BaseClient {
      *
      * // use `zunionstore` with default aggregation and weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"]))
-     * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
-     * // Output: {'member1': 20, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * // Output: {'member1': 20, 'member2': 8.2}
+     * // `member1` is now stored in `my_sorted_set` with score of 20 and `member2` with score of 8.2.
      * ```
      *
      * @example
      * ```typescript
      * // use `zunionstore` with default weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"], { aggregationType: AggregationType.MAX }))
-     * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements, and each score is the maximum score between the sets.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
-     * // Output: {'member1': 10.5, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * // Output: {'member1': 10.5, 'member2': 8.2}
+     * // `member1` is now stored in `my_sorted_set` with score of 10.5 and `member2` with score of 8.2.
      * ```
      *
      * @example
      * ```typescript
      * // use `zunionstore` with default aggregation
-     * console.log(await client.zunionstore("my_sorted_set", [["key1", 2], ["key2", 1]])) // Output: 2
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1})) // Output: { member2: 16.4, member1: 30.5 }
+     * console.log(await client.zunionstore("my_sorted_set", [["key1", 2], ["key2", 1]]))
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements
+     *
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * // Output: { member2: 16.4, member1: 30.5 }
      * ```
      */
     public async zunionstore(
@@ -4622,7 +4635,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zmscore("zset1", ["member1", "non_existent_member", "member2"]);
-     * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
+     * console.log(result); // Output: [1.0, null, 2.0]
+     * // `member1` has a score of 1.0, `non_existent_member` does not exist in the sorted set, and `member2` has a score of 2.0.
      * ```
      */
     public async zmscore(
@@ -4648,14 +4662,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zcount(
@@ -4689,8 +4703,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
-     * console.log(result1); // Output: all members in ascending order
-     * // ['member1', 'member2', 'member3']
+     * console.log(result1); // Output: ['member1', 'member2', 'member3']
+     * // All members in ascending order
      * ```
      * @example
      * ```typescript
@@ -4700,8 +4714,8 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
-     * // ['member2', 'member1']
+     * console.log(result); // Output: ['member2', 'member1']
+     * // Output: members with scores within the range of negative infinity to 3, in descending order
      * ```
      */
     public async zrange(
@@ -4739,8 +4753,8 @@ export class BaseClient {
      *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: members with scores between 10 and 20 with their scores
-     * // [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
+     * console.log(result); // Output: [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
+     * // Members with scores between 10 and 20 with their scores
      * ```
      * @example
      * ```typescript
@@ -4750,8 +4764,8 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores
-     * // [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
+     * console.log(result); // Output: [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
+     * // Members with scores within the range of negative infinity to 3, with their scores
      * ```
      */
     public async zrangeWithScores(
@@ -4787,7 +4801,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
-     * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
+     * console.log(result); // Output: 7
+     * // `destination_key` contains a sorted set with the 7 members from `my_sorted_set`.
      * ```
      * @example
      * ```typescript
@@ -4797,7 +4812,8 @@ export class BaseClient {
      *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
+     * console.log(result); // Output: 5
+     * // Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in `destination_key`.
      * ```
      */
     public async zrangeStore(
