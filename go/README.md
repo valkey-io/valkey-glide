@@ -128,6 +128,8 @@ func main() {
 }
 ```
 
+For more code examples please refer to [examples.md](examples/examples.md).
+
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
