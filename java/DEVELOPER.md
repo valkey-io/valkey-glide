@@ -22,6 +22,12 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - openssl-dev
 - rustup
 - Java 11
+- ziglang and zigbuild (for GNU Linux only)
+- valkey (for testing)
+
+**Valkey installation**
+
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 **Dependencies installation for Ubuntu**
 
@@ -35,7 +41,7 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
-Continue with **Install protobuf compiler** below.
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for CentOS**
 
@@ -46,7 +52,7 @@ sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-deve
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Continue with **Install protobuf compiler** below.
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for MacOS**
 
@@ -78,6 +84,13 @@ unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler version 29.1 or higher is installed
 protoc --version
+```
+
+**Install `ziglang` and `zigbuild`**
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
 ```
 
 #### Building and installation steps
@@ -278,6 +291,10 @@ To run server modules test (it doesn't start servers):
 ```bash
 ./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
 ```
+
+### JaCoCo Code Coverage Results
+
+JaCoCo results are automatically generated just by running the tests (due to the `finalizedBy jacocoTestReport` task). The generated files are located in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`
 
 ### Generate files
 

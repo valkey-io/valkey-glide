@@ -13,10 +13,12 @@ use crate::{cluster_routing, RedisResult, Value};
 use crate::{cluster_routing::Route, Cmd, ErrorKind, RedisError};
 use cluster_routing::RoutingInfo::{MultiNode, SingleNode};
 use futures::FutureExt;
+use logger_core::log_error;
 use rand::prelude::IteratorRandom;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
@@ -95,6 +97,8 @@ pub(crate) type ResponsePoliciesMap =
 /// Adds a command to the pipeline map for a specific node address.
 ///
 /// `add_asking` is a boolean flag that determines whether to add an `ASKING` command before the command.
+/// `is_retrying` is a boolean flag that indicates whether this is a retry attempt.
+#[allow(clippy::too_many_arguments)]
 fn add_command_to_node_pipeline_map<C>(
     pipeline_map: &mut NodePipelineMap<C>,
     address: String,
@@ -103,9 +107,19 @@ fn add_command_to_node_pipeline_map<C>(
     index: usize,
     inner_index: Option<usize>,
     add_asking: bool,
+    is_retrying: bool,
 ) where
     C: Clone,
 {
+    if is_retrying {
+        // Record retry attempt metric if telemetry is initialized
+        if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
+            log_error(
+                "OpenTelemetry:retry_error",
+                format!("Failed to record retry attempt: {}", e),
+            );
+        }
+    }
     if add_asking {
         let asking_cmd = Arc::new(crate::cmd::cmd("ASKING"));
         pipeline_map
@@ -224,6 +238,7 @@ where
                                     index,
                                     Some(inner_index),
                                     false,
+                                    false,
                                 );
                             }
                         }
@@ -268,7 +283,7 @@ where
 {
     if matches!(routing, InternalSingleNodeRouting::Random) && !pipeline_map.is_empty() {
         // Adds the command to a random existing node pipeline in the pipeline map
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         if let Some(node_context) = pipeline_map.values_mut().choose(&mut rng) {
             node_context.add_command(cmd, index, None, false);
             return Ok(());
@@ -279,7 +294,7 @@ where
         .await
         .map_err(|err| (OperationTarget::NotFound, err))?;
 
-    add_command_to_node_pipeline_map(pipeline_map, address, conn, cmd, index, None, false);
+    add_command_to_node_pipeline_map(pipeline_map, address, conn, cmd, index, None, false, false);
     Ok(())
 }
 
@@ -323,6 +338,7 @@ where
                 new_cmd,
                 index,
                 Some(inner_index),
+                false,
                 false,
             );
         } else {
@@ -1080,6 +1096,7 @@ where
                                 index,
                                 inner_index,
                                 matches!(retry_method, RetryMethod::AskRedirect),
+                                true,
                             );
                             continue;
                         }
@@ -1195,6 +1212,7 @@ where
                     index,
                     inner_index,
                     false,
+                    true,
                 );
             }
             Err(redis_error) => {

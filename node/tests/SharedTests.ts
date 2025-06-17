@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
     Batch,
@@ -57,8 +58,7 @@ import {
     convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,
@@ -3925,6 +3925,7 @@ export function runBaseTests(config: {
                         decoder: Decoder.Bytes,
                     }),
                 ).toEqual(Buffer.from("Hello"));
+                script.release();
 
                 script = new Script(
                     Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
@@ -3944,6 +3945,7 @@ export function runBaseTests(config: {
                         args: [Buffer.from("value2")],
                     }),
                 ).toEqual("OK");
+                script.release();
 
                 script = new Script(
                     Buffer.from("return redis.call('GET', KEYS[1])"),
@@ -3969,6 +3971,7 @@ export function runBaseTests(config: {
                         decoder: Decoder.Bytes,
                     }),
                 ).toEqual(Buffer.from("value2"));
+                script.release();
             }, protocol);
         },
         config.timeout,
@@ -3983,6 +3986,7 @@ export function runBaseTests(config: {
 
                 let script = new Script(Buffer.from("return 'Hello'"));
                 expect(await client.invokeScript(script)).toEqual("Hello");
+                script.release();
 
                 script = new Script(
                     Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
@@ -4001,6 +4005,7 @@ export function runBaseTests(config: {
                         args: [Buffer.from("value2")],
                     }),
                 ).toEqual("OK");
+                script.release();
 
                 script = new Script(
                     Buffer.from("return redis.call('GET', KEYS[1])"),
@@ -4012,6 +4017,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.invokeScript(script, { keys: [key2] }),
                 ).toEqual("value2");
+                script.release();
             }, protocol);
         },
         config.timeout,
@@ -4026,6 +4032,7 @@ export function runBaseTests(config: {
 
                 let script = new Script("return 'Hello'");
                 expect(await client.invokeScript(script)).toEqual("Hello");
+                script.release();
 
                 script = new Script(
                     "return redis.call('SET', KEYS[1], ARGV[1])",
@@ -4044,6 +4051,7 @@ export function runBaseTests(config: {
                         args: ["value2"],
                     }),
                 ).toEqual("OK");
+                script.release();
 
                 script = new Script("return redis.call('GET', KEYS[1])");
                 expect(
@@ -4053,6 +4061,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.invokeScript(script, { keys: [key2] }),
                 ).toEqual("value2");
+                script.release();
             }, protocol);
         },
         config.timeout,
@@ -4092,6 +4101,9 @@ export function runBaseTests(config: {
                 expect(results).toEqual([true, false, true, false]);
 
                 client.close();
+                script1.release();
+                script2.release();
+                script3.release();
             }, protocol);
         },
         config.timeout,
@@ -4124,6 +4136,7 @@ export function runBaseTests(config: {
                 expect(await client.scriptExists([script.getHash()])).toEqual([
                     false,
                 ]);
+                script.release();
             }, protocol);
         },
         config.timeout,
@@ -4151,6 +4164,56 @@ export function runBaseTests(config: {
                 await expect(
                     client.scriptShow("non existing sha1"),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    // Verifies that a script is retained in the local scripts container and not removed while another
+    // instance with the same hash still exists, even after the original reference is released
+    // and the server-side script cache is flushed.
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script is not removed while another instance exists - %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const script1 = new Script("return 'Script Exists'");
+                const script2 = new Script("return 'Script Exists'");
+                expect(script1.getHash()).toEqual(script2.getHash());
+
+                // Invoke script1 and release reference
+                expect(await client.invokeScript(script1)).toEqual(
+                    "Script Exists",
+                );
+
+                // Manually simulate release of script1 reference
+                script1.release();
+
+                // Flush the script cache from the server
+                expect(await client.scriptFlush()).toEqual("OK");
+
+                // Script should not exist on the server anymore
+                expect(await client.scriptExists([script1.getHash()])).toEqual([
+                    false,
+                ]);
+
+                // Invoke script2 - should be available in the local script cache and reloaded
+                expect(await client.invokeScript(script2)).toEqual(
+                    "Script Exists",
+                );
+
+                // Release script2 and flush again
+                script2.release();
+                expect(await client.scriptFlush()).toEqual("OK");
+
+                // Script should not exist on the server anymore
+                expect(await client.scriptExists([script2.getHash()])).toEqual([
+                    false,
+                ]);
+
+                // Now it should throw a NOSCRIPT error
+                await expect(client.invokeScript(script2)).rejects.toThrowError(
+                    /NoScriptError/,
+                );
             }, protocol);
         },
         config.timeout,
@@ -7926,12 +7989,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = getRandomKey();
-                expect(await client.pfadd(key, [])).toEqual(1);
-                expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
+                expect(await client.pfadd(key, [])).toBeTruthy();
+                expect(await client.pfadd(key, ["one", "two"])).toBeTruthy();
                 expect(
                     await client.pfadd(Buffer.from(key), [Buffer.from("two")]),
-                ).toEqual(0);
-                expect(await client.pfadd(key, [])).toEqual(0);
+                ).toBeFalsy();
+                expect(await client.pfadd(key, [])).toBeFalsy();
 
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
@@ -7951,8 +8014,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
                 expect(await client.pfcount([key1])).toEqual(3);
                 expect(await client.pfcount([Buffer.from(key2)])).toEqual(3);
                 expect(await client.pfcount([key1, key2])).toEqual(4);
@@ -7961,7 +8024,7 @@ export function runBaseTests(config: {
                 ).toEqual(4);
 
                 // empty HyperLogLog data set
-                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfadd(key3, [])).toBeTruthy();
                 expect(await client.pfcount([key3])).toEqual(0);
 
                 // invalid argument - key list must not be empty
@@ -7987,8 +8050,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
 
                 // merge into new HyperLogLog data set
                 expect(

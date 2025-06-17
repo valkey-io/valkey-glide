@@ -36,6 +36,7 @@ from glide.exceptions import (
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
+from glide.opentelemetry import OpenTelemetry
 from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
@@ -47,6 +48,8 @@ from .glide import (
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
     create_leaked_bytes_vec,
+    create_otel_span,
+    drop_otel_span,
     get_statistics,
     start_socket_listener_external,
     value_from_pointer,
@@ -397,7 +400,7 @@ class BaseClient(CoreCommands):
         for arg in args_list:
             encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
             encoded_args_list.append(encoded_arg)
-            args_size += sys.getsizeof(encoded_arg)
+            args_size += len(encoded_arg)
         return (encoded_args_list, args_size)
 
     async def _execute_command(
@@ -410,6 +413,13 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        span = None
+        if OpenTelemetry.should_sample():
+            command_name = RequestType.Name(request_type)
+            span = create_otel_span(command_name)
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
@@ -424,6 +434,11 @@ class BaseClient(CoreCommands):
             request.single_command.args_vec_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span
+
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -441,6 +456,14 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        span = None
+
+        if OpenTelemetry.should_sample():
+            # Use "Batch" as span name for batches
+            span = create_otel_span("Batch")
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         batch_commands = []
@@ -462,6 +485,11 @@ class BaseClient(CoreCommands):
             request.batch.timeout = timeout
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span
+
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -655,6 +683,10 @@ class BaseClient(CoreCommands):
                 res_future.set_result(OK)
             else:
                 res_future.set_result(None)
+
+        # Clean up span if it was created
+        if response.HasField("root_span_ptr"):
+            drop_otel_span(response.root_span_ptr)
 
     async def _process_push(self, response: Response) -> None:
         if response.HasField("closing_error") or not response.HasField("resp_pointer"):

@@ -55,6 +55,7 @@ from glide.async_commands.stream import (
     _create_xpending_range_args,
 )
 from glide.constants import TEncodable
+from glide.exceptions import RequestError
 from glide.protobuf.command_request_pb2 import RequestType
 
 if sys.version_info >= (3, 13):
@@ -2317,6 +2318,10 @@ class BaseBatch:
             args.append("REPLACE")
         if absttl is True:
             args.append("ABSTTL")
+        if idletime is not None and frequency is not None:
+            raise RequestError(
+                "syntax error: IDLETIME and FREQ cannot be set at the same time."
+            )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:
@@ -4275,10 +4280,10 @@ class BaseBatch:
             elements (List[TEncodable]): A list of members to add to the HyperLogLog stored at `key`.
 
         Commands response:
-            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns 1.
+            bool: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns `True`.
 
-            Otherwise, returns 0.
+            Otherwise, returns `False`.
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
@@ -5584,7 +5589,7 @@ class ClusterBatch(BaseBatch):
     # TODO: add all CLUSTER commands
 
 
-@deprecated("Use ClusterBatch(is_atomic=True) instead.")
+@deprecated("Use Batch(is_atomic=True) instead.")
 class Transaction(Batch):
     def __init__(self):
         super().__init__(is_atomic=True)

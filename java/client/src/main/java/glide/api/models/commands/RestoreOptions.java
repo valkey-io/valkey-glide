@@ -51,12 +51,8 @@ public final class RestoreOptions {
      *
      * @return a <code>GlideString</code> array that holds the subcommands and their arguments.
      */
-    public GlideString[] toArgs(GlideString key, long ttl, byte[] value) {
+    public GlideString[] toArgs() {
         List<GlideString> resultList = new ArrayList<>();
-
-        resultList.add(key);
-        resultList.add(gs(Long.toString(ttl)));
-        resultList.add(gs(value));
 
         if (hasReplace) {
             resultList.add(gs(REPLACE_VALKEY_API));
@@ -64,6 +60,10 @@ public final class RestoreOptions {
 
         if (hasAbsttl) {
             resultList.add(gs(ABSTTL_VALKEY_API));
+        }
+
+        if (idletime != null && frequency != null) {
+            throw new IllegalArgumentException("IDLETIME and FREQ cannot be set at the same time.");
         }
 
         if (idletime != null) {

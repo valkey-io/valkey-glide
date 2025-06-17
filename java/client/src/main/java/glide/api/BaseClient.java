@@ -3804,15 +3804,16 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull String key, @NonNull String[] elements) {
+    public CompletableFuture<Boolean> pfadd(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull GlideString key, @NonNull GlideString[] elements) {
+    public CompletableFuture<Boolean> pfadd(
+            @NonNull GlideString key, @NonNull GlideString[] elements) {
         GlideString[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override
@@ -4782,7 +4783,9 @@ public abstract class BaseClient
             long ttl,
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
-        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key, gs(Long.toString(ttl)), gs(value)}, restoreOptions.toArgs());
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 

@@ -9542,10 +9542,10 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void pfadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        assertEquals(1, client.pfadd(key, new String[0]).get());
-        assertEquals(1, client.pfadd(key, new String[] {"one", "two"}).get());
-        assertEquals(0, client.pfadd(key, new String[] {"two"}).get());
-        assertEquals(0, client.pfadd(key, new String[0]).get());
+        assertTrue(client.pfadd(key, new String[0]).get());
+        assertTrue(client.pfadd(key, new String[] {"one", "two"}).get());
+        assertFalse(client.pfadd(key, new String[] {"two"}).get());
+        assertFalse(client.pfadd(key, new String[0]).get());
 
         // Key exists, but it is not a HyperLogLog
         assertEquals(OK, client.set("foo", "bar").get());
@@ -9559,10 +9559,10 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void pfadd_binary(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        assertEquals(1, client.pfadd(key, new GlideString[0]).get());
-        assertEquals(1, client.pfadd(key, new GlideString[] {gs("one"), gs("two")}).get());
-        assertEquals(0, client.pfadd(key, new GlideString[] {gs("two")}).get());
-        assertEquals(0, client.pfadd(key, new GlideString[0]).get());
+        assertTrue(client.pfadd(key, new GlideString[0]).get());
+        assertTrue(client.pfadd(key, new GlideString[] {gs("one"), gs("two")}).get());
+        assertFalse(client.pfadd(key, new GlideString[] {gs("two")}).get());
+        assertFalse(client.pfadd(key, new GlideString[0]).get());
 
         // Key exists, but it is not a HyperLogLog
         assertEquals(OK, client.set("foo", "bar").get());
@@ -9579,14 +9579,14 @@ public class SharedCommandTests {
         String key1 = "{test}-hll1-" + UUID.randomUUID();
         String key2 = "{test}-hll2-" + UUID.randomUUID();
         String key3 = "{test}-hll3-" + UUID.randomUUID();
-        assertEquals(1, client.pfadd(key1, new String[] {"a", "b", "c"}).get());
-        assertEquals(1, client.pfadd(key2, new String[] {"b", "c", "d"}).get());
+        assertTrue(client.pfadd(key1, new String[] {"a", "b", "c"}).get());
+        assertTrue(client.pfadd(key2, new String[] {"b", "c", "d"}).get());
         assertEquals(3, client.pfcount(new String[] {key1}).get());
         assertEquals(3, client.pfcount(new String[] {key2}).get());
         assertEquals(4, client.pfcount(new String[] {key1, key2}).get());
         assertEquals(4, client.pfcount(new String[] {key1, key2, key3}).get());
         // empty HyperLogLog data set
-        assertEquals(1, client.pfadd(key3, new String[0]).get());
+        assertTrue(client.pfadd(key3, new String[0]).get());
         assertEquals(0, client.pfcount(new String[] {key3}).get());
 
         // Key exists, but it is not a HyperLogLog
@@ -9603,14 +9603,14 @@ public class SharedCommandTests {
         GlideString key1 = gs("{test}-hll1-" + UUID.randomUUID());
         GlideString key2 = gs("{test}-hll2-" + UUID.randomUUID());
         GlideString key3 = gs("{test}-hll3-" + UUID.randomUUID());
-        assertEquals(1, client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
-        assertEquals(1, client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
+        assertTrue(client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertTrue(client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
         assertEquals(3, client.pfcount(new GlideString[] {key1}).get());
         assertEquals(3, client.pfcount(new GlideString[] {key2}).get());
         assertEquals(4, client.pfcount(new GlideString[] {key1, key2}).get());
         assertEquals(4, client.pfcount(new GlideString[] {key1, key2, key3}).get());
         // empty HyperLogLog data set
-        assertEquals(1, client.pfadd(key3, new GlideString[0]).get());
+        assertTrue(client.pfadd(key3, new GlideString[0]).get());
         assertEquals(0, client.pfcount(new GlideString[] {key3}).get());
 
         // Key exists, but it is not a HyperLogLog
@@ -9628,8 +9628,8 @@ public class SharedCommandTests {
         String key1 = "{test}-hll1-" + UUID.randomUUID();
         String key2 = "{test}-hll2-" + UUID.randomUUID();
         String key3 = "{test}-hll3-" + UUID.randomUUID();
-        assertEquals(1, client.pfadd(key1, new String[] {"a", "b", "c"}).get());
-        assertEquals(1, client.pfadd(key2, new String[] {"b", "c", "d"}).get());
+        assertTrue(client.pfadd(key1, new String[] {"a", "b", "c"}).get());
+        assertTrue(client.pfadd(key2, new String[] {"b", "c", "d"}).get());
         // new HyperLogLog data set
         assertEquals(OK, client.pfmerge(key3, new String[] {key1, key2}).get());
         assertEquals(
@@ -9658,8 +9658,8 @@ public class SharedCommandTests {
         GlideString key1 = gs("{test}-hll1-" + UUID.randomUUID());
         GlideString key2 = gs("{test}-hll2-" + UUID.randomUUID());
         GlideString key3 = gs("{test}-hll3-" + UUID.randomUUID());
-        assertEquals(1, client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
-        assertEquals(1, client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
+        assertTrue(client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertTrue(client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
         // new HyperLogLog data set
         assertEquals(OK, client.pfmerge(key3, new GlideString[] {key1, key2}).get());
         assertEquals(
@@ -12454,6 +12454,14 @@ public class SharedCommandTests {
                                                 RestoreOptions.builder().replace().frequency(-10L).build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Test that setting both idletime and frequency throws IllegalArgumentException
+        IllegalArgumentException illegalArgumentException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> RestoreOptions.builder().idletime(10L).frequency(5L).build().toArgs());
+        assertEquals(
+                "IDLETIME and FREQ cannot be set at the same time.", illegalArgumentException.getMessage());
     }
 
     @SneakyThrows

@@ -5055,8 +5055,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements An <code>array</code> of members to add to the HyperLogLog stored at <code>key
      *     </code>.
      * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
-     *     approximated cardinality is altered, then returns <code>1</code>. Otherwise, returns <code>
-     *      0</code>.
+     *     approximated cardinality is altered, then returns <code>true</code>. Otherwise, returns
+     *     <code>false</code>.
      */
     public <ArgType> T pfadd(@NonNull ArgType key, @NonNull ArgType[] elements) {
         checkTypeOrThrow(key);
@@ -5286,7 +5286,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull RestoreOptions restoreOptions) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
-                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions)));
+                buildCommand(
+                        Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions.toArgs())));
         return getThis();
     }
 
@@ -7232,6 +7233,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * before this command, both in the case where the specified number of replicas are reached, or
      * when the timeout is reached.
      *
+     * @apiNote This command clashes with Java's built-in wait method. Ensure you are using the right
+     *     one.
      * @see <a href="https://valkey.io/commands/wait">valkey.io</a> for details.
      * @param numReplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds.
