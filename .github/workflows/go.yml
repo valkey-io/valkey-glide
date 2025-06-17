@@ -151,7 +151,7 @@ jobs:
 
             - name: Run Example Tests
               working-directory: go
-              if: ${{ contains(matrix.engine.version, '8') }}
+              if: ${{ contains(matrix.engine.version, '8') && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 
