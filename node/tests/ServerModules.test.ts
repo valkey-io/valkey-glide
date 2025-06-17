@@ -9,6 +9,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     ClusterBatch,
     ConditionalChange,
@@ -29,8 +30,7 @@ import {
     RequestError,
     SortOrder,
     VectorField,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
+} from "../build-ts";
 import {
     CreateJsonBatchCommands,
     flushAndCloseClient,
@@ -108,7 +108,9 @@ describe("Server Module Tests", () => {
 
                 // JSON.get
                 let result = await GlideJson.get(client, key, { path: "." });
-                expect(JSON.parse(result.toString())).toEqual(jsonValue);
+                expect(JSON.parse((result as string).toString())).toEqual(
+                    jsonValue,
+                );
 
                 // binary buffer test
                 result = await GlideJson.get(client, Buffer.from(key), {
@@ -130,7 +132,7 @@ describe("Server Module Tests", () => {
                 result = await GlideJson.get(client, key, {
                     path: ["$.a", "$.b"],
                 });
-                expect(JSON.parse(result.toString())).toEqual({
+                expect(JSON.parse((result as string).toString())).toEqual({
                     "$.a": [1.0],
                     "$.b": [3],
                 });
@@ -174,7 +176,11 @@ describe("Server Module Tests", () => {
                 let result = await GlideJson.get(client, key, {
                     path: "$..c",
                 });
-                expect(JSON.parse(result.toString())).toEqual([true, 1, 2]);
+                expect(JSON.parse((result as string).toString())).toEqual([
+                    true,
+                    1,
+                    2,
+                ]);
 
                 // JSON.set with deep path
                 expect(
@@ -183,7 +189,7 @@ describe("Server Module Tests", () => {
 
                 // verify JSON.set result
                 result = await GlideJson.get(client, key, { path: "$..c" });
-                expect(JSON.parse(result.toString())).toEqual([
+                expect(JSON.parse((result as string).toString())).toEqual([
                     "new_value",
                     "new_value",
                     "new_value",

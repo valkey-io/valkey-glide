@@ -33,7 +33,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::ptr::from_mut;
 use std::rc::Rc;
 use std::str;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
+use telemetrylib::{GlideSpan, GlideSpanStatus};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
@@ -186,15 +187,21 @@ async fn write_result(
     resp_result: ClientUsageResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
+    command_span_ptr: Option<u64>,
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.is_push = false;
+    response.root_span_ptr = command_span_ptr;
+    let otel_command_span: Option<GlideSpan> = get_unsafe_span_from_ptr(command_span_ptr);
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
         )),
         Ok(value) => {
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Ok);
+            }
             if value != Value::Nil {
                 // Since null values don't require any additional data, they can be sent without any extra effort.
                 // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
@@ -207,12 +214,18 @@ async fn write_result(
         }
         Err(ClientUsageError::Internal(error_message)) => {
             log_error("internal error", &error_message);
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             Some(response::response::Value::ClosingError(
                 error_message.into(),
             ))
         }
         Err(ClientUsageError::User(error_message)) => {
             log_error("user error", &error_message);
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             let request_error = response::RequestError {
                 type_: response::RequestErrorType::Unspecified.into(),
                 message: error_message.into(),
@@ -224,6 +237,9 @@ async fn write_result(
             let error_message = error_message(&err);
             log_warn("received error", error_message.as_str());
             log_debug("received error", format!("for callback {}", callback_index));
+            if let Some(span) = otel_command_span {
+                span.set_status(GlideSpanStatus::Error((&error_message).into()));
+            }
             let request_error = response::RequestError {
                 type_: match error_type(&err) {
                     RequestErrorType::Unspecified => response::RequestErrorType::Unspecified,
@@ -309,14 +325,15 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    let child_span = cmd.span().map(|span| span.add_span("send_command"));
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    if let Some(child_span) = child_span {
-        child_span.end();
-    }
+
+    if let Some(c) = child_span {
+        c.end()
+    };
     res
 }
 
@@ -377,12 +394,36 @@ async fn invoke_script(
         .map_err(|err| err.into())
 }
 
+/// Creates a child span for telemetry if telemetry is enabled
+fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> {
+    // Early return if no parent span is provided
+    let parent_span = span?;
+
+    match parent_span.add_span(name) {
+        Ok(child_span) => Some(child_span),
+        Err(error_msg) => {
+            log_error(
+                "OpenTelemetry error",
+                format!(
+                    "Failed to create child span with name `{}`. Error: {:?}",
+                    name, error_msg
+                ),
+            );
+            None
+        }
+    }
+}
+
 async fn send_batch(
     request: Batch,
     client: &mut Client,
     routing: Option<RoutingInfo>,
+    command_span: Option<GlideSpan>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
+    pipeline.set_pipeline_span(command_span);
+    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
+
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -390,7 +431,7 @@ async fn send_batch(
         pipeline.add_command(get_redis_command(&command)?);
     }
 
-    match request.is_atomic {
+    let res = match request.is_atomic {
         true => client
             .send_transaction(
                 &pipeline,
@@ -413,7 +454,12 @@ async fn send_batch(
             )
             .await
             .map_err(|err| err.into()),
-    }
+    };
+
+    if let Some(c) = child_span {
+        c.end()
+    };
+    res
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -502,12 +548,16 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             true => match request.command {
                 Some(action) => match action {
                     command_request::Command::ClusterScan(cluster_scan_command) => {
+                        //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
                         cluster_scan(cluster_scan_command, client).await
                     }
                     command_request::Command::SingleCommand(command) => {
                         match get_redis_command(&command) {
-                            Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
-                                Ok(routes) => send_command(cmd, client, routes).await,
+                            Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
+                                Ok(routes) => {
+                                    cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
+                                    send_command(cmd, client, routes).await
+                                }
                                 Err(e) => Err(e),
                             },
                             Err(e) => Err(e),
@@ -515,7 +565,11 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     }
                     command_request::Command::Batch(batch) => {
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_batch(batch, &mut client, routes).await,
+                            Ok(routes) => {
+                                let otel_command_span =
+                                    get_unsafe_span_from_ptr(request.root_span_ptr);
+                                send_batch(batch, &mut client, routes, otel_command_span).await
+                            }
                             Err(e) => Err(e),
                         }
                     }
@@ -580,7 +634,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             client_clone.release_inflight_request();
         }
 
-        let _res = write_result(result, request.callback_idx, &writer).await;
+        let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
     });
 }
 
@@ -594,6 +648,34 @@ async fn handle_requests(
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
+}
+
+/// This function converts a raw pointer to a GlideSpan into a safe Rust reference.
+/// It handles the unsafe pointer operations internally, incrementing the reference count
+/// to ensure the span remains valid while in use.
+///
+/// # Safety
+///
+/// This function is marked as unsafe because it dereferences a raw pointer. The caller
+/// must ensure that:
+/// * The pointer is valid and points to a properly allocated GlideSpan
+/// * The pointer is properly aligned
+/// * The data pointed to is not modified while the returned reference is in use
+/// * The pointer is not used after the referenced data is dropped
+///
+/// # Arguments
+///
+/// * `command_span` - An optional raw pointer (as u64) to a GlideSpan
+///
+/// # Returns
+///
+/// * `Some(GlideSpan)` - A cloned GlideSpan if the pointer is valid
+/// * `None` - If the pointer is None
+fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpan> {
+    command_span.map(|command_span| unsafe {
+        Arc::increment_strong_count(command_span as *const GlideSpan);
+        (*Arc::from_raw(command_span as *const GlideSpan)).clone()
+    })
 }
 
 pub fn close_socket(socket_path: &String) {
@@ -610,7 +692,7 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), 0, writer).await?;
+    write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
 }
 

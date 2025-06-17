@@ -27,14 +27,14 @@ public interface HyperLogLogBaseCommands {
      *     altered, then returns <code>1</code>. Otherwise, returns <code>0</code>.
      * @example
      *     <pre>{@code
-     * Long result = client.pfadd("hll_1", new String[] { "a", "b", "c" }).get();
-     * assert result == 1L; // A data structure was created or modified
+     * Boolean result = client.pfadd("hll_1", new String[] { "a", "b", "c" }).get();
+     * assert result; // A data structure was created or modified
      *
      * result = client.pfadd("hll_2", new String[0]).get();
-     * assert result == 1L; // A new empty data structure was created
+     * assert result; // A new empty data structure was created
      * }</pre>
      */
-    CompletableFuture<Long> pfadd(String key, String[] elements);
+    CompletableFuture<Boolean> pfadd(String key, String[] elements);
 
     /**
      * Adds all elements to the HyperLogLog data structure stored at the specified <code>key</code>.
@@ -49,17 +49,17 @@ public interface HyperLogLogBaseCommands {
      * @param key The <code>key</code> of the HyperLogLog data structure to add elements into.
      * @param elements An array of members to add to the HyperLogLog stored at <code>key</code>.
      * @return If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-     *     altered, then returns <code>1</code>. Otherwise, returns <code>0</code>.
+     *     altered, then returns <code>true</code>. Otherwise, returns <code>false</code>.
      * @example
      *     <pre>{@code
-     * Long result = client.pfadd(gs("hll_1"), new GlideString[] { gs("a"), gs("b"), gs("c") }).get();
-     * assert result == 1L; // A data structure was created or modified
+     * Boolean result = client.pfadd(gs("hll_1"), new GlideString[] { gs("a"), gs("b"), gs("c") }).get();
+     * assert result; // A data structure was created or modified
      *
      * result = client.pfadd(gs("hll_2"), new GlideString[0]).get();
-     * assert result == 1L; // A new empty data structure was created
+     * assert result; // A new empty data structure was created
      * }</pre>
      */
-    CompletableFuture<Long> pfadd(GlideString key, GlideString[] elements);
+    CompletableFuture<Boolean> pfadd(GlideString key, GlideString[] elements);
 
     /**
      * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
