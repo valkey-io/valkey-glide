@@ -203,6 +203,74 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 	return b.addCmdAndTypeChecker(C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...), reflect.Slice, false)
 }
 
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	Returns "PONG".
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *StandaloneBatch) Ping() *StandaloneBatch {
+	return b.PingWithOptions(options.PingOptions{})
+}
+
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pingOptions - The PingOptions type.
+//
+// Command Response:
+//
+//	Returns the copy of message.
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *StandaloneBatch) PingWithOptions(pingOptions options.PingOptions) *StandaloneBatch {
+	optionArgs, err := pingOptions.ToArgs()
+	if err != nil {
+		return b.addError("PingWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Ping, optionArgs, reflect.String, false)
+}
+
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	Returns "PONG".
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *ClusterBatch) Ping() *ClusterBatch {
+	return b.PingWithOptions(options.ClusterPingOptions{})
+}
+
+// Pings the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	pingOptions - The [ClusterPingOptions] type.
+//
+// Command Response:
+//
+//	Returns the copy of message.
+//
+// [valkey.io]: https://valkey.io/commands/ping/
+func (b *ClusterBatch) PingWithOptions(pingOptions options.ClusterPingOptions) *ClusterBatch {
+	optionArgs, err := pingOptions.ToArgs()
+	if err != nil {
+		return b.addError("PingWithOptions", err)
+	}
+	return b.addCmdAndTypeChecker(C.Ping, optionArgs, reflect.String, false)
+}
+
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.
 //
 // Channel can be any string, but common patterns include using "." to create namespaces like

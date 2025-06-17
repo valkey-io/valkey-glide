@@ -6653,40 +6653,6 @@ func (b *BaseBatch[T]) Echo(message string) *T {
 	return b.addCmdAndTypeChecker(C.Echo, []string{message}, reflect.String, false)
 }
 
-// Pings the server.
-//
-// See [valkey.io] for details.
-//
-// Command Response:
-//
-//	Returns "PONG".
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (b *BaseBatch[T]) Ping() *T {
-	return b.PingWithOptions(options.PingOptions{})
-}
-
-// Pings the server.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	pingOptions - The PingOptions type.
-//
-// Command Response:
-//
-//	Returns the copy of message.
-//
-// [valkey.io]: https://valkey.io/commands/ping/
-func (b *BaseBatch[T]) PingWithOptions(pingOptions options.PingOptions) *T {
-	optionArgs, err := pingOptions.ToArgs()
-	if err != nil {
-		return b.addError("PingWithOptions", err)
-	}
-	return b.addCmdAndTypeChecker(C.Ping, optionArgs, reflect.String, false)
-}
-
 // Deletes all the keys of all the existing databases.
 //
 // See [valkey.io] for details.
