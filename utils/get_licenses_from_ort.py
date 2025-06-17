@@ -10,6 +10,7 @@ The analyzer tool reports to analyzer-result.json files, which the script expect
 The script outputs a set of licenses identified by the analyzer. GLIDE maintainers should review the returned list to ensure that all licenses are approved.
 """
 
+# TODO: Modify to use logic operations instead of including AND and OR in strings
 APPROVED_LICENSES = [
     "(Apache-2.0 OR MIT) AND Unicode-DFS-2016",
     "Unicode-3.0",
@@ -40,6 +41,10 @@ APPROVED_LICENSES = [
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "Zlib",
+    "BSD-3-Clause AND MIT",
+    "Apache-2.0 OR LGPL-2.1-or-later OR MIT",
+    "Apache-2.0 AND ISC",
+    "Apache-2.0 AND (Apache-2.0 OR MIT) AND MIT",
 ]
 
 # Packages with non-pre-approved licenses that received manual approval.
@@ -48,6 +53,7 @@ APPROVED_PACKAGES = [
     "PyPI::certifi:2023.11.17",
     "Crate::ring:0.17.8",
     "Maven:org.json:json:20231013",
+    "Crate::webpki-root-certs:1.0.0"
 ]
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 

@@ -10,14 +10,20 @@ The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bind
 Before building the package from source, make sure that you have installed the listed dependencies below:
 
 
--   python3 virtualenv
--   git
--   GCC
--   pkg-config
--   protoc (protobuf compiler) >= v3.20.0
--   openssl
--   openssl-dev
--   rustup
+- python3 virtualenv
+- git
+- GCC
+- pkg-config
+- protoc (protobuf compiler) >= v3.20.0
+- openssl
+- openssl-dev
+- rustup
+- ziglang and zigbuild (for GNU Linux only)
+- valkey (for testing)
+
+**Valkey installation**
+
+See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 For your convenience, we wrapped the steps in a "copy-paste" code blocks for common operating systems:
 
@@ -32,16 +38,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-# For other arch type from x86 example below, the signature of the curl url should be protoc-<version>-<os>-<arch>.zip,
-# e.g. protoc-3.20.3-linux-aarch_64.zip for ARM64.
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed
-protoc --version
 ```
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
 
@@ -57,14 +55,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed
-protoc --version
 ```
+Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
 
@@ -78,6 +70,18 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
+```
+Continue with **Install protobuf compiler** below.
+
+</details>
+
+<details>
+<summary>Install protobuf compiler</summary>
+
+To install protobuf for MacOS, run:
+
+```bash
+brew install protobuf@3
 # Verify the Protobuf compiler installation
 protoc --version
 
@@ -85,6 +89,27 @@ protoc --version
 echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
 source /Users/$USER/.bash_profile
 protoc --version
+```
+
+For the remaining systems, do the following:
+
+```bash
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+protoc --version
+```
+
+</details>
+
+<details>
+<summary>Install `ziglang` and `zigbuild`</summary>
+
+```bash
+pip3 install ziglang
+cargo install --locked cargo-zigbuild
 ```
 
 </details>
@@ -155,7 +180,17 @@ If needed, you can invoke `pytest` directly from the root `python/` directory fo
 ### Run all tests manually
 ```bash
 source .env/bin/activate
-pytest -v --asyncio-mode=auto
+pytest -v
+```
+
+### Running with different async backends
+
+Python GLIDE supports both trio and asyncio. Pass the `--async-backend` flag to `pytest` with either `trio`, `asyncio` or `uvloop` to run tests on the specified async backend. You can pass multiple async backends to run tests on all of them.
+
+Example:
+```bash
+source .env/bin/activate
+pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
 # Protobuf
@@ -457,3 +492,7 @@ Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
 -   [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
 -   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+# Community Support and Feedback
+
+We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).

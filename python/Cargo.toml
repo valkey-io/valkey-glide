@@ -1,7 +1,7 @@
 [package]
 name = "valkey-glide"
-version = "255.255.255"
-edition = "2021"
+version = "0.1.0"
+edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
 
@@ -21,9 +21,6 @@ redis = { path = "../glide-core/redis-rs/redis", features = [
 ] }
 glide-core = { path = "../glide-core", features = ["socket-layer"] }
 logger_core = { path = "../logger_core" }
-
-[package.metadata.maturin]
-python-source = "python"
 
 [profile.release]
 lto = true

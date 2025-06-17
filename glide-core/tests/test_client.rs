@@ -30,12 +30,12 @@ pub(crate) mod shared_client_tests {
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
-        cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
         FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
+        cluster_routing::{MultipleNodeRoutingInfo, Route, RoutingInfo},
     };
     use rstest::rstest;
-    use utilities::cluster::*;
     use utilities::BackingServer;
+    use utilities::cluster::*;
     use utilities::*;
 
     struct TestBasics {
@@ -1068,10 +1068,12 @@ pub(crate) mod shared_client_tests {
                         pipeline_result.is_err(),
                         "Pipeline should have failed: {pipeline_result:?}"
                     );
-                    assert!(pipeline_result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("FatalReceiveError"),);
+                    assert!(
+                        pipeline_result
+                            .unwrap_err()
+                            .to_string()
+                            .contains("FatalReceiveError"),
+                    );
                 }
             }
         });
@@ -1313,6 +1315,66 @@ pub(crate) mod shared_client_tests {
             ]);
 
             assert_eq!(result, expected, "Pipeline result: {result:?}");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_failed_commands_skip_conversion(
+        #[values(false, true)] use_cluster: bool,
+        #[values(false, true)] atomic: bool,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut pipeline = Pipeline::new();
+            if atomic {
+                pipeline.atomic();
+            }
+            pipeline.set("key", "value");
+            pipeline.hgetall("key");
+
+            let result = if atomic {
+                test_basics
+                    .client
+                    .send_transaction(&pipeline, None, None, false)
+                    .await
+                    .expect("Transaction failed")
+            } else {
+                test_basics
+                    .client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy {
+                            retry_server_error: false,
+                            retry_connection_error: false,
+                        },
+                    )
+                    .await
+                    .expect("Pipeline failed")
+            };
+
+            let arr = match result {
+                Value::Array(ref arr) => arr,
+                _ => panic!("Expected array result, got: {:?}", result),
+            };
+
+            assert_eq!(arr[0], Value::Okay, "Pipeline result: {arr:?}");
+            assert!(
+                matches!(&arr[1], Value::ServerError(err) if err.err_code().contains("WRONGTYPE")),
+                "Pipeline result: {arr:?}"
+            );
         });
     }
 

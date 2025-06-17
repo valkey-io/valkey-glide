@@ -7,10 +7,10 @@ use glide_core::{
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
 use once_cell::sync::Lazy;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{Rng, distributions::Alphanumeric};
 use redis::{
-    cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
     ConnectionAddr, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisResult, Value,
+    cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
 };
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -727,6 +727,10 @@ pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
 #[ctor::ctor]
 fn init() {
     logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // This needs to be done before any TLS connections are made
+    let _ =
+        rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
 }
 
 pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientForTests) {

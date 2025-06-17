@@ -10,14 +10,15 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
--   Ubuntu 22.04.5 (x86_64/amd64 and arm64/aarch64)
--   Amazon Linux 2023 (AL2023) (x86_64)
+-   Ubuntu 20 (x86_64/amd64 and arm64/aarch64)
+-   Amazon Linux 2 (AL2) and 2023 (AL2023) (x86_64)
 
 **Note: Currently Alpine Linux / MUSL is NOT supported due to an incompatibility with a native Java component.**
 
 macOS:
 
 -   macOS 14.7 (Apple silicon/aarch_64)
+-   macOS 13.7 (x86_64/amd64)
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -59,6 +60,7 @@ Additionally, consider installing the Gradle plugin, [OS Detector](https://githu
 There are 4 types of classifiers for Valkey GLIDE which are
 ```
 osx-aarch_64
+osx-x86_64
 linux-aarch_64
 linux-x86_64
 ```
@@ -70,6 +72,11 @@ Gradle:
 // osx-aarch_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
+}
+
+// osx-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
@@ -95,31 +102,39 @@ Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block, or both the dependency and the extension blocks if you're using `os-maven-plugin`, and add it to the pom.xml file.
 ```xml
 
-<!--osx-aarch_64-->
+<!-- osx-x86_64 -->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>osx-x86_64</classifier>
+   <version>[1.0.0,)</version>
+</dependency>
+
+<!-- osx-aarch_64 -->
 <dependency>
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>osx-aarch_64</classifier>
-   <version>[1.0.0,2.0.0)</version>
+   <version>[1.0.0,)</version>
 </dependency>
 
-<!--linux-aarch_64-->
+<!-- linux-aarch_64 -->
 <dependency>
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>linux-aarch_64</classifier>
-   <version>[1.0.0,2.0.0)</version>
+   <version>[1.0.0,)</version>
 </dependency>
 
-<!--linux-x86_64-->
+<!-- linux-x86_64 -->
 <dependency>
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>linux-x86_64</classifier>
-   <version>[1.0.0,2.0.0)</version>
+   <version>[1.0.0,)</version>
 </dependency>
 
-<!--with os-maven-plugin-->
+<!-- with os-maven-plugin -->
 <build>
     <extensions>
         <extension>
@@ -133,7 +148,7 @@ Maven:
         <groupId>io.valkey</groupId>
         <artifactId>valkey-glide</artifactId>
         <classifier>${os.detected.classifier}</classifier>
-        <version>[1.0.0,2.0.0)</version>
+        <version>[1.0.0,)</version>
     </dependency>
 </dependencies>
 ```
@@ -143,6 +158,9 @@ SBT:
 ```scala
 // osx-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-aarch_64"
+
+// osx-x86_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-x86_64"
 
 // linux-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-aarch_64"
@@ -198,6 +216,8 @@ public class Main {
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
                         .useTLS(useSsl)
+                        // It is recommended to set a timeout for your specific use case
+                        .requestTimeout(500) // 500ms timeout
                         .build();
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
@@ -248,6 +268,8 @@ public class Main {
                 GlideClusterClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port1).port(port2).port(port3).port(port4).port(port5).port(port6).build())
                         .useTLS(useSsl)
+                        // It is recommended to set a timeout for your specific use case
+                        .requestTimeout(500) // 500ms timeout
                         .build();
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
