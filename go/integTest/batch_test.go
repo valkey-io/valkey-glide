@@ -686,9 +686,11 @@ func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool
 	batch.Ping()
 	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
 
-	pingOptions := options.PingOptions{
-		Message: "hello",
+	pingOptions := options.ClusterPingOptions{
+		PingOptions: &options.PingOptions{Message: "hello"},
+		RouteOption: &options.RouteOption{},
 	}
+
 	batch.PingWithOptions(pingOptions)
 	testData = append(testData, CommandTestData{ExpectedResponse: "hello", TestName: "PingWithOptions(pingOptions)"})
 
