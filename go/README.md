@@ -60,34 +60,34 @@ To install Valkey GLIDE in your Go project, follow these steps:
 package main
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	glide "github.com/valkey-io/valkey-glide/go/v2"
-	"github.com/valkey-io/valkey-glide/go/v2/config"
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
-	host := "localhost"
-	port := 6379
+    host := "localhost"
+    port := 6379
 
-	config := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port})
+    config := config.NewClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := glide.NewClient(config)
-	if err != nil {
-		fmt.Println("There was an error: ", err)
-		return
-	}
+    client, err := glide.NewClient(config)
+    if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+    }
 
-	res, err := client.Ping(context.Background())
-	if err != nil {
-		fmt.Println("There was an error: ", err)
-		return
-	}
-	fmt.Println(res) // PONG
+    res, err := client.Ping(context.Background())
+    if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+    }
+    fmt.Println(res) // PONG
 
-	client.Close()
+    client.Close()
 }
 ```
 
@@ -97,34 +97,34 @@ func main() {
 package main
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	glide "github.com/valkey-io/valkey-glide/go/v2"
-	"github.com/valkey-io/valkey-glide/go/v2/config"
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
-	host := "localhost"
-	port := 7001
+    host := "localhost"
+    port := 7001
 
-	config := config.NewClusterClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port})
+    config := config.NewClusterClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := glide.NewClusterClient(config)
-	if err != nil {
-		fmt.Println("There was an error: ", err)
-		return
-	}
+    client, err := glide.NewClusterClient(config)
+    if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+    }
 
-	res, err := client.Ping(context.Background())
-	if err != nil {
-		fmt.Println("There was an error: ", err)
-		return
-	}
-	fmt.Println(res) // PONG
+    res, err := client.Ping(context.Background())
+    if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+    }
+    fmt.Println(res) // PONG
 
-	client.Close()
+    client.Close()
 }
 ```
 
