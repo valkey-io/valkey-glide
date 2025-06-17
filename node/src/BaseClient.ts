@@ -4971,7 +4971,7 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zunion(["key1", "key2"]);
-     * console.log(result); // Output: ['member1', 'member2']
+     * console.log(result); // Output: ['member1', 'member2'] // Union elements from sets stored at keys `key1` and `key2`.
      * ```
      */
     public async zunion(
@@ -5005,11 +5005,14 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zunionWithScores(["key1", "key2"]);
-     * console.log(result1); // Output:
-     * // [{ element: 'member1', score: 20 }, { element: 'member2', score: 8.2 }]
+     * console.log(result1);
+     * // Output: [{ element: 'member1', score: 20 }, { element: 'member2', score: 8.2 }]
+     * // A list of union elements with scores.
+     *
      * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
-     * console.log(result2); // Output:
-     * // [{ element: 'member1', score: 10.5}, { element: 'member2', score: 8.2 }]
+     * console.log(result2);
+     * // Output: [{ element: 'member1', score: 10.5}, { element: 'member2', score: 8.2 }]
+     * // A list of union elements with score. The score of the common element in both sets (`member1`), is the maximum of scores(10.5) for that member from both sets.
      * ```
      */
     public async zunionWithScores(
@@ -5035,7 +5038,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmember("mySortedSet");
-     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * console.log(payload1);
+     * // Output: "Glide"
+     * // A random member from the set
      * ```
      *
      * @example
@@ -5067,13 +5072,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
-     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * console.log(payload1);
+     * // Output: ["Glide", "GLIDE", "node"]
+     * // Returns 3 random members from the sorted set, with duplicates allowed.
      * ```
      *
      * @example
      * ```typescript
      * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
-     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * console.log(payload1);
+     * // Output: []
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmemberWithCount(
@@ -5100,13 +5109,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
-     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * console.log(payload1);
+     * // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * // Returns 3 random members with scores, with duplicates allowed.
      * ```
      *
      * @example
      * ```typescript
      * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
-     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * console.log(payload1);
+     * // Output: []
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmemberWithCountWithScores(
@@ -5133,15 +5146,15 @@ export class BaseClient {
      * ```typescript
      * // Example usage of strlen method with an existing key
      * await client.set("key", "GLIDE");
-     * const len1 = await client.strlen("key");
-     * console.log(len1); // Output: 5
+     * const length1 = await client.strlen("key");
+     * console.log(length1); // Output: 5
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of strlen method with a non-existing key
-     * const len2 = await client.strlen("non_existing_key");
-     * console.log(len2); // Output: 0
+     * const length2 = await client.strlen("non_existing_key");
+     * console.log(length2); // Output: 0
      * ```
      */
     public async strlen(key: GlideString): Promise<number> {
@@ -5197,9 +5210,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmin method to remove and return the member with the lowest score from a sorted set
      * const result = await client.zpopmin("my_sorted_set");
-     * console.log(result); // Output:
-     * // 'member1' with a score of 5.0 has been removed from the sorted set
-     * // [{ element: 'member1', score: 5.0 }]
+     * console.log(result); // Output: [{ element: 'member1', score: 5.0 }]
+     * // `member1` with a score of 5.0 has been removed from the sorted set
      * ```
      *
      * @example
@@ -5207,11 +5219,11 @@ export class BaseClient {
      * // Example usage of zpopmin method to remove and return multiple members with the lowest scores from a sorted set
      * const result = await client.zpopmin("my_sorted_set", 2);
      * console.log(result); // Output:
-     * // 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set
      * // [
      * //     { element: 'member3', score: 7.5 },
      * //     { element: 'member2', score: 8.0 }
      * // ]
+     * // `member3` with a score of 7.5 and `member2` with a score of 8.0 have been removed from the sorted set
      * ```
      */
     public async zpopmin(
@@ -5243,7 +5255,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const data = await client.bzpopmin(["zset1", "zset2"], 0.5);
-     * console.log(data); // Output: ["zset1", "a", 2];
+     * console.log(data);
+     * // Output: ["zset1", "a", 2];
+     * // Pops the member `a` with score 2 stored at key `zset1`.
      * ```
      */
     public async bzpopmin(
@@ -5273,21 +5287,21 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmax method to remove and return the member with the highest score from a sorted set
      * const result = await client.zpopmax("my_sorted_set");
-     * console.log(result); // Output:
-     * // 'member1' with a score of 10.0 has been removed from the sorted set
-     * // [{ element: 'member1', score: 10.0 }]
+     * console.log(result); // Output: [{ element: 'member1', score: 10.0 }]
+     * // `member1` with a score of 10.0 has been removed from the sorted set
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zpopmax method to remove and return multiple members with the highest scores from a sorted set
      * const result = await client.zpopmax("my_sorted_set", 2);
-     * console.log(result); // Output:
-     * // 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set
+     * console.log(result);
+     * // Output:
      * // [
      * //     { element: 'member3', score: 7.5 },
      * //     { element: 'member2', score: 8.0 }
      * // ]
+     * // `member3` with a score of 7.5 and `member2` with a score of 8.0 have been removed from the sorted set
      * ```
      */
     public async zpopmax(
@@ -5342,21 +5356,21 @@ export class BaseClient {
      * ```typescript
      * // Example usage of pttl method with an existing key
      * const result = await client.pttl("my_key");
-     * console.log(result); // Output: 5000 - Indicates that the key "my_key" has a remaining time to live of 5000 milliseconds.
+     * console.log(result); // Output: 5000 // Indicates that the key `my_key` has a remaining time to live of 5000 milliseconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with a non-existing key
      * const result = await client.pttl("non_existing_key");
-     * console.log(result); // Output: -2 - Indicates that the key "non_existing_key" does not exist.
+     * console.log(result); // Output: -2 // Indicates that the key `non_existing_key` does not exist.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with an exisiting key that has no associated expire.
      * const result = await client.pttl("key");
-     * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
+     * console.log(result); // Output: -1 // Indicates that the key `key` has no associated expire.
      * ```
      */
     public async pttl(key: GlideString): Promise<number> {
@@ -5382,7 +5396,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByRank method
      * const result = await client.zremRangeByRank("my_sorted_set", 0, 2);
-     * console.log(result); // Output: 3 - Indicates that three elements have been removed from the sorted set "my_sorted_set" between ranks 0 and 2.
+     * console.log(result); // Output: 3 // Indicates that three elements have been removed from the sorted set `my_sorted_set` between ranks 0 and 2.
      * ```
      */
     public async zremRangeByRank(
@@ -5409,14 +5423,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
      * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
-     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+     * console.log(result); // Output: 4 // Indicates that 4 members, with lexicographical values ranging from `a` (exclusive) to `e` (inclusive), have been removed from `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
      * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
-     * console.log(result); // Output: 0 - Indicates that no elements were removed.
+     * console.log(result); // Output: 0 // Indicates that no elements were removed.
      * ```
      */
     public async zremRangeByLex(
@@ -5445,14 +5459,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
      * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
+     * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
      * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zremRangeByScore(
@@ -5480,13 +5494,13 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between `c` (inclusive) and positive infinity in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
-     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between `c` (inclusive) and `k` (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zlexcount(
@@ -5512,14 +5526,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank method to retrieve the rank of a member in a sorted set
      * const result = await client.zrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 - Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 1 // Indicates that `member2` has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank method with a non-existing member
      * const result = await client.zrank("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * console.log(result); // Output: null - Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrank(
@@ -5544,14 +5558,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank_withscore method to retrieve the rank and score of a member in a sorted set
      * const result = await client.zrank_withscore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
+     * console.log(result); // Output: [1, 6.0] - Indicates that `member2` with score 6.0 has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank_withscore method with a non-existing member
      * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * console.log(result); // Output: null - Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrankWithScore(
@@ -5576,7 +5590,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 1 - Indicates that `member2` has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrank(
@@ -5602,7 +5616,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevankWithScore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     * console.log(result); // Output: [1, 6.0] // Indicates that `member2` with score 6.0 has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrankWithScore(
@@ -5647,7 +5661,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
-     * // Output is 2 since the stream marked 2 entries as deleted.
+     * // Output: 2 // the stream marked 2 entries as deleted.
      * ```
      */
     public async xdel(key: GlideString, ids: string[]): Promise<number> {
@@ -5685,9 +5699,9 @@ export class BaseClient {
      * console.log(result); // Output:
      * // [
      * //     {
-     * //         key: "my_stream",
-     * //         value: {
-     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         key: "my_stream",  // Stream key
+     * //         value: {  // Stream Ids mapped to entries array.
+     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]], // Each entry is a key/value tuple.
      * //             "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
      * //         }
      * //     },
@@ -5737,7 +5751,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers_stream": "0-0", "readers_stream", ">"});
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
      * //         key: "my_stream",
@@ -5800,7 +5815,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const numEntries = await client.xlen("my_stream");
-     * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
+     * console.log(numEntries); // Output: 2 - `my_stream` contains 2 entries.
      * ```
      */
     public async xlen(key: GlideString): Promise<number> {
@@ -5817,7 +5832,8 @@ export class BaseClient {
      * @returns An `array` that includes the summary of the pending messages. See example for more details.
      * @example
      * ```typescript
-     * console.log(await client.xpending("my_stream", "my_group")); // Output:
+     * console.log(await client.xpending("my_stream", "my_group"));
+     * // Output:
      * // [
      * //     42,                            // The total number of pending messages
      * //     "1722643465939-0",             // The smallest ID among the pending messages
@@ -5893,13 +5909,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xinfoConsumers("my_stream", "my_group");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
-     * //         "name": "Alice",
-     * //         "pending": 1,
-     * //         "idle": 9104628,
-     * //         "inactive": 18104698   // Added in 7.2.0
+     * //         "name": "Alice",  // The consumer name.
+     * //         "pending": 1,     // The number of entries in Pending entries list.
+     * //         "idle": 9104628,   // The time passed since last attempted interaction.
+     * //         "inactive": 18104698  // The time passed since last successful interaction. // Added in 7.2.0
      * //     },
      * //     ...
      * // ]
@@ -5931,12 +5948,12 @@ export class BaseClient {
      * console.log(result); // Output:
      * // [
      * //     {
-     * //         "name": "mygroup",
-     * //         "consumers": 2,
-     * //         "pending": 2,
-     * //         "last-delivered-id": "1638126030001-0",
-     * //         "entries-read": 2,                       // Added in version 7.0.0
-     * //         "lag": 0                                 // Added in version 7.0.0
+     * //         "name": "mygroup",   // The consumer group name.
+     * //         "consumers": 2,      // Number of consumers in the group.
+     * //         "pending": 2,        // The length of the group's pending entry list.
+     * //         "last-delivered-id": "1638126030001-0", // The id of the last delivered entry to the consumers.
+     * //         "entries-read": 2,       // The read counter // Added in version 7.0.0
+     * //         "lag": 0                 // The number of entries that are still waiting to be delivered // Added in version 7.0.0
      * //     },
      * //     {
      * //         "name": "some-other-group",
@@ -5977,9 +5994,14 @@ export class BaseClient {
      * ```typescript
      * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // {
-     * //     "2-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]]
+     * //     "2-0": [                   // Stream Entry id
+     * //         ["duration", "1532"],   // Entry data tuple containing the field and associated value.
+     * //         ["event-id", "5"],
+     * //         ["user-id", "7782813"]
+     * //     ]
      * // }
      * ```
      */
@@ -6026,7 +6048,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
@@ -6100,7 +6123,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
@@ -6155,7 +6179,8 @@ export class BaseClient {
      * ```typescript
      * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
-     * console.log(result); // Output: [ "2-0", "3-0" ]
+     * console.log(result);
+     * // Output: [ "2-0", "3-0" ] // A list of entry ids.
      * ```
      */
     public async xclaimJustId(
@@ -6186,7 +6211,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Create the consumer group "mygroup", using zero as the starting ID:
-     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output: "OK"
      * ```
      */
     public async xgroupCreate(
@@ -6213,7 +6238,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Destroys the consumer group "mygroup"
-     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output: true
      * ```
      */
     public async xgroupDestroy(
@@ -6242,16 +6267,16 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream");
      * console.log(infoResult);
      * // Output: {
-     * //   length: 2,
-     * //   "radix-tree-keys": 1,
-     * //   "radix-tree-nodes": 2,
-     * //   "last-generated-id": "1719877599564-1",
-     * //   "max-deleted-entry-id": "0-0",
-     * //   "entries-added": 2,
-     * //   "recorded-first-entry-id": "1719877599564-0",
-     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
-     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],
-     * //   groups: 1,
+     * //   length: 2,  // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2,  // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream
+     * //   "max-deleted-entry-id": "0-0", // The maximal entry ID that was deleted from the stream
+     * //   "entries-added": 2, // The count of all entries added to the stream during its lifetime
+     * //   "recorded-first-entry-id": "1719877599564-0", // Recorded first entry id.
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the first entry in the stream
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the last entry in the stream
+     * //   "groups": 1, // The number of consumer groups defined for the stream
      * // }
      * ```
      *
@@ -6261,27 +6286,27 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   "length": 2,
-     * //   "radix-tree-keys": 1,
-     * //   "radix-tree-nodes": 2,
-     * //   "last-generated-id": "1719877599564-1",
-     * //   "max-deleted-entry-id": "0-0",
-     * //   "entries-added": 2,
-     * //   "recorded-first-entry-id": "1719877599564-0",
-     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],
-     * //   "groups': [ {
-     * //     "name': "group",
-     * //     "last-delivered-id": "1719877599564-0",
-     * //     "entries-read": 1,
-     * //     "lag": 1,
-     * //     "pel-count": 1,
-     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
+     * //   "length": 2,           // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2, // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream.
+     * //   "max-deleted-entry-id": "0-0",          // The maximal entry ID that was deleted from the stream.
+     * //   "entries-added": 2,                     // The count of all entries added to the stream during its lifetime.
+     * //   "recorded-first-entry-id": "1719877599564-0",                            // Recorded first entry id.
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ], // Array of the stream entries (ID and field-value tuples) in ascending order.
+     * //   "groups': [ {                                                            // An array of groups containing information about each consumer group.
+     * //     "name': "group",                              // The consumer group's name.
+     * //     "last-delivered-id": "1719877599564-0",       // The ID of the last entry delivered to the group's consumers.
+     * //     "entries-read": 1,                            // The logical "read counter" of the last entry delivered to the group's consumers.
+     * //     "lag": 1,                                     // The number of entries in the stream that are still waiting to be delivered.
+     * //     "pel-count": 1,                               // The length of the group's pending entries list (PEL).
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries.
      * //     "consumers": [ {
-     * //         "name": "consumer",
-     * //         "seen-time": 1722624726802,
-     * //         "active-time": 1722624726802,
-     * //         "pel-count": 1,
-     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],
+     * //         "name": "consumer",             // The consumer's name.
+     * //         "seen-time": 1722624726802,     // The UNIX timestamp of the last attempted interaction.
+     * //         "active-time": 1722624726802,   // The UNIX timestamp of the last successful interaction.
+     * //         "pel-count": 1,                 // The number of entries in the PEL.
+     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries information.
      * //         }
      * //       ]
      * //     }
