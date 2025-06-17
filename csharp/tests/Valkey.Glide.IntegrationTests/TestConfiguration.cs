@@ -28,16 +28,16 @@ public class TestConfiguration : IDisposable
             .WithTls(TLS);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
-    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).WithTls(TLS).Build()).GetAwaiter().GetResult();
+    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
 
     public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).WithTls(TLS).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
 
     public static GlideClient DefaultStandaloneClient()
-        => GlideClient.CreateClient(DefaultClientConfig().WithTls(TLS).Build()).GetAwaiter().GetResult();
+        => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
 
     public static GlideClusterClient DefaultClusterClient()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithTls(TLS).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
     public static TheoryData<BaseClient> TestClients
     {
