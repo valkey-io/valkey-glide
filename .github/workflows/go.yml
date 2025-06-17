@@ -139,6 +139,8 @@ jobs:
               env:
                   rc-version: ${{ github.event.inputs.rc-version }}
               run: |
+                  echo "Printing output"
+                  echo $rc-version
                   if [[ -n "$rc-version" ]]; then
                     make install-tools
                     make -k integ-test
