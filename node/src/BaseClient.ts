@@ -4069,7 +4069,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ttl method with existing key
      * const result = await client.ttl("my_key");
-     * console.log(result); // Output: 3600 - Indicates that `my_key` has a remaining time to live of 3600 seconds.
+     * console.log(result); // Output: 3600 // Indicates that `my_key` has a remaining time to live of 3600 seconds.
      * ```
      *
      * @example
@@ -4806,7 +4806,7 @@ export class BaseClient {
      * ```
      * @example
      * ```typescript
-     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
+     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in `destination_key`
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
      *              end: { value: 3, isInclusive: false },
@@ -4851,15 +4851,21 @@ export class BaseClient {
      *
      * // use `zinterstore` with default aggregation and weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
-     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * // Output: 1
+     * // Indicates that the sorted set `my_sorted_set` contains one element.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
-     * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
+     * // Output: {'member1': 20}
+     * // `member1` is now stored in `my_sorted_set` with score of 20.
      *
      * // use `zinterstore` with default weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , { aggregationType: AggregationType.MAX }))
-     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * // Output: 1
+     * // Indicates that the sorted set `my_sorted_set` contains one element, and it's score is the maximum score between the sets.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
-     * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
+     * // Output: {'member1': 10.5}
+     * // `member1` is now stored in `my_sorted_set` with score of 10.5.
      * ```
      */
     public async zinterstore(
@@ -4892,7 +4898,7 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zinter(["key1", "key2"]);
-     * console.log(result); // Output: ['member1']
+     * console.log(result); // Output: ['member1'] // The intersecting element for the sorted sets at `key1` and `key2`.
      * ```
      */
     public async zinter(
@@ -4928,11 +4934,12 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zinterWithScores(["key1", "key2"]);
-     * console.log(result1); // Output: "member1" with score of 20 is the result
-     * // [{ element: 'member1', score: 20 }]
+     * console.log(result1); // Output: [{ element: 'member1', score: 20 }]
+     * // `member1` with score of 20 is the result
+     *
      * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
-     * console.log(result2); // Output: "member1" with score of 10.5 is the result
-     * // [{ element: 'member1', score: 10.5 }]
+     * console.log(result2); // Output: [{ element: 'member1', score: 10.5 }]
+     * // `member1` with score of 10.5 is the result
      * ```
      */
     public async zinterWithScores(
