@@ -2290,14 +2290,14 @@ export class BaseClient {
      * // Example usage of the hget method on an-existing field
      * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hget("my_hash", "field");
-     * console.log(result); // Output: "value"
+     * console.log(result); // Output: "value" - The value associated with `field` in the key `my_hash`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hget method on a non-existing field
      * const result = await client.hget("my_hash", "nonexistent_field");
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null - Indicates non existent key.
      * ```
      */
     public async hget(
@@ -2459,14 +2459,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hexists method with existing field
      * const result = await client.hexists("my_hash", "field1");
-     * console.log(result); // Output: true
+     * console.log(result); // Output: true // Returns true because `my_hash` hash contains `field1` field.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hexists method with non-existing field
      * const result = await client.hexists("my_hash", "nonexistent_field");
-     * console.log(result); // Output: false
+     * console.log(result); // Output: false // Returns false because `my_hash` hash does not contain `nonexistent_field` field.
      * ```
      */
     public async hexists(
@@ -2492,7 +2492,7 @@ export class BaseClient {
      * const result = await client.hgetall("my_hash");
      * console.log(result); // Output:
      * // [
-     * //     { field: "field1", value: "value1"},
+     * //     { field: "field1", value: "value1"},  // Returned all fields and values stored at `my_hash`.
      * //     { field: "field2", value: "value2"}
      * // ]
      * ```
@@ -2526,7 +2526,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrby method to increment the value in a hash by a specified amount
      * const result = await client.hincrby("my_hash", "field1", 5);
-     * console.log(result); // Output: 5
+     * console.log(result); // Output: 5 // Increments the value stored at hash field `field1` by 5
      * ```
      */
     public async hincrBy(
@@ -2552,7 +2552,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: 2.5
+     * console.log(result); // Output: 2.5 // Increments the value stored at hash field `field1` by 2.5
      * ```
      */
     public async hincrByFloat(
@@ -2574,14 +2574,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hlen method with an existing key
      * const result = await client.hlen("my_hash");
-     * console.log(result); // Output: 3
+     * console.log(result); // Output: 3 // Returns the number of fields for the hash stored at key `my_hash`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hlen method with a non-existing key
      * const result = await client.hlen("non_existing_key");
-     * console.log(result); // Output: 0
+     * console.log(result); // Output: 0 // Returns 0 for non-existent key.
      * ```
      */
     public async hlen(key: GlideString): Promise<number> {
@@ -2623,7 +2623,7 @@ export class BaseClient {
      * ```typescript
      * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hstrlen("my_hash", "field");
-     * console.log(result); // Output: 5
+     * console.log(result); // Output: 5 // Returns the string length of `value` which is the value associated with the field `field` stored at key `my_hash`.
      * ```
      */
     public async hstrlen(
@@ -2646,7 +2646,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * console.log(await client.hrandfield("myHash")); // Output: 'field'
+     * const result = await client.hrandfield("myHash")
+     * console.log(result); // Output: 'field' // Returns a random field stored at the key `my_hash`.
      * ```
      */
     public async hrandfield(
@@ -2686,12 +2687,12 @@ export class BaseClient {
      *      console.log("Members: ", result[1]);
      * } while (newCursor !== "0");
      * // The output of the code above is something similar to:
-     * // Cursor:  31
-     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
-     * // Cursor:  39
-     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
-     * // Cursor:  0
-     * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113']
+     * // Cursor:  31  // The cursor after the first interation.
+     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115'] // First 3 hash field-value pairs stored at the key `key1`
+     * // Cursor:  39 // The cursor after the second interation.
+     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162'] // The next 3 hash field-value pairs at key `key1`
+     * // Cursor:  0 // The cursor after the last batch of elements is fetched.
+     * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113'] // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      * @example
      * ```typescript
@@ -2709,12 +2710,12 @@ export class BaseClient {
      *      console.log("Members: ", result[1]);
      * } while (newCursor !== "0");
      * // The output of the code above is something similar to:
-     * // Cursor:  31
-     * // Members:  ['field 79', 'field 20', 'field 115']
-     * // Cursor:  39
-     * // Members:  ['field 63', 'field 293', 'field 162']
-     * // Cursor:  0
-     * // Members:  ['field 55', 'field 24', 'field 90', 'field 113']
+     * // Cursor:  31 // The cursor after the first interation.
+     * // Members:  ['field 79', 'field 20', 'field 115'] // First 3 hash fields stored at the key `key1`
+     * // Cursor:  39 // The cursor after the second interation.
+     * // Members:  ['field 63', 'field 293', 'field 162'] // Next 3 hash fields stored at the key `key1`
+     * // Cursor:  0 // The cursor after the last batch of elements is fetched.
+     * // Members:  ['field 55', 'field 24', 'field 90', 'field 113'] // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      */
     public async hscan(
@@ -2744,7 +2745,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * console.log(await client.hrandfieldCount("myHash", 2)); // Output: ['field1', 'field2']
+     * result = await client.hrandfieldCount("my_hash", 2)
+     * console.log(result); // Output: ['field1', 'field2'] // Returns 2 random fields from the hash stored at key `my_hash`.
      * ```
      */
     public async hrandfieldCount(
@@ -2774,7 +2776,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.hrandfieldCountWithValues("myHash", 2);
-     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']] // Returns 2 random field-value pairs from the hash stored at key `my_hash`.
      * ```
      */
     public async hrandfieldWithValues(
@@ -2802,7 +2804,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpush method with an existing list
      * const result = await client.lpush("my_list", ["value2", "value3"]);
-     * console.log(result); // Output: 3 - Indicated that the new length of the list is 3 after the push operation.
+     * console.log(result); // Output: 3 - Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
@@ -2830,8 +2832,8 @@ export class BaseClient {
      * @returns The length of the list after the push operation.
      * @example
      * ```typescript
-     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
-     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * const result = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result); // Output: 2 - Indicates that the list has two elements after the push operation.
      * ```
      */
     public async lpushx(
@@ -2855,14 +2857,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpop method with an existing list
      * const result = await client.lpop("my_list");
-     * console.log(result); // Output: 'value1'
+     * console.log(result); // Output: 'value1' // Returns and removes the first element of the list `value1`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lpop method with a non-existing list
      * const result = await client.lpop("non_exiting_key");
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null // Returns null for non-existent key.
      * ```
      */
     public async lpop(
@@ -2886,14 +2888,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpopCount method with an existing list
      * const result = await client.lpopCount("my_list", 2);
-     * console.log(result); // Output: ["value1", "value2"]
+     * console.log(result); // Output: ["value1", "value2"] // Returns and removes 2 elements from the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lpopCount method with a non-existing list
      * const result = await client.lpopCount("non_exiting_key", 3);
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null // Returns null in case of non-existent key.
      * ```
      */
     public async lpopCount(
@@ -2924,21 +2926,21 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lrange method with an existing list and positive indices
      * const result = await client.lrange("my_list", 0, 2);
-     * console.log(result); // Output: ["value1", "value2", "value3"]
+     * console.log(result); // Output: ["value1", "value2", "value3"] // Returns the first 3 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with an existing list and negative indices
      * const result = await client.lrange("my_list", -2, -1);
-     * console.log(result); // Output: ["value2", "value3"]
+     * console.log(result); // Output: ["value2", "value3"] // Returns the last 2 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with a non-existing list
      * const result = await client.lrange("non_exiting_key", 0, 2);
-     * console.log(result); // Output: []
+     * console.log(result); // Output: [] // Returns an empty list for non-existent key.
      * ```
      */
     public async lrange(
@@ -2986,17 +2988,17 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.lpush("testKey1", ["two", "one"]);
-     * await client.lpush("testKey2", ["four", "three"]);
+     * await client.lpush("testKey1", ["two", "one"]); // The key `testKey1` has a list ["one", "two"] after this operation.
+     * await client.lpush("testKey2", ["four", "three"]); // The key `testKey2` has a list ["three", "four"] after this operation.
      *
-     * const result1 = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
-     * console.log(result1); // Output: "one".
+     * const result = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
+     * console.log(result); // Output: "one". // Removes "one" from the list at key `testKey1` and adds it to the left of the list at `testKey2`.
      *
      * const updated_array_key1 = await client.lrange("testKey1", 0, -1);
-     * console.log(updated_array); // Output: "two".
+     * console.log(updated_array_key1); // Output: ["two"] // The elements in the list at `testKey1` after lmove command.
      *
      * const updated_array_key2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array_key2); // Output: ["one", "three", "four"].
+     * console.log(updated_array_key2); // Output: ["one", "three", "four"] // The elements in the list at `testKey2` after lmove command.
      * ```
      */
     public async lmove(
@@ -3033,16 +3035,16 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.lpush("testKey1", ["two", "one"]);
-     * await client.lpush("testKey2", ["four", "three"]);
+     * await client.lpush("testKey1", ["two", "one"]); // The key `testKey1` has a list ["one", "two"] after this operation.
+     * await client.lpush("testKey2", ["four", "three"]); // The key `testKey2` has a list ["three", "four"] after this operation.
      * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
-     * console.log(result); // Output: "one"
+     * console.log(result); // Output: "one" // Removes "one" from the list at key `testKey1` and adds it to the left of the list at `testKey2`.
      *
-     * const result2 = await client.lrange("testKey1", 0, -1);
-     * console.log(result2);   // Output: "two"
+     * const updated_array1 = await client.lrange("testKey1", 0, -1);
+     * console.log(updated_array1); // Output: "two" // The elements in the list at `testKey1` after blmove command.
      *
      * const updated_array2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array2); // Output: ["one", "three", "four"]
+     * console.log(updated_array2); // Output: ["one", "three", "four"] // The elements in the list at `testKey2` after blmove command.
      * ```
      */
     public async blmove(
@@ -3075,8 +3077,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the lset method
-     * const response = await client.lset("test_key", 1, "two");
-     * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
+     * const result = await client.lset("test_key", 1, "two");
+     * console.log(result); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
      * ```
      */
     public async lset(
@@ -3214,14 +3216,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpop method with an existing list
      * const result = await client.rpop("my_list");
-     * console.log(result); // Output: 'value1'
+     * console.log(result); // Output: 'value1' // Returns and removes the last element of the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpop method with a non-existing list
      * const result = await client.rpop("non_exiting_key");
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null // Returns null for non-existent key.
      * ```
      */
     public async rpop(
@@ -3245,14 +3247,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpopCount method with an existing list
      * const result = await client.rpopCount("my_list", 2);
-     * console.log(result); // Output: ["value1", "value2"]
+     * console.log(result); // Output: ["value1", "value2"] // Returns and removes the last 2 elements from the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpopCount method with a non-existing list
      * const result = await client.rpopCount("non_exiting_key", 7);
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null // Returns null for a non-existing key.
      * ```
      */
     public async rpopCount(
@@ -3276,7 +3278,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sadd method with an existing set
      * const result = await client.sadd("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2
+     * console.log(result); // Output: 2 // Adds 2 members to the set at key `my_set`
      * ```
      */
     public async sadd(
@@ -3299,7 +3301,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the srem method
      * const result = await client.srem("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2
+     * console.log(result); // Output: 2 // Removes `member1` and `member2` from the set at key `my_set`.
      * ```
      */
     public async srem(
