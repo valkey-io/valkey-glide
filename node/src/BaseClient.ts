@@ -6577,9 +6577,9 @@ export class BaseClient {
      * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
      * //   "radix-tree-nodes": 2,  // The number of nodes in the underlying radix data structure.
      * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream
-     * //   "max-deleted-entry-id": "0-0", // The maximal entry ID that was deleted from the stream
-     * //   "entries-added": 2, // The count of all entries added to the stream during its lifetime
-     * //   "recorded-first-entry-id": "1719877599564-0", // Recorded first entry id.
+     * //   "max-deleted-entry-id": "0-0", // The maximal entry ID that was deleted from the stream // Added in version 7.0.0
+     * //   "entries-added": 2, // The count of all entries added to the stream during its lifetime // Added in version 7.0.0
+     * //   "recorded-first-entry-id": "1719877599564-0", // Recorded first entry id. // Added in version 7.0.0
      * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the first entry in the stream
      * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ], // The ID and field-value tuples of the last entry in the stream
      * //   "groups": 1, // The number of consumer groups defined for the stream
@@ -6596,21 +6596,21 @@ export class BaseClient {
      * //   "radix-tree-keys": 1,  // The number of keys in the underlying radix data structure.
      * //   "radix-tree-nodes": 2, // The number of nodes in the underlying radix data structure.
      * //   "last-generated-id": "1719877599564-1", // The ID of the least-recently entry that was added to the stream.
-     * //   "max-deleted-entry-id": "0-0",          // The maximal entry ID that was deleted from the stream.
-     * //   "entries-added": 2,                     // The count of all entries added to the stream during its lifetime.
-     * //   "recorded-first-entry-id": "1719877599564-0",                            // Recorded first entry id.
+     * //   "max-deleted-entry-id": "0-0",          // The maximal entry ID that was deleted from the stream. // Added in version 7.0.0
+     * //   "entries-added": 2,                     // The count of all entries added to the stream during its lifetime. // Added in version 7.0.0
+     * //   "recorded-first-entry-id": "1719877599564-0",                            // Recorded first entry id. // Added in version 7.0.0
      * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ], // Array of the stream entries (ID and field-value tuples) in ascending order.
      * //   "groups': [ {                                                            // An array of groups containing information about each consumer group.
      * //     "name': "group",                              // The consumer group's name.
      * //     "last-delivered-id": "1719877599564-0",       // The ID of the last entry delivered to the group's consumers.
-     * //     "entries-read": 1,                            // The logical "read counter" of the last entry delivered to the group's consumers.
-     * //     "lag": 1,                                     // The number of entries in the stream that are still waiting to be delivered.
+     * //     "entries-read": 1,                            // The logical "read counter" of the last entry delivered to the group's consumers. // Added in version 7.0.0
+     * //     "lag": 1,                                     // The number of entries in the stream that are still waiting to be delivered. // Added in version 7.0.0
      * //     "pel-count": 1,                               // The length of the group's pending entries list (PEL).
      * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries.
      * //     "consumers": [ {
      * //         "name": "consumer",             // The consumer's name.
      * //         "seen-time": 1722624726802,     // The UNIX timestamp of the last attempted interaction.
-     * //         "active-time": 1722624726802,   // The UNIX timestamp of the last successful interaction.
+     * //         "active-time": 1722624726802,   // The UNIX timestamp of the last successful interaction. // Added in version 7.2.0
      * //         "pel-count": 1,                 // The number of entries in the PEL.
      * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries information.
      * //         }
