@@ -256,8 +256,8 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
-     *     map to different hash slots.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys
+     *     </code> map to different hash slots.
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>
@@ -274,8 +274,8 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
-     *     map to different hash slots.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys
+     *     </code> map to different hash slots.
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>

@@ -1922,7 +1922,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
      *
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to 
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to
      * different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
@@ -3998,7 +3998,7 @@ export class BaseClient {
     /**
      * Returns the number of keys in `keys` that exist in the database.
      *
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to 
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to
      * different hash slots.
      *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
@@ -7952,7 +7952,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
      *
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to 
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to
      * different hash slots.
      *
      * @param keys - The keys to watch.

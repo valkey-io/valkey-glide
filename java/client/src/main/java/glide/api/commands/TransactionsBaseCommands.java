@@ -15,8 +15,8 @@ public interface TransactionsBaseCommands {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
-     *     map to different hash slots.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys
+     *     </code> map to different hash slots.
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
@@ -41,8 +41,8 @@ public interface TransactionsBaseCommands {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
-     *     map to different hash slots.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys
+     *     </code> map to different hash slots.
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
