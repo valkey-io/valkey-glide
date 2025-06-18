@@ -1053,7 +1053,6 @@ mod cluster {
         assert!(res.is_ok());
     }
 
-    #[cfg(feature = "tls-rustls")]
     mod mtls_test {
         use super::*;
         use crate::support::mtls_test::create_cluster_client_from_cluster;

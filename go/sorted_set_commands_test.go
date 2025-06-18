@@ -561,36 +561,36 @@ func ExampleClient_ZRankWithScore() {
 	var client *Client = getExampleClient() // example helper function
 
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
-	resRank, resScore, err := client.ZRankWithScore(context.Background(), "key1", "two")
+	res, err := client.ZRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(resRank)
-	fmt.Println(resScore)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 3
-	// {1 false}
-	// {2 false}
+	// 1
+	// 2
 }
 
 func ExampleClusterClient_ZRankWithScore() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
-	resRank, resScore, err := client.ZRankWithScore(context.Background(), "key1", "two")
+	res, err := client.ZRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(resRank)
-	fmt.Println(resScore)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 3
-	// {1 false}
-	// {2 false}
+	// 1
+	// 2
 }
 
 func ExampleClient_ZRevRank() {
@@ -641,18 +641,18 @@ func ExampleClient_ZRevRankWithScore() {
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resRank, resScore, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
+	res, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(resRank)
-	fmt.Println(resScore)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 4
-	// {2 false}
-	// {2 false}
+	// 2
+	// 2
 }
 
 func ExampleClusterClient_ZRevRankWithScore() {
@@ -663,18 +663,18 @@ func ExampleClusterClient_ZRevRankWithScore() {
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0},
 	)
-	resRank, resScore, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
+	res, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(resRank)
-	fmt.Println(resScore)
+	fmt.Println(res.Value().Rank)
+	fmt.Println(res.Value().Score)
 
 	// Output:
 	// 4
-	// {2 false}
-	// {2 false}
+	// 2
+	// 2
 }
 
 func ExampleClient_ZScore() {

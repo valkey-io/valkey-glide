@@ -2536,8 +2536,8 @@ class CoreCommands(Protocol):
         Returns:
             TOK: A simple "OK" response.
 
-            If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
-            (which causes `key` to be removed).
+            If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+            and the key is removed.
 
             If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 

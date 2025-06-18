@@ -31,7 +31,7 @@ type Client struct {
 	baseClient
 }
 
-// Creates a new `Client` instance and establishes a connection to a standalone Valkey server.
+// Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
 //
 // Parameters:
 //
@@ -41,7 +41,7 @@ type Client struct {
 //
 // Return value:
 //
-//	A connected `Client` instance.
+//	A connected [Client] instance.
 //
 // Remarks:
 //
@@ -53,6 +53,7 @@ type Client struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
+//	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
 func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	client, err := createClient(config)
 	if err != nil {

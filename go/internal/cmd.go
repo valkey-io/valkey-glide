@@ -47,3 +47,11 @@ type BatchOptions struct {
 	RetryServerError     *bool
 	RetryConnectionError *bool
 }
+
+type LCSResponseType int
+
+const (
+	SimpleLCSString LCSResponseType = iota
+	SimpleLCSLength
+	ComplexLCSMatch
+)

@@ -1207,17 +1207,20 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 // Return value:
 //
-//	A string containing all the longest common subsequences combined between the 2 strings.
-//	An empty string is returned if the keys do not exist or have no common subsequences.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: A string containing all the longest common subsequences combined between the 2 strings. An empty string is
+//		returned if the keys do not exist or have no common subsequences.
+//	- `Matches`: Empty array.
+//	- `Len`: 0
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (string, error) {
+func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2})
 	if err != nil {
-		return models.DefaultStringResponse, err
+		return nil, err
 	}
 
-	return handleStringResponse(result)
+	return handleLCSMatchResponse(result, internal.SimpleLCSString)
 }
 
 // Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
@@ -1240,16 +1243,19 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (st
 //
 // Return value:
 //
-//	The total length of all the longest common subsequences the 2 strings.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Empty array.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64, error) {
+func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2, options.LCSLenCommand})
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return nil, err
 	}
 
-	return handleIntResponse(result)
+	return handleLCSMatchResponse(result, internal.SimpleLCSLength)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
@@ -1273,20 +1279,18 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64,
 //
 // Return value:
 //
-//	A Map containing the indices of the longest common subsequence between the 2 strings
-//	and the total length of all the longest common subsequences. The resulting map contains
-//	two keys, "matches" and "len":
-//	  - "len" is mapped to the total length of the all longest common subsequences between
-//	     the 2 strings.
-//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//	     of the common subsequences in the strings held by key1 and key2.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Array of [models.LCSMatchedPosition] objects with the common subsequences in the strings held by key1 and
+//		key2. If WithMatchLen is specified, the array also contains the length of each match, otherwise the length is 0.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(
 	ctx context.Context,
 	key1, key2 string,
 	opts options.LCSIdxOptions,
-) (map[string]any, error) {
+) (*models.LCSMatch, error) {
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -1295,7 +1299,8 @@ func (client *baseClient) LCSWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToAnyMapResponse(response)
+
+	return handleLCSMatchResponse(response, internal.ComplexLCSMatch)
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
@@ -2686,10 +2691,10 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 //
 // Return value:
 //
-//	Always `"OK"`.
-//	If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-//	key to be removed).
-//	If end exceeds the actual end of the list, it will be treated like the last element of the list.
+//	Always "OK".
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+//	and the key is removed.
+//	If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 //	If key does not exist, `"OK"` will be returned without changes to the database.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
@@ -2984,7 +2989,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -2992,7 +2997,7 @@ func (client *baseClient) LMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3013,7 +3018,7 @@ func (client *baseClient) LMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -3037,7 +3042,7 @@ func (client *baseClient) LMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped elements.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -3046,7 +3051,7 @@ func (client *baseClient) LMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3067,7 +3072,7 @@ func (client *baseClient) LMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
@@ -3092,7 +3097,7 @@ func (client *baseClient) LMPopCount(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3102,7 +3107,7 @@ func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection constants.ListDirection,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3123,7 +3128,7 @@ func (client *baseClient) BLMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
@@ -3151,7 +3156,7 @@ func (client *baseClient) BLMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3162,7 +3167,7 @@ func (client *baseClient) BLMPopCount(
 	listDirection constants.ListDirection,
 	count int64,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3183,7 +3188,7 @@ func (client *baseClient) BLMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Sets the list element at index to element.
@@ -3989,7 +3994,7 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (string, error) {
+func (client *baseClient) XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error) {
 	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -4010,14 +4015,14 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values [][]strin
 //
 // Return value:
 //
-//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
 	ctx context.Context,
 	key string,
-	values [][]string,
+	values []models.FieldValue,
 	options options.XAddOptions,
 ) (models.Result[string], error) {
 	args := []string{}
@@ -4028,13 +4033,7 @@ func (client *baseClient) XAddWithOptions(
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return models.CreateNilStringResult(), fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			)
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
@@ -4064,7 +4063,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry.
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4092,7 +4091,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: []KeyValue array of field-value pairs for the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -4923,8 +4922,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 // Return value:
 //
 //	The rank of `member` in the sorted set.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -4952,21 +4950,20 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
@@ -4983,10 +4980,8 @@ func (client *baseClient) ZRankWithScore(
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set, where ranks are ordered from high to
-//	low based on scores.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -5014,21 +5009,20 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Trims the stream by evicting older entries.
@@ -5103,7 +5097,7 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -5144,7 +5138,7 @@ func (client *baseClient) XAutoClaim(
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -6463,7 +6457,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6496,7 +6490,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: []KeyValue array of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6748,7 +6742,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -6757,7 +6751,7 @@ func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6779,7 +6773,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6790,7 +6784,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6801,7 +6795,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRangeResponse(result)
+	return handleXRangeResponse(result, false)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6822,7 +6816,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -6831,7 +6825,7 @@ func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6854,7 +6848,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6865,7 +6859,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6876,7 +6870,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRevRangeResponse(result)
+	return handleXRangeResponse(result, true)
 }
 
 // Returns information about the stream stored at `key`.
@@ -6890,7 +6884,7 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A models.XInfoStreamResponse containing information about the stream stored at key:
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
 //	- Length: the number of entries in the stream
 //	- RadixTreeKeys: the number of keys in the underlying radix data structure
 //	- RadixTreeNodes: the number of nodes in the underlying radix data structure
@@ -6929,18 +6923,18 @@ func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
 	opts options.XInfoStreamOptions,
-) (map[string]any, error) {
+) (models.XInfoStreamFullOptionsResponse, error) {
 	args := []string{key, constants.FullKeyword}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamFullOptionsResponse(result)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the
@@ -8824,8 +8818,8 @@ func (client *baseClient) InvokeScriptWithOptions(
 	script options.Script,
 	scriptOptions options.ScriptOptions,
 ) (any, error) {
-	keys := scriptOptions.GetKeys()
-	args := scriptOptions.GetArgs()
+	keys := scriptOptions.Keys
+	args := scriptOptions.Args
 
 	response, err := client.executeScriptWithRoute(ctx, script.GetHash(), keys, args, nil)
 	if err != nil {

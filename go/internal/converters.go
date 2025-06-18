@@ -136,24 +136,13 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	if len < 2 || len > 3 {
 		return nil, fmt.Errorf("unexpected response array length: %d", len)
 	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(arr[1])
+	claimedEntries, err := MakeConvertStreamEntryArray(false)(arr[1])
 	if err != nil {
 		return nil, err
 	}
-
-	claimedEntries := converted.(map[string][][]string)
 	var deletedMessages []string = nil
 	if len == 3 {
-		converted, err = arrayConverter[string]{
+		converted, err := arrayConverter[string]{
 			nil,
 			false,
 		}.convert(arr[2])
@@ -164,7 +153,7 @@ func ConvertXAutoClaimResponse(data any) (any, error) {
 	}
 	return models.XAutoClaimResponse{
 		NextEntry:       arr[0].(string),
-		ClaimedEntries:  claimedEntries,
+		ClaimedEntries:  claimedEntries.([]models.StreamEntry),
 		DeletedMessages: deletedMessages,
 	}, nil
 }
@@ -441,79 +430,23 @@ func ConvertFunctionListResponse(data any) (any, error) {
 	return result, nil
 }
 
-func ConvertLMPopResponse(data any) (any, error) {
-	return mapConverter[[]string]{
-		arrayConverter[string]{},
-		false,
-	}.convert(data)
-	// actually returns a map[string][]string
-}
+// XRange, XRangeWithOptions, XRevRange, XRevRangeWithOptions
+func MakeConvertStreamEntryArray(reverse bool) func(data any) (any, error) {
+	return func(data any) (any, error) {
+		claimedEntries := data.(map[string]any)
+		result := make([]models.StreamEntry, 0, len(claimedEntries))
 
-func ConvertXReadResponse(data any) (any, error) {
-	return mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	// actually returns a map[string]map[string][][]string
-}
-
-func ConvertXReadGroupResponse(data any) (any, error) {
-	return mapConverter[map[string][][]string]{
-		mapConverter[[][]string]{
-			arrayConverter[[]string]{
-				arrayConverter[string]{
-					nil,
-					false,
-				},
-				true,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	// actually returns a map[string]map[string][][]string
-}
-
-func ConvertXClaimResponse(data any) (any, error) {
-	return mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(data)
-	// actually returns a map[string][][]string
-}
-
-func ConvertXRangeResponse(data any) (any, error) {
-	converted, err := ConvertXClaimResponse(data)
-	if err != nil {
-		return nil, err
+		for k, v := range claimedEntries {
+			result = append(result, models.StreamEntry{ID: k, Fields: CreateFieldInfoArray(v)})
+		}
+		sort.Slice(result, func(i, j int) bool {
+			if reverse {
+				return result[i].ID > result[j].ID
+			}
+			return result[i].ID < result[j].ID
+		})
+		return result, nil
 	}
-	claimedEntries := converted.(map[string][][]string)
-
-	result := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		result = append(result, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].StreamId < result[j].StreamId
-	})
-	return result, nil
 }
 
 func ConvertFunctionStatsResponse(data any) (any, error) {
@@ -558,6 +491,25 @@ func ConvertScanResult(data any) (any, error) {
 	return models.ScanResult{Cursor: models.NewCursorFromString(arr[0].(string)), Data: scanData.([]string)}, err
 }
 
+func ConvertLCSResult(data any) (any, error) {
+	lcsResp := data.(map[string]any)
+	lenVal, err := ConvertToInt64(lcsResp["len"])
+	if err != nil {
+		return nil, fmt.Errorf("expected len to be a number, got %T", lcsResp["len"])
+	}
+
+	// Parse the matches array using the helper function
+	matches, err := ParseLCSMatchedPositions(lcsResp["matches"])
+	if err != nil {
+		return nil, err
+	}
+	return models.LCSMatch{
+		MatchString: models.DefaultStringResponse,
+		Matches:     matches,
+		Len:         lenVal,
+	}, nil
+}
+
 func ConverterAndTypeChecker(
 	data any,
 	expectedType reflect.Kind,
@@ -580,4 +532,200 @@ func ConverterAndTypeChecker(
 	// data lost even though it was incorrect
 	// TODO maybe still return the data?
 	return nil, fmt.Errorf("unexpected return type from Glide: got %v, expected %v", reflect.TypeOf(data), expectedType)
+}
+
+// LMPop, LMPopCount, BLMPop, BLMPopCount
+func ConvertKeyValuesArrayOrNil(data any) ([]models.KeyValues, error) {
+	return keyValuesConverter{canBeNil: true}.convert(data)
+}
+
+func ConvertKeyValuesArrayOrNilForBatch(data any) (any, error) {
+	return ConvertKeyValuesArrayOrNil(data)
+}
+
+// XRead, XReadGroup
+func ConvertXReadResponse(data any) (any, error) {
+	result := make(map[string]models.StreamResponse)
+	// Process the map data directly
+	streamMap := data.(map[string]any)
+	for streamName, streamData := range streamMap {
+		streamResponse := models.StreamResponse{
+			Entries: make([]models.StreamEntry, 0),
+		}
+		// Process fields
+		for id, entriesArray := range streamData.(map[string]any) {
+			// Process stream entries
+			fieldInfos := CreateFieldInfoArray(entriesArray)
+			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
+				ID:     id,
+				Fields: fieldInfos,
+			})
+		}
+
+		result[streamName] = streamResponse
+	}
+	return result, nil
+}
+
+func ConvertXClaimResponse(data any) (any, error) {
+	result := make(map[string]models.XClaimResponse)
+
+	// Process the map data directly
+	claimMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type received: %T", data)
+	}
+
+	for id, entriesArray := range claimMap {
+		// Process fields
+		fieldInfos := CreateFieldInfoArray(entriesArray)
+		result[id] = models.XClaimResponse{
+			Fields: fieldInfos,
+		}
+	}
+
+	return result, nil
+}
+
+// ZRankWithScore and ZRevRankWithScore
+func ConvertRankAndScoreResponse(data any) (any, error) {
+	arr := data.([]any)
+	return models.RankAndScore{Rank: arr[0].(int64), Score: arr[1].(float64)}, nil
+}
+
+// XInfoStream
+func ConvertXInfoStreamResponse(data any) (any, error) {
+	infoMap := data.(map[string]any)
+
+	streamInfo := models.XInfoStreamResponse{}
+	// Parse integer fields
+	ReadValue(infoMap, "length", &streamInfo.Length)
+	ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	ReadValue(infoMap, "groups", &streamInfo.Groups)
+	ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
+	// Parse string fields
+	ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
+
+	// Get First Entry
+	entry := CreateStreamEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+
+	entry = CreateStreamEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	return streamInfo, nil
+}
+
+// XInfoStreamFullWithOptions
+func ConvertXInfoStreamFullResponse(data any) (any, error) {
+	infoMap := data.(map[string]any)
+
+	streamInfo := models.XInfoStreamFullOptionsResponse{}
+
+	// Parse integer fields
+	ReadValue(infoMap, "length", &streamInfo.Length)
+	ReadValue(infoMap, "radix-tree-keys", &streamInfo.RadixTreeKeys)
+	ReadValue(infoMap, "radix-tree-nodes", &streamInfo.RadixTreeNodes)
+	ReadResult(infoMap, "entries-added", &streamInfo.EntriesAdded)
+
+	// Parse string fields
+	ReadValue(infoMap, "last-generated-id", &streamInfo.LastGeneratedID)
+	ReadResult(infoMap, "max-deleted-entry-id", &streamInfo.MaxDeletedEntryID)
+
+	// Get First Entry
+	entry := CreateStreamEntry(infoMap, "first-entry")
+	if entry.ID != "" {
+		streamInfo.FirstEntry = entry
+	}
+	// Get Last Entry
+	entry = CreateStreamEntry(infoMap, "last-entry")
+	if entry.ID != "" {
+		streamInfo.LastEntry = entry
+	}
+
+	if groups, ok := infoMap["groups"].([]any); ok {
+		groupsArr := make([]models.XInfoStreamGroupInfo, 0, len(groups))
+		for _, group := range groups {
+			groupInfo := models.XInfoStreamGroupInfo{}
+			if groupMap, ok := group.(map[string]any); ok {
+				if consumers, ok := groupMap["consumers"].([]any); ok {
+					consumersArr := make([]models.XInfoStreamConsumerInfo, 0, len(consumers))
+					for _, consumerMap := range consumers {
+						consumerInfo := models.XInfoStreamConsumerInfo{}
+						if consumer, ok := consumerMap.(map[string]any); ok {
+							ReadValue(consumer, "name", &consumerInfo.Name)
+							ReadValue(consumer, "seen-time", &consumerInfo.SeenTime)
+							ReadResult(consumer, "active-time", &consumerInfo.ActiveTime)
+							ReadValue(consumer, "pel-count", &consumerInfo.PelCount)
+
+							if pending, ok := consumer["pending"].([]any); ok {
+								pendingConsumerArr := make([]models.ConsumerPendingEntry, 0, len(pending))
+								for _, entry := range pending {
+									if entryArr, ok := entry.([]any); ok {
+										pendingConsumerArr = append(
+											pendingConsumerArr,
+											models.ConsumerPendingEntry{
+												Id:             entryArr[0].(string),
+												DeliveredTime:  entryArr[1].(int64),
+												DeliveredCount: entryArr[2].(int64),
+											},
+										)
+									}
+								}
+								consumerInfo.Pending = pendingConsumerArr
+							}
+
+							consumersArr = append(consumersArr, consumerInfo)
+						}
+					}
+					groupInfo.Consumers = consumersArr
+				}
+				ReadValue(groupMap, "name", &groupInfo.Name)
+				ReadValue(groupMap, "last-delivered-id", &groupInfo.LastDeliveredId)
+				ReadValue(groupMap, "pel-count", &groupInfo.PelCount)
+				ReadResult(groupMap, "entries-read", &groupInfo.EntriesRead)
+				ReadResult(groupMap, "lag", &groupInfo.Lag)
+
+				if pending, ok := groupMap["pending"].([]any); ok {
+					pendingArr := make([]models.PendingEntry, 0, len(pending))
+					for _, pendingEntry := range pending {
+						if pendingEntryArr, ok := pendingEntry.([]any); ok {
+							pendingArr = append(pendingArr, models.PendingEntry{
+								Id:             pendingEntryArr[0].(string),
+								Name:           pendingEntryArr[1].(string),
+								DeliveredTime:  pendingEntryArr[2].(int64),
+								DeliveredCount: pendingEntryArr[3].(int64),
+							})
+						}
+					}
+					groupInfo.Pending = pendingArr
+				}
+			}
+			groupsArr = append(groupsArr, groupInfo)
+		}
+		streamInfo.Groups = groupsArr
+	}
+	if val, ok := infoMap["entries"].([]any); ok {
+		entriesArr := make([]models.StreamEntry, 0, len(val))
+		for _, entry := range val {
+			if streamEntry, ok := entry.([]any); ok && len(streamEntry) > 1 {
+				entryInfo := models.StreamEntry{}
+				entryInfo.ID = streamEntry[0].(string)
+				entryInfo.Fields = CreateFieldInfoArray([]any{streamEntry[1]})
+				entriesArr = append(entriesArr, entryInfo)
+			}
+		}
+		streamInfo.Entries = entriesArr
+	}
+
+	ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
+
+	return streamInfo, nil
 }

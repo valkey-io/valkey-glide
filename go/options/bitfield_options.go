@@ -9,12 +9,14 @@ import (
 // Subcommands for bitfield operations.
 type BitFieldSubCommands interface {
 	ToArgs() ([]string, error)
+	dummyBitFieldSubCommands()
 }
 
 // Subcommands for bitfieldReadOnly.
 type BitFieldROCommands interface {
-	dummy()
 	ToArgs() ([]string, error)
+	dummyBitFieldSubCommands()
+	dummyBitFieldROCommands()
 }
 
 type EncType string
@@ -69,7 +71,8 @@ func (cmd *BitFieldGet) ToArgs() ([]string, error) {
 	return args, nil
 }
 
-func (cmd *BitFieldGet) dummy() {}
+func (cmd *BitFieldGet) dummyBitFieldROCommands()  {}
+func (cmd *BitFieldGet) dummyBitFieldSubCommands() {}
 
 // BitFieldSet represents a SET operation to set the bits in the binary
 // representation of the string stored in key based on EncType and Offset.
@@ -104,6 +107,8 @@ func (cmd *BitFieldSet) ToArgs() ([]string, error) {
 	return args, nil
 }
 
+func (cmd *BitFieldSet) dummyBitFieldSubCommands() {}
+
 // BitFieldIncrBy represents a INCRBY subcommand for increasing or decreasing the bits in the binary
 // representation of the string stored in key based on EncType and Offset.
 type BitFieldIncrBy struct {
@@ -137,6 +142,8 @@ func (cmd *BitFieldIncrBy) ToArgs() ([]string, error) {
 	return args, nil
 }
 
+func (cmd *BitFieldIncrBy) dummyBitFieldSubCommands() {}
+
 // BitFieldOverflow represents a OVERFLOW subcommand that determines the result of the SET
 // or INCRBY commands when an under or overflow occurs.
 type BitFieldOverflow struct {
@@ -154,3 +161,5 @@ func NewBitFieldOverflow(overflow OverflowType) *BitFieldOverflow {
 func (cmd *BitFieldOverflow) ToArgs() ([]string, error) {
 	return []string{overFlow, string(cmd.Overflow)}, nil
 }
+
+func (cmd *BitFieldOverflow) dummyBitFieldSubCommands() {}

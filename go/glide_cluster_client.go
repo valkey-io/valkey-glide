@@ -32,7 +32,7 @@ type ClusterClient struct {
 	baseClient
 }
 
-// Creates a new `GlideClusterClient` instance and establishes a connection to a Valkey Cluster.
+// Creates a new [ClusterClient] instance and establishes a connection to a Valkey Cluster.
 //
 // Parameters:
 //
@@ -42,7 +42,7 @@ type ClusterClient struct {
 //
 // Return value:
 //
-//	A connected `GlideClusterClient` instance.
+//	A connected [ClusterClient] instance.
 //
 // Remarks:
 //
@@ -57,6 +57,8 @@ type ClusterClient struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
+//	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
+//	      Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
 func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
@@ -2396,7 +2398,7 @@ func (client *ClusterClient) InvokeScriptWithClusterOptions(
 	script options.Script,
 	clusterScriptOptions options.ClusterScriptOptions,
 ) (models.ClusterValue[any], error) {
-	args := clusterScriptOptions.GetArgs()
+	args := clusterScriptOptions.Args
 	route := clusterScriptOptions.Route
 
 	response, err := client.baseClient.executeScriptWithRoute(ctx, script.GetHash(), []string{}, args, route)
@@ -2519,7 +2521,7 @@ func (client *ClusterClient) ScriptFlushWithOptions(
 		}
 		return handleOkResponse(result)
 	}
-	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.Route.Route)
+	result, err := client.executeCommandWithRoute(ctx, C.ScriptFlush, args, options.RouteOption.Route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

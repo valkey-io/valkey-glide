@@ -290,8 +290,8 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			ZInterWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZInterOptions().SetAggregate(options.AggregateMax)).
 			ZUnion(options.KeyArray{Keys: []string{key1, key2}}).
 			ZUnionWithScores(options.KeyArray{Keys: []string{key1, key2}}, *options.NewZUnionOptions().SetAggregate(options.AggregateMax)).
-			XAdd(key1, [][]string{{"a", "b"}}).
-			XAddWithOptions(key1, [][]string{{"a", "b"}}, *options.NewXAddOptions().SetId("0-1")).
+			XAdd(key1, []models.FieldValue{{Field: "a", Value: "b"}}).
+			XAddWithOptions(key1, []models.FieldValue{{Field: "a", Value: "b"}}, *options.NewXAddOptions().SetId("0-1")).
 			XAutoClaim(key1, "g", "c", 2, "0-0").
 			XAutoClaimWithOptions(key1, "g", "c", 2, "0-0", *options.NewXAutoClaimOptions().SetCount(2)).
 			XAutoClaimJustId(key1, "g", "c", 2, "0-0").
@@ -307,7 +307,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			XClaimJustId(key1, "g", "c", 2, []string{"0-0"}).
 			XClaimJustIdWithOptions(key1, "g", "c", 2, []string{"0-0"}, *options.NewXClaimOptions().SetForce()).
 			XInfoStream(key1).
-			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptionsOptions().SetCount(2)).
+			XInfoStreamFullWithOptions(key1, options.NewXInfoStreamOptions().SetCount(2)).
 			XInfoConsumers(key1, "g").
 			XInfoGroups(key1).
 			XRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
@@ -554,8 +554,12 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: map[string]any{"len": int64(2), "matches": ([]any)(nil)},
-				TestName:         "LCSWithOptions(multiKey1, multiKey2, opts)",
+				ExpectedResponse: models.LCSMatch{
+					Len:         2,
+					MatchString: models.DefaultStringResponse,
+					Matches:     []models.LCSMatchedPosition{},
+				},
+				TestName: "LCSWithOptions(multiKey1, multiKey2, opts)",
 			},
 		)
 	}
@@ -1176,8 +1180,11 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	testData = append(
 		testData,
 		CommandTestData{
-			ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}},
-			TestName:         "HScan(key, 0)",
+			ExpectedResponse: models.ScanResult{
+				Cursor: models.NewCursorFromString("0"),
+				Data:   []string{"field1", "value1", "counter", "15", "float_counter", "12"},
+			},
+			TestName: "HScan(key, 0)",
 		},
 	)
 	if serverVer >= "8.0.0" {
@@ -1185,15 +1192,21 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		testData = append(
 			testData,
 			CommandTestData{
-				ExpectedResponse: []any{"0", []any{"field1", "counter", "float_counter"}},
-				TestName:         "HScanWithOptions(key, 0, options)",
+				ExpectedResponse: models.ScanResult{
+					Cursor: models.NewCursorFromString("0"),
+					Data:   []string{"field1", "counter", "float_counter"},
+				},
+				TestName: "HScanWithOptions(key, 0, options)",
 			},
 		)
 	} else {
 		batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetCount(42))
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{"0", []any{"field1", "value1", "counter", "15", "float_counter", "12"}}, TestName: "HScanWithOptions(key, 0, options)"},
+			CommandTestData{ExpectedResponse: models.ScanResult{
+				Cursor: models.NewCursorFromString("0"),
+				Data:   []string{"field1", "value1", "counter", "15", "float_counter", "12"},
+			}},
 		)
 	}
 
@@ -1376,7 +1389,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.LMPop([]string{key}, constants.Left)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"there"}}, TestName: "LMPop([key], Left)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"there"}}},
+				TestName:         "LMPop([key], Left)",
+			},
 		)
 
 		batch.RPush(key, []string{"hello"})
@@ -1384,7 +1400,10 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.LMPopCount([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "LMPopCount([key], Left, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"hello"}}},
+				TestName:         "LMPopCount([key], Left, 1)",
+			},
 		)
 
 		batch.RPush(key, []string{"hello", "world"})
@@ -1392,13 +1411,19 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		batch.BLMPop([]string{key}, constants.Left, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"hello"}}, TestName: "BLMPop([key], Left, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"hello"}}},
+				TestName:         "BLMPop([key], Left, 1)",
+			},
 		)
 
 		batch.BLMPopCount([]string{key}, constants.Left, 1, 1)
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: map[string][]string{key: {"world"}}, TestName: "BLMPopCount([key], Left, 1, 1)"},
+			CommandTestData{
+				ExpectedResponse: []models.KeyValues{{Key: key, Values: []string{"world"}}},
+				TestName:         "BLMPopCount([key], Left, 1, 1)",
+			},
 		)
 	}
 
@@ -1591,13 +1616,22 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	)
 
 	batch.SScan(key, "0")
-	testData = append(testData, CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScan(key, 0)"})
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1"},
+		},
+		TestName: "SScan(key, 0)",
+	})
 
 	scanOptions := options.NewBaseScanOptions().SetMatch("mem*")
 	batch.SScanWithOptions(key, "0", *scanOptions)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1"}}, TestName: "SScanWithOptions(key, 0, options)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1"},
+		}, TestName: "SScanWithOptions(key, 0, options)"},
 	)
 
 	batch.SAdd(prefix+key2, []string{"newmember"})
@@ -1814,7 +1848,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.ZRankWithScore(key, "member1")
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRankWithScore(key, member1)"},
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRankWithScore(key, member1)",
+			},
 		)
 	}
 
@@ -1825,7 +1862,10 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		batch.ZRevRankWithScore(key, "member1")
 		testData = append(
 			testData,
-			CommandTestData{ExpectedResponse: []any{int64(0), float64(1.0)}, TestName: "ZRevRankWithScore(key, member2)"},
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRevRankWithScore(key, member1)",
+			},
 		)
 	}
 
@@ -1842,14 +1882,20 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZScan(key, "0")
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScan(key, 0)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1", "1"},
+		}, TestName: "ZScan(key, 0)"},
 	)
 
 	zScanOpts := options.NewZScanOptions().SetCount(1)
 	batch.ZScanWithOptions(key, "0", *zScanOpts)
 	testData = append(
 		testData,
-		CommandTestData{ExpectedResponse: []any{"0", []any{"member1", "1"}}, TestName: "ZScanWithOptions(key, 0, opts)"},
+		CommandTestData{ExpectedResponse: models.ScanResult{
+			Cursor: models.NewCursorFromString("0"),
+			Data:   []string{"member1", "1"},
+		}, TestName: "ZScanWithOptions(key, 0, opts)"},
 	)
 
 	key3 := atomicPrefix + "key3-" + uuid.NewString()
@@ -2034,19 +2080,23 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 	// XADD commands with options
 	xaddOpts1 := options.NewXAddOptions().SetId("0-1")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field1", "value1"}}, *xaddOpts1)
+	batch.XAddWithOptions(streamKey1, []models.FieldValue{{Field: "field1", Value: "value1"}}, *xaddOpts1)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-1", TestName: "XAdd(streamKey1, field1=value1, 0-1)"})
 
 	xaddOpts2 := options.NewXAddOptions().SetId("0-2")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field2", "value2"}}, *xaddOpts2)
+	batch.XAddWithOptions(streamKey1, []models.FieldValue{{Field: "field2", Value: "value2"}}, *xaddOpts2)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-2", TestName: "XAdd(streamKey1, field2=value2, 0-2)"})
 
 	xaddOpts3 := options.NewXAddOptions().SetId("0-3")
-	batch.XAddWithOptions(streamKey1, [][]string{{"field3", "value3"}}, *xaddOpts3)
+	batch.XAddWithOptions(streamKey1, []models.FieldValue{{Field: "field3", Value: "value3"}}, *xaddOpts3)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-3", TestName: "XAdd(streamKey1, field3=value3, 0-3)"})
 
 	xaddOpts4 := options.NewXAddOptions().SetId("0-4")
-	batch.XAddWithOptions(streamKey4, [][]string{{"field4", "value4"}, {"field4", "value5"}}, *xaddOpts4)
+	batch.XAddWithOptions(
+		streamKey4,
+		[]models.FieldValue{{Field: "field4", Value: "value4"}, {Field: "field4", Value: "value5"}},
+		*xaddOpts4,
+	)
 	testData = append(testData, CommandTestData{ExpectedResponse: "0-4", TestName: "XAdd(streamKey4, field4=value4,5, 0-4)"})
 
 	// XLEN command
@@ -2057,10 +2107,10 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadOpts := options.NewXReadOptions().SetCount(1)
 	batch.XReadWithOptions(map[string]string{streamKey1: "0-2"}, *xreadOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]map[string][][]string{
-			streamKey1: {
-				"0-3": {{"field3", "value3"}},
-			},
+		ExpectedResponse: map[string]models.StreamResponse{
+			streamKey1: {Entries: []models.StreamEntry{{
+				ID: "0-3", Fields: []models.FieldValue{{Field: "field3", Value: "value3"}},
+			}}},
 		},
 		TestName: "XRead(streamKey1, 0-2)",
 	})
@@ -2069,8 +2119,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRangeWithOptions(streamKey1, "0-1", "0-1", *xrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.XRangeResponse{
-			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
+		ExpectedResponse: []models.StreamEntry{
+			{ID: "0-1", Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
 		},
 		TestName: "XRange(streamKey1, 0-1, 0-1)",
 	})
@@ -2079,8 +2129,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xrevrangeOpts := options.NewXRangeOptions().SetCount(1)
 	batch.XRevRangeWithOptions(streamKey1, "0-1", "0-1", *xrevrangeOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.XRangeResponse{
-			{StreamId: "0-1", Entries: [][]string{{"field1", "value1"}}},
+		ExpectedResponse: []models.StreamEntry{
+			{ID: "0-1", Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
 		},
 		TestName: "XRevRange(streamKey1, 0-1, 0-1)",
 	})
@@ -2119,8 +2169,8 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xreadgroupOpts := options.NewXReadGroupOptions().SetCount(2)
 	batch.XReadGroupWithOptions(groupName1, consumer1, map[string]string{streamKey1: "0-3"}, *xreadgroupOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string]map[string][][]string{
-			streamKey1: {},
+		ExpectedResponse: map[string]models.StreamResponse{
+			streamKey1: {Entries: []models.StreamEntry{}},
 		},
 		TestName: "XReadGroup(streamKey1, 0-3, groupName1, consumer1)",
 	})
@@ -2129,14 +2179,14 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	xclaimOpts := options.NewXClaimOptions().SetForce()
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-1"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string][][]string{},
+		ExpectedResponse: map[string]models.XClaimResponse{},
 		TestName:         "XClaim(streamKey1, groupName1, consumer1, 0-1)",
 	})
 
 	batch.XClaimWithOptions(streamKey1, groupName1, consumer1, 0, []string{"0-3"}, *xclaimOpts)
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: map[string][][]string{
-			"0-3": {{"field3", "value3"}},
+		ExpectedResponse: map[string]models.XClaimResponse{
+			"0-3": {Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
 		},
 		TestName: "XClaim(streamKey1, groupName1, consumer1, 0-3)",
 	})
@@ -2170,13 +2220,15 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	if serverVer >= "6.2.0" {
 		expectedXAutoClaimResponse := models.XAutoClaimResponse{
 			NextEntry:      "0-0",
-			ClaimedEntries: map[string][][]string{"0-3": {{"field3", "value3"}}},
+			ClaimedEntries: []models.StreamEntry{{ID: "0-3", Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}}},
 		}
 
 		if serverVer >= "7.0.0" {
 			expectedXAutoClaimResponse = models.XAutoClaimResponse{
-				NextEntry:       "0-0",
-				ClaimedEntries:  map[string][][]string{"0-3": {{"field3", "value3"}}},
+				NextEntry: "0-0",
+				ClaimedEntries: []models.StreamEntry{
+					{ID: "0-3", Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
+				},
 				DeletedMessages: []string{},
 			}
 		}
@@ -2238,7 +2290,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 
 		// Add entry to streamKey3 and create group
 		xaddOpts5 := options.NewXAddOptions().SetId("1-0")
-		batch.XAddWithOptions(streamKey3, [][]string{{"f0", "v0"}}, *xaddOpts5)
+		batch.XAddWithOptions(streamKey3, []models.FieldValue{{Field: "f0", Value: "v0"}}, *xaddOpts5)
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey3, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey3, groupName3, "0")
@@ -2258,7 +2310,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	// Add entry to streamKey2 and create group
 	if serverVer >= "7.0.0" {
 		xaddOpts6 := options.NewXAddOptions().SetId("1-0")
-		batch.XAddWithOptions(streamKey2, [][]string{{"f0", "v0"}}, *xaddOpts6)
+		batch.XAddWithOptions(streamKey2, []models.FieldValue{{Field: "f0", Value: "v0"}}, *xaddOpts6)
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
 
 		batch.XGroupCreate(streamKey2, groupName3, "0")
@@ -2274,6 +2326,25 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 			CommandTestData{ExpectedResponse: "OK", TestName: "XGroupSetId(streamKey2, groupName3, 1-0)"},
 		)
 	}
+
+	batch.XInfoStream(streamKey1)
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: models.XInfoStreamResponse{},
+			CheckTypeOnly:    true,
+			TestName:         "XInfoStream(streamKey1)",
+		},
+	)
+	batch.XInfoStreamFullWithOptions(streamKey1, options.NewXInfoStreamOptions().SetCount(1))
+	testData = append(
+		testData,
+		CommandTestData{
+			ExpectedResponse: models.XInfoStreamFullOptionsResponse{},
+			CheckTypeOnly:    true,
+			TestName:         "XInfoStreamFullWithOptions(streamKey1)",
+		},
+	)
 
 	return BatchTestData{CommandTestData: testData, TestName: "Stream commands"}
 }

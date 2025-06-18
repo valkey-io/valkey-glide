@@ -615,32 +615,32 @@ func handleFloatOrNilArrayResponse(response *C.struct_CommandResponse) ([]models
 	return slice, nil
 }
 
-func handleLongAndDoubleOrNullResponse(
+func handleRankAndScoreOrNilResponse(
 	response *C.struct_CommandResponse,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), typeErr
+		return models.CreateNilRankAndScoreResult(), typeErr
 	}
 
 	if response.response_type == C.Null {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), nil
+		return models.CreateNilRankAndScoreResult(), nil
 	}
 
-	rank := models.CreateNilInt64Result()
-	score := models.CreateNilFloat64Result()
+	rank := int64(0)
+	score := float64(0)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		if v.response_type == C.Int {
-			rank = models.CreateInt64Result(int64(v.int_value))
+			rank = int64(v.int_value)
 		}
 		if v.response_type == C.Float {
-			score = models.CreateFloat64Result(float64(v.float_value))
+			score = float64(v.float_value)
 		}
 	}
 
-	return rank, score, nil
+	return models.CreateRankAndScoreResult(rank, score), nil
 }
 
 func handleBoolResponse(response *C.struct_CommandResponse) (bool, error) {
@@ -789,6 +789,28 @@ func handleStringToStringArrayMapOrNilResponse(
 	return nil, fmt.Errorf("unexpected type received: %T", res)
 }
 
+func handleKeyValuesArrayOrNilResponse(
+	response *C.struct_CommandResponse,
+) ([]models.KeyValues, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return internal.ConvertKeyValuesArrayOrNil(data)
+}
+
 func handleStringSetResponse(response *C.struct_CommandResponse) (map[string]struct{}, error) {
 	defer C.free_command_response(response)
 
@@ -932,26 +954,11 @@ func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models
 	}
 
 	// Convert the raw response to the structured XClaimResponse format
-	result := make(map[string]models.XClaimResponse)
-
-	// Process the map data directly
-	claimMap, ok := data.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type received: %T", data)
-	}
-
-	for id, entriesArray := range claimMap {
-		// Process fields
-		fieldInfos := createFieldInfoArray(entriesArray)
-		result[id] = models.XClaimResponse{
-			Fields: fieldInfos,
-		}
-	}
-
-	return result, nil
+	res, err := internal.ConvertXClaimResponse(data)
+	return res.(map[string]models.XClaimResponse), err
 }
 
-func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
+func handleXRangeResponse(response *C.struct_CommandResponse, reverse bool) ([]models.StreamEntry, error) {
 	defer C.free_command_response(response)
 
 	if response.response_type == uint32(C.Null) {
@@ -966,79 +973,9 @@ func handleXRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeRe
 	if err != nil {
 		return nil, err
 	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
 
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId < XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
-}
-
-func handleXRevRangeResponse(response *C.struct_CommandResponse) ([]models.XRangeResponse, error) {
-	defer C.free_command_response(response)
-
-	if response.response_type == uint32(C.Null) {
-		return nil, nil
-	}
-
-	typeErr := checkResponseType(response, C.Map, false)
-	if typeErr != nil {
-		return nil, typeErr
-	}
-	mapData, err := parseMap(response)
-	if err != nil {
-		return nil, err
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(mapData)
-	if err != nil {
-		return nil, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-
-	XRangeResponseArray := make([]models.XRangeResponse, 0, len(claimedEntries))
-
-	for k, v := range claimedEntries {
-		XRangeResponseArray = append(XRangeResponseArray, models.XRangeResponse{StreamId: k, Entries: v})
-	}
-
-	sort.Slice(XRangeResponseArray, func(i, j int) bool {
-		return XRangeResponseArray[i].StreamId > XRangeResponseArray[j].StreamId
-	})
-	return XRangeResponseArray, nil
+	res, err := internal.MakeConvertStreamEntryArray(reverse)(mapData)
+	return res.([]models.StreamEntry), err
 }
 
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoClaimResponse, error) {
@@ -1052,48 +989,9 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (models.XAutoC
 	if err != nil {
 		return null, err
 	}
-	arr := slice.([]any)
-	len := len(arr)
-	if len < 2 || len > 3 {
-		return null, fmt.Errorf("unexpected response array length: %d", len)
-	}
-	converted, err := mapConverter[[][]string]{
-		arrayConverter[[]string]{
-			arrayConverter[string]{
-				nil,
-				false,
-			},
-			false,
-		},
-		false,
-	}.convert(arr[1])
-	if err != nil {
-		return null, err
-	}
-	claimedEntries, ok := converted.(map[string][][]string)
-	if !ok {
-		return null, fmt.Errorf("unexpected type of second element: %T", converted)
-	}
-	var deletedMessages []string
-	deletedMessages = nil
-	if len == 3 {
-		converted, err = arrayConverter[string]{
-			nil,
-			false,
-		}.convert(arr[2])
-		if err != nil {
-			return null, err
-		}
-		deletedMessages, ok = converted.([]string)
-		if !ok {
-			return null, fmt.Errorf("unexpected type of third element: %T", converted)
-		}
-	}
-	return models.XAutoClaimResponse{
-		NextEntry:       arr[0].(string),
-		ClaimedEntries:  claimedEntries,
-		DeletedMessages: deletedMessages,
-	}, nil
+
+	res, err := internal.ConvertXAutoClaimResponse(slice)
+	return res.(models.XAutoClaimResponse), err
 }
 
 func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (models.XAutoClaimJustIdResponse, error) {
@@ -1155,31 +1053,8 @@ func handleStreamResponse(response *C.struct_CommandResponse) (map[string]models
 		return nil, nil
 	}
 
-	// Convert the raw response to the structured StreamResponse format
-	result := make(map[string]models.StreamResponse)
-
-	// Process the map data directly
-	streamMap, ok := data.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type received: %T", data)
-	}
-	for streamName, streamData := range streamMap {
-		streamResponse := models.StreamResponse{
-			Entries: make([]models.StreamEntry, 0),
-		}
-		// Process fields
-		for id, entriesArray := range streamData.(map[string]any) {
-			// Process stream entries
-			fieldInfos := createFieldInfoArray(entriesArray)
-			streamResponse.Entries = append(streamResponse.Entries, models.StreamEntry{
-				ID:     id,
-				Fields: fieldInfos,
-			})
-		}
-
-		result[streamName] = streamResponse
-	}
-	return result, nil
+	res, err := internal.ConvertXReadResponse(data)
+	return res.(map[string]models.StreamResponse), err
 }
 
 func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (models.XPendingSummary, error) {
@@ -1378,11 +1253,64 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	if typeErr != nil {
 		return nil, typeErr
 	}
+
 	result, err := parseMap(response)
 	if err != nil {
 		return nil, err
 	}
 	return result.(map[string]any), nil
+}
+
+func handleLCSMatchResponse(
+	response *C.struct_CommandResponse,
+	lcsResponseType internal.LCSResponseType,
+) (*models.LCSMatch, error) {
+	switch lcsResponseType {
+	case internal.SimpleLCSString:
+		lcsResp, err := handleStringResponse(response)
+		if err != nil {
+			return nil, err
+		}
+		return &models.LCSMatch{
+			MatchString: lcsResp,
+			Matches:     make([]models.LCSMatchedPosition, 0),
+			Len:         0,
+		}, nil
+	case internal.SimpleLCSLength:
+		lcsResp, err := handleIntResponse(response)
+		if err != nil {
+			return nil, err
+		}
+		return &models.LCSMatch{
+			MatchString: models.DefaultStringResponse,
+			Matches:     make([]models.LCSMatchedPosition, 0),
+			Len:         lcsResp,
+		}, nil
+	case internal.ComplexLCSMatch:
+		lcsResp, err := handleStringToAnyMapResponse(response)
+		if err != nil {
+			return nil, err
+		}
+
+		lenVal, err := internal.ConvertToInt64(lcsResp["len"])
+		if err != nil {
+			return nil, fmt.Errorf("expected len to be a number, got %T", lcsResp["len"])
+		}
+
+		// Parse the matches array using the helper function
+		matches, err := internal.ParseLCSMatchedPositions(lcsResp["matches"])
+		if err != nil {
+			return nil, err
+		}
+
+		return &models.LCSMatch{
+			MatchString: models.DefaultStringResponse,
+			Matches:     matches,
+			Len:         lenVal,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown LCS response type: %d", lcsResponseType)
+	}
 }
 
 func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
@@ -1675,108 +1603,33 @@ func handleSortedSetWithScoresResponse(response *C.struct_CommandResponse, rever
 	return zRangeResponseArray, nil
 }
 
-func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+func handleXInfoStreamCResponse(response *C.struct_CommandResponse) (any, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return models.XInfoStreamResponse{}, typeErr
 	}
+	return parseMap(response)
+}
 
-	result, err := parseMap(response)
+func handleXInfoStreamResponse(response *C.struct_CommandResponse) (models.XInfoStreamResponse, error) {
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
 	if err != nil {
 		return models.XInfoStreamResponse{}, err
 	}
-
-	infoMap, ok := result.(map[string]any)
-	if !ok {
-		return models.XInfoStreamResponse{},
-			fmt.Errorf("unexpected type of map: %T", result)
-	}
-
-	streamInfo := models.XInfoStreamResponse{}
-
-	// Parse integer fields
-	if val, ok := infoMap["length"].(int64); ok {
-		streamInfo.Length = val
-	}
-	if val, ok := infoMap["radix-tree-keys"].(int64); ok {
-		streamInfo.RadixTreeKeys = val
-	}
-	if val, ok := infoMap["radix-tree-nodes"].(int64); ok {
-		streamInfo.RadixTreeNodes = val
-	}
-	if val, ok := infoMap["groups"].(int64); ok {
-		streamInfo.Groups = val
-	}
-	if val, ok := infoMap["entries-added"].(int64); ok {
-		streamInfo.EntriesAdded = val
-	}
-
-	// Parse string fields
-	if val, ok := infoMap["last-generated-id"].(string); ok {
-		streamInfo.LastGeneratedID = val
-	}
-	if val, ok := infoMap["max-deleted-entry-id"].(string); ok {
-		streamInfo.MaxDeletedEntryID = val
-	}
-
-	// Get First Entry
-	entry := createEntry(infoMap, "first-entry")
-	if entry.ID != "" {
-		streamInfo.FirstEntry = entry
-	}
-
-	entry = createEntry(infoMap, "last-entry")
-	if entry.ID != "" {
-		streamInfo.LastEntry = entry
-	}
-
-	return streamInfo, nil
+	streamInfo, err := internal.ConvertXInfoStreamResponse(result)
+	return streamInfo.(models.XInfoStreamResponse), err
 }
 
-// Parse entry - it's an array where first element is ID and second is array of field-value pairs
-func createEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
-	entry := models.StreamEntry{}
-	// Parse first-entry - it's an array where first element is ID and second is array of field-value pairs
-	if firstEntryArray, ok := infoMap[entryKey].([]any); ok && len(firstEntryArray) >= 2 {
-		// First element is the ID
-		if id, ok := firstEntryArray[0].(string); ok {
-			// Create field info array.
-			entryArray := []any{firstEntryArray[1]}
-			keyValues := createFieldInfoArray(entryArray)
-			// Create a StreamEntry with the ID
-			entry = models.StreamEntry{
-				ID:     id,
-				Fields: keyValues,
-			}
-		}
-	}
-	return entry
-}
-
-func createFieldInfoArray(entriesArray any) []models.KeyValue {
-	keyValues := make([]models.KeyValue, 0)
-	entriesData, ok := entriesArray.([]any)
-	if !ok {
-		entriesData = []any{}
+func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (models.XInfoStreamFullOptionsResponse, error) {
+	// Returns a map of any type.
+	result, err := handleXInfoStreamCResponse(response)
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
 
-	for _, entryData := range entriesData {
-		fieldValuePairs, ok := entryData.([]any)
-		if !ok || len(fieldValuePairs) < 2 {
-			continue
-		}
-		for i := 0; i+1 < len(fieldValuePairs); i += 2 {
-			fieldName, okField := fieldValuePairs[i].(string)
-			fieldValue, okValue := fieldValuePairs[i+1].(string)
-			if okField && okValue {
-				keyValues = append(keyValues, models.KeyValue{
-					Key:   fieldName,
-					Value: fieldValue,
-				})
-			}
-		}
-	}
-	return keyValues
+	streamInfo, err := internal.ConvertXInfoStreamFullResponse(result)
+	return streamInfo.(models.XInfoStreamFullOptionsResponse), err
 }
