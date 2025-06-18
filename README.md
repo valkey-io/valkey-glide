@@ -71,6 +71,8 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)
 - [Dynamic Password Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#dynamic-password-management)
 - [Modules API](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#modules-api)
+- [Batching (Pipeline and Transaction)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#batching-pipeline-and-transaction)
+- [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
