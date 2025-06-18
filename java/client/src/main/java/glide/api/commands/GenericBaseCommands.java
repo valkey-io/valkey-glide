@@ -63,12 +63,8 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
-     *     will be split across these slots and executed separately for each. This means the command
-     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-     *     call will return the first encountered error, even though some requests may have succeeded
-     *     while others did not. If this behavior impacts your application logic, consider splitting
-     *     the request into sub-requests per slot to ensure atomicity.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
+     *     map to different hash slots.
      * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
@@ -84,12 +80,8 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
-     *     will be split across these slots and executed separately for each. This means the command
-     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-     *     call will return the first encountered error, even though some requests may have succeeded
-     *     while others did not. If this behavior impacts your application logic, consider splitting
-     *     the request into sub-requests per slot to ensure atomicity.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
+     *     map to different hash slots.
      * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys

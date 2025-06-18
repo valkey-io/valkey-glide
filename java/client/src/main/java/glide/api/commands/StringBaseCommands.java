@@ -256,12 +256,8 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
-     *     will be split across these slots and executed separately for each. This means the command
-     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-     *     call will return the first encountered error, even though some requests may have succeeded
-     *     while others did not. If this behavior impacts your application logic, consider splitting
-     *     the request into sub-requests per slot to ensure atomicity.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
+     *     map to different hash slots.
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>
@@ -278,12 +274,8 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
-     *     will be split across these slots and executed separately for each. This means the command
-     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-     *     call will return the first encountered error, even though some requests may have succeeded
-     *     while others did not. If this behavior impacts your application logic, consider splitting
-     *     the request into sub-requests per slot to ensure atomicity.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>keys</code> 
+     *     map to different hash slots.
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>

@@ -932,12 +932,9 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 //
 // Note:
 //
-//	In cluster mode, if keys in `keys` map to different hash slots, the command
-//	will be split across these slots and executed separately for each. This means the command
-//	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-//	call will return the first encountered error, even though some requests may have succeeded
-//	while others did not. If this behavior impacts your application logic, consider splitting
-//	the request into sub-requests per slot to ensure atomicity.
+//	When in cluster mode, the command may route to multiple nodes when keys in `keys` map to different hash slots.
+//
+// See [valkey.io] for details.
 //
 // Parameters:
 //
@@ -3356,12 +3353,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 //
 // Note:
 //
-//	In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
-//	will be split across these slots and executed separately for each. This means the command
-//	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-//	call will return the first encountered error, even though some requests may have succeeded
-//	while others did not. If this behavior impacts your application logic, consider splitting
-//	the request into sub-requests per slot to ensure atomicity.
+//	When in cluster mode, the command may route to multiple nodes when keys in `keys` map to different hash slots.
 //
 // See [valkey.io] for details.
 //
@@ -9082,13 +9074,7 @@ func (client *baseClient) ScriptKill(ctx context.Context) (string, error) {
 //
 // Note:
 //
-//	In cluster mode, if keys in `keys` map to different hash slots,
-//	the command will be split across these slots and executed separately for each.
-//	This means the command is atomic only at the slot level. If one or more slot-specific
-//	requests fail, the entire call will return the first encountered error, even
-//	though some requests may have succeeded while others did not.
-//	If this behavior impacts your application logic, consider splitting the
-//	request into sub-requests per slot to ensure atomicity.
+//	When in cluster mode, the command may route to multiple nodes when keys in `keys` map to different hash slots.
 //
 // Parameters:
 //
