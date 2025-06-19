@@ -187,10 +187,6 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 
 // Retrieves the values of multiple keys.
 //
-// Note:
-//
-//	When in cluster mode, the command may route to multiple nodes when keys in `keys` map to different hash slots.
-//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -2088,10 +2084,6 @@ func (b *BaseBatch[T]) Del(keys []string) *T {
 }
 
 // Returns the number of keys that exist in the database.
-//
-// Note:
-//
-//	When in cluster mode, the command may route to multiple nodes when keys in `keys` map to different hash slots.
 //
 // See [valkey.io] for details.
 //

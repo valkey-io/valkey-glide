@@ -1811,13 +1811,8 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
-     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
-     * the command will be split across these slots and executed separately for each.
-     * This means the command is atomic only at the slot level. If one or more slot-specific
-     * requests fail, the entire call will return the first encountered error, even
-     * though some requests may have succeeded while others did not.
-     * If this behavior impacts your application logic, consider splitting the
-     * request into sub-requests per slot to ensure atomicity.
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to
+     * different hash slots.
      *
      * @param keys - The keys we wanted to remove.
      * @returns The number of keys that were removed.
@@ -4025,13 +4020,8 @@ export class BaseClient {
      * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
      *
-     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
-     * the command will be split across these slots and executed separately for each.
-     * This means the command is atomic only at the slot level. If one or more slot-specific
-     * requests fail, the entire call will return the first encountered error, even
-     * though some requests may have succeeded while others did not.
-     * If this behavior impacts your application logic, consider splitting the
-     * request into sub-requests per slot to ensure atomicity.
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keys` map to
+     * different hash slots.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
