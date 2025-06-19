@@ -2819,7 +2819,7 @@ func (client *baseClient) RPopCount(ctx context.Context, key string, count int64
 //
 //	ctx            - The context for controlling the command execution.
 //	key            - The key of the list.
-//	insertPosition - The relative position to insert into - either options.Before or options.After the pivot.
+//	insertPosition - The relative position to insert into - either constants.Before or constants.After the pivot.
 //	pivot          - An element of the list.
 //	element        - The new element to insert.
 //
