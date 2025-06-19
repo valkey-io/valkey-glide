@@ -65,7 +65,7 @@ criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
 ctor = "0.4"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
-rustls = { version = "0.23", features = ["ring"], default-features = false}
+rustls = { version = "0.23", features = ["aws-lc-rs"]}
 iai-callgrind = "0.14"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [

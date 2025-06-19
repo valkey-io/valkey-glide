@@ -731,8 +731,9 @@ fn init() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
     // This needs to be done before any TLS connections are made
-    let _ =
-        rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
+    let _ = rustls::crypto::CryptoProvider::install_default(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    );
 }
 
 pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientForTests) {
