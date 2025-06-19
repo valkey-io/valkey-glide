@@ -110,6 +110,9 @@ Run test suite from `csharp` directory:
 
 ```bash
 dotnet test
+
+# If the above fails, try running
+sudo dotnet test
 ```
 
 You can also specify which framework version to use for testing (by defaults it runs on net6.0 and net8.0) by adding `--framework net8.0` or `--framework net6.0` accordingly.
