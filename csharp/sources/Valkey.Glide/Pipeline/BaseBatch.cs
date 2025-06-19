@@ -5,9 +5,7 @@ using System.Diagnostics;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
-using static Valkey.Glide.Errors;
-
-using RequestType = Valkey.Glide.Internals.FFI.RequestType;
+using static Valkey.Glide.Internals.Request;
 
 namespace Valkey.Glide.Pipeline;
 
@@ -27,12 +25,11 @@ namespace Valkey.Glide.Pipeline;
 /// </param>
 public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
 {
-    private readonly List<FFI.Cmd> _commands = [];
-    private readonly List<Func<object?, object?>> _converters = [];
+    private readonly List<ICmd> _commands = [];
 
     internal bool IsAtomic { get; private set; } = isAtomic;
 
-    internal FFI.Batch ToFFI() => new([.. _commands], IsAtomic);
+    internal FFI.Batch ToFFI() => new([.. _commands.Select(c => c.ToFfi())], IsAtomic);
 
     /// <summary>
     /// Convert a response reseived from the server.
@@ -44,69 +41,36 @@ public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T
             return null;
         }
 
-        Debug.Assert(response?.Length == _converters.Count, "Converteds misaligned");
+        Debug.Assert(response.Length == _commands.Count,
+            $"Response misaligned: received {response.Length} responses while submitted {_commands.Count} commands");
 
         for (int i = 0; i < response?.Length; i++)
         {
-            response[i] = _converters[i](response[i]);
+            response[i] = _commands[i].GetConverter()(response[i]);
         }
         return response;
     }
 
-    /// <summary>
-    /// Create a type checker for the response value.
-    /// </summary>
-    /// <typeparam name="V">Expected value type</typeparam>
-    protected Func<object?, object?> MakeTypeChecker<V>(bool isNullable = false) where V : class?
-        => MakeTypeCheckerAndConverter<V, V>(r => r, isNullable);
-
-    /// <summary>
-    /// Create a function which checks response value type and converts it.
-    /// </summary>
-    /// <typeparam name="V">Expected value type in server response</typeparam>
-    /// <typeparam name="R">Resulting value type after conversion</typeparam>
-    protected Func<object?, object?> MakeTypeCheckerAndConverter<V, R>(Func<V, R> converter, bool isNullable = false) where V : class? where R : class?
-        => value =>
-        {
-#pragma warning disable IDE0046 // Convert to conditional expression
-            if (value is null)
-            {
-                return isNullable
-                    ? null
-                    : (object)new RequestException($"Unexpected return type from Glide: got null expected {typeof(V).GetRealTypeName()}");
-            }
-#pragma warning restore IDE0046 // Convert to conditional expression
-            return value is V
-                ? converter((value as V)!)
-                : new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(V).GetRealTypeName()}");
-        };
-
-    internal T AddCmd(FFI.Cmd cmd, Func<object?, object?> converter)
+    internal T AddCmd(ICmd cmd)
     {
         _commands.Add(cmd);
-        _converters.Add(converter);
         return (T)this;
     }
 
     /// <inheritdoc cref="IBatch.CustomCommand(GlideString[])" />
-    public T CustomCommand(GlideString[] args)
-        => AddCmd(new(RequestType.CustomCommand, args), MakeTypeChecker<object>(true));
+    public T CustomCommand(GlideString[] args) => AddCmd(Request.CustomCommand(args));
 
     /// <inheritdoc cref="IBatch.Get(GlideString)" />
-    public T Get(GlideString key)
-        => AddCmd(new(RequestType.Get, [key]), MakeTypeChecker<GlideString>(true));
+    public T Get(GlideString key) => AddCmd(Request.Get(key));
 
     /// <inheritdoc cref="IBatch.Set(GlideString, GlideString)" />
-    public T Set(GlideString key, GlideString value)
-        => AddCmd(new(RequestType.Set, [key, value]), MakeTypeChecker<string>());
+    public T Set(GlideString key, GlideString value) => AddCmd(Request.Set(key, value));
 
     /// <inheritdoc cref="IBatch.Info()" />
     public T Info() => Info([]);
 
     /// <inheritdoc cref="IBatch.Info(Section[])" />
-    public T Info(Section[] sections)
-        => AddCmd(new(RequestType.Info, sections.ToGlideStrings()),
-            MakeTypeCheckerAndConverter<GlideString, string>(gs => gs.ToString()));
+    public T Info(Section[] sections) => AddCmd(Request.InfoStandalone(sections));
 
     IBatch IBatch.CustomCommand(GlideString[] args) => CustomCommand(args);
     IBatch IBatch.Get(GlideString key) => Get(key);
