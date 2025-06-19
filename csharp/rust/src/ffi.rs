@@ -13,10 +13,11 @@ use glide_core::{
     request_type::RequestType,
 };
 use redis::{
+    Cmd, Pipeline, PipelineRetryStrategy, Value,
     cluster_routing::{
         MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo,
         SingleNodeRoutingInfo, SlotAddr,
-    }, Cmd, FromRedisValue, Pipeline, PipelineRetryStrategy, Value
+    },
 };
 
 /// Convert raw C string to a rust string.
