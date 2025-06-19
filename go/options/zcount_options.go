@@ -9,8 +9,8 @@ type ScoreRange interface {
 
 // This struct represents the min and max boundary for the Zcount command.
 type ZCountRange struct {
-	min scoreBoundary
-	max scoreBoundary
+	Min scoreBoundary
+	Max scoreBoundary
 }
 
 // Create a new Zcount range.
@@ -19,5 +19,5 @@ func NewZCountRange(min scoreBoundary, max scoreBoundary) *ZCountRange {
 }
 
 func (zCountRange *ZCountRange) ToArgs() ([]string, error) {
-	return []string{string(zCountRange.min), string(zCountRange.max)}, nil
+	return []string{string(zCountRange.Min), string(zCountRange.Max)}, nil
 }

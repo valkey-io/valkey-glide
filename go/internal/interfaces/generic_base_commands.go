@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -20,34 +21,39 @@ type GenericBaseCommands interface {
 
 	Exists(ctx context.Context, keys []string) (int64, error)
 
-	Expire(ctx context.Context, key string, seconds int64) (bool, error)
+	Expire(ctx context.Context, key string, expireTime time.Duration) (bool, error)
 
-	ExpireWithOptions(ctx context.Context, key string, seconds int64, expireCondition constants.ExpireCondition) (bool, error)
+	ExpireWithOptions(
+		ctx context.Context,
+		key string,
+		expireTime time.Duration,
+		expireCondition constants.ExpireCondition,
+	) (bool, error)
 
-	ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error)
+	ExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error)
 
 	ExpireAtWithOptions(
 		ctx context.Context,
 		key string,
-		unixTimestampInSeconds int64,
+		expireTime time.Time,
 		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
-	PExpire(ctx context.Context, key string, milliseconds int64) (bool, error)
+	PExpire(ctx context.Context, key string, expireTime time.Duration) (bool, error)
 
 	PExpireWithOptions(
 		ctx context.Context,
 		key string,
-		milliseconds int64,
+		expireTime time.Duration,
 		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
-	PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error)
+	PExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error)
 
 	PExpireAtWithOptions(
 		ctx context.Context,
 		key string,
-		unixTimestampInMilliSeconds int64,
+		expireTime time.Time,
 		expireCondition constants.ExpireCondition,
 	) (bool, error)
 
@@ -71,9 +77,15 @@ type GenericBaseCommands interface {
 
 	Persist(ctx context.Context, key string) (bool, error)
 
-	Restore(ctx context.Context, key string, ttl int64, value string) (string, error)
+	Restore(ctx context.Context, key string, ttl time.Duration, value string) (string, error)
 
-	RestoreWithOptions(ctx context.Context, key string, ttl int64, value string, option options.RestoreOptions) (string, error)
+	RestoreWithOptions(
+		ctx context.Context,
+		key string,
+		ttl time.Duration,
+		value string,
+		option options.RestoreOptions,
+	) (string, error)
 
 	ObjectEncoding(ctx context.Context, key string) (models.Result[string], error)
 
@@ -97,7 +109,7 @@ type GenericBaseCommands interface {
 
 	SortReadOnlyWithOptions(ctx context.Context, key string, sortOptions options.SortOptions) ([]models.Result[string], error)
 
-	Wait(ctx context.Context, numberOfReplicas int64, timeout int64) (int64, error)
+	Wait(ctx context.Context, numberOfReplicas int64, timeout time.Duration) (int64, error)
 
 	Copy(ctx context.Context, source string, destination string) (bool, error)
 

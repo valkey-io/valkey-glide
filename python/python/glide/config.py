@@ -256,6 +256,25 @@ class BaseClientConfiguration:
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
+
+        lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
+            are deferred until the first command is sent. This can reduce startup latency and allow for client
+            creation in disconnected environments.
+
+            When set to `True`, the client will not attempt to connect to the specified nodes during
+            initialization. Instead, connections will be established only when a command is actually executed.
+
+            Note that the first command executed with lazy connections may experience additional latency
+            as it needs to establish the connection first. During this initial connection, the standard
+            request timeout does not apply yet - instead, the connection establishment is governed by
+            `AdvancedBaseClientConfiguration.connection_timeout`. The request timeout (`request_timeout`)
+            only begins counting after the connection has been successfully established. This behavior
+            can effectively increase the total time needed for the first command to complete.
+
+            This setting applies to both standalone and cluster modes. Note that if an operation is
+            attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+
+            If not set, connections are established immediately during client creation (equivalent to `False`).
     """
 
     def __init__(
@@ -271,6 +290,7 @@ class BaseClientConfiguration:
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -283,6 +303,7 @@ class BaseClientConfiguration:
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
         self.advanced_config = advanced_config
+        self.lazy_connect = lazy_connect
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -343,6 +364,8 @@ class BaseClientConfiguration:
         if self.advanced_config:
             self.advanced_config._create_a_protobuf_conn_request(request)
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -461,6 +484,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -474,6 +498,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.database_id = database_id
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -638,6 +663,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -651,6 +677,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -689,6 +716,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 for channel_pattern in channels_patterns:
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:
