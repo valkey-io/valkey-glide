@@ -42,7 +42,7 @@ pub struct Client {
 /// # Safety
 /// * The callback must copy the pointer in a sync manner and return ASAP. Any further data processing should be done in another thread to avoid
 ///   starving `tokio`'s thread pool.
-/// * The callee is responsible to free memory by calling [`free_respose`] with the given pointer once only.
+/// * The callee is responsible to free memory by calling [`free_response`] with the given pointer once only.
 pub type SuccessCallback = unsafe extern "C-unwind" fn(usize, *const ResponseValue) -> ();
 
 /// Failure callback that is called when a command fails.
