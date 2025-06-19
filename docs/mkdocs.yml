@@ -14,11 +14,9 @@ nav:
           - Core Commands: python/core.md
           - Cluster Commands: python/cluster_commands.md
           - Standalone Commands: python/standalone_commands.md
-          - Base Batch (from version 2.0.0): python/base_batch.md
-          - Standalone Batch (from version 2.0.0): python/standalone_batch.md
-          - Cluster Batch (from version 2.0.0): python/cluster_batch.md
-          - Standalone Transaction (deprecated): python/standalone_transaction.md
-          - Cluster Transaction (deprecated): python/cluster_transaction.md
+          - Base Batch: python/base_batch.md
+          - Standalone Batch: python/standalone_batch.md
+          - Cluster Batch: python/cluster_batch.md
       - Exceptions: python/exceptions.md
       - Logger: python/logger.md
   - TypeScript:
@@ -26,11 +24,9 @@ nav:
           - Standalone: node/GlideClient/classes/GlideClient.md
           - Cluster: node/GlideClusterClient/classes/GlideClusterClient.md
           - Base: node/BaseClient/classes/BaseClient.md
-          - Base Batch (from version 2.0.0): node/Batch/classes/BaseBatch.md
-          - Standalone Batch (from version 2.0.0): node/Batch/classes/Batch.md
-          - Cluster Batch (from version 2.0.0): node/Batch/classes/ClusterBatch.md
-          - Transaction (deprecated): node/Batch/classes/Transaction.md
-          - Cluster Transaction (deprecated): node/Batch/classes/ClusterTransaction.md
+          - Base Batch: node/Batch/classes/BaseBatch.md
+          - Standalone Batch: node/Batch/classes/Batch.md
+          - Cluster Batch: node/Batch/classes/ClusterBatch.md
       - config: node/BaseClient/interfaces/BaseClientConfiguration.md
       - Modules:
           - JSON: node/server-modules/GlideJson/classes/GlideJson.md
