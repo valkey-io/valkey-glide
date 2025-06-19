@@ -13,61 +13,46 @@ import "C"
 
 // ScriptOptions represents options for script execution
 type ScriptOptions struct {
-	keys []string
-	args []string
+	Keys []string
+	Args []string
 }
 
 // NewScriptOptions creates a new ScriptOptions with default values
 func NewScriptOptions() *ScriptOptions {
 	return &ScriptOptions{
-		keys: []string{},
-		args: []string{},
+		Keys: []string{},
+		Args: []string{},
 	}
 }
 
 // WithKeys sets the keys for the script
 func (o *ScriptOptions) WithKeys(keys []string) *ScriptOptions {
-	o.keys = keys
+	o.Keys = keys
 	return o
 }
 
 // WithArgs sets the arguments for the script
 func (o *ScriptOptions) WithArgs(args []string) *ScriptOptions {
-	o.args = args
+	o.Args = args
 	return o
-}
-
-// GetKeys returns the keys for the script
-func (o *ScriptOptions) GetKeys() []string {
-	return o.keys
-}
-
-// GetArgs returns the arguments for the script
-func (o *ScriptOptions) GetArgs() []string {
-	return o.args
 }
 
 // ScriptArgOptions represents options for script execution with only arguments
 type ScriptArgOptions struct {
-	args []string
+	Args []string
 }
 
 // NewScriptArgOptions creates a new ScriptArgOptions with default values
 func NewScriptArgOptions() *ScriptArgOptions {
 	return &ScriptArgOptions{
-		args: []string{},
+		Args: []string{},
 	}
 }
 
 // WithArgs sets the arguments for the script
 func (o *ScriptArgOptions) WithArgs(args []string) *ScriptArgOptions {
-	o.args = args
+	o.Args = args
 	return o
-}
-
-// GetArgs returns the arguments for the script
-func (o *ScriptArgOptions) GetArgs() []string {
-	return o.args
 }
 
 type ClusterScriptOptions struct {
@@ -175,15 +160,15 @@ func dropScript(hash string) error {
 
 // ScriptFlushOptions represents options for script flush operations
 type ScriptFlushOptions struct {
-	Mode  FlushMode
-	Route *RouteOption
+	Mode FlushMode
+	*RouteOption
 }
 
 // NewScriptFlushOptions creates a new ScriptFlushOptions with default values
 func NewScriptFlushOptions() *ScriptFlushOptions {
 	return &ScriptFlushOptions{
-		Mode:  "",
-		Route: &RouteOption{},
+		Mode:        "",
+		RouteOption: &RouteOption{},
 	}
 }
 
@@ -195,6 +180,6 @@ func (o *ScriptFlushOptions) WithMode(mode FlushMode) *ScriptFlushOptions {
 
 // WithRoute sets the route option for the script flush operation
 func (o *ScriptFlushOptions) WithRoute(route *RouteOption) *ScriptFlushOptions {
-	o.Route = route
+	o.RouteOption = route
 	return o
 }

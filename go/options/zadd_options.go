@@ -12,12 +12,12 @@ import (
 
 // Optional arguments to `ZAdd` in [SortedSetCommands]
 type ZAddOptions struct {
-	conditionalChange constants.ConditionalSet
-	updateOptions     UpdateOptions
-	changed           bool
-	incr              bool
-	increment         float64
-	member            string
+	ConditionalChange constants.ConditionalSet
+	UpdateOptions     UpdateOptions
+	Changed           bool
+	Incr              bool
+	Increment         float64
+	Member            string
 }
 
 func NewZAddOptions() *ZAddOptions {
@@ -26,33 +26,33 @@ func NewZAddOptions() *ZAddOptions {
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
 func (options *ZAddOptions) SetConditionalChange(c constants.ConditionalSet) *ZAddOptions {
-	options.conditionalChange = c
+	options.ConditionalChange = c
 	return options
 }
 
 // `updateOptions` specifies conditions for updating scores with zadd command.
 func (options *ZAddOptions) SetUpdateOptions(u UpdateOptions) *ZAddOptions {
-	options.updateOptions = u
+	options.UpdateOptions = u
 	return options
 }
 
 // `Changed` changes the return value from the number of new elements added to the total number of elements changed.
 func (options *ZAddOptions) SetChanged(ch bool) (*ZAddOptions, error) {
-	if options.incr {
+	if options.Incr {
 		return nil, errors.New("changed cannot be set when incr is true")
 	}
-	options.changed = ch
+	options.Changed = ch
 	return options, nil
 }
 
 // `INCR` sets the increment value to use when incr is true.
 func (options *ZAddOptions) SetIncr(incr bool, increment float64, member string) (*ZAddOptions, error) {
-	if options.changed {
+	if options.Changed {
 		return nil, errors.New("incr cannot be set when changed is true")
 	}
-	options.incr = incr
-	options.increment = increment
-	options.member = member
+	options.Incr = incr
+	options.Increment = increment
+	options.Member = member
 	return options, nil
 }
 
@@ -61,20 +61,20 @@ func (opts *ZAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
-	if opts.conditionalChange == constants.OnlyIfExists || opts.conditionalChange == constants.OnlyIfDoesNotExist {
-		args = append(args, string(opts.conditionalChange))
+	if opts.ConditionalChange == constants.OnlyIfExists || opts.ConditionalChange == constants.OnlyIfDoesNotExist {
+		args = append(args, string(opts.ConditionalChange))
 	}
 
-	if opts.updateOptions == ScoreGreaterThanCurrent || opts.updateOptions == ScoreLessThanCurrent {
-		args = append(args, string(opts.updateOptions))
+	if opts.UpdateOptions == ScoreGreaterThanCurrent || opts.UpdateOptions == ScoreLessThanCurrent {
+		args = append(args, string(opts.UpdateOptions))
 	}
 
-	if opts.changed {
+	if opts.Changed {
 		args = append(args, constants.ChangedKeyword)
 	}
 
-	if opts.incr {
-		args = append(args, constants.IncrKeyword, utils.FloatToString(opts.increment), opts.member)
+	if opts.Incr {
+		args = append(args, constants.IncrKeyword, utils.FloatToString(opts.Increment), opts.Member)
 	}
 
 	return args, err

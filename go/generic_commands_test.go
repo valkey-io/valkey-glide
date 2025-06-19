@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -43,12 +44,12 @@ func ExampleClient_Scan() {
 	var client *Client = getExampleClient() // example helper function
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
 	client.Set(context.Background(), "key1", "hello")
-	resCursor, resCollection, err := client.Scan(context.Background(), 0)
+	result, err := client.Scan(context.Background(), models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("Cursor:", resCursor)
-	fmt.Println("Collection:", resCollection)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
 	// Cursor: 0
@@ -60,12 +61,12 @@ func ExampleClient_ScanWithOptions() {
 	opts := options.NewScanOptions().SetCount(10).SetType(constants.ObjectTypeList)
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
 	client.LPush(context.Background(), "key1", []string{"1", "3", "2", "4"})
-	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
+	result, err := client.ScanWithOptions(context.Background(), models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("Cursor:", resCursor)
-	fmt.Println("Collection:", resCollection)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
 	// Cursor: 0

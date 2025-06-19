@@ -2,13 +2,7 @@
 
 package options
 
-import (
-	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
-)
-
 const (
-	// LIMIT subcommand string to include in the SORT and SORT_RO commands.
-	LIMIT_COMMAND_STRING = "LIMIT"
 	// ALPHA subcommand string to include in the SORT and SORT_RO commands.
 	ALPHA_COMMAND_STRING = "ALPHA"
 	// BY subcommand string to include in the SORT and SORT_RO commands.
@@ -17,14 +11,6 @@ const (
 	// GET subcommand string to include in the SORT and SORT_RO commands.
 	GET_COMMAND_STRING = "GET"
 )
-
-// SortLimit struct represents the range of elements to retrieve
-// The LIMIT argument is commonly used to specify a subset of results from the matching elements, similar to the
-// LIMIT clause in SQL (e.g., `SELECT LIMIT offset, count`).
-type SortLimit struct {
-	Offset int64
-	Count  int64
-}
 
 // OrderBy specifies the order to sort the elements. Can be ASC (ascending) or DESC(descending).
 type OrderBy string
@@ -36,7 +22,7 @@ const (
 
 // SortOptions struct combines both the base options and additional sorting options
 type SortOptions struct {
-	SortLimit   *SortLimit
+	Limit       *Limit
 	OrderBy     OrderBy
 	IsAlpha     bool
 	ByPattern   string
@@ -50,12 +36,9 @@ func NewSortOptions() *SortOptions {
 	}
 }
 
-// SortLimit Limits the range of elements
-// Offset is the starting position of the range, zero based.
-// Count is the maximum number of elements to include in the range.
-// A negative count returns all elements from the offset.
-func (opts *SortOptions) SetSortLimit(offset, count int64) *SortOptions {
-	opts.SortLimit = &SortLimit{Offset: offset, Count: count}
+// Set limits the range of elements.
+func (opts *SortOptions) SetLimit(limit Limit) *SortOptions {
+	opts.Limit = &limit
 	return opts
 }
 
@@ -103,13 +86,12 @@ func (opts *SortOptions) AddGetPattern(getPattern string) *SortOptions {
 func (opts *SortOptions) ToArgs() ([]string, error) {
 	var args []string
 
-	if opts.SortLimit != nil {
-		args = append(
-			args,
-			LIMIT_COMMAND_STRING,
-			utils.IntToString(opts.SortLimit.Offset),
-			utils.IntToString(opts.SortLimit.Count),
-		)
+	if opts.Limit != nil {
+		limitArgs, err := opts.Limit.toArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, limitArgs...)
 	}
 
 	if opts.OrderBy != "" {

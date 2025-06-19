@@ -1288,7 +1288,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end The end of the range.
      * @return Command Response - Always <code>OK</code>.<br>
      *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
-     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     <code>end</code>, the list is emptied and the key is removed.<br>
      *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.
@@ -1319,18 +1319,19 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
      * the list stored at <code>key</code>.<br>
-     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
-     * head to tail.<br>
-     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
-     * tail to head.<br>
-     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
-     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     *     If <code>count</code> is positive: Removes elements equal to <code>element</code> moving
+     *     from head to tail.<br>
+     *     If <code>count</code> is negative: Removes elements equal to <code>element</code> moving
+     *     from tail to head.<br>
+     *     If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of
+     *     elements equal to <code>element</code>, it removes all elements equal to <code>element
+     *     </code>.
      * @param element The element to remove from the list.
      * @return Command Response - The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.

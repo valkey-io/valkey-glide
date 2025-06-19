@@ -17,28 +17,40 @@ type Route interface {
 	IsMultiNode() bool
 }
 
-type notMultiNode struct{}
+type SingleNodeRoute interface {
+	IsMultiNode() bool
+	dummySingleNodeRoute()
+}
 
-func (*notMultiNode) IsMultiNode() bool { return false }
-
-type SimpleNodeRoute int
+type (
+	SimpleNodeRoute       int
+	SimpleSingleNodeRoute SimpleNodeRoute
+	SimpleMultiNodeRoute  SimpleNodeRoute
+)
 
 const (
 	// Route request to all nodes.
 	// Warning: Don't use it with write commands, they could be routed to a replica (RO) node and fail.
-	AllNodes SimpleNodeRoute = iota
+	AllNodes SimpleMultiNodeRoute = iota
 	// Route request to all primary nodes.
-	AllPrimaries
+	AllPrimaries SimpleMultiNodeRoute = iota
 	// Route request to a random node.
 	// Warning: Don't use it with write commands, because they could be randomly routed to a replica (RO) node and fail.
-	RandomRoute
+	RandomRoute SimpleSingleNodeRoute = iota
 )
 
-func (route SimpleNodeRoute) IsMultiNode() bool {
-	return route != RandomRoute
+func (route SimpleNodeRoute) IsMultiNode() bool { return route != SimpleNodeRoute(RandomRoute) }
+
+func (route SimpleSingleNodeRoute) IsMultiNode() bool     { return false }
+func (route SimpleMultiNodeRoute) IsMultiNode() bool      { return true }
+func (route SimpleSingleNodeRoute) dummySingleNodeRoute() {}
+
+func (snr SimpleSingleNodeRoute) ToPtr() *Route {
+	a := Route(snr)
+	return &a
 }
 
-func (snr SimpleNodeRoute) ToPtr() *Route {
+func (snr SimpleMultiNodeRoute) ToPtr() *Route {
 	a := Route(snr)
 	return &a
 }
@@ -58,7 +70,6 @@ const (
 type SlotIdRoute struct {
 	SlotType SlotType
 	SlotID   int32
-	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -68,12 +79,14 @@ func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
 	return &SlotIdRoute{SlotType: slotType, SlotID: slotId}
 }
 
+func (route SlotIdRoute) dummySingleNodeRoute() {}
+func (route SlotIdRoute) IsMultiNode() bool     { return false }
+
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotKeyRoute struct {
 	SlotType SlotType
 	SlotKey  string
-	notMultiNode
 }
 
 // - slotType: Defines type of the node being addressed.
@@ -82,11 +95,13 @@ func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 	return &SlotKeyRoute{SlotType: slotType, SlotKey: slotKey}
 }
 
+func (route SlotKeyRoute) dummySingleNodeRoute() {}
+func (route SlotKeyRoute) IsMultiNode() bool     { return false }
+
 // Routes a request to a node by its address.
 type ByAddressRoute struct {
 	Host string
 	Port int32
-	notMultiNode
 }
 
 // Create a route using hostname/address and port.
@@ -111,3 +126,6 @@ func NewByAddressRouteWithHost(host string) (*ByAddressRoute, error) {
 
 	return &ByAddressRoute{Host: split[0], Port: int32(port)}, nil
 }
+
+func (route ByAddressRoute) dummySingleNodeRoute() {}
+func (route ByAddressRoute) IsMultiNode() bool     { return false }

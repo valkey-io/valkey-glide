@@ -1,14 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 import gc
 import json
 import os
 from typing import Dict, List, Tuple
 
+import anyio
 import psutil  # type: ignore[import-untyped]
 import pytest
-import pytest_asyncio
 
 from glide import (
     OpenTelemetryConfig,
@@ -186,7 +185,7 @@ async def test_span_not_exported_before_init_otel(request):
 
 
 class TestOpenTelemetryGlide:
-    @pytest_asyncio.fixture(scope="class")
+    @pytest.fixture(scope="class")
     async def setup_class(self, request):
         # Test wrong OpenTelemetry config before initializing
         test_wrong_opentelemetry_config()
@@ -195,7 +194,7 @@ class TestOpenTelemetryGlide:
         await test_span_not_exported_before_init_otel(request)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest_asyncio.fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     async def setup_test(self, request, cluster_mode):
         # Initialize OpenTelemetry with 100% sampling for tests
         opentelemetry_config = OpenTelemetryConfig(
@@ -247,33 +246,34 @@ class TestOpenTelemetryGlide:
 
         # Execute multiple concurrent commands
         commands = [
-            client.set("test_key1", "value1"),
-            client.get("test_key1"),
-            client.set("test_key2", "value2"),
-            client.get("test_key2"),
-            client.set("test_key3", "value3"),
-            client.get("test_key3"),
+            lambda: client.set("test_key1", "value1"),
+            lambda: client.get("test_key1"),
+            lambda: client.set("test_key2", "value2"),
+            lambda: client.get("test_key2"),
+            lambda: client.set("test_key3", "value3"),
+            lambda: client.get("test_key3"),
         ]
 
-        await asyncio.gather(*commands)
+        async with anyio.create_task_group() as tg:
+            for command in commands:
+                tg.start_soon(command)
 
         # Force garbage collection again
         gc.collect()
 
         # Wait for spans to be flushed
-        await asyncio.sleep(1)
+        await anyio.sleep(1)
 
         # Get final memory usage
         final_memory = process.memory_info().rss
 
-        # Check that memory usage hasn't grown significantly (indicating span leaks)
-        # Allow for some reasonable growth, but not excessive
-        memory_growth = final_memory - initial_memory
-        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
 
+        # Assert memory increase is not more than 10%
         assert (
-            memory_growth < max_allowed_growth
-        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
         await client.close()
 
@@ -304,41 +304,42 @@ class TestOpenTelemetryGlide:
         batch1.set("{batch}key1", "value1")
         batch1.get("{batch}key1")
         batch1.strlen("{batch}key1")
-        batch_operations.append(client.exec(batch1, raise_on_error=True))
+        batch_operations.append(lambda b=batch1: client.exec(b, raise_on_error=True))
 
         # Create second batch
         batch2 = ClusterBatch(is_atomic=True)
         batch2.set("{batch}key2", "value2")
         batch2.object_refcount("{batch}key2")
-        batch_operations.append(client.exec(batch2, raise_on_error=True))
+        batch_operations.append(lambda b=batch2: client.exec(b, raise_on_error=True))
 
         # Create third batch
         batch3 = ClusterBatch(is_atomic=True)
         batch3.set("{batch}key3", "value3")
         batch3.get("{batch}key3")
         batch3.delete(["{batch}key1", "{batch}key2", "{batch}key3"])
-        batch_operations.append(client.exec(batch3, raise_on_error=True))
+        batch_operations.append(lambda b=batch3: client.exec(b, raise_on_error=True))
 
         # Execute all batches concurrently
-        await asyncio.gather(*batch_operations)
+        async with anyio.create_task_group() as tg:
+            for operation in batch_operations:
+                tg.start_soon(operation)
 
         # Force garbage collection again
         gc.collect()
 
         # Wait for spans to be flushed
-        await asyncio.sleep(1)
+        await anyio.sleep(1)
 
         # Get final memory usage
         final_memory = process.memory_info().rss
 
-        # Check that memory usage hasn't grown significantly (indicating span leaks)
-        # Allow for some reasonable growth, but not excessive
-        memory_growth = final_memory - initial_memory
-        max_allowed_growth = 10 * 1024 * 1024  # 10MB threshold
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
 
+        # Assert memory increase is not more than 10%
         assert (
-            memory_growth < max_allowed_growth
-        ), f"Memory grew by {memory_growth} bytes, which exceeds the {max_allowed_growth} byte threshold"
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
         await client.close()
 
@@ -399,7 +400,7 @@ class TestOpenTelemetryGlide:
         assert OpenTelemetry.get_sample_percentage() == 0
 
         # Wait for any pending spans to be flushed
-        await asyncio.sleep(0.5)
+        await anyio.sleep(0.5)
 
         # Clean up any existing files
         if os.path.exists(VALID_ENDPOINT_TRACES):
@@ -412,7 +413,7 @@ class TestOpenTelemetryGlide:
             )
 
         # Wait for any spans to be flushed (though none should be created)
-        await asyncio.sleep(0.5)
+        await anyio.sleep(0.5)
 
         # Check that no spans file was created
         assert not os.path.exists(VALID_ENDPOINT_TRACES)
@@ -426,7 +427,7 @@ class TestOpenTelemetryGlide:
             await client.get(key)
 
         # Wait for spans to be flushed
-        await asyncio.sleep(5)
+        await anyio.sleep(5)
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -464,7 +465,7 @@ class TestOpenTelemetryGlide:
         await client.set("GlideClusterClient_test_otel_global_config", "value")
 
         # Wait for spans to be flushed
-        await asyncio.sleep(0.5)
+        await anyio.sleep(0.5)
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -513,7 +514,7 @@ class TestOpenTelemetryGlide:
             assert response[1] >= 1  # batch.object_refcount("test_key")
 
         # Wait for spans to be flushed
-        await asyncio.sleep(5)
+        await anyio.sleep(5)
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -562,7 +563,7 @@ class TestOpenTelemetryGlide:
         await client2.get("test_key")
 
         # Wait for spans to be flushed
-        await asyncio.sleep(5)
+        await anyio.sleep(5)
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)

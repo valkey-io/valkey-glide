@@ -1,10 +1,16 @@
-# GO wrapper
+# Welcome to Valkey GLIDE!
 
-The Valkey GLIDE Go Wrapper is currently in **public preview.** Please refer to [this page](https://pkg.go.dev/github.com/valkey-io/valkey-glide/go/v2) for available commands.
+Valkey General Language Independent Driver for the Enterprise (GLIDE) is the official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
 
-# Valkey GLIDE
+# Why Choose Valkey GLIDE?
 
-Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, however the public preview currently has limited implementation for the commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS and GCP, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
+- **Community and Open Source**: Join our vibrant community and contribute to the project. We are always here to respond, and the client is for the community.
+- **Reliability**: Built with best practices learned from over a decade of operating Redis OSS-compatible services.
+- **Performance**: Optimized for high performance and low latency.
+- **High Availability**: Designed to ensure your applications are always up and running.
+- **Cross-Language Support**: Implemented using a core driver framework written in Rust, with language-specific extensions to ensure consistency and reduce complexity.
+- **Stability and Fault Tolerance**: We brought our years of experience to create a bulletproof client.
+- **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
 
 ## Supported Engine Versions
 
@@ -54,33 +60,34 @@ To install Valkey GLIDE in your Go project, follow these steps:
 package main
 
 import (
-	"fmt"
+    "context"
+    "fmt"
 
     glide "github.com/valkey-io/valkey-glide/go/v2"
-	"github.com/valkey-io/valkey-glide/go/v2/config"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
-	host := "localhost"
-	port := 6379
+    host := "localhost"
+    port := 6379
 
-	config := config.NewGlideClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port})
+    config := config.NewClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := glide.NewGlideClient(config)
-	if err != nil {
+    client, err := glide.NewClient(config)
+    if err != nil {
         fmt.Println("There was an error: ", err)
         return
-	}
+    }
 
-	res, err := client.Ping()
-	if err != nil {
+    res, err := client.Ping(context.Background())
+    if err != nil {
         fmt.Println("There was an error: ", err)
         return
-	}
-	fmt.Println(res) // PONG
+    }
+    fmt.Println(res) // PONG
 
-	client.Close()
+    client.Close()
 }
 ```
 
@@ -90,35 +97,38 @@ func main() {
 package main
 
 import (
-	"fmt"
+    "context"
+    "fmt"
 
     glide "github.com/valkey-io/valkey-glide/go/v2"
-	"github.com/valkey-io/valkey-glide/go/v2/config"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 func main() {
-	host := "localhost"
-	port := 7001
+    host := "localhost"
+    port := 7001
 
-	config := config.NewGlideClusterClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port})
+    config := config.NewClusterClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: host, Port: port})
 
-	client, err := glide.NewGlideClusterClient(config)
-	if err != nil {
-		fmt.Println("There was an error: ", err)
-		return
-	}
-
-	res, err := client.Ping()
-	if err != nil {
+    client, err := glide.NewClusterClient(config)
+    if err != nil {
         fmt.Println("There was an error: ", err)
         return
-	}
-	fmt.Println(res) // PONG
+    }
 
-	client.Close()
+    res, err := client.Ping(context.Background())
+    if err != nil {
+        fmt.Println("There was an error: ", err)
+        return
+    }
+    fmt.Println(res) // PONG
+
+    client.Close()
 }
 ```
+
+For more code examples please refer to [examples.md](examples/examples.md).
 
 ### Building & Testing
 

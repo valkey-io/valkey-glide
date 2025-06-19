@@ -121,7 +121,8 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        output, err = p.communicate(timeout=10)
+        # ARM64 runners take longer to generate TLS certificates, and sometimes fail if the timeout shorter (10 seconds).
+        output, err = p.communicate(timeout=20)
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"

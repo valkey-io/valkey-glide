@@ -28,8 +28,8 @@ func MapGeoDataToArray(memberGeoMap map[string]GeospatialData) []string {
 
 // Optional arguments to `GeoAdd` in [GeoSpatialCommands]
 type GeoAddOptions struct {
-	conditionalChange constants.ConditionalSet
-	changed           bool
+	ConditionalChange constants.ConditionalSet
+	Changed           bool
 }
 
 func NewGeoAddOptions() *GeoAddOptions {
@@ -38,13 +38,13 @@ func NewGeoAddOptions() *GeoAddOptions {
 
 // `conditionalChange` defines conditions for updating or adding elements with `ZADD` command.
 func (options *GeoAddOptions) SetConditionalChange(conditionalChange constants.ConditionalSet) *GeoAddOptions {
-	options.conditionalChange = conditionalChange
+	options.ConditionalChange = conditionalChange
 	return options
 }
 
 // `Changed` changes the return value from the number of new elements added to the total number of elements changed.
 func (options *GeoAddOptions) SetChanged(changed bool) *GeoAddOptions {
-	options.changed = changed
+	options.Changed = changed
 	return options
 }
 
@@ -53,11 +53,11 @@ func (opts *GeoAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
 
-	if opts.conditionalChange == constants.OnlyIfExists || opts.conditionalChange == constants.OnlyIfDoesNotExist {
-		args = append(args, string(opts.conditionalChange))
+	if opts.ConditionalChange == constants.OnlyIfExists || opts.ConditionalChange == constants.OnlyIfDoesNotExist {
+		args = append(args, string(opts.ConditionalChange))
 	}
 
-	if opts.changed {
+	if opts.Changed {
 		args = append(args, constants.ChangedKeyword)
 	}
 

@@ -856,10 +856,10 @@ func (suite *GlideTestSuite) TestScan() {
 	t := suite.T()
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(context.Background(), key, "Hello"))
-	resCursor, resCollection, err := client.Scan(context.Background(), 0)
+	result, err := client.Scan(context.Background(), models.NewCursor())
 	assert.Nil(t, err)
-	assert.GreaterOrEqual(t, len(resCursor), 1)
-	assert.GreaterOrEqual(t, len(resCollection), 1)
+	assert.GreaterOrEqual(t, len(result.Cursor.String()), 1)
+	assert.GreaterOrEqual(t, len(result.Data), 1)
 }
 
 func (suite *GlideTestSuite) TestScanWithOption() {
@@ -870,17 +870,17 @@ func (suite *GlideTestSuite) TestScanWithOption() {
 	key := uuid.New().String()
 	suite.verifyOK(client.Set(context.Background(), key, "Hello"))
 	opts := options.NewScanOptions().SetCount(10)
-	resCursor, resCollection, err := client.ScanWithOptions(context.Background(), 0, *opts)
+	result, err := client.ScanWithOptions(context.Background(), models.NewCursor(), *opts)
 	assert.Nil(t, err)
-	assert.GreaterOrEqual(t, len(resCursor), 1)
-	assert.GreaterOrEqual(t, len(resCollection), 1)
+	assert.GreaterOrEqual(t, len(result.Cursor.String()), 1)
+	assert.GreaterOrEqual(t, len(result.Data), 1)
 
 	// Test TestScanWithOption SetType
 	opts = options.NewScanOptions().SetType(constants.ObjectTypeString)
-	resCursor, resCollection, err = client.ScanWithOptions(context.Background(), 0, *opts)
+	result, err = client.ScanWithOptions(context.Background(), models.NewCursor(), *opts)
 	assert.Nil(t, err)
-	assert.GreaterOrEqual(t, len(resCursor), 1)
-	assert.GreaterOrEqual(t, len(resCollection), 1)
+	assert.GreaterOrEqual(t, len(result.Cursor.String()), 1)
+	assert.GreaterOrEqual(t, len(result.Data), 1)
 }
 
 func (suite *GlideTestSuite) TestConfigRewrite() {

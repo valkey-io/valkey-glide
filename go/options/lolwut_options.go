@@ -15,7 +15,7 @@ const (
 // Optional arguments to `Lolwut` for standalone client
 type LolwutOptions struct {
 	Version int64
-	Args    *[]int
+	Args    []int
 }
 
 // Optional arguments to `Lolwut` for cluster client
@@ -33,7 +33,7 @@ func NewLolwutOptions(version int64) *LolwutOptions {
 // These arguments customize the dimensions or parameters of the ASCII art
 // based on the version.
 func (options *LolwutOptions) SetArgs(args []int) *LolwutOptions {
-	options.Args = &args
+	options.Args = args
 	return options
 }
 
@@ -44,7 +44,7 @@ func (options *LolwutOptions) ToArgs() ([]string, error) {
 	args := []string{string(VersionStr), utils.IntToString(options.Version)}
 
 	if options.Args != nil {
-		for _, arg := range *options.Args {
+		for _, arg := range options.Args {
 			args = append(args, utils.IntToString(int64(arg)))
 		}
 	}

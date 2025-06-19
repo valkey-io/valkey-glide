@@ -1204,7 +1204,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param end - The end of the range.
      *
      * Command Response - always "OK".
-     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied and the key is removed.
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      */
@@ -1213,12 +1213,12 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
-     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
-     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      *
      * @param key - The key of the list.
      * @param count - The count of the occurrences of elements equal to `element` to remove.
+     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
+     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
+     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      * @param element - The element to remove from the list.
      *
      * Command Response - the number of the removed elements.

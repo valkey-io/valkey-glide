@@ -10,7 +10,7 @@ const (
 	CountKeyword      string = "COUNT"      // Valkey API keyword used to extract specific number of matching indices from a list.
 	FullKeyword       string = "FULL"       // Valkey API keyword used in XINFO STREAM
 	MatchKeyword      string = "MATCH"      // Valkey API keyword used to indicate the match filter.
-	NoValueKeyword    string = "NOVALUE"    // Valkey API keyword for the no value option for hcsan command.
+	NoValuesKeyword   string = "NOVALUES"   // Valkey API keyword for the no value option for hcsan command.
 	WithScoreKeyword  string = "WITHSCORE"  // Valkey API keyword for the with score option for zrank and zrevrank commands.
 	WithScoresKeyword string = "WITHSCORES" // Valkey API keyword for ZRandMember and ZDiff command to return scores along with members.
 	NoScoresKeyword   string = "NOSCORES"   // Valkey API keyword for the no scores option for zscan command.

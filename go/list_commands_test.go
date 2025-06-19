@@ -4,6 +4,7 @@ package glide
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -680,11 +681,13 @@ func ExampleClient_LMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClusterClient_LMPop() {
@@ -695,11 +698,13 @@ func ExampleClusterClient_LMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClient_LMPopCount() {
@@ -710,11 +715,13 @@ func ExampleClient_LMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClusterClient_LMPopCount() {
@@ -725,11 +732,13 @@ func ExampleClusterClient_LMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClient_BLMPop() {
@@ -740,11 +749,13 @@ func ExampleClient_BLMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClusterClient_BLMPop() {
@@ -755,11 +766,13 @@ func ExampleClusterClient_BLMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClient_BLMPopCount() {
@@ -770,11 +783,13 @@ func ExampleClient_BLMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClusterClient_BLMPopCount() {
@@ -785,11 +800,13 @@ func ExampleClusterClient_BLMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClient_LSet() {

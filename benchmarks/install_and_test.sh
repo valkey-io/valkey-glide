@@ -80,7 +80,7 @@ function runJavaBenchmark(){
 function runGoBenchmark(){
     cd ${BENCH_FOLDER}/../go/benchmarks
     export LD_LIBRARY_PATH=${BENCH_FOLDER}/../go/target/release:$LD_LIBRARY_PATH
-    go run . -resultsFile ${BENCH_FOLDER}/$1 -dataSize $2 -concurrentTasks $concurrentTasks -clients $chosenClients -host $host $portFlag -clientCount $clientCount $tlsFlag $clusterFlag $minimalFlag
+    go run . -resultsFile "${BENCH_FOLDER}/$1" -dataSize "$2" -concurrentTasks "$concurrentTasks" -clients "$chosenClients" -host "$host" $portFlag -clientCount "$clientCount" $tlsFlag $clusterFlag $minimalFlag
 }
 
 function runRustBenchmark(){
