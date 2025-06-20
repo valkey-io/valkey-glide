@@ -434,8 +434,7 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
-     *     null</code> if <code>count</code> is non-positive.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
@@ -475,8 +474,7 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
-     *     null</code> if <code>count</code> is non-positive.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
@@ -599,8 +597,7 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
-     *     null</code> if <code>count</code> is non-positive.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
