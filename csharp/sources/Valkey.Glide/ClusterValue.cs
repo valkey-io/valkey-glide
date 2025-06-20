@@ -18,7 +18,7 @@ namespace Valkey.Glide;
 /// <c>nodeResponse</c> is of type <typeparamref name="T" />.
 /// </remarks>
 /// <typeparam name="T">The wrapped response type</typeparam>
-public class ClusterValue<T> where T : class?
+public class ClusterValue<T>
 {
     private Dictionary<string, T>? _multiValue = default;
     private T? _singleValue = default;

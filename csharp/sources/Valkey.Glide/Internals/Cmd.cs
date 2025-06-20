@@ -13,11 +13,17 @@ internal class Request // TODO naming
 {
     internal interface ICmd
     {
+        /// <summary>
+        /// Convert to an FFI-ready struct.
+        /// </summary>
         Cmd ToFfi();
+        /// <summary>
+        /// Get untyped converted (used for batch).
+        /// </summary>
         Func<object?, object?> GetConverter();
     }
 
-    internal class Cmd<R, T> : ICmd where R : class? where T : class?
+    internal class Cmd<R, T> : ICmd
     {
         public readonly bool IsNullable;
         public readonly Func<R, T> Converter;
@@ -39,21 +45,16 @@ internal class Request // TODO naming
             {
                 return value;
             }
-            return Convert((R)value!);
+            Debug.Assert(value!.GetType() == typeof(R) || typeof(R).IsAssignableFrom(value!.GetType()),
+                $"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(R).GetRealTypeName()}");
+
+            return Converter((R)value!);
         };
 #pragma warning restore IDE0046 // Convert to conditional expression
 
         public Cmd ToFfi() => new(Request, Args.Args);
 
         public new string ToString() => $"{Request} [{string.Join(' ', Args.Args.ToStrings())}]";
-
-        public T Convert(R value)
-        {
-            Debug.Assert(value!.GetType() == typeof(R) || typeof(R).IsAssignableFrom(value!.GetType()),
-                $"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(R).GetRealTypeName()}");
-
-            return Converter(value);
-        }
 
         public Cmd(RequestType request, GlideString[] args, bool isNullable, Func<R, T> converter)
         {
@@ -97,7 +98,6 @@ internal class Request // TODO naming
     public static Cmd<string, string> Set(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
 
-
     /// <summary>
     /// Create a Cmd which returns OK
     /// </summary>
@@ -107,6 +107,6 @@ internal class Request // TODO naming
     /// <summary>
     /// Create a Cmd which does not need type conversion
     /// </summary>
-    private static Cmd<T, T> Simple<T>(RequestType request, GlideString[] args, bool isNullable = false) where T : class?
+    private static Cmd<T, T> Simple<T>(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, o => o);
 }
