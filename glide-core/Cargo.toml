@@ -54,6 +54,7 @@ socket-layer = [
     "tokio-util",
 ]
 standalone_heartbeat = []
+rust_client = ["logger_core/rust_client"]
 
 [dev-dependencies]
 rsevents = "0.3.1"
