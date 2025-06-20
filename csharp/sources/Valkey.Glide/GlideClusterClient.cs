@@ -7,7 +7,6 @@ using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
-using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Pipeline.Options;
 using static Valkey.Glide.Route;
 
@@ -76,10 +75,10 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
     public async Task<Dictionary<string, string>> Info() => await Info([]);
 
     public async Task<Dictionary<string, string>> Info(InfoOptions.Section[] sections)
-        => await Command(Request.InfoCluster(sections));
+        => await Command(Request.Info(sections).ToMultiNodeValue());
 
     public async Task<ClusterValue<string>> Info(Route route) => await Info([], route);
 
     public async Task<ClusterValue<string>> Info(InfoOptions.Section[] sections, Route route)
-        => await Command(Request.InfoWithRoute(sections, route is SingleNodeRoute), route);
+        => await Command(Request.Info(sections).ToClusterValue(route is SingleNodeRoute), route);
 }

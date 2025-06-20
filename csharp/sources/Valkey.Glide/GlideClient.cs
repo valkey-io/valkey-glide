@@ -71,5 +71,5 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
     public async Task<string> Info() => await Info([]);
 
     public async Task<string> Info(InfoOptions.Section[] sections)
-        => await Command(Request.InfoStandalone(sections));
+        => await Command(Request.Info(sections));
 }

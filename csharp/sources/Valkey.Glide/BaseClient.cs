@@ -2,7 +2,6 @@
 
 using System.Runtime.InteropServices;
 
-using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 using Valkey.Glide.Pipeline;
 
@@ -15,15 +14,9 @@ using static Valkey.Glide.Pipeline.Options;
 
 namespace Valkey.Glide;
 
-public abstract class BaseClient : IDisposable, IStringBaseCommands
+public abstract partial class BaseClient : IDisposable
 {
     #region public methods
-    public async Task<string> Set(GlideString key, GlideString value)
-        => await Command(Request.Set(key, value));
-
-    public async Task<GlideString?> Get(GlideString key)
-        => await Command(Request.Get(key));
-
     public void Dispose()
     {
         GC.SuppressFinalize(this);
@@ -78,7 +71,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
     /// <param name="command"></param>
     /// <param name="route"></param>
     /// <returns></returns>
-    internal async Task<T> Command<R, T>(Request.IICmd<R, T> command, Route? route = null) where R : class? where T : class?
+    internal async Task<T> Command<R, T>(Request.Cmd<R, T> command, Route? route = null) where R : class? where T : class?
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
         using Cmd cmd = command.ToFfi();

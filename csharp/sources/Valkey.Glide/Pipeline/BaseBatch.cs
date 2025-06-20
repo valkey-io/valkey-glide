@@ -70,7 +70,7 @@ public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T
     public T Info() => Info([]);
 
     /// <inheritdoc cref="IBatch.Info(Section[])" />
-    public T Info(Section[] sections) => AddCmd(Request.InfoStandalone(sections));
+    public T Info(Section[] sections) => AddCmd(Request.Info(sections));
 
     IBatch IBatch.CustomCommand(GlideString[] args) => CustomCommand(args);
     IBatch IBatch.Get(GlideString key) => Get(key);
