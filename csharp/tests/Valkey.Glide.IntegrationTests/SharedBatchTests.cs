@@ -51,6 +51,7 @@ public class SharedBatchTests
         string key2 = "{BatchRaiseOnError}" + Guid.NewGuid();
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        // TODO replace custom command
         _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 
         object?[] res = isCluster
