@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -39,7 +40,6 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -3558,5 +3558,53 @@ public class CommandTests {
                 script.close();
             }
         }
+    }
+
+    /**
+     * Verifies that a script is retained in the local scripts container and not removed while another
+     * instance with the same hash still exists, even after the original reference is dropped and the
+     * server cache is flushed.
+     */
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void test_script_is_not_removed_while_another_instance_exists(
+            GlideClusterClient clusterClient) {
+        String code = "return 'Script Exists'";
+        Script script1 = new Script(code, false);
+        Script script2 = new Script(code, false);
+
+        // Assert both have the same SHA1
+        assertEquals(script1.getHash(), script2.getHash());
+
+        // Run first script and drop reference
+        assertEquals("Script Exists", clusterClient.invokeScript(script1).get());
+
+        // Manually simulate release of script1 reference
+        script1.close();
+
+        // Flush script from server
+        assertEquals("OK", clusterClient.scriptFlush().get());
+
+        // Server should now report that the script doesn't exist
+        Boolean[] exists = clusterClient.scriptExists(new String[] {script1.getHash()}).get();
+        assertArrayEquals(new Boolean[] {false}, exists);
+
+        // Invoke again using script2 (same hash, still in local cache)
+        assertEquals("Script Exists", clusterClient.invokeScript(script2).get());
+
+        // Manually simulate release of script2 reference
+        script2.close();
+
+        // Flush the script from server agains
+        assertEquals("OK", clusterClient.scriptFlush().get());
+
+        // Make sure the script doesn't exist on the local container anymore
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.invokeScript(script2).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(
+                exception.getMessage().toUpperCase().contains("NOSCRIPT"),
+                "Expected NOSCRIPT error after script is fully released and flushed");
     }
 }

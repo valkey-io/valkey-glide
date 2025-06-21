@@ -6,6 +6,7 @@ use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
+use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -18,10 +19,12 @@ use redis::{
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
+use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
@@ -29,8 +32,8 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use redis::InfoDict;
-use telemetrylib::*;
-use tokio::sync::mpsc;
+use telemetrylib::GlideOpenTelemetry;
+use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
@@ -58,6 +61,67 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 /// A 3-second interval provides a reasonable balance between connection validation
 /// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
+
+/// A static Glide runtime instance
+static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
+
+pub struct GlideRt {
+    pub runtime: Handle,
+    pub(crate) thread: Option<JoinHandle<()>>,
+    shutdown_notifier: Arc<Notify>,
+}
+
+/// Initializes a single-threaded Tokio runtime in a dedicated thread (if not already initialized)
+/// and returns a static reference to the `GlideRt` wrapper, which holds the runtime handle and a shutdown notifier.
+/// The runtime remains active indefinitely until a shutdown is triggered via the notifier, allowing tasks to be spawned
+/// throughout the lifetime of the application.
+pub fn get_or_init_runtime() -> Result<&'static GlideRt, String> {
+    RUNTIME.get_or_try_init(|| {
+        let notify = Arc::new(Notify::new());
+        let notify_thread = notify.clone();
+
+        let (tx, rx) = oneshot::channel();
+
+        let thread_handle = thread::Builder::new()
+            .name("glide-runtime-thread".into())
+            .spawn(move || {
+                match Builder::new_current_thread().enable_all().build() {
+                    Ok(runtime) => {
+                        let _ = tx.send(Ok(runtime.handle().clone()));
+                        // Keep runtime alive until shutdown is signaled
+                        runtime.block_on(notify_thread.notified());
+                    }
+                    Err(err) => {
+                        let _ = tx.send(Err(format!("Failed to create runtime: {err}")));
+                    }
+                }
+            })
+            .map_err(|_| "Failed to spawn runtime thread".to_string())?;
+
+        let runtime_handle = rx
+            .blocking_recv()
+            .map_err(|err| format!("Failed to receive runtime handle: {err:?}"))??;
+
+        Ok(GlideRt {
+            runtime: runtime_handle,
+            thread: Some(thread_handle),
+            shutdown_notifier: notify,
+        })
+    })
+}
+
+impl Drop for GlideRt {
+    fn drop(&mut self) {
+        if let Some(rt) = RUNTIME.get() {
+            rt.shutdown_notifier.notify_one();
+        }
+
+        // Move the JoinHandle out of the Option and join it
+        if let Some(handle) = self.thread.take() {
+            handle.join().expect("GlideRt thread panicked");
+        }
+    }
+}
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
@@ -119,11 +183,19 @@ pub(super) fn get_connection_info(
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
     Cluster { client: ClusterConnection },
+    Lazy(Box<LazyClient>),
+}
+
+/// A client wrapper that defers connection until the first command is executed.
+#[derive(Clone)]
+pub struct LazyClient {
+    config: ConnectionRequest,
+    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
 #[derive(Clone)]
 pub struct Client {
-    internal_client: ClientWrapper,
+    internal_client: Arc<RwLock<ClientWrapper>>,
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
@@ -134,10 +206,19 @@ async fn run_with_timeout<T>(
     future: impl futures::Future<Output = RedisResult<T>> + Send,
 ) -> redis::RedisResult<T> {
     match timeout {
-        Some(duration) => tokio::time::timeout(duration, future)
-            .await
-            .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
-            .and_then(|res| res),
+        Some(duration) => match tokio::time::timeout(duration, future).await {
+            Ok(result) => result,
+            Err(_) => {
+                // Record timeout error metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                    log_error(
+                        "OpenTelemetry:timeout_error",
+                        format!("Failed to record timeout error: {}", e),
+                    );
+                }
+                Err(io::Error::from(io::ErrorKind::TimedOut).into())
+            }
+        },
         None => future.await,
     }
 }
@@ -249,53 +330,105 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
+        {
+            let guard = self.internal_client.read().await;
+            if !matches!(&*guard, ClientWrapper::Lazy(_)) {
+                return Ok(guard.clone()); // ✅ Already initialized, return clone
+            }
+        }
+
+        let mut guard = self.internal_client.write().await;
+
+        if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
+            let mut config = lazy_client.config.clone();
+            let push_sender = lazy_client.push_sender.clone();
+
+            // When initializing the actual connection from a lazy client,
+            // the underlying connection attempt itself should not be lazy.
+            config.lazy_connect = false;
+
+            // Create the appropriate client based on configuration
+            let real_client = if config.cluster_mode_enabled {
+                // Create cluster client
+                let client = create_cluster_client(config, push_sender).await?;
+                ClientWrapper::Cluster { client }
+            } else {
+                // Create standalone client
+                let client = StandaloneClient::create_client(config, push_sender)
+                    .await
+                    .map_err(|e| {
+                        RedisError::from((
+                            ErrorKind::IoError,
+                            "Standalone connect failed",
+                            format!("{e:?}"),
+                        ))
+                    })?;
+                ClientWrapper::Standalone(client)
+            };
+
+            // Replace the lazy client with the real client
+            *guard = real_client;
+        }
+
+        Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
+    }
+
+    /// Send a command to the server.
+    /// This function will route the command to the correct node, and retry if needed.
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
-        let expected_type = expected_type_for_cmd(cmd);
-        let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
-            Ok(request_timeout) => request_timeout,
-            Err(err) => {
-                return async { Err(err) }.boxed();
-            }
-        };
-        run_with_timeout(request_timeout, async move {
-            match self.internal_client {
-                ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
-                ClientWrapper::Cluster { ref mut client } => {
-                    let routing =
-                        if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
-                            routing
-                        {
-                            let cmd_name = cmd.command().unwrap_or_default();
-                            let cmd_name = String::from_utf8_lossy(&cmd_name);
-                            if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
+        Box::pin(async move {
+            let client = self.get_or_initialize_client().await?;
+
+            let expected_type = expected_type_for_cmd(cmd);
+            let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
+                Ok(request_timeout) => request_timeout,
+                Err(err) => return Err(err),
+            };
+
+            let value = run_with_timeout(request_timeout, async move {
+                match client {
+                    ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
+                    ClientWrapper::Cluster {mut client } => {
+                        let final_routing =
+                            if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
+                                routing
+                            {
+                                let cmd_name = cmd.command().unwrap_or_default();
+                                let cmd_name = String::from_utf8_lossy(&cmd_name);
+                                if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
                                 // A read-only command, go ahead and send it to a random node
-                                RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
-                            } else {
+                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+                                } else {
                                 // A "Random" node was selected, but the command is a "@write" command
                                 // change the routing to "RandomPrimary"
-                                log_warn(
-                                    "send_command",
-                                    format!(
-                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
-                                    ),
-                                );
-                                RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
-                            }
-                        } else {
-                            routing
-                                .or_else(|| RoutingInfo::for_routable(cmd))
-                                .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                        };
-                    client.route_command(cmd, routing).await
+                                    log_warn(
+                                        "send_command",
+                                        format!(
+                                            "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
+                                        ),
+                                    );
+                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
+                                }
+                            } else {
+                                routing
+                                    .or_else(|| RoutingInfo::for_routable(cmd))
+                                    .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                            };
+                        client.route_command(cmd, final_routing).await
+                    },
+                    ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
-            }
-            .and_then(|value| convert_to_expected_type(value, expected_type))
+                .and_then(|value| convert_to_expected_type(value, expected_type))
+            })
+            .await?;
+
+            Ok(value)
         })
-        .boxed()
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -316,21 +449,30 @@ impl Client {
         scan_state_cursor: &'a ScanStateRC,
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
-        match self.internal_client {
+        // Clone arguments before the async block (ScanStateRC is Arc, clone is cheap)
+        let scan_state_cursor_clone = scan_state_cursor.clone();
+        let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
+
+        // Check and initialize if lazy *inside* the async block
+        let client = self.get_or_initialize_client().await?;
+
+        match client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
             }
-            ClientWrapper::Cluster { ref mut client } => {
+            ClientWrapper::Cluster { mut client } => {
                 let (cursor, keys) = client
-                    .cluster_scan(scan_state_cursor.clone(), cluster_scan_args)
+                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
                     .await?;
                 let cluster_cursor_id = if cursor.is_finished() {
-                    Value::BulkString(FINISHED_SCAN_CURSOR.into())
+                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
                 } else {
                     Value::BulkString(insert_cluster_scan_cursor(cursor).into())
                 };
                 Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
             }
+            // Lazy case is now handled by the initial check
+            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }
     }
 
@@ -417,41 +559,60 @@ impl Client {
         transaction_timeout: Option<u32>,
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
-        let command_count = pipeline.cmd_iter().count();
-        // The offset is set to command_count + 1 to account for:
-        // 1. The first command, which is the "MULTI" command, that returns "OK"
-        // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
-        // After these initial responses (OK and QUEUED), we expect a single response,
-        // which is an array containing the results of all the commands in the pipeline.
-        let offset = command_count + 1;
-        run_with_timeout(
-            Some(to_duration(transaction_timeout, self.request_timeout)),
-            async move {
-                let values = match self.internal_client {
-                    ClientWrapper::Standalone(ref mut client) => {
-                        client.send_pipeline(pipeline, offset, 1).await
-                    }
+        Box::pin(async move {
+            let client = self.get_or_initialize_client().await?;
 
-                    ClientWrapper::Cluster { ref mut client } => match routing {
-                        Some(RoutingInfo::SingleNode(route)) => {
-                            client
-                                .route_pipeline(pipeline, offset, 1, Some(route), None)
-                                .await
+            let command_count = pipeline.cmd_iter().count();
+            // The offset is set to command_count + 1 to account for:
+            // 1. The first command, which is the "MULTI" command, that returns "OK"
+            // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
+            // After these initial responses (OK and QUEUED), we expect a single response,
+            // which is an array containing the results of all the commands in the pipeline.
+            let offset = command_count + 1;
+
+            run_with_timeout(
+                Some(to_duration(transaction_timeout, self.request_timeout)),
+                async move {
+                    match client {
+                        ClientWrapper::Standalone(mut client) => {
+                            let values = client.send_pipeline(pipeline, offset, 1).await?;
+                            Client::get_transaction_values(
+                                pipeline,
+                                values,
+                                command_count,
+                                offset,
+                                raise_on_error,
+                            )
                         }
-                        _ => client.req_packed_commands(pipeline, offset, 1, None).await,
-                    },
-                }?;
-
-                Self::get_transaction_values(
-                    pipeline,
-                    values,
-                    command_count,
-                    offset,
-                    raise_on_error,
-                )
-            },
-        )
-        .boxed()
+                        ClientWrapper::Cluster { mut client } => {
+                            let values = match routing {
+                                Some(RoutingInfo::SingleNode(route)) => {
+                                    client
+                                        .route_pipeline(pipeline, offset, 1, Some(route), None)
+                                        .await?
+                                }
+                                _ => {
+                                    client
+                                        .req_packed_commands(pipeline, offset, 1, None)
+                                        .await?
+                                }
+                            };
+                            Client::get_transaction_values(
+                                pipeline,
+                                values,
+                                command_count,
+                                offset,
+                                raise_on_error,
+                            )
+                        }
+                        ClientWrapper::Lazy(_) => {
+                            unreachable!("Lazy client should have been initialized")
+                        }
+                    }
+                },
+            )
+            .await
+        })
     }
 
     /// Send a pipeline to the server.
@@ -475,59 +636,63 @@ impl Client {
         pipeline_timeout: Option<u32>,
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
-        let command_count = pipeline.cmd_iter().count();
-        if pipeline.is_empty() {
-            return async {
-                Err(RedisError::from((
+        Box::pin(async move {
+            let client = self.get_or_initialize_client().await?;
+
+            let command_count = pipeline.cmd_iter().count();
+            if pipeline.is_empty() {
+                return Err(RedisError::from((
                     ErrorKind::ResponseError,
                     "Received empty pipeline",
-                )))
+                )));
             }
-            .boxed();
-        }
 
-        run_with_timeout(
-            Some(to_duration(pipeline_timeout, self.request_timeout)),
-            async move {
-                let values = match self.internal_client {
-                    ClientWrapper::Standalone(ref mut client) => {
-                        client.send_pipeline(pipeline, 0, command_count).await
-                    }
-
-                    ClientWrapper::Cluster { ref mut client } => match routing {
-                        Some(RoutingInfo::SingleNode(route)) => {
-                            client
-                                .route_pipeline(
-                                    pipeline,
-                                    0,
-                                    command_count,
-                                    Some(route),
-                                    Some(pipeline_retry_strategy),
-                                )
-                                .await
+            run_with_timeout(
+                Some(to_duration(pipeline_timeout, self.request_timeout)),
+                async move {
+                    let values = match client {
+                        ClientWrapper::Standalone(mut client) => {
+                            client.send_pipeline(pipeline, 0, command_count).await
                         }
-                        _ => {
-                            client
-                                .req_packed_commands(
-                                    pipeline,
-                                    0,
-                                    command_count,
-                                    Some(pipeline_retry_strategy),
-                                )
-                                .await
-                        }
-                    },
-                }?;
 
-                Self::convert_pipeline_values_to_expected_types(
-                    pipeline,
-                    values,
-                    command_count,
-                    raise_on_error,
-                )
-            },
-        )
-        .boxed()
+                        ClientWrapper::Cluster { mut client } => match routing {
+                            Some(RoutingInfo::SingleNode(route)) => {
+                                client
+                                    .route_pipeline(
+                                        pipeline,
+                                        0,
+                                        command_count,
+                                        Some(route),
+                                        Some(pipeline_retry_strategy),
+                                    )
+                                    .await
+                            }
+                            _ => {
+                                client
+                                    .req_packed_commands(
+                                        pipeline,
+                                        0,
+                                        command_count,
+                                        Some(pipeline_retry_strategy),
+                                    )
+                                    .await
+                            }
+                        },
+                        ClientWrapper::Lazy(_) => {
+                            unreachable!("Lazy client should have been initialized")
+                        }
+                    }?;
+
+                    Client::convert_pipeline_values_to_expected_types(
+                        pipeline,
+                        values,
+                        command_count,
+                        raise_on_error,
+                    )
+                },
+            )
+            .await
+        })
     }
 
     pub async fn invoke_script<'a>(
@@ -537,6 +702,8 @@ impl Client {
         args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
+        let _ = self.get_or_initialize_client().await?;
+
         let eval = eval_cmd(hash, keys, args);
         let result = self.send_command(&eval, routing.clone()).await;
         let Err(err) = result else {
@@ -599,13 +766,15 @@ impl Client {
         // Since the password update operation is not a command that go through the regular command pipeline,
         // it is not have the regular timeout handling, as such we need to handle it separately.
         match tokio::time::timeout(timeout, async {
-            match self.internal_client {
+            let mut client = self.get_or_initialize_client().await?;
+            match client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.update_connection_password(password.clone()).await
                 }
                 ClientWrapper::Cluster { ref mut client } => {
                     client.update_connection_password(password.clone()).await
                 }
+                ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
         })
         .await
@@ -651,8 +820,10 @@ impl Client {
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
     async fn get_username(&mut self) -> RedisResult<Option<String>> {
-        match &mut self.internal_client {
-            ClientWrapper::Cluster { client } => match client.get_username().await {
+        let client = self.get_or_initialize_client().await?;
+
+        match client {
+            ClientWrapper::Cluster { mut client } => match client.get_username().await {
                 Ok(Value::SimpleString(username)) => Ok(Some(username)),
                 Ok(Value::Nil) => Ok(None),
                 Ok(other) => Err(RedisError::from((
@@ -667,6 +838,7 @@ impl Client {
                 ))),
             },
             ClientWrapper::Standalone(client) => Ok(client.get_username()),
+            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }
     }
 }
@@ -795,14 +967,14 @@ async fn create_cluster_client(
                         return Err(RedisError::from((
                             ErrorKind::ResponseError,
                             "Failed to parse engine version",
-                        )))
+                        )));
                     }
                 },
                 _ => {
                     return Err(RedisError::from((
                         ErrorKind::ResponseError,
                         "Could not determine engine version from INFO result",
-                    )))
+                    )));
                 }
             }
         }
@@ -961,28 +1133,13 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        if let Some(endpoint_str) = &request.otel_endpoint {
-            let trace_exporter = GlideOpenTelemetryTraceExporter::from_str(endpoint_str.as_str())
-                .map_err(ConnectionError::IoError)?;
-            let config = GlideOpenTelemetryConfigBuilder::default()
-                .with_flush_interval(std::time::Duration::from_millis(
-                    request
-                        .otel_span_flush_interval_ms
-                        .unwrap_or(DEFAULT_FLUSH_SPAN_INTERVAL_MS),
-                ))
-                .with_trace_exporter(trace_exporter)
-                .build();
-
-            let _ = GlideOpenTelemetry::initialise(config).map_err(|e| {
-                log_error(
-                    "OpenTelemetry initialization",
-                    format!("OpenTelemetry initialization failed: {}", e),
-                )
-            });
-        };
-
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
-            let internal_client = if request.cluster_mode_enabled {
+            let internal_client = if request.lazy_connect {
+                ClientWrapper::Lazy(Box::new(LazyClient {
+                    config: request,
+                    push_sender,
+                }))
+            } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
                     .await
                     .map_err(ConnectionError::Cluster)?;
@@ -996,7 +1153,7 @@ impl Client {
             };
 
             Ok(Self {
-                internal_client,
+                internal_client: Arc::new(RwLock::new(internal_client)),
                 request_timeout,
                 inflight_requests_allowed,
             })
@@ -1041,7 +1198,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::{
-        get_request_timeout, RequestTimeoutOption, TimeUnit, BLOCKING_CMD_TIMEOUT_EXTENSION,
+        BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
 
     use super::get_timeout_from_cmd_arg;

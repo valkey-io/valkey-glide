@@ -274,6 +274,7 @@ public class VectorSearchTests {
                                                     (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
                                                     (byte) 0
                                                 })))
+                        .addReturnField("vec")
                         .build();
         var query = "*=>[KNN 2 @VEC $query_vec]";
         var ftsearch = FT.search(client, index, query, options).get();
@@ -283,11 +284,9 @@ public class VectorSearchTests {
                     2L,
                     Map.of(
                             gs(prefix + 0),
-                            Map.of(gs("__VEC_score"), gs("0"), gs("vec"), gs("\0\0\0\0\0\0\0\0")),
+                            Map.of(gs("vec"), gs("\0\0\0\0\0\0\0\0")),
                             gs(prefix + 1),
                             Map.of(
-                                    gs("__VEC_score"),
-                                    gs("1"),
                                     gs("vec"),
                                     gs(
                                             new byte[] {

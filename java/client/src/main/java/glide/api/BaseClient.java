@@ -360,11 +360,8 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
-            ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
-            if (threadPoolResource == null) {
-                threadPoolResource =
-                        ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
-            }
+            ThreadPoolResource threadPoolResource =
+                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             MessageHandler messageHandler = buildMessageHandler(config);
             ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
@@ -1477,7 +1474,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LRange,
                 new String[] {key, Long.toString(start), Long.toString(end)},
-                response -> castArray(handleArrayOrNullResponse(response), String.class));
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1485,7 +1482,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LRange,
                 new GlideString[] {key, gs(Long.toString(start)), gs(Long.toString(end))},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -3108,14 +3105,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> xpending(@NonNull String key, @NonNull String group) {
         return commandManager.submitNewCommand(
-                XPending, new String[] {key, group}, this::handleArrayOrNullResponse);
+                XPending, new String[] {key, group}, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xpending(
             @NonNull GlideString key, @NonNull GlideString group) {
         return commandManager.submitNewCommand(
-                XPending, new GlideString[] {key, group}, this::handleArrayOrNullResponseBinary);
+                XPending, new GlideString[] {key, group}, this::handleArrayResponseBinary);
     }
 
     @Override
@@ -3807,15 +3804,16 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull String key, @NonNull String[] elements) {
+    public CompletableFuture<Boolean> pfadd(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override
-    public CompletableFuture<Long> pfadd(@NonNull GlideString key, @NonNull GlideString[] elements) {
+    public CompletableFuture<Boolean> pfadd(
+            @NonNull GlideString key, @NonNull GlideString[] elements) {
         GlideString[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
     }
 
     @Override
@@ -4785,7 +4783,9 @@ public abstract class BaseClient
             long ttl,
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
-        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key, gs(Long.toString(ttl)), gs(value)}, restoreOptions.toArgs());
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 

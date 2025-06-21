@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use jni::{errors::Error as JNIError, JNIEnv};
+use jni::{JNIEnv, errors::Error as JNIError};
 use log::error;
 use std::string::FromUtf8Error;
 
@@ -9,6 +9,7 @@ pub enum FFIError {
     Uds(String),
     Utf8(FromUtf8Error),
     Logger(String),
+    OpenTelemetry(String),
 }
 
 impl From<jni::errors::Error> for FFIError {
@@ -30,6 +31,7 @@ impl std::fmt::Display for FFIError {
             FFIError::Uds(err) => write!(f, "{}", err),
             FFIError::Utf8(err) => write!(f, "{}", err),
             FFIError::Logger(err) => write!(f, "{}", err),
+            FFIError::OpenTelemetry(err) => write!(f, "{}", err),
         }
     }
 }

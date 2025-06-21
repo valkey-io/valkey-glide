@@ -6,6 +6,7 @@ import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { Socket } from "net";
 import { promisify } from "util";
+import ValkeyCluster, { TestTLSConfig } from "../../utils/TestUtils";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -40,8 +41,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
-} from "..";
-import ValkeyCluster from "../../utils/TestUtils";
+} from "../build-ts";
 const execAsync = promisify(exec);
 
 export function getRandomKey() {
@@ -218,6 +218,78 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(setResult)).toEqual("OK");
     const result = await client.get(key);
     expect(intoString(result)).toEqual(value);
+}
+
+/**
+ * Parse CLIENT LIST output and count the number of client connections
+ * @param output - The output from CLIENT LIST command
+ * @returns The number of connected clients
+ */
+export async function getClientListOutputCount(
+    output: GlideReturnType,
+): Promise<number> {
+    if (output === null) {
+        return 0;
+    }
+
+    const text =
+        output instanceof Buffer ? output.toString("utf8") : String(output);
+
+    if (!text.trim()) {
+        return 0;
+    }
+
+    return text.split("\n").filter((line) => line.trim().length > 0).length;
+}
+
+/**
+ * Get the count of client connections for a client
+ * @param client - GlideClient or GlideClusterClient instance
+ * @returns The number of connected clients
+ */
+export async function getClientCount(
+    client: GlideClient | GlideClusterClient,
+): Promise<number> {
+    if (client instanceof GlideClusterClient) {
+        // For cluster client, execute CLIENT LIST on all nodes
+        const result = await client.customCommand(["CLIENT", "LIST"], {
+            route: "allNodes",
+        });
+
+        // Sum counts from all nodes
+        let totalCount = 0;
+
+        for (const nodeOutput of Object.values(
+            result as Record<string, GlideReturnType>,
+        )) {
+            totalCount += await getClientListOutputCount(nodeOutput);
+        }
+
+        return totalCount;
+    } else {
+        // For standalone client
+        const result = await client.customCommand(["CLIENT", "LIST"]);
+        return await getClientListOutputCount(result);
+    }
+}
+
+/**
+ * Get the expected number of new connections when a lazy client is initialized
+ * @param client - GlideClient or GlideClusterClient instance
+ * @returns The number of expected new connections
+ */
+export async function getExpectedNewConnections(
+    client: GlideClient | GlideClusterClient,
+): Promise<number> {
+    if (client instanceof GlideClusterClient) {
+        // For cluster, get node count and multiply by 2 (2 connections per node)
+        const result = await client.customCommand(["CLUSTER", "NODES"]);
+        const nodesInfo = String(result).trim().split("\n");
+        return nodesInfo.length * 2;
+    } else {
+        // For standalone, always expect 1 new connection
+        return 1;
+    }
 }
 
 export async function flushallOnPort(port: number): Promise<void> {
@@ -439,11 +511,13 @@ export async function flushAndCloseClient(
     cluster_mode: boolean,
     addresses: [string, number][],
     client?: BaseClient,
+    tlsConfig?: TestTLSConfig,
 ) {
     try {
         await testTeardown(
             cluster_mode,
             getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                ...tlsConfig,
                 requestTimeout: 2000,
             }),
         );
@@ -1703,7 +1777,7 @@ export async function batchTest(
     responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
     baseBatch.pfadd(key11, [one, two, three]);
-    responseData.push(["pfadd(key11, [one, two, three])", 1]);
+    responseData.push(["pfadd(key11, [one, two, three])", true]);
     baseBatch.pfmerge(key11, []);
     responseData.push(["pfmerge(key11, [])", "OK"]);
     baseBatch.pfcount([key11]);
@@ -2184,23 +2258,36 @@ export async function CreateJsonBatchCommands(
 export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
+    tlsConfig?: TestTLSConfig,
 ): Promise<string> {
     let info = "";
 
     if (clusterMode) {
-        const glideClusterClient = await GlideClusterClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
-        );
+        const glideClusterClient = await GlideClusterClient.createClient({
+            ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            ...tlsConfig,
+        });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
-        await flushAndCloseClient(clusterMode, addresses, glideClusterClient);
-    } else {
-        const glideClient = await GlideClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+        await flushAndCloseClient(
+            clusterMode,
+            addresses,
+            glideClusterClient,
+            tlsConfig,
         );
+    } else {
+        const glideClient = await GlideClient.createClient({
+            ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            ...tlsConfig,
+        });
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(clusterMode, addresses, glideClient);
+        await flushAndCloseClient(
+            clusterMode,
+            addresses,
+            glideClient,
+            tlsConfig,
+        );
     }
 
     let version = "";

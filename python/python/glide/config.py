@@ -73,7 +73,7 @@ class BackoffStrategy:
     """
     Represents the strategy used to determine how and when to reconnect, in case of connection failures.
     The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N
-    is the number of failed attempts.
+    is the number of failed attempts, and `rand(...)` applies a jitter of up to `jitter_percent`% to introduce randomness and reduce retry storms.
     Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is
     successful.
     The client will attempt to reconnect indefinitely.
@@ -147,25 +147,66 @@ class PeriodicChecksStatus(Enum):
     """
 
 
+class TlsAdvancedConfiguration:
+    """
+    Represents advanced TLS configuration settings.
+
+    Attributes:
+        use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
+
+            - When set to True, the client skips certificate validation.
+              This is useful when connecting to servers or clusters using self-signed certificates,
+              or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+
+            - This setting is typically used in development or testing environments. **It is
+              strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+
+            - Only valid if TLS is already enabled in the base client configuration.
+              Enabling it without TLS will result in a `ConfigurationError`.
+
+            - Default: False (verification is enforced).
+    """
+
+    def __init__(self, use_insecure_tls: Optional[bool] = None):
+        self.use_insecure_tls = use_insecure_tls
+
+
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
 
     Attributes:
         connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
-            This applies both during initial client creation and any reconnections that may occur during request processing.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-            If not explicitly set, a default value of 250 milliseconds will be used.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
+        tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
+            This allows for more granular control of TLS behavior, such as enabling an insecure mode
+            that bypasses certificate validation.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
         self.connection_timeout = connection_timeout
+        self.tls_config = tls_config
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
+
+        if self.tls_config and self.tls_config.use_insecure_tls:
+            if request.tls_mode == TlsMode.SecureTls:
+                request.tls_mode = TlsMode.InsecureTls
+            elif request.tls_mode == TlsMode.NoTls:
+                raise ConfigurationError(
+                    "use_insecure_tls cannot be enabled when use_tls is disabled."
+                )
+
         return request
 
 
@@ -187,14 +228,15 @@ class BaseClientConfiguration:
                 ].
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
+            Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+            For advanced tls configuration, please use `AdvancedBaseClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
             If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to
             complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not
             explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -214,6 +256,25 @@ class BaseClientConfiguration:
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
+
+        lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
+            are deferred until the first command is sent. This can reduce startup latency and allow for client
+            creation in disconnected environments.
+
+            When set to `True`, the client will not attempt to connect to the specified nodes during
+            initialization. Instead, connections will be established only when a command is actually executed.
+
+            Note that the first command executed with lazy connections may experience additional latency
+            as it needs to establish the connection first. During this initial connection, the standard
+            request timeout does not apply yet - instead, the connection establishment is governed by
+            `AdvancedBaseClientConfiguration.connection_timeout`. The request timeout (`request_timeout`)
+            only begins counting after the connection has been successfully established. This behavior
+            can effectively increase the total time needed for the first command to complete.
+
+            This setting applies to both standalone and cluster modes. Note that if an operation is
+            attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+
+            If not set, connections are established immediately during client creation (equivalent to `False`).
     """
 
     def __init__(
@@ -229,6 +290,7 @@ class BaseClientConfiguration:
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -241,6 +303,7 @@ class BaseClientConfiguration:
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
         self.advanced_config = advanced_config
+        self.lazy_connect = lazy_connect
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -301,6 +364,8 @@ class BaseClientConfiguration:
         if self.advanced_config:
             self.advanced_config._create_a_protobuf_conn_request(request)
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -317,9 +382,13 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Standalone Glide client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
 
-        super().__init__(connection_timeout)
+        super().__init__(connection_timeout, tls_config)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -337,12 +406,13 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                Please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required
-                reconnections or retries.
+                reconnection or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
                 If not explicitly set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -414,6 +484,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -427,6 +498,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.database_id = database_id
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -479,8 +551,12 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Glide Cluster client.
     """
 
-    def __init__(self, connection_timeout: Optional[int] = None):
-        super().__init__(connection_timeout)
+    def __init__(
+        self,
+        connection_timeout: Optional[int] = None,
+        tls_config: Optional[TlsAdvancedConfiguration] = None,
+    ):
+        super().__init__(connection_timeout, tls_config)
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
@@ -497,12 +573,13 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
+                For advanced tls configuration, please use `AdvancedGlideClusterClientConfiguration`.
         credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required
-            reconnections or retries.
+            reconnection or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not explicitly
             set, a default value of 250 milliseconds will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
@@ -586,6 +663,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
+        lazy_connect: Optional[bool] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -599,6 +677,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
+            lazy_connect=lazy_connect,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -637,6 +716,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
                 for channel_pattern in channels_patterns:
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
+        if self.lazy_connect is not None:
+            request.lazy_connect = self.lazy_connect
         return request
 
     def _is_pubsub_configured(self) -> bool:

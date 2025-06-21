@@ -7,17 +7,20 @@ mod cluster_client_tests {
     use std::collections::HashMap;
 
     use super::*;
-    use cluster::{setup_cluster_with_replicas, LONG_CLUSTER_TEST_TIMEOUT};
+    use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
     use glide_core::client::Client;
+    use glide_core::connection_request::ProtocolVersion as GlideProtocolVersion;
     use glide_core::connection_request::{
-        self, OpenTelemetryConfig, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
+        self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
     };
+    use redis::ProtocolVersion as RedisProtocolVersion;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
-    use redis::InfoDict;
+    use redis::{InfoDict, Value};
+
     use rstest::rstest;
-    use utilities::cluster::{setup_test_basics_internal, SHORT_CLUSTER_TEST_TIMEOUT};
+    use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
     use versions::Versioning;
 
@@ -302,44 +305,187 @@ mod cluster_client_tests {
         });
     }
 
+    // Helper function to get client count on shared cluster primaries using AllMasters routing
+    async fn get_total_clients_on_shared_cluster_primaries(client: &mut Client) -> usize {
+        let mut cmd = redis::Cmd::new();
+        cmd.arg("CLIENT").arg("LIST");
+
+        let routing_info = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+        let mut total_clients = 0;
+
+        logger_core::log_info(
+            "TestClusterLazyHelper",
+            "Querying CLIENT LIST on all shared cluster primaries via AllMasters routing.",
+        );
+
+        match client.send_command(&cmd, Some(routing_info)).await {
+            Ok(Value::Map(node_results_map)) => {
+                for (_node_addr_value, node_result_value) in node_results_map {
+                    match node_result_value {
+                        Value::BulkString(bytes) => {
+                            let s = String::from_utf8_lossy(&bytes);
+                            total_clients += s.lines().count();
+                        }
+                        _ => {
+                            logger_core::log_warn(
+                                "TestClusterLazyHelper",
+                                format!(
+                                    "CLIENT LIST from a primary (AllMasters) returned unexpected inner type for a node's result: {:?}",
+                                    node_result_value
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(other_type) => {
+                // Logging if returned type is not a map as we expect
+                logger_core::log_warn(
+                    "TestClusterLazyHelper",
+                    format!(
+                        "CLIENT LIST with AllMasters routing returned an unexpected type (expected Map): {:?}",
+                        other_type
+                    ),
+                );
+            }
+            Err(e) => {
+                logger_core::log_warn(
+                    "TestClusterLazyHelper",
+                    format!("CLIENT LIST with AllMasters routing failed: {:?}", e),
+                );
+            }
+        }
+
+        logger_core::log_info(
+            "TestClusterLazyHelper",
+            format!(
+                "Total clients found on shared primaries (AllMasters): {}",
+                total_clients
+            ),
+        );
+        total_clients
+    }
+
     #[rstest]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_async_open_telemetry_config() {
-        block_on_all(async {
-            let test_basics = setup_cluster_with_replicas(
-                TestConfiguration {
-                    cluster_mode: ClusterMode::Enabled,
-                    shared_server: false,
-                    ..Default::default()
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_lazy_cluster_connection_establishes_on_first_command(
+        #[values(RedisProtocolVersion::RESP2, RedisProtocolVersion::RESP3)]
+        protocol: RedisProtocolVersion,
+    ) {
+        block_on_all(async move {
+            const USE_TLS: bool = false;
+
+            // 1. Base configuration for creating the DEDICATED cluster (Cluster A)
+            // and the monitoring client.
+            let base_config_for_dedicated_cluster = TestConfiguration {
+                use_tls: USE_TLS,
+                protocol: match protocol {
+                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
+                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
                 },
-                0,
-                3,
-            )
-            .await;
+                shared_server: false, // <<<< This ensures a dedicated cluster is made
+                cluster_mode: ClusterMode::Enabled,
+                lazy_connect: false, // Monitoring client connects eagerly
+                ..Default::default()
+            };
 
-            let cluster = test_basics.cluster.unwrap();
-            let mut addresses = cluster.get_server_addresses();
-            addresses.truncate(1);
+            // 2. Setup the dedicated cluster (Cluster A) and the monitoring client.
+            // `monitoring_test_basics` now owns Cluster A.
+            let monitoring_test_basics =
+                setup_test_basics_internal(base_config_for_dedicated_cluster.clone()).await;
+            let mut monitoring_client = monitoring_test_basics.client;
 
-            let mut connection_request = connection_request::ConnectionRequest::new();
-            connection_request.addresses = addresses.iter().map(get_address_info).collect();
+            // Get addresses from the DEDICATED Cluster A
+            let dedicated_cluster_addresses = monitoring_test_basics
+                .cluster
+                .as_ref()
+                .expect("Dedicated cluster (Cluster A) should have been created")
+                .get_server_addresses(); // This returns Vec<redis::ConnectionAddr>
 
-            let mut op = OpenTelemetryConfig::new();
-            op.collector_end_point = "http://valid-url.com".into();
-            op.span_flush_interval = Some(300);
+            // 3. Get initial client count on Cluster A.
+            let clients_before_lazy_init =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients before lazy client init (protocol={:?} on dedicated cluster A): {}",
+                    protocol, clients_before_lazy_init
+                ),
+            );
 
-            connection_request.opentelemetry_config = protobuf::MessageField::from_option(Some(op));
+            // 4. Manually create the ConnectionRequest for the lazy client,
+            //    pointing to the DEDICATED Cluster A.
+            //    We use the `base_config_for_dedicated_cluster` for other settings.
+            let mut lazy_client_config = base_config_for_dedicated_cluster.clone();
+            lazy_client_config.lazy_connect = true;
 
-            let result = std::panic::catch_unwind(|| {
-                tokio::task::block_in_place(|| {
-                    futures::executor::block_on(async {
-                        let _client = Client::new(connection_request.clone().into(), None)
-                            .await
-                            .unwrap();
-                    });
-                });
-            });
-            assert!(result.is_err(), "Expected a panic but no panic occurred");
+            // Create connection request directly with our dedicated cluster addresses
+            let lazy_connection_request = utilities::create_connection_request(
+                &dedicated_cluster_addresses,
+                &lazy_client_config, // Uses the same config but with lazy_connect=true
+            );
+
+            // 5. Create the client
+            let mut lazy_glide_client = Client::new(lazy_connection_request.into(), None)
+                .await
+                .expect("Failed to create lazy client for Cluster A");
+
+            // 6. Assert that no new connections were made yet by the lazy client on Cluster A.
+            let clients_after_lazy_init =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients after lazy client init (protocol={:?} on dedicated cluster A): {}",
+                    protocol, clients_after_lazy_init
+                ),
+            );
+            assert_eq!(
+                clients_after_lazy_init, clients_before_lazy_init,
+                "Lazy client (on dedicated cluster A) should not establish new connections before the first command. Before: {}, After: {}. protocol={:?}",
+                clients_before_lazy_init, clients_after_lazy_init, protocol
+            );
+
+            // 7. Send the first command using the lazy client to Cluster A.
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Sending first command to lazy client (PING) (protocol={:?} on dedicated cluster A)",
+                    protocol
+                ),
+            );
+            let ping_response = lazy_glide_client
+                .send_command(&redis::cmd("PING"), None)
+                .await;
+            assert!(
+                ping_response.is_ok(),
+                "PING command failed (on dedicated cluster A): {:?}. protocol={:?}",
+                ping_response.as_ref().err(),
+                protocol
+            );
+            assert_eq!(
+                ping_response.unwrap(),
+                redis::Value::SimpleString("PONG".to_string())
+            );
+
+            // 8. Assert that new connections were made on Cluster A by the lazy client.
+            let clients_after_first_command =
+                get_total_clients_on_shared_cluster_primaries(&mut monitoring_client).await;
+            logger_core::log_info(
+                "TestClusterLazy",
+                format!(
+                    "Clients after first command (protocol={:?} on dedicated cluster A): {}",
+                    protocol, clients_after_first_command
+                ),
+            );
+            assert!(
+                clients_after_first_command > clients_before_lazy_init,
+                "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {}, After: {}. protocol={:?}",
+                clients_before_lazy_init,
+                clients_after_first_command,
+                protocol
+            );
         });
     }
 }

@@ -1,9 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import random
+import sys
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
+
 from glide.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -14,13 +16,13 @@ from glide.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide.exceptions import ClosingError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide.routes import AllNodes
-
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -79,8 +81,8 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for standalone cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379
-                pytest -v --asyncio-mode=auto --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --cluster-endpoints=127.0.0.1:6379
+                pytest -v --cluster-endpoints=127.0.0.1:6379,127.0.0.1:6380
             """,
         default=None,
     )
@@ -91,8 +93,20 @@ def pytest_addoption(parser):
         help="""Comma-separated list of cluster endpoints for cluster mode cluster in the format host1:port1,host2:port2,...
             Note: The cluster will be flashed between tests.
             Example:
-                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379
-                pytest -v --asyncio-mode=auto --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
+                pytest -v --standalone-endpoints=127.0.0.1:6379
+                pytest -v --standalone-endpoints=127.0.0.1:6379,127.0.0.1:6380
+            """,
+        default=None,
+    )
+
+    parser.addoption(
+        "--async-backend",
+        action="append",
+        choices=("asyncio", "uvloop", "trio"),
+        help="""Async framework with which the tests will be run. By default, runs on asyncio and trio.
+            Example:
+                pytest -v --async-backend=trio
+                pytest -v --async-backend=uvloop --async-backend=trio
             """,
         default=None,
     )
@@ -151,6 +165,20 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
+    pytest.valkey_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        load_module=load_module,
+        replica_count=2,
+    )
+    pytest.standalone_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=1,
+        load_module=load_module,
+    )
+
 
 @pytest.fixture(autouse=True, scope="session")
 def call_before_all_pytests(request):
@@ -162,6 +190,11 @@ def call_before_all_pytests(request):
     load_module = request.config.getoption("--load-module")
     cluster_endpoints = request.config.getoption("--cluster-endpoints")
     standalone_endpoints = request.config.getoption("--standalone-endpoints")
+
+    # only run asyncio by default. trio is run in CI nightly
+    request.config.async_backends = request.config.getoption("--async-backend") or (
+        "asyncio",
+    )
 
     create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
 
@@ -181,6 +214,18 @@ def pytest_sessionfinish(session, exitstatus):
         del pytest.standalone_cluster
     except AttributeError:
         # standalone_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_tls_cluster
+    except AttributeError:
+        # valkey_tls_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.standalone_tls_cluster
+    except AttributeError:
+        # standalone_tls_cluster was not set, skip deletion
         pass
 
 
@@ -215,6 +260,61 @@ def pytest_collection_modifyitems(config, items):
                     )
 
 
+@pytest.fixture(autouse=True)
+async def skip_if_version_below(request, anyio_backend):
+    """
+    Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
+
+    Example:
+        @pytest.mark.skip_if_version_below('7.0.0')
+        async def test_meow_meow(...):
+            ...
+    """
+    if request.node.get_closest_marker("skip_if_version_below"):
+        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
+        client = await create_client(request, False)
+        try:
+            if await check_if_server_version_lt(client, min_version):
+                pytest.skip(
+                    reason=f"This feature added in version {min_version}",
+                    allow_module_level=True,
+                )
+        finally:
+            await client.close()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            (("asyncio", {"use_uvloop": False}), "asyncio"),
+            id="asyncio",
+        ),
+        pytest.param(
+            (("asyncio", {"use_uvloop": True}), "uvloop"),
+            marks=[
+                pytest.mark.skipif(
+                    sys.platform == "win32",
+                    reason="uvloop is unavailabe on windows",
+                )
+            ],
+            id="uvloop",
+        ),
+        pytest.param(
+            (("trio", {"restrict_keyboard_interrupt_to_checkpoints": True}), "trio"),
+            id="trio",
+        ),
+    ]
+)
+def anyio_backend(request):
+    if request.param[1] not in request.config.async_backends:
+        pytest.skip(
+            reason=f"{request.param[1]} is excluded",
+            allow_module_level=True,
+        )
+
+    return request.param[0]
+
+
 @pytest.fixture(scope="function")
 async def glide_client(
     request,
@@ -223,11 +323,45 @@ async def glide_client(
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
     client = await create_client(
-        request, cluster_mode, protocol=protocol, request_timeout=5000
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,  # Explicitly false for general test client
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
+
+
+@pytest.fixture(scope="function")
+async def glide_tls_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    tls_insecure: bool,
+) -> AsyncGenerator[TGlideClient, None]:
+    """
+    Get async socket client for tests with TLS enabled.
+    """
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        use_tls=True,
+        tls_insecure=tls_insecure,
+        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
+    )
+    yield client
+    await test_teardown(request, cluster_mode, protocol)
+    await client.close()
+
+
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)
 
 
 @pytest.fixture(scope="function")
@@ -237,7 +371,9 @@ async def management_client(
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
-    client = await create_client(request, cluster_mode, protocol=protocol)
+    client = await create_client(
+        request, cluster_mode, protocol=protocol, lazy_connect=False
+    )
     yield client
     await test_teardown(request, cluster_mode, protocol)
     await client.close()
@@ -266,6 +402,8 @@ async def acl_glide_client(
         cluster_mode,
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
+        lazy_connect=False,
     )
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -293,9 +431,16 @@ async def create_client(
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
     valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
-    use_tls = request.config.getoption("--tls")
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -313,15 +458,17 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            lazy_connect=lazy_connect,
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
         config = GlideClientConfiguration(
-            addresses=(
-                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
-            ),
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
@@ -332,8 +479,11 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
             reconnect_strategy=reconnect_strategy,
+            lazy_connect=lazy_connect,
         )
         return await GlideClient.create(config)
 
@@ -417,23 +567,3 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 await client.close()
         else:
             raise e
-
-
-@pytest.fixture(autouse=True)
-async def skip_if_version_below(request):
-    """
-    Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
-
-    Example:
-        @pytest.mark.skip_if_version_below('7.0.0')
-        async def test_meow_meow(...):
-            ...
-    """
-    if request.node.get_closest_marker("skip_if_version_below"):
-        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
-        client = await create_client(request, False)
-        if await check_if_server_version_lt(client, min_version):
-            pytest.skip(
-                reason=f"This feature added in version {min_version}",
-                allow_module_level=True,
-            )

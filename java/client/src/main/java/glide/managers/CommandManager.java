@@ -13,6 +13,7 @@ import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
 import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
+import glide.api.OpenTelemetry;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
@@ -33,6 +34,7 @@ import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.GlideValueResolver;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -242,7 +244,9 @@ public class CommandManager {
         var builder = UpdateConnectionPassword.newBuilder().setImmediateAuth(immediateAuth);
         password.ifPresent(builder::setPassword);
 
-        var command = CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
+        CommandRequest.Builder command =
+                CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
+
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -261,6 +265,9 @@ public class CommandManager {
                     new ClosingException("Channel closed: Unable to submit command."));
             return errorFuture;
         }
+
+        // Store the root span pointer for cleanup after command execution
+        final long rootSpanPtr = command.hasRootSpanPtr() ? command.getRootSpanPtr() : 0;
 
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
@@ -284,9 +291,20 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
+
         var builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
 
         return prepareCommandRequestRoute(builder, route);
     }
@@ -305,9 +323,20 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
+
         var builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
 
         return prepareCommandRequestRoute(builder, route);
     }
@@ -323,6 +352,17 @@ public class CommandManager {
     protected CommandRequest.Builder prepareCommandRequest(
             Batch batch, boolean raiseOnError, Optional<BatchOptions> options) {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
+
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
+        }
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
@@ -347,38 +387,43 @@ public class CommandManager {
      */
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
+        CommandRequest.Builder builder;
 
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
                 > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            return CommandRequest.newBuilder()
-                    .setScriptInvocationPointers(
-                            ScriptInvocationPointers.newBuilder()
-                                    .setHash(script.getHash())
-                                    .setArgsPointer(
-                                            GlideValueResolver.createLeakedBytesVec(
-                                                    args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                    .setKeysPointer(
-                                            GlideValueResolver.createLeakedBytesVec(
-                                                    keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                    .build());
+            builder =
+                    CommandRequest.newBuilder()
+                            .setScriptInvocationPointers(
+                                    ScriptInvocationPointers.newBuilder()
+                                            .setHash(script.getHash())
+                                            .setArgsPointer(
+                                                    GlideValueResolver.createLeakedBytesVec(
+                                                            args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                            .setKeysPointer(
+                                                    GlideValueResolver.createLeakedBytesVec(
+                                                            keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                            .build());
+        } else {
+            builder =
+                    CommandRequest.newBuilder()
+                            .setScriptInvocation(
+                                    ScriptInvocation.newBuilder()
+                                            .setHash(script.getHash())
+                                            .addAllKeys(
+                                                    keys.stream()
+                                                            .map(GlideString::getBytes)
+                                                            .map(ByteString::copyFrom)
+                                                            .collect(Collectors.toList()))
+                                            .addAllArgs(
+                                                    args.stream()
+                                                            .map(GlideString::getBytes)
+                                                            .map(ByteString::copyFrom)
+                                                            .collect(Collectors.toList()))
+                                            .build());
         }
 
-        return CommandRequest.newBuilder()
-                .setScriptInvocation(
-                        ScriptInvocation.newBuilder()
-                                .setHash(script.getHash())
-                                .addAllKeys(
-                                        keys.stream()
-                                                .map(GlideString::getBytes)
-                                                .map(ByteString::copyFrom)
-                                                .collect(Collectors.toList()))
-                                .addAllArgs(
-                                        args.stream()
-                                                .map(GlideString::getBytes)
-                                                .map(ByteString::copyFrom)
-                                                .collect(Collectors.toList()))
-                                .build());
+        return builder;
     }
 
     /**
@@ -409,6 +454,17 @@ public class CommandManager {
             ClusterBatch batch, boolean raiseOnError, Optional<ClusterBatchOptions> options) {
 
         CommandRequest.Builder builder = CommandRequest.newBuilder();
+
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
+        }
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
 
         if (options.isPresent()) {
             ClusterBatchOptions opts = options.get();
@@ -446,6 +502,12 @@ public class CommandManager {
     protected CommandRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("ClusterScan");
+        }
+
         CommandRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
                 CommandRequestOuterClass.ClusterScan.newBuilder();
 
@@ -474,7 +536,15 @@ public class CommandManager {
             clusterScanBuilder.setAllowNonCoveredSlots(options.getAllowNonCoveredSlots());
         }
 
-        return CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
+
+        return builder;
     }
 
     /**
@@ -490,8 +560,21 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return CommandRequest.newBuilder()
-                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
+
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder()
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
+        return builder;
     }
 
     /**
@@ -507,8 +590,22 @@ public class CommandManager {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return CommandRequest.newBuilder()
-                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+        long spanPtr = 0;
+        if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+            // Create OpenTelemetry span
+            spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
+        }
+
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder()
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
+
+        // Set the root span pointer if a span was created
+        if (spanPtr != 0) {
+            builder.setRootSpanPtr(spanPtr);
+        }
+
+        return builder;
     }
 
     private CommandRequestOuterClass.Batch.Builder prepareCommandRequestBatchOptions(

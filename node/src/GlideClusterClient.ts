@@ -2,32 +2,31 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
-import { Writer } from "protobufjs";
+import { Writer } from "protobufjs/minimal";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
+    ClusterBatch,
+    ClusterBatchOptions,
+    ClusterScanCursor,
+    ClusterScanOptions,
     Decoder,
     DecoderOption,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
-    PubSubMsg,
-    convertGlideRecordToRecord,
-} from "./BaseClient";
-import { ClusterBatch } from "./Batch";
-import {
-    ClusterBatchOptions,
-    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
     InfoOptions,
     LolwutOptions,
+    PubSubMsg,
+    Script,
+    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -63,9 +62,11 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from "./Commands";
-import { command_request, connection_request } from "./ProtobufMessage";
-
+} from ".";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -207,6 +208,9 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  * ```typescript
  * const config: AdvancedGlideClusterClientConfiguration = {
  *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ *   tlsAdvancedConfiguration: {
+ *     insecure: true, // Skip TLS certificate verification (use only in development)
+ *   },
  * };
  * ```
  */
@@ -574,6 +578,12 @@ export class GlideClusterClient extends BaseClient {
      *       console.log(`Received message: ${msg.payload}`);
      *     },
      *   },
+     *   connectionBackoff: {
+     *     numberOfRetries: 5,
+     *     factor: 1000,
+     *     exponentBase: 2,
+     *     jitter: 20,
+     *   },
      * });
      * ```
      *
@@ -581,6 +591,8 @@ export class GlideClusterClient extends BaseClient {
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
+     *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     *      For advanced tls configuration, please use the {@link AdvancedGlideClusterClientConfiguration} option.
      * - **Periodic Checks**: The `periodicChecks` setting allows you to configure how often the client checks for cluster topology changes.
      * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
      */
@@ -652,7 +664,7 @@ export class GlideClusterClient extends BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [ClusterScanCursor, GlideString[]]) => {
+                (resolveAns: [typeof cursor, GlideString[]]) => {
                     try {
                         resolve([
                             new ClusterScanCursor(resolveAns[0].toString()),
@@ -893,6 +905,8 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
+     * Starting from server version 7, command supports multiple section arguments.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param options - (Optional) Additional parameters:
@@ -900,8 +914,15 @@ export class GlideClusterClient extends BaseClient {
      *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * - (Optional) `route`: see {@link RouteOption}.
      * @returns A string containing the information for the sections requested.
-     * When specifying a route other than a single node,
+     *     When specifying a route other than a single node,
      *     it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the info method with retrieving total_net_input_bytes from the result
+     * const result = await client.info(new Section[] { Section.STATS });
+     * console.log(someClusterParsingFunction(result, "total_net_input_bytes")); // Output: 1
+     * ```
      */
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,
@@ -1799,9 +1820,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * let response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
-     * response = await client.unwatch();
+     * let response = await client.unwatch();
      * console.log(response); // Output: "OK"
      * ```
      */

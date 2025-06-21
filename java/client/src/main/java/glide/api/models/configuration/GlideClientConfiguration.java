@@ -2,6 +2,7 @@
 package glide.api.models.configuration;
 
 import glide.api.GlideClient;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
@@ -32,8 +33,6 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @ToString
 public class GlideClientConfiguration extends BaseClientConfiguration {
-    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
-    private final BackoffStrategy reconnectStrategy;
 
     /** Index of the logical database to connect to. */
     private final Integer databaseId;
@@ -42,5 +41,7 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
     private final StandaloneSubscriptionConfiguration subscriptionConfiguration;
 
     /** Advanced configuration settings for the client. */
-    private final AdvancedGlideClientConfiguration advancedConfiguration;
+    @Builder.Default
+    private final AdvancedGlideClientConfiguration advancedConfiguration =
+            AdvancedGlideClientConfiguration.builder().build();
 }
