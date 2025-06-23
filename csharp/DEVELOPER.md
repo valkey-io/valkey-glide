@@ -101,6 +101,7 @@ cd valkey-glide
 2. Build the C# wrapper
 
 ```bash
+cd csharp
 dotnet build
 ```
 
