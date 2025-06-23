@@ -3563,7 +3563,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
      *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
-     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end) {
@@ -3636,7 +3635,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
      *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
-     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start) {
