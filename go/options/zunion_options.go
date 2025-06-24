@@ -1,4 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 package options
 
 // This struct represents the optional arguments for the ZUNION command.
