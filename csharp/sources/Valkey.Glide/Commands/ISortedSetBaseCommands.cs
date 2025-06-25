@@ -61,6 +61,23 @@ internal interface ISortedSetBaseCommands
     Task<long> ZRem(GlideString key, GlideString[] members);
 
     /// <summary>
+    /// Returns the number of members in the sorted set stored at <paramref name="key"/>.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.ZCard("my_sorted_set");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <returns>The number of elements in the sorted set.
+    /// If <paramref name="key"/> does not exist, it is treated as an empty sorted set, and this command returns <c>0</c>.
+    /// If <paramref name="key"/> holds a value that is not a sorted set, an error is returned.</returns>
+    /// <see href="https://valkey.io/commands/zcard/">valkey.io</see>
+    Task<long> ZCard(GlideString key);
+
+    /// <summary>
     /// Returns the specified range of elements in the sorted set stored at <paramref name="key"/>.
     /// ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
     /// </summary>

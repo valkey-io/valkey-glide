@@ -179,6 +179,52 @@ public class SharedCommandTests(TestConfiguration config)
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task ZCardBasicTest(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test with non-existing key
+        long result1 = await client.ZCard("nonExistingKey");
+        Assert.Equal(0, result1);
+
+        // Add some members
+        var membersScoreMap = new Dictionary<GlideString, double>
+        {
+            { "one", 1.0 },
+            { "two", 2.0 },
+            { "three", 3.0 }
+        };
+
+        long addResult = await client.ZAdd(key, membersScoreMap);
+        Assert.Equal(3, addResult);
+
+        // Test ZCard with existing key
+        long result2 = await client.ZCard(key);
+        Assert.Equal(3, result2);
+
+        // Remove one member
+        long remResult = await client.ZRem(key, ["one"]);
+        Assert.Equal(1, remResult);
+
+        // Test ZCard after removal
+        long result3 = await client.ZCard(key);
+        Assert.Equal(2, result3);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task ZCardErrorCasesTest(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test wrong key type - should throw error
+        await client.Set(key, "test");
+        await Assert.ThrowsAsync<RequestException>(async () =>
+            await client.ZCard(key));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task ZRangeSimpleTest(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
