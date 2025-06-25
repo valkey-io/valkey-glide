@@ -195,7 +195,7 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Test simple range by index [0:-1] (all)
         GlideString[] result = await client.ZRange(key, new RangeByIndex(0, -1));
-        Assert.Equal(new GlideString[] { "a", "b", "c" }, result);
+        Assert.Equal(["a", "b", "c"], result);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -216,11 +216,11 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Test range by index [0:1]
         GlideString[] result1 = await client.ZRange(key, new RangeByIndex(0, 1));
-        Assert.Equal(new GlideString[] { "a", "b" }, result1);
+        Assert.Equal(["a", "b"], result1);
 
         // Test range by index [0:-1] (all)
         GlideString[] result2 = await client.ZRange(key, new RangeByIndex(0, -1));
-        Assert.Equal(new GlideString[] { "a", "b", "c" }, result2);
+        Assert.Equal(["a", "b", "c"], result2);
 
         // Test range by index [3:1] (none)
         GlideString[] result3 = await client.ZRange(key, new RangeByIndex(3, 1));
@@ -228,27 +228,27 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Test range by score [-inf:3]
         GlideString[] result4 = await client.ZRange(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Inclusive(3.0)));
-        Assert.Equal(new GlideString[] { "a", "b", "c" }, result4);
+        Assert.Equal(["a", "b", "c"], result4);
 
         // Test range by score [-inf:3)
         GlideString[] result5 = await client.ZRange(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Exclusive(3.0)));
-        Assert.Equal(new GlideString[] { "a", "b" }, result5);
+        Assert.Equal(["a", "b"], result5);
 
         // Test range by score with reverse
         GlideString[] result6 = await client.ZRange(key, new RangeByScore(ScoreBoundary.Exclusive(3.0), ScoreBoundary.Infinite(InfBoundary.NegativeInfinity)).SetReverse());
-        Assert.Equal(new GlideString[] { "b", "a" }, result6);
+        Assert.Equal(["b", "a"], result6);
 
         // Test range by score with limit
         GlideString[] result7 = await client.ZRange(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity)).SetLimit(1, 2));
-        Assert.Equal(new GlideString[] { "b", "c" }, result7);
+        Assert.Equal(["b", "c"], result7);
 
         // Test range by lex [-:c)
         GlideString[] result8 = await client.ZRange(key, new RangeByLex(LexBoundary.Infinite(InfBoundary.NegativeInfinity), LexBoundary.Exclusive("c")));
-        Assert.Equal(new GlideString[] { "a", "b" }, result8);
+        Assert.Equal(["a", "b"], result8);
 
         // Test range by lex with reverse and limit
         GlideString[] result9 = await client.ZRange(key, new RangeByLex(LexBoundary.Infinite(InfBoundary.PositiveInfinity), LexBoundary.Infinite(InfBoundary.NegativeInfinity)).SetReverse().SetLimit(1, 2));
-        Assert.Equal(new GlideString[] { "b", "a" }, result9);
+        Assert.Equal(["b", "a"], result9);
 
         // Test non-existing key
         GlideString[] result10 = await client.ZRange("nonExistingKey", new RangeByIndex(0, -1));
@@ -281,11 +281,11 @@ public class SharedCommandTests(TestConfiguration config)
         try
         {
             MemberAndScore[] result1 = await client.ZRangeWithScores(key, new RangeByIndex(0, 1));
-            MemberAndScore[] expected1 = new MemberAndScore[]
-            {
-                new MemberAndScore("f", 1.0),
-                new MemberAndScore("a", 2.0)
-            };
+            MemberAndScore[] expected1 =
+            [
+                new("f", 1.0),
+                new("a", 2.0)
+            ];
             Assert.Equal(expected1, result1);
         }
         catch (Exception ex)
@@ -296,18 +296,18 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Test range by index [0:-1] (all)
         MemberAndScore[] result2 = await client.ZRangeWithScores(key, new RangeByIndex(0, -1));
-        MemberAndScore[] expected2 = new MemberAndScore[]
-        {
-            new MemberAndScore("f", 1.0),
-            new MemberAndScore("a", 2.0),
-            new MemberAndScore("ab", 2.0),
-            new MemberAndScore("ac", 2.0),
-            new MemberAndScore("g", 2.0),
-            new MemberAndScore("c", 3.0),
-            new MemberAndScore("b", 4.0),
-            new MemberAndScore("e", 5.0),
-            new MemberAndScore("d", 8.0)
-        };
+        MemberAndScore[] expected2 =
+        [
+            new("f", 1.0),
+            new("a", 2.0),
+            new("ab", 2.0),
+            new("ac", 2.0),
+            new("g", 2.0),
+            new("c", 3.0),
+            new("b", 4.0),
+            new("e", 5.0),
+            new("d", 8.0)
+        ];
         Assert.Equal(expected2, result2);
 
         // Test range by index [3:1] (none)
@@ -316,48 +316,48 @@ public class SharedCommandTests(TestConfiguration config)
 
         // Test range by score [-inf:3]
         MemberAndScore[] result4 = await client.ZRangeWithScores(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Inclusive(3.0)));
-        MemberAndScore[] expected4 = new MemberAndScore[]
-        {
-            new MemberAndScore("f", 1.0),
-            new MemberAndScore("a", 2.0),
-            new MemberAndScore("ab", 2.0),
-            new MemberAndScore("ac", 2.0),
-            new MemberAndScore("g", 2.0),
-            new MemberAndScore("c", 3.0)
-        };
+        MemberAndScore[] expected4 =
+        [
+            new("f", 1.0),
+            new("a", 2.0),
+            new("ab", 2.0),
+            new("ac", 2.0),
+            new("g", 2.0),
+            new("c", 3.0)
+        ];
         Assert.Equal(expected4, result4);
 
         // Test range by score [-inf:3)
         MemberAndScore[] result5 = await client.ZRangeWithScores(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Exclusive(3.0)));
-        MemberAndScore[] expected5 = new MemberAndScore[]
-        {
-            new MemberAndScore("f", 1.0),
-            new MemberAndScore("a", 2.0),
-            new MemberAndScore("ab", 2.0),
-            new MemberAndScore("ac", 2.0),
-            new MemberAndScore("g", 2.0)
-        };
+        MemberAndScore[] expected5 =
+        [
+            new("f", 1.0),
+            new("a", 2.0),
+            new("ab", 2.0),
+            new("ac", 2.0),
+            new("g", 2.0)
+        ];
         Assert.Equal(expected5, result5);
 
         // Test range by score with reverse
         MemberAndScore[] result6 = await client.ZRangeWithScores(key, new RangeByScore(ScoreBoundary.Exclusive(3.0), ScoreBoundary.Infinite(InfBoundary.NegativeInfinity)).SetReverse());
-        MemberAndScore[] expected6 = new MemberAndScore[]
-        {
-            new MemberAndScore("g", 2.0),
-            new MemberAndScore("ac", 2.0),
-            new MemberAndScore("ab", 2.0),
-            new MemberAndScore("a", 2.0),
-            new MemberAndScore("f", 1.0)
-        };
+        MemberAndScore[] expected6 =
+        [
+            new("g", 2.0),
+            new("ac", 2.0),
+            new("ab", 2.0),
+            new("a", 2.0),
+            new("f", 1.0)
+        ];
         Assert.Equal(expected6, result6);
 
         // Test range by score with limit
         MemberAndScore[] result7 = await client.ZRangeWithScores(key, new RangeByScore(ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity)).SetLimit(4, 2));
-        MemberAndScore[] expected7 = new MemberAndScore[]
-        {
-            new MemberAndScore("g", 2.0),
-            new MemberAndScore("c", 3.0)
-        };
+        MemberAndScore[] expected7 =
+        [
+            new("g", 2.0),
+            new("c", 3.0)
+        ];
         Assert.Equal(expected7, result7);
 
         // Test non-existing key

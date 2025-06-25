@@ -187,7 +187,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         var array = HandleServerResponse<object?[]>(response, true);
         if (array == null)
             return [];
-        return array.Cast<GlideString>().ToArray();
+        return [.. array.Cast<GlideString>()];
     }
 
     private static MemberAndScore[] HandleMemberAndScoreArrayResponse(IntPtr response, bool needsReverse = false)
@@ -204,7 +204,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         {
             var member = kvp.Key;
             var score = Convert.ToDouble(kvp.Value);
-            result[index++] = new MemberAndScore(member, score);
+            result[index++] = new(member, score);
         }
 
         // Sort by score, then by member name for ties

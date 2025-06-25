@@ -55,6 +55,11 @@ public class RangeByIndex(long start, long end) : IZRangeQuery, IZRangeWithScore
     public long End { get; } = end;
 
     /// <summary>
+    /// Whether to reverse the order (highest to lowest score).
+    /// </summary>
+    public bool Reverse { get; private set; }
+
+    /// <summary>
     /// Sets the reverse flag to return elements in reverse order.
     /// </summary>
     /// <returns>This RangeByIndex instance for method chaining.</returns>
@@ -82,17 +87,19 @@ public class RangeByIndex(long start, long end) : IZRangeQuery, IZRangeWithScore
 /// <summary>
 /// Represents a range query by score.
 /// </summary>
-public class RangeByScore : IZRangeQuery, IZRangeWithScoresQuery
+/// <param name="start">The start score boundary.</param>
+/// <param name="end">The end score boundary.</param>
+public class RangeByScore(ScoreBoundary start, ScoreBoundary end) : IZRangeQuery, IZRangeWithScoresQuery
 {
     /// <summary>
     /// The start score boundary.
     /// </summary>
-    public ScoreBoundary Start { get; }
+    public ScoreBoundary Start { get; } = start;
 
     /// <summary>
     /// The end score boundary.
     /// </summary>
-    public ScoreBoundary End { get; }
+    public ScoreBoundary End { get; } = end;
 
     /// <summary>
     /// Whether to reverse the order (highest to lowest score).
@@ -103,17 +110,6 @@ public class RangeByScore : IZRangeQuery, IZRangeWithScoresQuery
     /// The limit for the number of elements to return.
     /// </summary>
     public RangeLimit? Limit { get; private set; }
-
-    /// <summary>
-    /// Initializes a new instance of the RangeByScore class.
-    /// </summary>
-    /// <param name="start">The start score boundary.</param>
-    /// <param name="end">The end score boundary.</param>
-    public RangeByScore(ScoreBoundary start, ScoreBoundary end)
-    {
-        Start = start;
-        End = end;
-    }
 
     /// <summary>
     /// Sets the reverse flag to return elements in reverse order.
@@ -159,17 +155,19 @@ public class RangeByScore : IZRangeQuery, IZRangeWithScoresQuery
 /// <summary>
 /// Represents a range query by lexicographical order.
 /// </summary>
-public class RangeByLex : IZRangeQuery
+/// <param name="start">The start lexicographical boundary.</param>
+/// <param name="end">The end lexicographical boundary.</param>
+public class RangeByLex(LexBoundary start, LexBoundary end) : IZRangeQuery
 {
     /// <summary>
     /// The start lexicographical boundary.
     /// </summary>
-    public LexBoundary Start { get; }
+    public LexBoundary Start { get; } = start;
 
     /// <summary>
     /// The end lexicographical boundary.
     /// </summary>
-    public LexBoundary End { get; }
+    public LexBoundary End { get; } = end;
 
     /// <summary>
     /// Whether to reverse the order.
@@ -180,17 +178,6 @@ public class RangeByLex : IZRangeQuery
     /// The limit for the number of elements to return.
     /// </summary>
     public RangeLimit? Limit { get; private set; }
-
-    /// <summary>
-    /// Initializes a new instance of the RangeByLex class.
-    /// </summary>
-    /// <param name="start">The start lexicographical boundary.</param>
-    /// <param name="end">The end lexicographical boundary.</param>
-    public RangeByLex(LexBoundary start, LexBoundary end)
-    {
-        Start = start;
-        End = end;
-    }
 
     /// <summary>
     /// Sets the reverse flag to return elements in reverse order.
@@ -350,28 +337,19 @@ public class LexBoundary
 /// <summary>
 /// Represents a limit for range queries.
 /// </summary>
-public class RangeLimit
+/// <param name="offset">The starting position of the range, zero based.</param>
+/// <param name="count">The maximum number of elements to include in the range. A negative count returns all elements from the offset.</param>
+public class RangeLimit(long offset, long count)
 {
     /// <summary>
     /// The starting position of the range, zero based.
     /// </summary>
-    public long Offset { get; }
+    public long Offset { get; } = offset;
 
     /// <summary>
     /// The maximum number of elements to include in the range. A negative count returns all elements from the offset.
     /// </summary>
-    public long Count { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the RangeLimit class.
-    /// </summary>
-    /// <param name="offset">The starting position of the range, zero based.</param>
-    /// <param name="count">The maximum number of elements to include in the range. A negative count returns all elements from the offset.</param>
-    public RangeLimit(long offset, long count)
-    {
-        Offset = offset;
-        Count = count;
-    }
+    public long Count { get; } = count;
 
     /// <summary>
     /// Converts the limit to command arguments.
