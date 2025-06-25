@@ -43,6 +43,31 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         return await ExecuteLongCommand(RequestType.ZRem, args);
     }
 
+    public async Task<GlideString[]> ZRange(GlideString key, IZRangeQuery rangeQuery)
+    {
+        GlideString[] args = [key, .. rangeQuery.ToArgs()];
+        return await Command(RequestType.ZRange, args, HandleStringArrayResponse);
+    }
+
+    public async Task<MemberAndScore[]> ZRangeWithScores(GlideString key, IZRangeWithScoresQuery rangeQuery)
+    {
+        var queryArgs = rangeQuery.ToArgs();
+        GlideString[] args = [key, .. queryArgs, "WITHSCORES"];
+
+        // Check if reverse flag is present
+        bool needsReverse = false;
+        foreach (var arg in queryArgs)
+        {
+            if (arg.ToString() == "REV")
+            {
+                needsReverse = true;
+                break;
+            }
+        }
+
+        return await Command(RequestType.ZRange, args, response => HandleMemberAndScoreArrayResponse(response, needsReverse));
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);
@@ -156,6 +181,52 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
 
     private static GlideString[] ConvertMembersScoreMapToArgs(Dictionary<GlideString, double> membersScoreMap)
         => [.. membersScoreMap.SelectMany(kvp => (GlideString[])[kvp.Value.ToString(), kvp.Key])];
+
+    private static GlideString[] HandleStringArrayResponse(IntPtr response)
+    {
+        var array = HandleServerResponse<object?[]>(response, true);
+        if (array == null)
+            return [];
+        return array.Cast<GlideString>().ToArray();
+    }
+
+    private static MemberAndScore[] HandleMemberAndScoreArrayResponse(IntPtr response, bool needsReverse = false)
+    {
+        var rawResponse = HandleServerResponse<Dictionary<GlideString, object>>(response, true);
+
+        if (rawResponse == null || rawResponse.Count == 0)
+            return [];
+
+        var result = new MemberAndScore[rawResponse.Count];
+        int index = 0;
+
+        foreach (var kvp in rawResponse)
+        {
+            var member = kvp.Key;
+            var score = Convert.ToDouble(kvp.Value);
+            result[index++] = new MemberAndScore(member, score);
+        }
+
+        // Sort by score, then by member name for ties
+        if (!needsReverse)
+        {
+            Array.Sort(result, (a, b) =>
+            {
+                int scoreComparison = a.Score.CompareTo(b.Score);
+                return scoreComparison != 0 ? scoreComparison : string.Compare(a.Member.ToString(), b.Member.ToString(), StringComparison.Ordinal);
+            });
+        }
+        else
+        {
+            Array.Sort(result, (a, b) =>
+            {
+                int scoreComparison = b.Score.CompareTo(a.Score); // Reverse score comparison
+                return scoreComparison != 0 ? scoreComparison : string.Compare(b.Member.ToString(), a.Member.ToString(), StringComparison.Ordinal);
+            });
+        }
+
+        return result;
+    }
 
     protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
