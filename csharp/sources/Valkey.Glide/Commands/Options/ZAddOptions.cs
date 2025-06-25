@@ -11,11 +11,11 @@ public enum ConditionalSet
     /// Only update existing elements. Equivalent to "XX" in the Valkey API.
     /// </summary>
     OnlyIfExists,
-    
+
     /// <summary>
     /// Only add new elements. Equivalent to "NX" in the Valkey API.
     /// </summary>
-    OnlyIfDoesNotExist
+    OnlyIfDoesNotExist,
 }
 
 /// <summary>
@@ -27,11 +27,11 @@ public enum UpdateOptions
     /// Only update existing elements if the new score is less than the current score. Equivalent to "LT" in the Valkey API.
     /// </summary>
     ScoreLessThanCurrent,
-    
+
     /// <summary>
     /// Only update existing elements if the new score is greater than the current score. Equivalent to "GT" in the Valkey API.
     /// </summary>
-    ScoreGreaterThanCurrent
+    ScoreGreaterThanCurrent,
 }
 
 /// <summary>

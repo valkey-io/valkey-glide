@@ -27,14 +27,14 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
 
     public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap)
     {
-        var args = new List<GlideString> { key };
+        List<GlideString> args = new() { key };
         args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
         return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
     }
 
     public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap, ZAddOptions options)
     {
-        var args = new List<GlideString> { key };
+        List<GlideString> args = new() { key };
         args.AddRange(options.ToArgs());
         args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
         return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
@@ -153,7 +153,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
 
     private static GlideString[] ConvertMembersScoreMapToArgs(Dictionary<GlideString, double> membersScoreMap)
     {
-        var args = new List<GlideString>();
+        List<GlideString> args = new();
         foreach (var kvp in membersScoreMap)
         {
             args.Add(kvp.Value.ToString());
