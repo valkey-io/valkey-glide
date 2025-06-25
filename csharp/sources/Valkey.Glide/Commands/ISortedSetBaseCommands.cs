@@ -42,4 +42,21 @@ internal interface ISortedSetBaseCommands
     /// <param name="options">The options for the ZAdd command.</param>
     /// <returns>The number of members added to the sorted set. If <c>Changed</c> is set, the number of members that were updated.</returns>
     Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap, ZAddOptions options);
+
+    /// <summary>
+    /// Removes one or more members from a sorted set.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.ZRem("my_sorted_set", new GlideString[] { "member1", "member2" });
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <param name="members">An array of members to remove from the sorted set.</param>
+    /// <returns>The number of members that were removed from the sorted set, not including non-existing members.
+    /// If <paramref name="key"/> does not exist, it is treated as an empty sorted set, and this command returns <c>0</c>.</returns>
+    /// <see href="https://valkey.io/commands/zrem/">valkey.io</see>
+    Task<long> ZRem(GlideString key, GlideString[] members);
 }

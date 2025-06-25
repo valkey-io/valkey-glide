@@ -37,6 +37,12 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         return await ExecuteLongCommand(RequestType.ZAdd, args);
     }
 
+    public async Task<long> ZRem(GlideString key, GlideString[] members)
+    {
+        GlideString[] args = [key, .. members];
+        return await ExecuteLongCommand(RequestType.ZRem, args);
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);
