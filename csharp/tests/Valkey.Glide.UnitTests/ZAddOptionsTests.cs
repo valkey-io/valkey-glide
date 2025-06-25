@@ -11,7 +11,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions().SetConditionalChange(ConditionalSet.OnlyIfExists);
         var args = options.ToArgs();
-        
+
         Assert.Single(args);
         Assert.Equal("XX", args[0].ToString());
     }
@@ -21,7 +21,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions().SetConditionalChange(ConditionalSet.OnlyIfDoesNotExist);
         var args = options.ToArgs();
-        
+
         Assert.Single(args);
         Assert.Equal("NX", args[0].ToString());
     }
@@ -31,7 +31,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions().SetUpdateOption(UpdateOptions.ScoreLessThanCurrent);
         var args = options.ToArgs();
-        
+
         Assert.Single(args);
         Assert.Equal("LT", args[0].ToString());
     }
@@ -41,7 +41,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions().SetUpdateOption(UpdateOptions.ScoreGreaterThanCurrent);
         var args = options.ToArgs();
-        
+
         Assert.Single(args);
         Assert.Equal("GT", args[0].ToString());
     }
@@ -51,7 +51,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions().SetChanged(true);
         var args = options.ToArgs();
-        
+
         Assert.Single(args);
         Assert.Equal("CH", args[0].ToString());
     }
@@ -64,7 +64,7 @@ public class ZAddOptionsTests
             .SetUpdateOption(UpdateOptions.ScoreGreaterThanCurrent)
             .SetChanged(true);
         var args = options.ToArgs();
-        
+
         Assert.Equal(3, args.Count);
         Assert.True(args.Any(arg => arg.ToString() == "XX"));
         Assert.True(args.Any(arg => arg.ToString() == "GT"));
@@ -76,7 +76,7 @@ public class ZAddOptionsTests
     {
         var options = new ZAddOptions();
         var args = options.ToArgs();
-        
+
         Assert.Empty(args);
     }
 }
