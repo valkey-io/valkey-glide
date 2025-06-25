@@ -76,6 +76,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
+- [ioredis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-ioredis)
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
 
 **Community**
