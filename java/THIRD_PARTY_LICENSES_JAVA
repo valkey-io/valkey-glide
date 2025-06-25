@@ -2535,7 +2535,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.18.1
+Package: bumpalo:3.19.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12771,7 +12771,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.173
+Package: libc:0.2.174
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23170,7 +23170,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.103
+Package: syn:2.0.104
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25650,7 +25650,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing-attributes:0.1.29
+Package: tracing-attributes:0.1.30
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34978,7 +34978,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.8.25
+Package: zerocopy:0.8.26
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35230,7 +35230,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.25
+Package: zerocopy-derive:0.8.26
 
 The following copyrights and licenses were found in the source code of this package:
 
