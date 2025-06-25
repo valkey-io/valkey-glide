@@ -458,7 +458,7 @@ public interface ListBaseCommands {
      * @param end The end of the range.
      * @return Always <code>OK</code>.<br>
      *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
-     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     <code>end</code>, the list is emptied and the key is removed.<br>
      *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.
@@ -531,16 +531,17 @@ public interface ListBaseCommands {
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
      * the list stored at <code>key</code>.<br>
-     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
-     * head to tail.<br>
-     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
-     * tail to head.<br>
-     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
-     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
      *
      * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     *     If <code>count</code> is positive: Removes elements equal to <code>element</code> moving
+     *     from head to tail.<br>
+     *     If <code>count</code> is negative: Removes elements equal to <code>element</code> moving
+     *     from tail to head.<br>
+     *     If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of
+     *     elements equal to <code>element</code>, it removes all elements equal to <code>element
+     *     </code>.`
      * @param element The element to remove from the list.
      * @return The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.
@@ -555,16 +556,17 @@ public interface ListBaseCommands {
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
      * the list stored at <code>key</code>.<br>
-     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
-     * head to tail.<br>
-     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
-     * tail to head.<br>
-     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
-     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
      *
      * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     *     If <code>count</code> is positive: Removes elements equal to <code>element</code> moving
+     *     from head to tail.<br>
+     *     If <code>count</code> is negative: Removes elements equal to <code>element</code> moving
+     *     from tail to head.<br>
+     *     If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of
+     *     elements equal to <code>element</code>, it removes all elements equal to <code>element
+     *     </code>.`
      * @param element The element to remove from the list.
      * @return The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.
@@ -939,7 +941,8 @@ public interface ListBaseCommands {
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
@@ -962,7 +965,8 @@ public interface ListBaseCommands {
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush(gs("testKey"), new GlideString[] {gs("one"), gs("two"), gs("three")}).get();
@@ -983,7 +987,8 @@ public interface ListBaseCommands {
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
@@ -1003,7 +1008,8 @@ public interface ListBaseCommands {
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element. If no
+     *     member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * client.lpush(gs("testKey"), new GlideString[] {gs("one"), gs("two"), gs("three")}).get();

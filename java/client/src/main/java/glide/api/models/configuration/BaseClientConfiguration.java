@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
-import glide.connectors.resources.ThreadPoolResource;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -48,7 +47,7 @@ public abstract class BaseClientConfiguration {
     /**
      * The duration in milliseconds that the client should wait for a request to complete. This
      * duration encompasses sending the request, awaiting for a response from the server, and any
-     * required reconnections or retries. If the specified timeout is exceeded for a pending request,
+     * required reconnection or retries. If the specified timeout is exceeded for a pending request,
      * it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds
      * will be used.
      */
@@ -59,12 +58,6 @@ public abstract class BaseClientConfiguration {
      * connection establishment.
      */
     private final String clientName;
-
-    /**
-     * Advanced users can pass an extended {@link ThreadPoolResource} to pass a user-defined event
-     * loop group. If set, users are responsible for shutting the resource down when no longer in use.
-     */
-    private final ThreadPoolResource threadPoolResource;
 
     /**
      * Serialization protocol to be used with the server. If not set, {@link ProtocolVersion#RESP3}
@@ -88,4 +81,7 @@ public abstract class BaseClientConfiguration {
      * within the specified AZ if exits.
      */
     private final String clientAZ;
+
+    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
+    private final BackoffStrategy reconnectStrategy;
 }

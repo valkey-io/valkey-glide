@@ -21,8 +21,8 @@ jobs:
             github.repository_owner == 'valkey-io' &&
             (github.event_name == 'workflow_dispatch' ||
             (github.event_name == 'pull_request' && !startsWith(github.head_ref, 'ort-diff-for-')))
-        strategy:
-            fail-fast: false
+
+        continue-on-error: true
         env:
             PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
@@ -97,31 +97,13 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
+                      enabledPackageManagers: [Cargo, GoMod, NPM, PIP, GradleInspector]
                   EOF
                   cat ~/.ort/config/config.yml
 
               ### NodeJS ###
             - name: Set up Node.js
               uses: actions/setup-node@v4
-
-            - name: Create package.json file for the Node wrapper
-              uses: ./.github/workflows/node-create-package-file
-              with:
-                  release_version: ${{ env.TARGET_COMMIT }}
-                  os: "ubuntu-latest"
-
-            - name: Fix Node base NPM package.json file for ORT
-              working-directory: ./node/npm/glide
-              run: |
-                  # Remove the glide-rs dependency to avoid duplication 
-                  sed -i '/ "glide-rs":/d' ../../package.json
-                  export pkg_name=valkey-glide-base
-                  export package_version="${{ env.TARGET_COMMIT }}"
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
-                  cat package.json
 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
@@ -151,6 +133,12 @@ jobs:
               with:
                   folder_path: "${{ github.workspace }}/glide-core"
 
+              ### Rust FFI ###
+            - name: Run ORT tools for FFI
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/ffi"
+
               ### Java ###
             - name: Set up JDK 11
               uses: actions/setup-java@v4
@@ -173,6 +161,18 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
+
+              ### GO ###
+            - name: Set up GO
+              uses: actions/setup-go@v5
+              with:
+                  go-version: 1.22
+
+            - name: Generate protobuf for GO
+              working-directory: ./go
+              run: |
+                  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+                  make generate-protobuf
 
             - name: Run ORT tools for Go
               uses: ./.github/workflows/run-ort-tools
@@ -223,16 +223,28 @@ jobs:
                       utils/unapproved_package_list.txt
                   retention-days: 30
 
-              ### TODO: Fail if there are unapproved packages ###
+            - name: Check for unapproved packages
+              run: |
+                  if [ -s utils/unapproved_package_list.txt ]; then
+                    echo "::error::Found unapproved packages. Please review utils/unapproved_package_list.txt"
+                    cat utils/unapproved_package_list.txt
+                    exit 1
+                  else
+                    echo "No unapproved packages found."
+                  fi
 
-              ### Check for attributions diff ###
+              ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
                   cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
-                  cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTIONS
+                  : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
+                  curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
+                  cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
+                  : Merge FFI attributions into GO attributions
+                  cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
                   GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV

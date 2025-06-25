@@ -1,10 +1,19 @@
 {
-    "extends": "../tsconfig.json",
     "compilerOptions": {
+        "target": "ESNext",
+        "module": "CommonJS",
         "rootDir": "../../",
+        "baseUrl": "../../",
+        "outDir": "./__tests_out__",
+        "noEmit": true,
+        "declaration": false,
+        "declarationMap": false,
+        "sourceMap": false,
+        "lib": ["ESNext"],
+        "esModuleInterop": true,
+        "skipLibCheck": true,
         "types": ["jest", "node"]
     },
-    "include": ["*.ts", "./*.test.ts", "setup.ts"],
-    "exclude": ["node_modules", "**/*.spec.ts"],
-    "isolatedModules": true
+    "include": ["**/*.ts", "../../utils/TestUtils.ts"],
+    "exclude": ["node_modules", "../build-ts"]
 }

@@ -55,7 +55,7 @@ use crate::{
     cluster_routing::{Redirect, Route, RoutingInfo},
     IntoConnectionInfo, PushInfo,
 };
-use rand::{seq::IteratorRandom, thread_rng};
+use rand::seq::IteratorRandom;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -65,11 +65,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-#[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
-
-#[cfg(not(feature = "tls-rustls"))]
-use crate::connection::TlsConnParams;
 
 #[derive(Clone)]
 enum Input<'a> {
@@ -372,7 +368,7 @@ where
 
     fn create_new_slots(&self) -> RedisResult<SlotMap> {
         let mut connections = self.connections.borrow_mut();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let len = connections.len();
         let samples = connections.iter_mut().choose_multiple(&mut rng, len);
         let mut result = Err(RedisError::from((
@@ -959,7 +955,7 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 ) -> (String, &mut C) {
     let addr = connections
         .keys()
-        .choose(&mut thread_rng())
+        .choose(&mut rand::rng())
         .expect("Connections is empty")
         .to_string();
     let con = connections.get_mut(&addr).expect("Connections is empty");

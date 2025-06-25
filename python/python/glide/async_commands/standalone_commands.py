@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide.async_commands.batch import Batch
+from glide.async_commands.batch_options import BatchOptions
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
@@ -31,6 +32,10 @@ class StandaloneCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
@@ -39,7 +44,8 @@ class StandaloneCommands(CoreCommands):
             TResult: The returning value depends on the executed command.
 
         Example:
-            >>> connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+            >>> await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"])
+            # Expected Output: A list of all pub/sub clients
 
         """
         return await self._execute_command(RequestType.CustomCommand, command_args)
@@ -50,6 +56,8 @@ class StandaloneCommands(CoreCommands):
     ) -> bytes:
         """
         Get information and statistics about the server.
+
+        Starting from server version 7, command supports multiple section arguments.
 
         See [valkey.io](https://valkey.io/commands/info/) for details.
 
@@ -69,7 +77,7 @@ class StandaloneCommands(CoreCommands):
         self,
         batch: Batch,
         raise_on_error: bool,
-        timeout: Optional[int] = None,
+        options: Optional[BatchOptions] = None,
     ) -> Optional[List[TResult]]:
         """
         Executes a batch by processing the queued commands.
@@ -89,10 +97,7 @@ class StandaloneCommands(CoreCommands):
                 When set to ``False``, errors will be included as part of the batch response array, allowing
                 the caller to process both successful and failed commands together. In this case, error details
                 will be provided as instances of ``RequestError``.
-            timeout (Optional[int]): The duration in milliseconds that the client should wait for the batch request
-                to complete. This duration encompasses sending the request, awaiting a response from the server, and any
-                required reconnections or retries. If the specified timeout is exceeded for the request,
-                a timeout error will be raised. If not explicitly set, the client's default request timeout will be used.
+            options (Optional[BatchOptions]): A ``BatchOptions`` object containing execution options.
 
         Returns:
             Optional[List[TResult]]: An array of results, where each entry corresponds to a command's execution result.
@@ -118,33 +123,38 @@ class StandaloneCommands(CoreCommands):
             # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
 
         Example (Atomic Batch - Transaction with options):
+            >>> from glide import BatchOptions
             >>> transaction = Batch(is_atomic=True)
             >>> transaction.set("key", "1")
             >>> transaction.incr("key")
             >>> transaction.custom_command(["get", "key"])
+            >>> options = BatchOptions(timeout=1000)  # Set a timeout of 1000 milliseconds
             >>> result = await client.exec(
             ...     transaction,
             ...     raise_on_error=False,  # Do not raise an error on failure
-            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ...     options=options
             ... )
             >>> print(f"Transaction Result: {result}")
             # Expected Output: Transaction Result: [OK, 2, b'2']
 
         Example (Non-Atomic Batch - Pipeline with options):
+            >>> from glide import BatchOptions
             >>> pipeline = Batch(is_atomic=False)
             >>> pipeline.custom_command(["set", "key1", "value1"])
             >>> pipeline.custom_command(["set", "key2", "value2"])
             >>> pipeline.custom_command(["get", "key1"])
             >>> pipeline.custom_command(["get", "key2"])
+            >>> options = BatchOptions(timeout=1000)  # Set a timeout of 1000 milliseconds
             >>> result = await client.exec(
             ...     pipeline,
             ...     raise_on_error=False,  # Do not raise an error on failure
-            ...     timeout=1000  # Set a timeout of 1000 milliseconds
+            ...     options=options
             ... )
             >>> print(f"Pipeline Result: {result}")
             # Expected Output: Pipeline Result: [OK, OK, b'value1', b'value2']
         """
         commands = batch.commands[:]
+        timeout = options.timeout if options else None
         return await self._execute_batch(
             commands,
             is_atomic=batch.is_atomic,
@@ -861,8 +871,6 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.watch("sampleKey")
-                'OK'
             >>> await client.unwatch()
                 'OK'
         """

@@ -39,10 +39,18 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            rc-version:
+                required: false
+                type: string
+                description: "RC Version number (Format: vX.Y.Z or vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
+            run-modules-tests:
+                description: "Run modules tests"
+                type: boolean
+                default: false
 
     workflow_call:
 
@@ -118,15 +126,32 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Install & build & test
               working-directory: go
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  make install-tools build
-                  make -k unit-test integ-test
+                  if [[ -n "$RC_VERSION" ]]; then
+                    make install-tools
+                    make -k integ-test
+                  else
+                    make install-tools build
+                    make -k unit-test integ-test
+                  fi
+                  make -k pubsub-test
+                  make -k opentelemetry-test
 
             - name: Run Example Tests
               working-directory: go
-              if: ${{ matrix.engine.version == '8.0' }}
+              if: ${{ contains(matrix.engine.version, '8') && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 
@@ -149,6 +174,7 @@ jobs:
     lint:
         timeout-minutes: 10
         runs-on: ubuntu-latest
+        if: ${{ !github.event.inputs.rc-version }}
         steps:
             - uses: actions/checkout@v4
 
@@ -173,10 +199,16 @@ jobs:
                       x86_64-unknown-linux-gnu-glide-core
                       x86_64-unknown-linux-gnu
 
+            - name: lint rust
+              uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ffi
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Install and run linters
               working-directory: go
               run: |
-                  make install-dev-tools install-build-tools build lint-ci
+                  make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
 
     get-containers:
         runs-on: ubuntu-latest
@@ -197,7 +229,7 @@ jobs:
 
     test-go-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
+        needs: get-containers
         timeout-minutes: 25
         strategy:
             fail-fast: false
@@ -242,11 +274,27 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Install & build & test
               working-directory: go
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  make install-tools build
-                  make -k unit-test integ-test
+                  if [[ -n "$RC_VERSION" ]]; then
+                    make install-tools
+                    make -k integ-test
+                  else
+                    make install-tools build
+                    make -k unit-test integ-test
+                  fi
+                  make -k pubsub-test
 
             - name: Upload test reports
               if: always()
@@ -260,7 +308,7 @@ jobs:
                       go/reports/**
 
     test-modules:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
         environment: AWS_ACTIONS
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64, persistent]
@@ -287,10 +335,28 @@ jobs:
                       aarch64-unknown-linux-gnu-glide-core
                       aarch64-unknown-linux-gnu
 
+            - name: Install zig
+              uses: ./.github/workflows/install-zig
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Build and test
               working-directory: ./go
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  if [[ -n "$RC_VERSION" ]]; then
+                    make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  else
+                    make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  fi
+                  make -k pubsub-test
 
             - name: Upload test reports
               if: always()
@@ -299,4 +365,81 @@ jobs:
               with:
                   name: test-reports-modules
                   path: |
+                      go/reports/**
+
+    test-long-timeout:
+        name: Go Long Timeout Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
+        needs: get-matrices
+        timeout-minutes: 35
+        strategy:
+            fail-fast: false
+            matrix:
+                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
+            - name: Set up Go ${{ matrix.go }}
+              uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ matrix.go }}
+                  cache-dependency-path: go/go.sum
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ffi/target
+                      glide-core/src/generated
+                  key: ${{ matrix.host.TARGET }}-go
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Install & build & test
+              working-directory: go
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  if [[ -n "$RC_VERSION" ]]; then
+                    make install-tools
+                    make -k long-timeout-test test-filter=TestLongTimeout
+                  else
+                    make install-tools build
+                    make -k long-timeout-test test-filter=TestLongTimeout
+                  fi
+                  make -k pubsub-test
+
+            - name: Upload logs and reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  path: |
+                      utils/clusters/**
+                      benchmarks/results/**
                       go/reports/**

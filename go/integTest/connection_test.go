@@ -3,67 +3,69 @@
 package integTest
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/api"
-	"github.com/valkey-io/valkey-glide/go/api/config"
-	"github.com/valkey-io/valkey-glide/go/api/errors"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	config := api.NewGlideClientConfiguration().
+	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
-	client, err := api.NewGlideClient(config)
+	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
 }
 
 func (suite *GlideTestSuite) TestClusterConnect() {
-	config := api.NewGlideClusterClientConfiguration()
+	config := config.NewClusterClientConfiguration()
 	for _, host := range suite.clusterHosts {
 		config.WithAddress(&host)
 	}
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	config := api.NewGlideClusterClientConfiguration().
+	config := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0])
 
-	client, err := api.NewGlideClusterClient(config)
+	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
 }
 
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
-	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: "invalid-host"})
-	client, err := api.NewGlideClient(config)
+	config := config.NewClientConfiguration().
+		WithAddress(&config.NodeAddress{Host: "invalid-host"})
+	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), client)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.ConnectionError{}, err)
+	suite.Nil(client)
+	suite.Error(err)
+	var connErr *glide.ConnectionError
+	suite.ErrorAs(err, &connErr)
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
-	suite.runWithTimeoutClients(func(client api.BaseClient) {
-		backoffStrategy := api.NewBackoffStrategy(2, 100, 1)
-		_, clusterMode := client.(api.GlideClusterClientCommands)
+	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
+		backoffStrategy := config.NewBackoffStrategy(2, 100, 1)
+		_, clusterMode := client.(interfaces.GlideClusterClientCommands)
 
 		// Runnable for long-running DEBUG SLEEP command
 		debugSleepTask := func() {
@@ -72,13 +74,17 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 					suite.T().Errorf("Recovered in debugSleepTask: %v", r)
 				}
 			}()
-			if clusterClient, ok := client.(api.GlideClusterClientCommands); ok {
-				_, err := clusterClient.CustomCommandWithRoute([]string{"DEBUG", "sleep", "7"}, config.AllNodes)
+			if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+				_, err := clusterClient.CustomCommandWithRoute(
+					context.Background(),
+					[]string{"DEBUG", "sleep", "7"},
+					config.AllNodes,
+				)
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
-			} else if glideClient, ok := client.(api.GlideClientCommands); ok {
-				_, err := glideClient.CustomCommand([]string{"DEBUG", "sleep", "7"})
+			} else if glideClient, ok := client.(interfaces.GlideClientCommands); ok {
+				_, err := glideClient.CustomCommand(context.Background(), []string{"DEBUG", "sleep", "7"})
 				if err != nil {
 					suite.T().Errorf("Error during DEBUG SLEEP command: %v", err)
 				}
@@ -111,17 +117,17 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 				}
 			}()
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
-			var timeoutClient api.BaseClient
+			var timeoutClient interfaces.BaseClientCommands
 			var err error
 			if clusterMode {
-				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)
+				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10*time.Second, 250*time.Millisecond)
 			} else {
-				timeoutClient, err = suite.createConnectionTimeoutClient(10000, 250, backoffStrategy)
+				timeoutClient, err = suite.createConnectionTimeoutClient(10*time.Second, 250*time.Millisecond, backoffStrategy)
 			}
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {
 				defer timeoutClient.Close()
-				result, err := timeoutClient.Set("key", "value")
+				result, err := timeoutClient.Set(context.Background(), "key", "value")
 				assert.NoError(suite.T(), err)
 				assert.Equal(suite.T(), "OK", result)
 			}

@@ -10458,22 +10458,21 @@ public class GlideClientTest {
         String key = "testKey";
         String[] elements = new String[] {"a", "b", "c"};
         String[] arguments = new String[] {key, "a", "b", "c"};
-        Long value = 1L;
 
-        CompletableFuture<Long> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(PfAdd), eq(arguments), any()))
+        when(commandManager.<Boolean>submitNewCommand(eq(PfAdd), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.pfadd(key, elements);
-        Long payload = response.get();
+        CompletableFuture<Boolean> response = service.pfadd(key, elements);
+        Boolean payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertTrue(payload);
     }
 
     @SneakyThrows
@@ -10483,22 +10482,21 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         GlideString[] elements = new GlideString[] {gs("a"), gs("b"), gs("c")};
         GlideString[] arguments = new GlideString[] {key, gs("a"), gs("b"), gs("c")};
-        Long value = 1L;
 
-        CompletableFuture<Long> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(PfAdd), eq(arguments), any()))
+        when(commandManager.<Boolean>submitNewCommand(eq(PfAdd), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.pfadd(key, elements);
-        Long payload = response.get();
+        CompletableFuture<Boolean> response = service.pfadd(key, elements);
+        Boolean payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertTrue(payload);
     }
 
     @SneakyThrows
@@ -14035,6 +14033,41 @@ public class GlideClientTest {
 
         GlideString[] arg =
                 new GlideString[] {
+                    key, gs(Long.toString(ttl)), gs(value), gs("REPLACE"), gs("ABSTTL"), gs("FREQ"), gs("5")
+                };
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response =
+                service.restore(
+                        key,
+                        ttl,
+                        value,
+                        RestoreOptions.builder().replace().absttl().frequency(frequency).build());
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_with_restoreOptions_throwsError() {
+        // setup
+        GlideString key = gs("testKey");
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+        Long idletime = 10L;
+        Long frequency = 5L;
+
+        GlideString[] arg =
+                new GlideString[] {
                     key,
                     gs(Long.toString(ttl)),
                     gs(value),
@@ -14053,17 +14086,22 @@ public class GlideClientTest {
         when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
                 .thenReturn(testResponse);
 
-        // exercise
-        CompletableFuture<String> response =
-                service.restore(
-                        key,
-                        ttl,
-                        value,
-                        RestoreOptions.builder().replace().absttl().idletime(10L).frequency(5L).build());
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, response.get());
+        IllegalArgumentException illegalArgumentException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                service.restore(
+                                        key,
+                                        ttl,
+                                        value,
+                                        RestoreOptions.builder()
+                                                .replace()
+                                                .absttl()
+                                                .idletime(10L)
+                                                .frequency(5L)
+                                                .build()));
+        assertEquals(
+                "IDLETIME and FREQ cannot be set at the same time.", illegalArgumentException.getMessage());
     }
 
     @SneakyThrows

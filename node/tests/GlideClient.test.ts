@@ -10,7 +10,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { BufferReader, BufferWriter } from "protobufjs";
+import { BufferReader, BufferWriter } from "protobufjs/minimal";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
     Decoder,
@@ -24,9 +25,8 @@ import {
     RequestError,
     Script,
     convertGlideRecordToRecord,
-} from "..";
-import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { command_request } from "../src/ProtobufMessage";
+} from "../build-ts";
+import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     batchTest,
@@ -1738,6 +1738,111 @@ describe("GlideClient", () => {
             }
         },
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lazy connection establishes only on first command_%p",
+        async (protocol) => {
+            // Create a monitoring client (eagerly connected)
+            const monitoringClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    lazyConnect: false, // Explicit eager connection
+                    requestTimeout: 3000,
+                }),
+            );
+
+            try {
+                // Get initial client count
+                const getClientCount = async (): Promise<number> => {
+                    const result = await monitoringClient.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    if (result === null) return 0;
+
+                    const text = Buffer.isBuffer(result)
+                        ? result.toString()
+                        : String(result);
+                    const lines = text.trim().split("\n");
+                    return lines.filter((line) => line.trim().length > 0)
+                        .length;
+                };
+
+                const clientsBeforeLazyInit = await getClientCount();
+
+                // Create lazy client
+                const lazyClient = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        {
+                            lazyConnect: true, // Lazy connection
+                            requestTimeout: 3000,
+                        },
+                    ),
+                );
+
+                try {
+                    // Verify no new connections were established
+                    const clientsAfterLazyInit = await getClientCount();
+
+                    expect(clientsAfterLazyInit).toEqual(clientsBeforeLazyInit);
+
+                    // Send first command with lazy client
+                    const pingResponse = await lazyClient.ping();
+                    expect(pingResponse).toEqual("PONG");
+
+                    // Check client count after first command
+                    const clientsAfterFirstCommand = await getClientCount();
+
+                    expect(clientsAfterFirstCommand).toEqual(
+                        clientsBeforeLazyInit + 1,
+                    );
+                } finally {
+                    await lazyClient.close();
+                }
+            } finally {
+                await monitoringClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lazy connection with non-existent host_%p",
+        async (protocol) => {
+            const nonExistentHost = "non-existent-host-that-does-not-resolve";
+            const baseConfig = {
+                addresses: [{ host: nonExistentHost, port: 6379 }],
+                protocol,
+                requestTimeout: 1000,
+            };
+
+            // Test 1: Eager connection to non-existent host should fail immediately
+            await expect(
+                GlideClient.createClient({
+                    ...baseConfig,
+                    lazyConnect: false,
+                }),
+            ).rejects.toThrow(/connect|connection|resolve|network|host/i);
+
+            // Test 2: Lazy connection to non-existent host should succeed in client creation
+            const lazyClient = await GlideClient.createClient({
+                ...baseConfig,
+                lazyConnect: true,
+            });
+
+            try {
+                // But command execution should fail with appropriate error
+                await expect(lazyClient.ping()).rejects.toThrow(
+                    /connect|connection|resolve|network|host/i,
+                );
+            } finally {
+                lazyClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(

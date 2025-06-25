@@ -1,17 +1,15 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-import {
-    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
-    Script,
-    StartSocketConnection,
-    getStatistics,
-    valueFromSplitPointer,
-} from "glide-rs";
+import Long from "long";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {
+    Buffer,
+    BufferWriter,
+    Long as ProtoLong,
+    Reader,
+    Writer,
+} from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -26,8 +24,15 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClosingError,
     ClusterBatchOptions,
+    ConfigurationError,
+    ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -37,20 +42,29 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     HScanOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
     ListDirection,
+    Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    OpenTelemetry,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RequestError,
     RestoreOptions,
+    RouteOption,
+    Routes,
     ScoreFilter,
+    Script,
     SearchOrigin,
     SetOptions,
     SortOptions,
+    StartSocketConnection,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -59,6 +73,8 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    TimeoutError,
+    ValkeyError,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -128,6 +144,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLeakedOtelSpan,
     createMGet,
     createMSet,
     createMSetNX,
@@ -232,29 +249,15 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-} from "./Commands";
-import {
-    ClosingError,
-    ConfigurationError,
-    ConnectionError,
-    ExecAbortError,
-    RequestError,
-    TimeoutError,
-    ValkeyError,
-} from "./Errors";
-import { GlideClientConfiguration } from "./GlideClient";
-import {
-    GlideClusterClientConfiguration,
-    RouteOption,
-    Routes,
-} from "./GlideClusterClient";
-import { Logger } from "./Logger";
+    dropOtelSpan,
+    getStatistics,
+    valueFromSplitPointer,
+} from ".";
 import {
     command_request,
     connection_request,
     response,
-} from "./ProtobufMessage";
-
+} from "../build-ts/ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -489,14 +492,14 @@ export function convertRecordToGlideRecord<T>(
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
 class PointerResponse {
-    pointer: number | Long | null;
+    pointer: number | ProtoLong | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
     high: number | undefined;
     low: number | undefined;
 
     constructor(
-        pointer: number | Long | null,
+        pointer: number | ProtoLong | null,
         high?: number | undefined,
         low?: number | undefined,
     ) {
@@ -544,10 +547,13 @@ export type ReadFrom =
  * - **Addresses**: Use the `addresses` property to specify the hostnames and ports of the server(s) to connect to.
  *   - **Cluster Mode**: In cluster mode, the client will discover other nodes based on the provided addresses.
  *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
+ * - **Lazy Connect**: Set `lazyConnect` to `true` to defer connection establishment until the first command is sent.
  *
  * ### Security Settings
  *
  * - **TLS**: Enable secure communication using `useTLS`.
+ *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+ *      For advanced tls configuration, , see {@link AdvancedBaseClientConfiguration}.
  * - **Authentication**: Provide `credentials` to authenticate with the server.
  *
  * ### Communication Settings
@@ -575,6 +581,14 @@ export type ReadFrom =
  *
  * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
  *
+ * ### Reconnection Strategy
+ * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
+ *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
+ *     - After this limit is reached, the retry interval becomes constant.
+ *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
+ *
  * @example
  * ```typescript
  * const config: BaseClientConfiguration = {
@@ -594,6 +608,13 @@ export type ReadFrom =
  *   clientAz: 'us-east-1a',
  *   defaultDecoder: Decoder.String,
  *   inflightRequestsLimit: 1000,
+ *   connectionBackoff: {
+ *     numberOfRetries: 10, // Maximum retries before delay becomes constant
+ *     factor: 500,        // Base delay in milliseconds
+ *     exponentBase: 2,    // Delay doubles with each retry (2^N)
+ *     jitterPercent: 20,   // Optional jitter percentage
+ *   },
+ *   lazyConnect: true,
  * };
  * ```
  */
@@ -633,7 +654,7 @@ export interface BaseClientConfiguration {
     credentials?: ServerCredentials;
     /**
      * The duration in milliseconds that the client should wait for a request to complete.
-     * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
+     * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnection or retries.
      * If the specified timeout is exceeded for a pending request, it will result in a timeout error.
      * If not explicitly set, a default value of 250 milliseconds will be used.
      * Value must be an integer.
@@ -679,6 +700,72 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+
+    /**
+     * Strategy used to determine how and when to reconnect, in case of connection failures.
+     * The time between attempts grows exponentially, following the formula rand(0 ... factor * (exponentBase ^ N)), where N is the number of failed attempts,
+     * and rand(...) applies a jitter of up to `jitterPercent`% to introduce randomness and reduce retry storms.
+     * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+     * reconnect attempt is successful.
+     * If not set, a default backoff strategy will be used.
+     */
+    connectionBackoff?: {
+        /**
+         * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+         * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
+         * Value must be an integer.
+         */
+        numberOfRetries: number;
+        /**
+         * The multiplier that will be applied to the waiting time between each retry.
+         * Value must be an integer.
+         */
+        factor: number;
+        /**
+         * The exponent base configured for the strategy.
+         * Value must be an integer.
+         */
+        exponentBase: number;
+        /** The Jitter percent on the calculated duration.
+         * If not set, a default value will be used.
+         * Value is optional, and must be an integer.
+         */
+        jitterPercent?: number;
+    };
+    /**
+     * Enables lazy connection mode, where physical connections to the server(s) are deferred
+     * until the first command is sent. This can reduce startup latency and allow for client
+     * creation in disconnected environments.
+     *
+     * - **Default**: `false` – connections are established immediately during client creation.
+     *
+     * @remarks
+     * When `lazyConnect` is set to `true`, the client will not attempt to connect to the specified
+     * nodes during initialization. Instead, connections will be established only when a command is
+     * actually executed.
+     *
+     * Note that the first command executed with lazy connections may experience additional latency
+     * as it needs to establish the connection first. During this initial connection, the standard
+     * request timeout does not apply yet - instead, the connection establishment is governed by
+     * `AdvancedBaseClientConfiguration::connectionTimeout`. The request timeout (`requestTimeout`)
+     * only begins counting after the connection has been successfully established. This behavior
+     * can effectively increase the total time needed for the first command to complete.
+     *
+     * This setting applies to both standalone and cluster modes. Note that if an operation is
+     * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+     *
+     * @example
+     * ```typescript
+     * const client = await GlideClient.createClient({
+     *   addresses: [{ host: "localhost", port: 6379 }],
+     *   lazyConnect: true
+     * });
+     *
+     * // No connection is made yet
+     * await client.ping(); // Now the client connects and sends the command
+     * ```
+     */
+    lazyConnect?: boolean;
 }
 
 /**
@@ -691,6 +778,10 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
+ * ### TLS config
+ *
+ * - **TLS Configuration**: The `tlsAdvancedConfiguration` property allows for advanced TLS settings, such as enabling insecure mode.
+ *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
@@ -701,11 +792,34 @@ export interface BaseClientConfiguration {
 export interface AdvancedBaseClientConfiguration {
     /**
      * The duration in milliseconds to wait for a TCP/TLS connection to complete.
-     * This applies both during initial client creation and any reconnections that may occur during request processing.
+     * This applies both during initial client creation and any reconnection that may occur during request processing.
      * **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-     * If not explicitly set, a default value of 250 milliseconds will be used.
+     * If not explicitly set, a default value of 2000 milliseconds will be used.
      */
     connectionTimeout?: number;
+
+    /**
+     * The advanced TLS configuration settings. This allows for more granular control of TLS behavior,
+     * such as enabling an insecure mode that bypasses certificate validation.
+     */
+    tlsAdvancedConfiguration?: {
+        /**
+         * Whether to bypass TLS certificate verification.
+         *
+         * - When set to `true`, the client skips certificate validation.
+         *   This is useful when connecting to servers or clusters using self-signed certificates,
+         *   or when DNS entries (e.g., CNAMEs) don't match certificate hostnames.
+         *
+         * - This setting is typically used in development or testing environments.
+         *   **It is strongly discouraged in production**, as it introduces security risks such as man-in-the-middle attacks.
+         *
+         * - Only valid if TLS is already enabled in the base client configuration.
+         *   Enabling it without TLS will result in a `ConfigurationError`.
+         *
+         * - Default: false (verification is enforced).
+         */
+        insecure?: boolean;
+    };
 }
 
 /**
@@ -767,7 +881,7 @@ export interface PubSubMsg {
  * @see {@link BatchOptions}
  */
 type BaseOptions = RouteOption & DecoderOption;
-export type WritePromiseOptions =
+type WritePromiseOptions =
     | BaseOptions
     | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
@@ -943,6 +1057,16 @@ export class BaseClient {
         }
     }
 
+    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
+        if (spanPtr === null || spanPtr === undefined) return;
+
+        if (typeof spanPtr === "number") {
+            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
+        } else if (spanPtr instanceof Long) {
+            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
@@ -994,6 +1118,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1099,6 +1225,18 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         const callbackIndex = this.getCallbackIndex();
         const basePromise = new Promise<T>((resolve, reject) => {
+            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
+            let spanPtr: Long | null = null;
+
+            if (OpenTelemetry.shouldSample()) {
+                const commandName =
+                    command instanceof command_request.Command
+                        ? command_request.RequestType[command.requestType]
+                        : "Batch";
+                const pair = createLeakedOtelSpan(commandName);
+                spanPtr = new Long(pair[0], pair[1]);
+            }
+
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
@@ -1109,6 +1247,7 @@ export class BaseClient {
                 callbackIndex,
                 command,
                 route,
+                spanPtr,
                 isAtomic,
                 raiseOnError,
                 options as ClusterBatchOptions,
@@ -1211,6 +1350,7 @@ export class BaseClient {
         callbackIdx: number,
         command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
+        commandSpanPtr?: number | Long | null,
         isAtomic = false,
         raiseOnError = false,
         options: ClusterBatchOptions | BatchOptions = {},
@@ -1249,6 +1389,7 @@ export class BaseClient {
             singleCommand: isBatch ? undefined : command,
             batch,
             route,
+            rootSpanPtr: commandSpanPtr,
         });
 
         this.writeOrBufferRequest(
@@ -1474,22 +1615,25 @@ export class BaseClient {
         }
     }
 
-    /** Get the value associated with the given key, or null if no such value exists.
+    /** Get the value associated with the given `key`, or `null` if no such `key` exists.
      *
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
-     * @param key - The key to retrieve from the database.
+     * @param key - The `key` to retrieve from the database.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return `null`.
      *
      * @example
      * ```typescript
      * // Example usage of get method to retrieve the value of a key
      * const result = await client.get("key");
-     * console.log(result); // Output: 'value'
+     * console.log(result);
+     * // Output: 'value'
+     *
      * // Example usage of get method to retrieve the value of a key with Bytes decoder
      * const result = await client.get("key", { decoder: Decoder.Bytes });
-     * console.log(result); // Output: <Buffer 76 61 6c 75 65>
+     * console.log(result);
+     * // Output: <Buffer 76 61 6c 75 65>
      * ```
      */
     public async get(
@@ -1516,7 +1660,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.getex("key", {expiry: { type: TimeUnit.Seconds, count: 5 }});
-     * console.log(result); // Output: 'value'
+     * console.log(result);
+     * // Output: 'value'
      * ```
      */
     public async getex(
@@ -1543,7 +1688,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = client.getdel("key");
-     * console.log(result); // Output: 'value'
+     * console.log(result);
+     * // Output: 'value'
      *
      * const value = client.getdel("key");  // value is null
      * ```
@@ -1574,13 +1720,21 @@ export class BaseClient {
      * ```typescript
      * await client.set("mykey", "This is a string")
      * let result = await client.getrange("mykey", 0, 3)
-     * console.log(result); // Output: "This"
+     * console.log(result);
+     * // Output: "This"
+     *
      * result = await client.getrange("mykey", -3, -1)
-     * console.log(result); // Output: "ing" - extracted last 3 characters of a string
+     * console.log(result);
+     * // Output: "ing"
+     * // extracted last 3 characters of a string
+     *
      * result = await client.getrange("mykey", 0, 100)
-     * console.log(result); // Output: "This is a string"
+     * console.log(result);
+     * // Output: "This is a string"
+     *
      * result = await client.getrange("mykey", 5, 6)
-     * console.log(result); // Output: ""
+     * console.log(result);
+     * // Output: ""
      * ```
      */
     public async getrange(
@@ -1615,22 +1769,33 @@ export class BaseClient {
      *
      * // Example usage of set method with conditional options and expiration
      * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: TimeUnit.Seconds, count: 5 }});
-     * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
+     * console.log(result2);
+     * // Output: 'OK'
+     * // Set "new_value" to `key" only if `key` already exists, and set the key expiration to 5 seconds.
      *
      * // Example usage of set method with conditional options and returning old value
      * const result3 = await client.set("key", "value", {conditionalSet: "onlyIfDoesNotExist", returnOldValue: true});
-     * console.log(result3); // Output: 'new_value' - Returns the old value of "key".
+     * console.log(result3);
+     * // Output: 'new_value'
+     * // Returns the old value of `key`.
      *
      * // Example usage of get method to retrieve the value of a key
      * const result4 = await client.get("key");
-     * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
+     * console.log(result4);
+     * // Output: 'new_value'
+     * // Value wasn't modified back to being "value" because of "NX" flag.
      *
      * // Example usage of set method with conditional option IFEQ
      * await client.set("key", "value we will compare to");
      * const result5 = await client.set("key", "new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
-     * console.log(result5); // Output: 'OK' - Set "new_value" to "key" only if comparisonValue is equal to the current value of "key".
+     * console.log(result5);
+     * // Output: 'OK'
+     * // Set "new_value" to "key" only if comparisonValue is equal to the current value of "key".
+     *
      * const result6 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
-     * console.log(result6); // Output: `null` - Value wasn't set because the comparisonValue is not equal to the current value of "key". Value of "key" remains "new_value".
+     * console.log(result6);
+     * // Output: null
+     * // Value wasn't set because the comparisonValue is not equal to the current value of `key`. Value of `key` remains "new_value".
      * ```
      */
     public async set(
@@ -1687,13 +1852,15 @@ export class BaseClient {
      * @example
      * ```typescript
      * let result = await client.dump("myKey");
-     * console.log(result); // Output: the serialized value of "myKey"
+     * console.log(result);
+     * // Result contains the serialized value of `myKey`
      * ```
      *
      * @example
      * ```typescript
      * result = await client.dump("nonExistingKey");
-     * console.log(result); // Output: `null`
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async dump(key: GlideString): Promise<Buffer | null> {
@@ -1774,7 +1941,8 @@ export class BaseClient {
      * await client.set("key1", "value1");
      * await client.set("key2", "value2");
      * const result = await client.mget(["key1", "key2"]);
-     * console.log(result); // Output: ['value1', 'value2']
+     * console.log(result);
+     * // Output: ['value1', 'value2']
      * ```
      */
     public async mget(
@@ -1969,10 +2137,14 @@ export class BaseClient {
      * await client.set("key1", "A"); // "A" has binary value 01000001
      * await client.set("key2", "B"); // "B" has binary value 01000010
      * const result1 = await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"]);
-     * console.log(result1); // Output: 1 - The size of the resulting string stored in "destination" is 1.
+     * console.log(result1);
+     * // Output: 1
+     * // The size of the resulting string stored in "destination" is 1.
      *
      * const result2 = await client.get("destination");
-     * console.log(result2); // Output: "@" - "@" has binary value 01000000
+     * console.log(result2);
+     * // Output: "@"
+     * // "@" has binary value 01000000
      * ```
      */
     public async bitop(
@@ -1999,7 +2171,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.getbit("key", 1);
-     * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
+     * console.log(result);
+     * // Output: 1
+     * // The second bit of the string stored at `key` is set to 1.
      * ```
      */
     public async getbit(key: GlideString, offset: number): Promise<number> {
@@ -2022,7 +2196,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.setbit("key", 1, 1);
-     * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
+     * console.log(result);
+     * // Output: 0
+     * // The second bit value was 0 before setting to 1.
      * ```
      */
     public async setbit(
@@ -2052,17 +2228,25 @@ export class BaseClient {
      * ```typescript
      * await client.set("key1", "A1");  // "A1" has binary value 01000001 00110001
      * const result1 = await client.bitpos("key1", 1);
-     * console.log(result1); // Output: 1 - The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+     * console.log(result1);
+     * // Output: 1
+     * // The first occurrence of bit value 1 in the string stored at `key1` is at the second position.
      *
      * const result2 = await client.bitpos("key1", 1, { start: -1 });
-     * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+     * console.log(result2);
+     * // Output: 10
+     * // The first occurrence of bit value 1, starting at the last byte in the string stored at `key1`, is at the eleventh position.
      *
      * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
      * const result3 = await client.bitpos("key1", 1, { start: 1, end: -1 });
-     * console.log(result3); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+     * console.log(result3);
+     * // Output: 10
+     * // The first occurrence of bit value 1 in the second byte to the last byte of the string stored at `key1` is at the eleventh position.
      *
      * const result4 = await client.bitpos("key1", 1, { start: 2, end: 9, indexType: BitmapIndexType.BIT });
-     * console.log(result4); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+     * console.log(result4);
+     * // Output: 7
+     * // The first occurrence of bit value 1 in the third to tenth bits of the string stored at `key1` is at the eighth position.
      * ```
      */
     public async bitpos(
@@ -2101,7 +2285,9 @@ export class BaseClient {
      * ```typescript
      * await client.set("key", "A");  // "A" has binary value 01000001
      * const result = await client.bitfield("key", [new BitFieldSet(new UnsignedEncoding(2), new BitOffset(1), 3), new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
-     * console.log(result); // Output: [2, 3] - The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+     * console.log(result);
+     * // Output: [2, 3]
+     * // The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
      * ```
      */
     public async bitfield(
@@ -2125,7 +2311,9 @@ export class BaseClient {
      * ```typescript
      * await client.set("key", "A");  // "A" has binary value 01000001
      * const result = await client.bitfieldReadOnly("key", [new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
-     * console.log(result); // Output: [2] - The value at offset 1 with an unsigned encoding of 2 is 2.
+     * console.log(result);
+     * // Output: [2]
+     * // The value at offset 1 with an unsigned encoding of 2 is 2.
      * ```
      */
     public async bitfieldReadOnly(
@@ -2149,14 +2337,18 @@ export class BaseClient {
      * // Example usage of the hget method on an-existing field
      * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hget("my_hash", "field");
-     * console.log(result); // Output: "value"
+     * console.log(result);
+     * // Output: "value"
+     * // The value associated with `field` in the key `my_hash`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hget method on a non-existing field
      * const result = await client.hget("my_hash", "nonexistent_field");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
+     * // Indicates non existent key.
      * ```
      */
     public async hget(
@@ -2179,11 +2371,15 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hset method using HashDataType as input type
      * const result = await client.hset("my_hash", [{"field": "field1", "value": "value1"}, {"field": "field2", "value": "value2"}]);
-     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that 2 fields were successfully set in the hash `my_hash`.
      *
      * // Example usage of the hset method using Record<string, GlideString> as input
      * const result = await client.hset("my_hash", {"field1": "value", "field2": "value2"});
-     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that 2 fields were successfully set in the hash `my_hash`.
      * ```
      */
     public async hset(
@@ -2212,7 +2408,9 @@ export class BaseClient {
      * // Example usage of the hkeys method:
      * await client.hset("my_hash", {"field1": "value1", "field2": "value2", "field3": "value3"});
      * const result = await client.hkeys("my_hash");
-     * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
+     * console.log(result);
+     * // Output: ["field1", "field2", "field3"]
+     * // Returns all the field names stored in the hash `my_hash`.
      * ```
      */
 
@@ -2238,14 +2436,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hsetnx method
      * const result = await client.hsetnx("my_hash", "field", "value");
-     * console.log(result); // Output: true - Indicates that the field "field" was set successfully in the hash "my_hash".
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the field "field" was set successfully in the hash `my_hash`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hsetnx method on a field that already exists
      * const result = await client.hsetnx("my_hash", "field", "new_value");
-     * console.log(result); // Output: false - Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
+     * console.log(result);
+     * // Output: false
+     * // Indicates that the field `field` already existed in the hash `my_hash` and was not set again.
      * ```
      */
     public async hsetnx(
@@ -2270,7 +2472,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hdel method
      * const result = await client.hdel("my_hash", ["field1", "field2"]);
-     * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that two fields were successfully removed from the hash.
      * ```
      */
     public async hdel(
@@ -2295,7 +2499,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hmget method
      * const result = await client.hmget("my_hash", ["field1", "field2"]);
-     * console.log(result); // Output: ["value1", "value2"] - A list of values associated with the specified fields.
+     * console.log(result);
+     * // Output: ["value1", "value2"]
+     * // A list of values associated with the specified fields.
      * ```
      */
     public async hmget(
@@ -2318,14 +2524,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hexists method with existing field
      * const result = await client.hexists("my_hash", "field1");
-     * console.log(result); // Output: true
+     * console.log(result);
+     * // Output: true
+     * // Returns true because `my_hash` hash contains `field1` field.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hexists method with non-existing field
      * const result = await client.hexists("my_hash", "nonexistent_field");
-     * console.log(result); // Output: false
+     * console.log(result);
+     * // Output: false
+     * // Returns false because `my_hash` hash does not contain `nonexistent_field` field.
      * ```
      */
     public async hexists(
@@ -2349,7 +2559,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hgetall method
      * const result = await client.hgetall("my_hash");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output: all fields and values stored at `my_hash`
      * // [
      * //     { field: "field1", value: "value1"},
      * //     { field: "field2", value: "value2"}
@@ -2385,7 +2596,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrby method to increment the value in a hash by a specified amount
      * const result = await client.hincrby("my_hash", "field1", 5);
-     * console.log(result); // Output: 5
+     * console.log(result);
+     * // Output: 5
+     * // Increments the value stored at hash field `field1` by 5
      * ```
      */
     public async hincrBy(
@@ -2411,7 +2624,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: 2.5
+     * console.log(result);
+     * // Output: 2.5
+     * // Increments the value stored at hash field `field1` by 2.5
      * ```
      */
     public async hincrByFloat(
@@ -2433,14 +2648,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hlen method with an existing key
      * const result = await client.hlen("my_hash");
-     * console.log(result); // Output: 3
+     * console.log(result);
+     * // Output: 3
+     * // Returns the number of fields for the hash stored at key `my_hash`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the hlen method with a non-existing key
      * const result = await client.hlen("non_existing_key");
-     * console.log(result); // Output: 0
+     * console.log(result);
+     * // Output: 0
+     * // Returns 0 for non-existent key.
      * ```
      */
     public async hlen(key: GlideString): Promise<number> {
@@ -2459,7 +2678,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hvals method
      * const result = await client.hvals("my_hash");
-     * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
+     * console.log(result);
+     * // Output: ["value1", "value2", "value3"]
+     * // Returns all the values stored in the hash `my_hash`.
      * ```
      */
     public async hvals(
@@ -2482,7 +2703,9 @@ export class BaseClient {
      * ```typescript
      * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hstrlen("my_hash", "field");
-     * console.log(result); // Output: 5
+     * console.log(result);
+     * // Output: 5
+     * // Returns the string length of `value` which is the value associated with the field `field` stored at key `my_hash`.
      * ```
      */
     public async hstrlen(
@@ -2505,7 +2728,10 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * console.log(await client.hrandfield("myHash")); // Output: 'field'
+     * const result = await client.hrandfield("myHash")
+     * console.log(result);
+     * // Output: 'field'
+     * // Returns a random field stored at the key `my_hash`.
      * ```
      */
     public async hrandfield(
@@ -2545,12 +2771,13 @@ export class BaseClient {
      *      console.log("Members: ", result[1]);
      * } while (newCursor !== "0");
      * // The output of the code above is something similar to:
-     * // Cursor:  31
-     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
-     * // Cursor:  39
-     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
-     * // Cursor:  0
+     * // Cursor:  31  // The cursor after the first interation.
+     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115'] // First 3 hash field-value pairs stored at the key `key1`
+     * // Cursor:  39 // The cursor after the second interation.
+     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162'] // The next 3 hash field-value pairs at key `key1`
+     * // Cursor:  0 // The cursor after the last batch of elements is fetched.
      * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113']
+     * // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      * @example
      * ```typescript
@@ -2568,12 +2795,13 @@ export class BaseClient {
      *      console.log("Members: ", result[1]);
      * } while (newCursor !== "0");
      * // The output of the code above is something similar to:
-     * // Cursor:  31
-     * // Members:  ['field 79', 'field 20', 'field 115']
-     * // Cursor:  39
-     * // Members:  ['field 63', 'field 293', 'field 162']
-     * // Cursor:  0
+     * // Cursor:  31 // The cursor after the first interation.
+     * // Members:  ['field 79', 'field 20', 'field 115'] // First 3 hash fields stored at the key `key1`
+     * // Cursor:  39 // The cursor after the second interation.
+     * // Members:  ['field 63', 'field 293', 'field 162'] // Next 3 hash fields stored at the key `key1`
+     * // Cursor:  0 // The cursor after the last batch of elements is fetched.
      * // Members:  ['field 55', 'field 24', 'field 90', 'field 113']
+     * // You can get more than `count` elements in the result set. Read the count documentation for more information.
      * ```
      */
     public async hscan(
@@ -2595,15 +2823,18 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      *
      * @example
      * ```typescript
-     * console.log(await client.hrandfieldCount("myHash", 2)); // Output: ['field1', 'field2']
+     * result = await client.hrandfieldCount("my_hash", 2)
+     * console.log(result);
+     * // Output: ['field1', 'field2']
+     * // Returns 2 random fields from the hash stored at key `my_hash`.
      * ```
      */
     public async hrandfieldCount(
@@ -2623,9 +2854,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
-     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
@@ -2633,7 +2864,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.hrandfieldCountWithValues("myHash", 2);
-     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * console.log(result);
+     * // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * // Returns 2 random field-value pairs from the hash stored at key `my_hash`.
      * ```
      */
     public async hrandfieldWithValues(
@@ -2661,14 +2894,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpush method with an existing list
      * const result = await client.lpush("my_list", ["value2", "value3"]);
-     * console.log(result); // Output: 3 - Indicated that the new length of the list is 3 after the push operation.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lpush method with a non-existing list
      * const result = await client.lpush("nonexistent_list", ["new_value"]);
-     * console.log(result); // Output: 1 - Indicates that a new list was created with one element
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that a new list was created with one element
      * ```
      */
     public async lpush(
@@ -2689,8 +2926,10 @@ export class BaseClient {
      * @returns The length of the list after the push operation.
      * @example
      * ```typescript
-     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
-     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * const result = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that the list has two elements after the push operation.
      * ```
      */
     public async lpushx(
@@ -2714,14 +2953,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpop method with an existing list
      * const result = await client.lpop("my_list");
-     * console.log(result); // Output: 'value1'
+     * console.log(result);
+     * // Output: 'value1'
+     * // Returns and removes the first element of the list `value1`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lpop method with a non-existing list
      * const result = await client.lpop("non_exiting_key");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
+     * // Returns null for non-existent key.
      * ```
      */
     public async lpop(
@@ -2745,14 +2988,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpopCount method with an existing list
      * const result = await client.lpopCount("my_list", 2);
-     * console.log(result); // Output: ["value1", "value2"]
+     * console.log(result);
+     * // Output: ["value1", "value2"]
+     * // Returns and removes 2 elements from the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lpopCount method with a non-existing list
      * const result = await client.lpopCount("non_exiting_key", 3);
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
+     * // Returns null in case of non-existent key.
      * ```
      */
     public async lpopCount(
@@ -2783,21 +3030,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lrange method with an existing list and positive indices
      * const result = await client.lrange("my_list", 0, 2);
-     * console.log(result); // Output: ["value1", "value2", "value3"]
+     * console.log(result);
+     * // Output: ["value1", "value2", "value3"]
+     * // Returns the first 3 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with an existing list and negative indices
      * const result = await client.lrange("my_list", -2, -1);
-     * console.log(result); // Output: ["value2", "value3"]
+     * console.log(result);
+     * // Output: ["value2", "value3"]
+     * // Returns the last 2 elements of the list.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the lrange method with a non-existing list
      * const result = await client.lrange("non_exiting_key", 0, 2);
-     * console.log(result); // Output: []
+     * console.log(result);
+     * // Output: []
+     * // Returns an empty list for non-existent key.
      * ```
      */
     public async lrange(
@@ -2821,7 +3074,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the llen method
      * const result = await client.llen("my_list");
-     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that there are 3 elements in the list.
      * ```
      */
     public async llen(key: GlideString): Promise<number> {
@@ -2845,17 +3100,23 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.lpush("testKey1", ["two", "one"]);
-     * await client.lpush("testKey2", ["four", "three"]);
+     * await client.lpush("testKey1", ["two", "one"]); // The key `testKey1` has a list ["one", "two"] after this operation.
+     * await client.lpush("testKey2", ["four", "three"]); // The key `testKey2` has a list ["three", "four"] after this operation.
      *
-     * const result1 = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
-     * console.log(result1); // Output: "one".
+     * const result = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
+     * console.log(result);
+     * // Output: "one".
+     * // Removes "one" from the list at key `testKey1` and adds it to the left of the list at `testKey2`.
      *
      * const updated_array_key1 = await client.lrange("testKey1", 0, -1);
-     * console.log(updated_array); // Output: "two".
+     * console.log(updated_array_key1);
+     * // Output: ["two"]
+     * // The elements in the list at `testKey1` after lmove command.
      *
      * const updated_array_key2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array_key2); // Output: ["one", "three", "four"].
+     * console.log(updated_array_key2);
+     * // Output: ["one", "three", "four"]
+     * // The elements in the list at `testKey2` after lmove command.
      * ```
      */
     public async lmove(
@@ -2892,16 +3153,22 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.lpush("testKey1", ["two", "one"]);
-     * await client.lpush("testKey2", ["four", "three"]);
+     * await client.lpush("testKey1", ["two", "one"]); // The key `testKey1` has a list ["one", "two"] after this operation.
+     * await client.lpush("testKey2", ["four", "three"]); // The key `testKey2` has a list ["three", "four"] after this operation.
      * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
-     * console.log(result); // Output: "one"
+     * console.log(result);
+     * // Output: "one"
+     * // Removes "one" from the list at key `testKey1` and adds it to the left of the list at `testKey2`.
      *
-     * const result2 = await client.lrange("testKey1", 0, -1);
-     * console.log(result2);   // Output: "two"
+     * const updated_array1 = await client.lrange("testKey1", 0, -1);
+     * console.log(updated_array1);
+     * // Output: "two"
+     * // The elements in the list at `testKey1` after blmove command.
      *
      * const updated_array2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array2); // Output: ["one", "three", "four"]
+     * console.log(updated_array2);
+     * // Output: ["one", "three", "four"]
+     * // The elements in the list at `testKey2` after blmove command.
      * ```
      */
     public async blmove(
@@ -2934,8 +3201,10 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the lset method
-     * const response = await client.lset("test_key", 1, "two");
-     * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
+     * const result = await client.lset("test_key", 1, "two");
+     * console.log(result);
+     * // Output: 'OK'
+     * // Indicates that the second index of the list has been set to "two".
      * ```
      */
     public async lset(
@@ -2959,7 +3228,7 @@ export class BaseClient {
      * @param start - The starting point of the range.
      * @param end - The end of the range.
      * @returns always "OK".
-     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied and the key is removed.
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      *
@@ -2967,7 +3236,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ltrim method
      * const result = await client.ltrim("my_list", 0, 1);
-     * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
+     * console.log(result);
+     * // Output: 'OK'
+     * // Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
     public async ltrim(
@@ -2981,12 +3252,12 @@ export class BaseClient {
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
-     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
-     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      *
      * @param key - The key of the list.
      * @param count - The count of the occurrences of elements equal to `element` to remove.
+     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
+     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
+     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      * @param element - The element to remove from the list.
      * @returns the number of the removed elements.
      * If `key` does not exist, 0 is returned.
@@ -2995,7 +3266,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lrem method
      * const result = await client.lrem("my_list", 2, "value");
-     * console.log(result); // Output: 2 - Removes the first 2 occurrences of "value" in the list.
+     * console.log(result);
+     * // Output: 2
+     * // Removes the first 2 occurrences of "value" in the list.
      * ```
      */
     public async lrem(
@@ -3020,14 +3293,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpush method with an existing list
      * const result = await client.rpush("my_list", ["value2", "value3"]);
-     * console.log(result); // Output: 3 - Indicates that the new length of the list is 3 after the push operation.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpush method with a non-existing list
      * const result = await client.rpush("nonexistent_list", ["new_value"]);
-     * console.log(result); // Output: 1
+     * console.log(result);
+     * // Output: 1
      * ```
      */
     public async rpush(
@@ -3049,7 +3325,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.rpushx("my_list", ["value1", "value2"]);
-     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that the list has two elements.
      * ```
      * */
     public async rpushx(
@@ -3073,14 +3351,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpop method with an existing list
      * const result = await client.rpop("my_list");
-     * console.log(result); // Output: 'value1'
+     * console.log(result);
+     * // Output: 'value1'
+     * // Returns and removes the last element of the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpop method with a non-existing list
      * const result = await client.rpop("non_exiting_key");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
+     * // Returns null for non-existent key.
      * ```
      */
     public async rpop(
@@ -3104,14 +3386,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpopCount method with an existing list
      * const result = await client.rpopCount("my_list", 2);
-     * console.log(result); // Output: ["value1", "value2"]
+     * console.log(result);
+     * // Output: ["value1", "value2"]
+     * // Returns and removes the last 2 elements from the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the rpopCount method with a non-existing list
      * const result = await client.rpopCount("non_exiting_key", 7);
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
+     * // Returns null for a non-existing key.
      * ```
      */
     public async rpopCount(
@@ -3135,7 +3421,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sadd method with an existing set
      * const result = await client.sadd("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2
+     * console.log(result);
+     * // Output: 2
+     * // Adds 2 members to the set at key `my_set`
      * ```
      */
     public async sadd(
@@ -3158,7 +3446,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the srem method
      * const result = await client.srem("my_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2
+     * console.log(result);
+     * // Output: 2
+     * // Removes `member1` and `member2` from the set at key `my_set`.
      * ```
      */
     public async srem(
@@ -3228,7 +3518,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
+     * console.log(result);
+     * // Output: Set(3) {'member1', 'member2', 'member3'}
      * ```
      */
     public async smembers(
@@ -3255,7 +3546,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.smove("set1", "set2", "member1");
-     * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
+     * console.log(result);
+     * // Output: true
+     * // `member1` was moved from `set1` to `set2`.
      * ```
      */
     public async smove(
@@ -3279,7 +3572,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the scard method
      * const result = await client.scard("my_set");
-     * console.log(result); // Output: 3
+     * console.log(result);
+     * // Output: 3
      * ```
      */
     public async scard(key: GlideString): Promise<number> {
@@ -3300,14 +3594,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of sinter method when member exists
      * const result = await client.sinter(["my_set1", "my_set2"]);
-     * console.log(result); // Output: Set {'member2'} - Indicates that sets have one common member
+     * console.log(result);
+     * // Output: Set(1) {'member2'}
+     * // Indicates that sets have one common member
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of sinter method with non-existing key
      * const result = await client.sinter(["my_set", "non_existing_key"]);
-     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * console.log(result);
+     * // Output: Set(0) {}
+     * // An empty set is returned since the key does not exist.
      * ```
      */
     public async sinter(
@@ -3337,10 +3635,14 @@ export class BaseClient {
      * await client.sadd("set1", ["a", "b", "c"]);
      * await client.sadd("set2", ["b", "c", "d"]);
      * const result1 = await client.sintercard(["set1", "set2"]);
-     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     * console.log(result1);
+     * // Output: 2
+     * // The intersection of `set1` and `set2` contains 2 elements: `b` and `c`.
      *
      * const result2 = await client.sintercard(["set1", "set2"], { limit: 1 });
-     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * console.log(result2);
+     * // Output: 1
+     * // The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
     public async sintercard(
@@ -3363,7 +3665,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.sinterstore("my_set", ["set1", "set2"]);
-     * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+     * console.log(result);
+     * // Output: 2
+     * // Two elements were stored at `my_set`, and those elements are the intersection of `set1` and `set2`.
      * ```
      */
     public async sinterstore(
@@ -3389,7 +3693,9 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiff(["set1", "set2"]);
-     * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
+     * console.log(result);
+     * // Output: Set(1) {"member1"}
+     * // `member2` is in `set1` but not `set2`
      * ```
      */
     public async sdiff(
@@ -3417,7 +3723,9 @@ export class BaseClient {
      * await client.sadd("set1", ["member1", "member2"]);
      * await client.sadd("set2", ["member1"]);
      * const result = await client.sdiffstore("set3", ["set1", "set2"]);
-     * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
+     * console.log(result);
+     * // Output: 1
+     * // One member was stored in `set3`, and that member is the diff between `set1` and `set2`.
      * ```
      */
     public async sdiffstore(
@@ -3443,10 +3751,13 @@ export class BaseClient {
      * await client.sadd("my_set1", ["member1", "member2"]);
      * await client.sadd("my_set2", ["member2", "member3"]);
      * const result1 = await client.sunion(["my_set1", "my_set2"]);
-     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} - Sets "my_set1" and "my_set2" have three unique members.
+     * console.log(result1);
+     * // Output: Set(3) {'member1', 'member2', 'member3'}
+     * // Sets `my_set1` and `my_set2` have three unique members.
      *
      * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
-     * console.log(result2); // Output: Set {'member1', 'member2'}
+     * console.log(result2);
+     * // Output: Set(2) {'member1', 'member2'}
      * ```
      */
     public async sunion(
@@ -3473,7 +3784,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const length = await client.sunionstore("mySet", ["set1", "set2"]);
-     * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
+     * console.log(length);
+     * // Output: 2
+     * // Two elements were stored in `mySet`, and those two members are the union of `set1` and `set2`.
      * ```
      */
     public async sunionstore(
@@ -3496,14 +3809,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the sismember method when member exists
      * const result = await client.sismember("my_set", "member1");
-     * console.log(result); // Output: true - Indicates that "member1" exists in the set "my_set".
+     * console.log(result);
+     * // Output: true
+     * // Indicates that `member1` exists in the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the sismember method when member does not exist
      * const result = await client.sismember("my_set", "non_existing_member");
-     * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
+     * console.log(result);
+     * // Output: false
+     * // Indicates that `non_existing_member` does not exist in the set `my_set`.
      * ```
      */
     public async sismember(
@@ -3527,7 +3844,9 @@ export class BaseClient {
      * ```typescript
      * await client.sadd("set1", ["a", "b", "c"]);
      * const result = await client.smismember("set1", ["b", "c", "d"]);
-     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * console.log(result);
+     * // Output: [true, true, false]
+     * // `b` and `c` are members of `set1`, but `d` is not.
      * ```
      */
     public async smismember(
@@ -3551,14 +3870,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spop method to remove and return a random member from a set
      * const result = await client.spop("my_set");
-     * console.log(result); // Output: 'member1' - Removes and returns a random member from the set "my_set".
+     * console.log(result);
+     * // Output: 'member1'
+     * // Removes and returns a random member from the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spop method with non-existing key
      * const result = await client.spop("non_existing_key");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async spop(
@@ -3582,14 +3904,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
+     * console.log(result);
+     * // Output: Set(2) {'member2', 'member3'}
+     * // Removes and returns 2 random members from the set `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * console.log(result);
+     * // Output: Set(0) {}
+     * // An empty set is returned since the key does not exist.
      * ```
      */
     public async spopCount(
@@ -3616,14 +3942,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmember method to return a random member from a set
      * const result = await client.srandmember("my_set");
-     * console.log(result); // Output: 'member1' - A random member of "my_set".
+     * console.log(result);
+     * // Output: 'member1'
+     * // A random member of `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of srandmember method with non-existing key
      * const result = await client.srandmember("non_existing_set");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async srandmember(
@@ -3649,14 +3978,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of srandmemberCount method to return multiple random members from a set
      * const result = await client.srandmemberCount("my_set", -3);
-     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of "my_set".
+     * console.log(result);
+     * // Output: ['member1', 'member1', 'member2']
+     * // Random members of `my_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of srandmemberCount method with non-existing key
      * const result = await client.srandmemberCount("non_existing_set", 3);
-     * console.log(result); // Output: [] - An empty list since the key does not exist.
+     * console.log(result);
+     * // Output: []
+     * // An empty list since the key does not exist.
      * ```
      */
     public async srandmemberCount(
@@ -3688,7 +4021,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the exists method
      * const result = await client.exists(["key1", "key2", "key3"]);
-     * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that all three keys exist in the database.
      * ```
      */
     public async exists(keys: GlideString[]): Promise<number> {
@@ -3717,7 +4052,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the unlink method
      * const result = await client.unlink(["key1", "key2", "key3"]);
-     * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that all three keys were unlinked from the database.
      * ```
      */
     public async unlink(keys: GlideString[]): Promise<number> {
@@ -3743,14 +4080,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expire method
      * const result = await client.expire("my_key", 60);
-     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key".
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a timeout of 60 seconds has been set for `my_key`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the expire method with exisiting expiry
      * const result = await client.expire("my_key", 60, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
+     * console.log(result);
+     * // Output: false
+     * // Indicates that `my_key` has an existing expiry.
      * ```
      */
     public async expire(
@@ -3782,7 +4123,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expireAt method on a key with no previous expiry
      * const result = await client.expireAt("my_key", 1672531200, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async expireAt(
@@ -3808,15 +4151,21 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = await client.expiretime("myKey");
-     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     * console.log(result1);
+     * // Output: -2
+     * // `myKey` doesn't exist.
      *
-     * const result2 = await client.set(myKey, "value");
-     * const result3 = await client.expireTime(myKey);
-     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     * const result2 = await client.set("myKey", "value");
+     * const result3 = await client.expireTime("myKey");
+     * console.log(result3);
+     * // Output: -1
+     * // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
-     * const result3 = await client.expireTime(myKey);
-     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
+     * const result3 = await client.expireTime("myKey");
+     * console.log(result3);
+     * // Output: 123456
+     * // The Unix timestamp (in seconds) when `myKey` will expire.
      * ```
      */
     public async expiretime(key: GlideString): Promise<number> {
@@ -3842,7 +4191,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpire method on a key with no previous expiry
      * const result = await client.pexpire("my_key", 60000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a timeout of 60,000 milliseconds has been set for `my_key`.
      * ```
      */
     public async pexpire(
@@ -3874,7 +4225,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the pexpireAt method on a key with no previous expiry
      * const result = await client.pexpireAt("my_key", 1672531200000, { expireOption: ExpireOptions.HasNoExpiry });
-     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the expiration time for `my_key` was successfully set.
      * ```
      */
     public async pexpireAt(
@@ -3899,15 +4252,21 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = client.pexpiretime("myKey");
-     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     * console.log(result1);
+     * // Output: -2
+     * // `myKey` doesn't exist.
      *
      * const result2 = client.set(myKey, "value");
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     * console.log(result2);
+     * // Output: -1
+     * // `myKey` has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
+     * console.log(result3);
+     * // Output: 123456789
+     * // The Unix timestamp (in milliseconds) when `myKey` will expire.
      * ```
      */
     public async pexpiretime(key: GlideString): Promise<number> {
@@ -3926,21 +4285,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ttl method with existing key
      * const result = await client.ttl("my_key");
-     * console.log(result); // Output: 3600 - Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     * console.log(result);
+     * // Output: 3600
+     * // Indicates that `my_key` has a remaining time to live of 3600 seconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with existing key that has no associated expire.
      * const result = await client.ttl("key");
-     * console.log(result); // Output: -1 - Indicates that the key has no associated expire.
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that the key has no associated expire.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the ttl method with a non-existing key
      * const result = await client.ttl("nonexistent_key");
-     * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
+     * console.log(result);
+     * // Output: -2
+     * // Indicates that the key doesn't exist.
      * ```
      */
     public async ttl(key: GlideString): Promise<number> {
@@ -3971,7 +4336,9 @@ export class BaseClient {
      *      args: ["bar"],
      * };
      * const result = await invokeScript(luaScript, scriptOptions);
-     * console.log(result); // Output: ['foo', 'bar']
+     * console.log(result);
+     * // Output: ['foo', 'bar']
+     * // The result for the script.
      * ```
      */
     public async invokeScript(
@@ -4008,7 +4375,9 @@ export class BaseClient {
      * ```typescript
      * const scriptHash = script.getHash();
      * const scriptSource = await client.scriptShow(scriptHash);
-     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
+     * console.log(scriptSource);
+     * // Output: "return { KEYS[1], ARGV[1] }"
+     * // The source for the script
      * ```
      */
     public async scriptShow(
@@ -4047,7 +4416,8 @@ export class BaseClient {
      * // {
      * //     "0-1": [["field1", "value1"]],
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * // }
+     * // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrange(
@@ -4093,7 +4463,8 @@ export class BaseClient {
      * // {
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
      * //     "0-1": [["field1", "value1"]],
-     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * // }
+     * // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in `mystream`.
      * ```
      */
     public async xrevrange(
@@ -4129,7 +4500,9 @@ export class BaseClient {
      * // Example usage of the zadd method to add elements to a sorted set
      * const data = [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }]
      * const result = await client.zadd("my_sorted_set", data);
-     * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that two elements have been added to the sorted set `my_sorted_set`.
      * ```
      *
      * @example
@@ -4137,7 +4510,9 @@ export class BaseClient {
      * // Example usage of the zadd method to update scores in an existing sorted set
      * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
      * const result = await client.zadd("existing_sorted_set", { "member1": 10.5, "member2": 8.2 }, options);
-     * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
+     * console.log(result);
+     * // Output: 2
+     * // Updates the scores of two existing members in the sorted set `existing_sorted_set`.
      * ```
      */
     public async zadd(
@@ -4168,14 +4543,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zaddIncr method to add a member with a score to a sorted set
      * const result = await client.zaddIncr("my_sorted_set", member, 5.0);
-     * console.log(result); // Output: 5.0
+     * console.log(result);
+     * // Output: 5.0
+     * // Score of the member after being updated.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
      * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { updateOptions: UpdateByScore.LESS_THAN });
-     * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
+     * console.log(result);
+     * // Output: null
+     * // Indicates that the member in the sorted set haven't been updated.
      * ```
      */
     public async zaddIncr(
@@ -4209,14 +4588,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zrem function to remove members from a sorted set
      * const result = await client.zrem("my_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 2 - Indicates that two members have been removed from the sorted set "my_sorted_set."
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that two members have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zrem function when the sorted set does not exist
      * const result = await client.zrem("non_existing_sorted_set", ["member1", "member2"]);
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zrem(
@@ -4239,14 +4622,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcard method to get the cardinality of a sorted set
      * const result = await client.zcard("my_sorted_set");
-     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that there are 3 elements in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcard method with a non-existing key
      * const result = await client.zcard("non_existing_key");
-     * console.log(result); // Output: 0
+     * console.log(result);
+     * // Output: 0
      * ```
      */
     public async zcard(key: GlideString): Promise<number> {
@@ -4268,7 +4654,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const cardinality = await client.zintercard(["key1", "key2"], { limit: 10 });
-     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
+     * console.log(cardinality);
+     * // Output: 3
+     * // The intersection of the sorted sets at `key1` and `key2` has a cardinality of 3.
      * ```
      */
     public async zintercard(
@@ -4297,7 +4685,9 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
+     * console.log(result);
+     * // Output: ["member1"]
+     * // `member1` is in `zset1` but not `zset2` or `zset3`.
      * ```
      */
     public async zdiff(
@@ -4326,8 +4716,9 @@ export class BaseClient {
      * await client.zadd("zset2", {"member2": 2.0});
      * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
-     * console.log(result); // Output: "member1" is in "zset1" but not "zset2" or "zset3"
-     * // [{ element: "member1", score: 1.0 }]
+     * console.log(result);
+     * // Output: [{ element: "member1", score: 1.0 }]
+     * // `member1` is in `zset1` but not `zset2` or `zset3`
      * ```
      */
     public async zdiffWithScores(
@@ -4358,10 +4749,14 @@ export class BaseClient {
      * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
      * await client.zadd("zset2", {"member1": 1.0});
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
-     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     * console.log(result1);
+     * // Output: 1
+     * // One member exists in `key1` but not `key2`, and this member was stored in `zset3`.
      *
      * const result2 = await client.zrange("zset3", {start: 0, end: -1});
-     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * console.log(result2);
+     * // Output: ["member2"]
+     * // `member2` is now stored in `my_sorted_set`.
      * ```
      */
     public async zdiffstore(
@@ -4386,21 +4781,25 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zscore method∂∂ to get the score of a member in a sorted set
      * const result = await client.zscore("my_sorted_set", "member");
-     * console.log(result); // Output: 10.5 - Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
+     * console.log(result);
+     * // Output: 10.5
+     * // Indicates that the score of `member` in the sorted set `my_sorted_set` is 10.5.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zscore method when the member does not exist in the sorted set
      * const result = await client.zscore("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zscore method with non existimng key
      * const result = await client.zscore("non_existing_set", "member");
-     * console.log(result); // Output: null
+     * console.log(result);
+     * // Output: null
      * ```
      */
     public async zscore(
@@ -4434,25 +4833,35 @@ export class BaseClient {
      *
      * // use `zunionstore` with default aggregation and weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"]))
-     * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
-     * // Output: {'member1': 20, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * // Output: {'member1': 20, 'member2': 8.2}
+     * // `member1` is now stored in `my_sorted_set` with score of 20 and `member2` with score of 8.2.
      * ```
      *
      * @example
      * ```typescript
      * // use `zunionstore` with default weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"], { aggregationType: AggregationType.MAX }))
-     * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements, and each score is the maximum score between the sets.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
-     * // Output: {'member1': 10.5, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * // Output: {'member1': 10.5, 'member2': 8.2}
+     * // `member1` is now stored in `my_sorted_set` with score of 10.5 and `member2` with score of 8.2.
      * ```
      *
      * @example
      * ```typescript
      * // use `zunionstore` with default aggregation
-     * console.log(await client.zunionstore("my_sorted_set", [["key1", 2], ["key2", 1]])) // Output: 2
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1})) // Output: { member2: 16.4, member1: 30.5 }
+     * console.log(await client.zunionstore("my_sorted_set", [["key1", 2], ["key2", 1]]))
+     * // Output: 2
+     * // Indicates that the sorted set `my_sorted_set` contains two elements
+     *
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * // Output: { member2: 16.4, member1: 30.5 }
      * ```
      */
     public async zunionstore(
@@ -4479,7 +4888,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zmscore("zset1", ["member1", "non_existent_member", "member2"]);
-     * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
+     * console.log(result); // Output: [1.0, null, 2.0]
+     * // `member1` has a score of 1.0, `non_existent_member` does not exist in the sorted set, and `member2` has a score of 2.0.
      * ```
      */
     public async zmscore(
@@ -4505,14 +4915,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
      * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zcount(
@@ -4546,8 +4960,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
-     * console.log(result1); // Output: all members in ascending order
-     * // ['member1', 'member2', 'member3']
+     * console.log(result1);
+     * // Output: ['member1', 'member2', 'member3']
+     * // All members in ascending order
      * ```
      * @example
      * ```typescript
@@ -4557,8 +4972,9 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
-     * // ['member2', 'member1']
+     * console.log(result);
+     * // Output: ['member2', 'member1']
+     * // Members with scores within the range of negative infinity to 3, in descending order
      * ```
      */
     public async zrange(
@@ -4596,8 +5012,9 @@ export class BaseClient {
      *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: members with scores between 10 and 20 with their scores
-     * // [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 10.5 }, { element: 'member2', score: 15.2 }]
+     * // Members with scores between 10 and 20 with their scores
      * ```
      * @example
      * ```typescript
@@ -4607,8 +5024,9 @@ export class BaseClient {
      *              end: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
-     * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores
-     * // [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
+     * // Members with scores within the range of negative infinity to 3, with their scores
      * ```
      */
     public async zrangeWithScores(
@@ -4644,17 +5062,21 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
-     * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
+     * console.log(result);
+     * // Output: 7
+     * // `destination_key` contains a sorted set with the 7 members from `my_sorted_set`.
      * ```
      * @example
      * ```typescript
-     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
+     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in `destination_key`
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
      *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
+     * console.log(result);
+     * // Output: 5
+     * // Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in `destination_key`.
      * ```
      */
     public async zrangeStore(
@@ -4692,15 +5114,21 @@ export class BaseClient {
      *
      * // use `zinterstore` with default aggregation and weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
-     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * // Output: 1
+     * // Indicates that the sorted set `my_sorted_set` contains one element.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
-     * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
+     * // Output: {'member1': 20}
+     * // `member1` is now stored in `my_sorted_set` with score of 20.
      *
      * // use `zinterstore` with default weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , { aggregationType: AggregationType.MAX }))
-     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * // Output: 1
+     * // Indicates that the sorted set `my_sorted_set` contains one element, and it's score is the maximum score between the sets.
+     *
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
-     * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
+     * // Output: {'member1': 10.5}
+     * // `member1` is now stored in `my_sorted_set` with score of 10.5.
      * ```
      */
     public async zinterstore(
@@ -4733,7 +5161,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zinter(["key1", "key2"]);
-     * console.log(result); // Output: ['member1']
+     * console.log(result);
+     * // Output: ['member1']
+     * // The intersecting element for the sorted sets at `key1` and `key2`.
      * ```
      */
     public async zinter(
@@ -4769,11 +5199,14 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zinterWithScores(["key1", "key2"]);
-     * console.log(result1); // Output: "member1" with score of 20 is the result
-     * // [{ element: 'member1', score: 20 }]
+     * console.log(result1);
+     * // Output: [{ element: 'member1', score: 20 }]
+     * // `member1` with score of 20 is the result
+     *
      * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
-     * console.log(result2); // Output: "member1" with score of 10.5 is the result
-     * // [{ element: 'member1', score: 10.5 }]
+     * console.log(result2);
+     * // Output: [{ element: 'member1', score: 10.5 }]
+     * // `member1` with score of 10.5 is the result
      * ```
      */
     public async zinterWithScores(
@@ -4805,7 +5238,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zunion(["key1", "key2"]);
-     * console.log(result); // Output: ['member1', 'member2']
+     * console.log(result);
+     * // Output: ['member1', 'member2']
+     * // Union elements from sets stored at keys `key1` and `key2`.
      * ```
      */
     public async zunion(
@@ -4839,11 +5274,14 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
      * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zunionWithScores(["key1", "key2"]);
-     * console.log(result1); // Output:
-     * // [{ element: 'member1', score: 20 }, { element: 'member2', score: 8.2 }]
+     * console.log(result1);
+     * // Output: [{ element: 'member1', score: 20 }, { element: 'member2', score: 8.2 }]
+     * // A list of union elements with scores.
+     *
      * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
-     * console.log(result2); // Output:
-     * // [{ element: 'member1', score: 10.5}, { element: 'member2', score: 8.2 }]
+     * console.log(result2);
+     * // Output: [{ element: 'member1', score: 10.5}, { element: 'member2', score: 8.2 }]
+     * // A list of union elements with score. The score of the common element in both sets (`member1`), is the maximum of scores(10.5) for that member from both sets.
      * ```
      */
     public async zunionWithScores(
@@ -4869,13 +5307,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmember("mySortedSet");
-     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * console.log(payload1);
+     * // Output: "Glide"
+     * // A random member from the set
      * ```
      *
      * @example
      * ```typescript
      * const payload2 = await client.zrandmember("nonExistingSortedSet");
-     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * console.log(payload2);
+     * // Output: null
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmember(
@@ -4901,13 +5343,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
-     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * console.log(payload1);
+     * // Output: ["Glide", "GLIDE", "node"]
+     * // Returns 3 random members from the sorted set, with duplicates allowed.
      * ```
      *
      * @example
      * ```typescript
      * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
-     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * console.log(payload1);
+     * // Output: []
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmemberWithCount(
@@ -4934,13 +5380,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
-     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * console.log(payload1);
+     * // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * // Returns 3 random members with scores, with duplicates allowed.
      * ```
      *
      * @example
      * ```typescript
      * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
-     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * console.log(payload1);
+     * // Output: []
+     * // Since the sorted set does not exist.
      * ```
      */
     public async zrandmemberWithCountWithScores(
@@ -4967,15 +5417,17 @@ export class BaseClient {
      * ```typescript
      * // Example usage of strlen method with an existing key
      * await client.set("key", "GLIDE");
-     * const len1 = await client.strlen("key");
-     * console.log(len1); // Output: 5
+     * const length1 = await client.strlen("key");
+     * console.log(length1);
+     * // Output: 5
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of strlen method with a non-existing key
-     * const len2 = await client.strlen("non_existing_key");
-     * console.log(len2); // Output: 0
+     * const length2 = await client.strlen("non_existing_key");
+     * console.log(length2);
+     * // Output: 0
      * ```
      */
     public async strlen(key: GlideString): Promise<number> {
@@ -4995,7 +5447,8 @@ export class BaseClient {
      * // Example usage of type method with a string value
      * await client.set("key", "value");
      * const type = await client.type("key");
-     * console.log(type); // Output: 'string'
+     * console.log(type);
+     * // Output: 'string'
      * ```
      *
      * @example
@@ -5003,7 +5456,8 @@ export class BaseClient {
      * // Example usage of type method with a list
      * await client.lpush("key", ["value"]);
      * const type = await client.type("key");
-     * console.log(type); // Output: 'list'
+     * console.log(type);
+     * // Output: 'list'
      * ```
      */
     public async type(key: GlideString): Promise<string> {
@@ -5031,21 +5485,22 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmin method to remove and return the member with the lowest score from a sorted set
      * const result = await client.zpopmin("my_sorted_set");
-     * console.log(result); // Output:
-     * // 'member1' with a score of 5.0 has been removed from the sorted set
-     * // [{ element: 'member1', score: 5.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 5.0 }]
+     * // `member1` with a score of 5.0 has been removed from the sorted set
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zpopmin method to remove and return multiple members with the lowest scores from a sorted set
      * const result = await client.zpopmin("my_sorted_set", 2);
-     * console.log(result); // Output:
-     * // 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set
+     * console.log(result);
+     * // Output:
      * // [
      * //     { element: 'member3', score: 7.5 },
      * //     { element: 'member2', score: 8.0 }
      * // ]
+     * // `member3` with a score of 7.5 and `member2` with a score of 8.0 have been removed from the sorted set
      * ```
      */
     public async zpopmin(
@@ -5077,7 +5532,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const data = await client.bzpopmin(["zset1", "zset2"], 0.5);
-     * console.log(data); // Output: ["zset1", "a", 2];
+     * console.log(data);
+     * // Output: ["zset1", "a", 2];
+     * // Pops the member `a` with score 2 stored at key `zset1`.
      * ```
      */
     public async bzpopmin(
@@ -5107,21 +5564,22 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmax method to remove and return the member with the highest score from a sorted set
      * const result = await client.zpopmax("my_sorted_set");
-     * console.log(result); // Output:
-     * // 'member1' with a score of 10.0 has been removed from the sorted set
-     * // [{ element: 'member1', score: 10.0 }]
+     * console.log(result);
+     * // Output: [{ element: 'member1', score: 10.0 }]
+     * // `member1` with a score of 10.0 has been removed from the sorted set
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zpopmax method to remove and return multiple members with the highest scores from a sorted set
      * const result = await client.zpopmax("my_sorted_set", 2);
-     * console.log(result); // Output:
-     * // 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set
+     * console.log(result);
+     * // Output:
      * // [
      * //     { element: 'member3', score: 7.5 },
      * //     { element: 'member2', score: 8.0 }
      * // ]
+     * // `member3` with a score of 7.5 and `member2` with a score of 8.0 have been removed from the sorted set
      * ```
      */
     public async zpopmax(
@@ -5153,7 +5611,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const data = await client.bzpopmax(["zset1", "zset2"], 0.5);
-     * console.log(data); // Output: ["zset1", "c", 2];
+     * console.log(data);
+     * // Output: ["zset1", "c", 2];
      * ```
      */
     public async bzpopmax(
@@ -5176,21 +5635,27 @@ export class BaseClient {
      * ```typescript
      * // Example usage of pttl method with an existing key
      * const result = await client.pttl("my_key");
-     * console.log(result); // Output: 5000 - Indicates that the key "my_key" has a remaining time to live of 5000 milliseconds.
+     * console.log(result);
+     * // Output: 5000
+     * // Indicates that the key `my_key` has a remaining time to live of 5000 milliseconds.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with a non-existing key
      * const result = await client.pttl("non_existing_key");
-     * console.log(result); // Output: -2 - Indicates that the key "non_existing_key" does not exist.
+     * console.log(result);
+     * // Output: -2
+     * // Indicates that the key `non_existing_key` does not exist.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of pttl method with an exisiting key that has no associated expire.
      * const result = await client.pttl("key");
-     * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that the key `key` has no associated expire.
      * ```
      */
     public async pttl(key: GlideString): Promise<number> {
@@ -5216,7 +5681,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByRank method
      * const result = await client.zremRangeByRank("my_sorted_set", 0, 2);
-     * console.log(result); // Output: 3 - Indicates that three elements have been removed from the sorted set "my_sorted_set" between ranks 0 and 2.
+     * console.log(result);
+     * // Output: 3
+     * // Indicates that three elements have been removed from the sorted set `my_sorted_set` between ranks 0 and 2.
      * ```
      */
     public async zremRangeByRank(
@@ -5243,14 +5710,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
      * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
-     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+     * console.log(result);
+     * // Output: 4
+     * // Indicates that 4 members, with lexicographical values ranging from `a` (exclusive) to `e` (inclusive), have been removed from `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
      * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
-     * console.log(result); // Output: 0 - Indicates that no elements were removed.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no elements were removed.
      * ```
      */
     public async zremRangeByLex(
@@ -5279,14 +5750,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
      * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
      * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
-     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that no members were removed as the sorted set `non_existing_sorted_set` does not exist.
      * ```
      */
     public async zremRangeByScore(
@@ -5314,13 +5789,17 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
-     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 2
+     * // Indicates that there are 2 members with lex scores between `c` (inclusive) and positive infinity in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
-     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that there is one member with a lex score between `c` (inclusive) and `k` (exclusive) in the sorted set `my_sorted_set`.
      * ```
      */
     public async zlexcount(
@@ -5346,14 +5825,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank method to retrieve the rank of a member in a sorted set
      * const result = await client.zrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 - Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member2` has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank method with a non-existing member
      * const result = await client.zrank("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: null
+     * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrank(
@@ -5378,14 +5861,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrank_withscore method to retrieve the rank and score of a member in a sorted set
      * const result = await client.zrank_withscore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: [1, 6.0]
+     * // Indicates that `member2` with score 6.0 has the second-lowest score in the sorted set `my_sorted_set`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zrank_withscore method with a non-existing member
      * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
-     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: null
+     * // Indicates that `non_existing_member` is not present in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrankWithScore(
@@ -5410,7 +5897,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevrank("my_sorted_set", "member2");
-     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member2` has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrank(
@@ -5436,7 +5925,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zrevankWithScore("my_sorted_set", "member2");
-     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     * console.log(result);
+     * // Output: [1, 6.0]
+     * // Indicates that `member2` with score 6.0 has the second-highest score in the sorted set `my_sorted_set`.
      * ```
      */
     public async zrevrankWithScore(
@@ -5481,7 +5972,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
-     * // Output is 2 since the stream marked 2 entries as deleted.
+     * // Output: 2
+     * // the stream marked 2 entries as deleted.
      * ```
      */
     public async xdel(key: GlideString, ids: string[]): Promise<number> {
@@ -5516,12 +6008,13 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
-     * //         key: "my_stream",
-     * //         value: {
-     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         key: "my_stream",                                                                         // Stream key
+     * //         value: {                                                                                  // Stream Ids mapped to entries array.
+     * //             "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]], // Each entry is a key/value tuple.
      * //             "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
      * //         }
      * //     },
@@ -5571,7 +6064,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers_stream": "0-0", "readers_stream", ">"});
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
      * //         key: "my_stream",
@@ -5634,7 +6128,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const numEntries = await client.xlen("my_stream");
-     * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
+     * console.log(numEntries);
+     * // Output: 2
+     * // `my_stream` contains 2 entries.
      * ```
      */
     public async xlen(key: GlideString): Promise<number> {
@@ -5651,7 +6147,8 @@ export class BaseClient {
      * @returns An `array` that includes the summary of the pending messages. See example for more details.
      * @example
      * ```typescript
-     * console.log(await client.xpending("my_stream", "my_group")); // Output:
+     * console.log(await client.xpending("my_stream", "my_group"));
+     * // Output:
      * // [
      * //     42,                            // The total number of pending messages
      * //     "1722643465939-0",             // The smallest ID among the pending messages
@@ -5687,7 +6184,8 @@ export class BaseClient {
      *     end: InfBoundary.PositiveInfinity,
      *     count: 2,
      *     consumer: "consumer1"
-     * }); // Output:
+     * });
+     * // Output:
      * // [
      * //     [
      * //         "1722643465939-0",  // The ID of the message
@@ -5727,13 +6225,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xinfoConsumers("my_stream", "my_group");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
-     * //         "name": "Alice",
-     * //         "pending": 1,
-     * //         "idle": 9104628,
-     * //         "inactive": 18104698   // Added in 7.2.0
+     * //         "name": "Alice",      // The consumer name.
+     * //         "pending": 1,         // The number of entries in Pending entries list.
+     * //         "idle": 9104628,      // The time passed since last attempted interaction.
+     * //         "inactive": 18104698  // The time passed since last successful interaction. Added in Valkey 7.2.0.
      * //     },
      * //     ...
      * // ]
@@ -5762,23 +6261,24 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xinfoGroups("my_stream");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     {
-     * //         "name": "mygroup",
-     * //         "consumers": 2,
-     * //         "pending": 2,
-     * //         "last-delivered-id": "1638126030001-0",
-     * //         "entries-read": 2,                       // Added in version 7.0.0
-     * //         "lag": 0                                 // Added in version 7.0.0
+     * //         "name": "mygroup",                      // The consumer group name.
+     * //         "consumers": 2,                         // Number of consumers in the group.
+     * //         "pending": 2,                           // The length of the group's pending entry list.
+     * //         "last-delivered-id": "1638126030001-0", // The id of the last delivered entry to the consumers.
+     * //         "entries-read": 2,                      // The read counter. Added in Valkey 7.0.0.
+     * //         "lag": 0                                // The number of entries that are still waiting to be delivered. Added in Valkey 7.0.0.
      * //     },
      * //     {
      * //         "name": "some-other-group",
      * //         "consumers": 1,
      * //         "pending": 0,
      * //         "last-delivered-id": "0-0",
-     * //         "entries-read": null,                    // Added in version 7.0.0
-     * //         "lag": 1                                 // Added in version 7.0.0
+     * //         "entries-read": null,                    // Added in Valkey 7.0.0.
+     * //         "lag": 1                                 // Added in Valkey 7.0.0.
      * //     }
      * // ]
      * ```
@@ -5811,9 +6311,14 @@ export class BaseClient {
      * ```typescript
      * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // {
-     * //     "2-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]]
+     * //     "2-0": [                    // Stream Entry id
+     * //         ["duration", "1532"],   // Entry data tuple containing the field and associated value.
+     * //         ["event-id", "5"],
+     * //         ["user-id", "7782813"]
+     * //     ]
      * // }
      * ```
      */
@@ -5846,7 +6351,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: the number of claimed entries.
+     * - (Optional) `count`: the number of claimed entries. Default value is 100.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `tuple` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
@@ -5860,7 +6365,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
@@ -5921,7 +6427,7 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count`: limits the number of claimed entries to the specified value.
+     * - (Optional) `count`: limits the number of claimed entries to the specified value. Default value is 100.
      * @returns An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
@@ -5934,7 +6440,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
@@ -5989,7 +6496,9 @@ export class BaseClient {
      * ```typescript
      * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
-     * console.log(result); // Output: [ "2-0", "3-0" ]
+     * console.log(result);
+     * // Output: [ "2-0", "3-0" ]
+     * // A list of entry ids.
      * ```
      */
     public async xclaimJustId(
@@ -6020,7 +6529,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Create the consumer group "mygroup", using zero as the starting ID:
-     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0"));
+     * // Output: "OK"
      * ```
      */
     public async xgroupCreate(
@@ -6041,13 +6551,14 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
-     * @param groupname - The newly created consumer group name.
+     * @param groupname - The consumer group name to delete.
      * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
      *
      * @example
      * ```typescript
      * // Destroys the consumer group "mygroup"
-     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * console.log(await client.xgroupDestroy("mystream", "mygroup"));
+     * // Output: true
      * ```
      */
     public async xgroupDestroy(
@@ -6067,6 +6578,7 @@ export class BaseClient {
      * - (Optional) `fullOptions`: If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
+     * @remark `fullOptions` - Available since Valkey version 6.0.0
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
@@ -6076,46 +6588,46 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream");
      * console.log(infoResult);
      * // Output: {
-     * //   length: 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     * //   groups: 1,
+     * //   length: 2,                                                                // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,                                                     // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2,                                                    // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1",                                   // The ID of the least-recently entry that was added to the stream.
+     * //   "max-deleted-entry-id": "0-0",                                            // The maximal entry ID that was deleted from the stream. Added in Valkey 7.0.0.
+     * //   "entries-added": 2,                                                       // The count of all entries added to the stream during its lifetime. Added in Valkey 7.0.0.
+     * //   "recorded-first-entry-id": "1719877599564-0",                             // Recorded first entry id. Added in Valkey 7.0.0.
+     * //   "first-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],  // The ID and field-value tuples of the first entry in the stream.
+     * //   "last-entry": [ "1719877599564-0", ["some_field", "some_value", ...] ],   // The ID and field-value tuples of the last entry in the stream.
+     * //   "groups": 1,                                                              // The number of consumer groups defined for the stream
      * // }
      * ```
      *
      * @example
      * ```typescript
      * const infoResult = await client.xinfoStream("my_stream", true); // default limit of 10 entries
-     * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
+     * const infoResult = await client.xinfoStream("my_stream", 15);   // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   'length': 2,
-     * //   'radix-tree-keys': 1,
-     * //   'radix-tree-nodes': 2,
-     * //   'last-generated-id': '1719877599564-1',
-     * //   'max-deleted-entry-id': '0-0',
-     * //   'entries-added': 2,
-     * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   'entries': [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     * //   'groups': [ {
-     * //     'name': 'group',
-     * //     'last-delivered-id': '1719877599564-0',
-     * //     'entries-read': 1,
-     * //     'lag': 1,
-     * //     'pel-count': 1,
-     * //     'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     * //     'consumers': [ {
-     * //         'name': 'consumer',
-     * //         'seen-time': 1722624726802,
-     * //         'active-time': 1722624726802,
-     * //         'pel-count': 1,
-     * //         'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //   "length": 2,                                                              // The number of entries in the stream.
+     * //   "radix-tree-keys": 1,                                                     // The number of keys in the underlying radix data structure.
+     * //   "radix-tree-nodes": 2,                                                    // The number of nodes in the underlying radix data structure.
+     * //   "last-generated-id": "1719877599564-1",                                   // The ID of the least-recently entry that was added to the stream.
+     * //   "max-deleted-entry-id": "0-0",                                            // The maximal entry ID that was deleted from the stream. Added in Valkey 7.0.0.
+     * //   "entries-added": 2,                                                       // The count of all entries added to the stream during its lifetime. Added in Valkey 7.0.0.
+     * //   "recorded-first-entry-id": "1719877599564-0",                             // Recorded first entry id. Added in Valkey 7.0.0.
+     * //   "entries": [ [ "1719877599564-0", ["some_field", "some_value", ...] ] ],  // Array of the stream entries (ID and field-value tuples) in ascending order.
+     * //   "groups': [ {                                                             // An array of groups containing information about each consumer group.
+     * //     "name': "group",                                                        // The consumer group's name.
+     * //     "last-delivered-id": "1719877599564-0",                                 // The ID of the last entry delivered to the group's consumers.
+     * //     "entries-read": 1,                                                      // The logical "read counter" of the last entry delivered to the group's consumers. Added in Valkey 7.0.0.
+     * //     "lag": 1,                                                               // The number of entries in the stream that are still waiting to be delivered. Added in Valkey 7.0.0.
+     * //     "pel-count": 1,                                                         // The length of the group's pending entries list (PEL).
+     * //     "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ],     // An array with pending entries.
+     * //     "consumers": [ {
+     * //         "name": "consumer",                                                 // The consumer's name.
+     * //         "seen-time": 1722624726802,                                         // The UNIX timestamp of the last attempted interaction.
+     * //         "active-time": 1722624726802,                                       // The UNIX timestamp of the last successful interaction. Added in Valkey 7.2.0.
+     * //         "pel-count": 1,                                                     // The number of entries in the PEL.
+     * //         "pending": [ [ "1719877599564-0", "consumer", 1722624726802, 1 ] ], // An array with pending entries information.
      * //         }
      * //       ]
      * //     }
@@ -6153,7 +6665,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
-     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")); // Output is true
+     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer"));
+     * // Output: true
      * ```
      */
     public async xgroupCreateConsumer(
@@ -6179,7 +6692,8 @@ export class BaseClient {
      * * @example
      * ```typescript
      * // Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
-     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer")); // Output is 5
+     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer"));
+     * // Output: 5
      * ```
      */
     public async xgroupDelConsumer(
@@ -6220,7 +6734,8 @@ export class BaseClient {
      * // read messages from streamId
      * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
      * // acknowledge messages on stream
-     * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1
+     * console.log(await client.xack("mystream", "mygroup", [entryId]));
+     * // Output: 1
      * ```
      */
     public async xack(
@@ -6246,7 +6761,8 @@ export class BaseClient {
      *
      * * @example
      * ```typescript
-     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", { entriesRead: 1 })); // Output is "OK"
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", { entriesRead: 1 }));
+     * // Output: "OK"
      * ```
      */
     public async xgroupSetId(
@@ -6278,14 +6794,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of lindex method to retrieve elements from a list by index
      * const result = await client.lindex("my_list", 0);
-     * console.log(result); // Output: 'value1' - Returns the first element in the list stored at 'my_list'.
+     * console.log(result);
+     * // Output: 'value1'
+     * // Returns the first element in the list stored at `my_list`.
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of lindex method to retrieve elements from a list by negative index
      * const result = await client.lindex("my_list", -1);
-     * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
+     * console.log(result);
+     * // Output: 'value3'
+     * // Returns the last element in the list stored at `my_list`.
      * ```
      */
     public async lindex(
@@ -6313,7 +6833,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const length = await client.linsert("my_list", InsertPosition.Before, "World", "There");
-     * console.log(length); // Output: 2 - The list has a length of 2 after performing the insert.
+     * console.log(length);
+     * // Output: 2
+     * // The list has a length of 2 after performing the insert.
      * ```
      */
     public async linsert(
@@ -6340,7 +6862,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of persist method to remove the timeout associated with a key
      * const result = await client.persist("my_key");
-     * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
+     * console.log(result);
+     * // Output: true
+     * // Indicates that the timeout associated with the key `my_key` was successfully removed.
      * ```
      */
     public async persist(key: GlideString): Promise<boolean> {
@@ -6363,7 +6887,9 @@ export class BaseClient {
      * // Example usage of rename method to rename a key
      * await client.set("old_key", "value");
      * const result = await client.rename("old_key", "new_key");
-     * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
+     * console.log(result);
+     * // Output: OK
+     * // Indicates successful renaming of the key `old_key` to `new_key`.
      * ```
      */
     public async rename(key: GlideString, newKey: GlideString): Promise<"OK"> {
@@ -6388,7 +6914,9 @@ export class BaseClient {
      * // Example usage of renamenx method to rename a key
      * await client.set("old_key", "value");
      * const result = await client.renamenx("old_key", "new_key");
-     * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
+     * console.log(result);
+     * // Output: true
+     * // Indicates successful renaming of the key `old_key` to `new_key`.
      * ```
      */
     public async renamenx(
@@ -6417,7 +6945,9 @@ export class BaseClient {
      * ```typescript
      * // Example usage of brpop method to block and wait for elements from multiple lists
      * const result = await client.brpop(["list1", "list2"], 5);
-     * console.log(result); // Output: ["list1", "element"] - Indicates an element "element" was popped from "list1".
+     * console.log(result);
+     * // Output: ["list1", "element"]
+     * // Indicates an element `element` was popped from `list1`.
      * ```
      */
     public async brpop(
@@ -6446,7 +6976,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.blpop(["list1", "list2"], 5);
-     * console.log(result); // Output: ['list1', 'element']
+     * console.log(result);
+     * // Output: ['list1', 'element']
+     * // An element `element` popped from the list stored at key `list1`.
      * ```
      */
     public async blpop(
@@ -6466,19 +6998,24 @@ export class BaseClient {
      * @param key - The key of the HyperLogLog data structure to add elements into.
      * @param elements - An array of members to add to the HyperLogLog stored at `key`.
      * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-     *     altered, then returns `1`. Otherwise, returns `0`.
+     *     altered, then returns `true`. Otherwise, returns `false`.
      * @example
      * ```typescript
      * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
-     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a data structure was created or modified.
+     *
      * const result = await client.pfadd("hll_2", []);
-     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
+     * console.log(result);
+     * // Output: true
+     * // Indicates that a new empty data structure was created.
      * ```
      */
     public async pfadd(
         key: GlideString,
         elements: GlideString[],
-    ): Promise<number> {
+    ): Promise<boolean> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
 
@@ -6494,7 +7031,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.pfcount(["hll_1", "hll_2"]);
-     * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
+     * console.log(result);
+     * // Output: 4
+     * // The approximate cardinality of the union of `hll_1` and `hll_2`
      * ```
      */
     public async pfcount(keys: GlideString[]): Promise<number> {
@@ -6517,9 +7056,14 @@ export class BaseClient {
      * await client.pfadd("hll1", ["a", "b"]);
      * await client.pfadd("hll2", ["b", "c"]);
      * const result = await client.pfmerge("new_hll", ["hll1", "hll2"]);
-     * console.log(result); // Output: OK  - The value of "hll1" merged with "hll2" was stored in "new_hll".
+     * console.log(result);
+     * // Output: OK
+     * // The value of `hll1` merged with `hll2` was stored in `new_hll`.
+     *
      * const count = await client.pfcount(["new_hll"]);
-     * console.log(count); // Output: 3  - The approximated cardinality of "new_hll" is 3.
+     * console.log(count);
+     * // Output: 3
+     * // The approximate cardinality of `new_hll` is 3.
      * ```
      */
     public async pfmerge(
@@ -6543,7 +7087,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.objectEncoding("my_hash");
-     * console.log(result); // Output: "listpack"
+     * console.log(result);
+     * // Output: "listpack"
      * ```
      */
     public async objectEncoding(key: GlideString): Promise<string | null> {
@@ -6564,7 +7109,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.objectFreq("my_hash");
-     * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
+     * console.log(result);
+     * // Output: 2
+     * // The logarithmic access frequency counter of `my_hash`.
      * ```
      */
     public async objectFreq(key: GlideString): Promise<number | null> {
@@ -6582,7 +7129,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.objectIdletime("my_hash");
-     * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
+     * console.log(result);
+     * // Output: 13
+     * // `my_hash` was last accessed 13 seconds ago.
      * ```
      */
     public async objectIdletime(key: GlideString): Promise<number | null> {
@@ -6601,7 +7150,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.objectRefcount("my_hash");
-     * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
+     * console.log(result);
+     * // Output: 2
+     * // `my_hash` has a reference count of 2.
      * ```
      */
     public async objectRefcount(key: GlideString): Promise<number | null> {
@@ -6625,7 +7176,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const response = await client.fcall("Deep_Thought", [], []);
-     * console.log(response); // Output: Returns the function's return value.
+     * console.log(response); // Returns the function's return value.
      * ```
      */
     public async fcall(
@@ -6655,7 +7206,9 @@ export class BaseClient {
      * ```typescript
      * const response = await client.fcallReadOnly("Deep_Thought", ["key1"], ["Answer", "to", "the",
      *            "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"]);
-     * console.log(response); // Output: 42 # The return value on the function that was executed.
+     * console.log(response);
+     * // Output: 42
+     * // The return value on the function that was executed.
      * ```
      */
     public async fcallReadonly(
@@ -6687,8 +7240,13 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
-     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurrence of "e" is at index 5.
-     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * console.log(await client.lpos("myList", "e", { rank: 2 }));
+     * // Output: 5
+     * // The second occurrence of `e` is at index 5.
+     *
+     * console.log(await client.lpos("myList", "e", { count: 3 }));
+     * // Output: [ 4, 5 ]
+     * // indices for the occurrences of `e` in list `myList`.
      * ```
      */
     public async lpos(
@@ -6713,11 +7271,25 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
-     * console.log(await client.bitcount("my_key2", { start: 1 })); // Output: 8 - From the second to to the last bytes of the string stored at "my_key2" are contain 8 set bits.
-     * console.log(await client.bitcount("my_key2", { start: 1, end: 3 })); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
-     * console.log(await client.bitcount("my_key3", { start: 1, end: 1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
-     * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key1"));
+     * // Output: 2
+     * // The string stored at `my_key1` contains 2 set bits.
+     *
+     * console.log(await client.bitcount("my_key2", { start: 1 }));
+     * // Output: 8
+     * // From the second to to the last bytes of the string stored at `my_key2` are contain 8 set bits.
+     *
+     * console.log(await client.bitcount("my_key2", { start: 1, end: 3 }));
+     * // Output: 2
+     * // The second to fourth bytes of the string stored at `my_key2` contain 2 set bits.
+     *
+     * console.log(await client.bitcount("my_key3", { start: 1, end: 1, indexType: BitmapIndexType.BIT }));
+     * // Output: 1
+     * // Indicates that the second bit of the string stored at `my_key3` is set.
+     *
+     * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT }));
+     * // Output: 1
+     * // Indicates that the last bit of the string stored at `my_key3` is set.
      * ```
      */
     public async bitcount(
@@ -6748,7 +7320,9 @@ export class BaseClient {
      *      ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
      * ]);
      * const num = await client.geoadd("mySortedSet", membersToCoordinates, options);
-     * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
+     * console.log(num);
+     * // Output: 1
+     * // Indicates that the position of an existing member in the sorted set `mySortedSet` has been updated.
      * ```
      */
     public async geoadd(
@@ -6791,7 +7365,9 @@ export class BaseClient {
      * await client.geoadd("mySortedSet", data);
      * // search for locations within 200 km circle around stored member named 'Palermo'
      * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
-     * console.log(result1); // Output: ['Palermo', 'Catania']
+     * console.log(result1);
+     * // Output: ['Palermo', 'Catania']
+     * // Locations within the specified radius.
      *
      * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
      * // limiting results by 2 best matches, ordered by ascending distance from the search area center
@@ -6807,7 +7383,8 @@ export class BaseClient {
      *         withHash: true,
      *     },
      * );
-     * console.log(result2); // Output:
+     * console.log(result2);
+     * // Output:
      * // [
      * //     [
      * //         'Catania',                                       // location name
@@ -6872,7 +7449,8 @@ export class BaseClient {
      * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * // query the stored results
      * const result1 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
-     * console.log(result1); // Output:
+     * console.log(result1);
+     * // Output:
      * // {
      * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
      * //     Catania: 3479447370796909
@@ -6893,7 +7471,8 @@ export class BaseClient {
      * );
      * // query the stored results
      * const result2 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
-     * console.log(result2); // Output:
+     * console.log(result2);
+     * // Output:
      * // {
      * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
      * //     Catania: 56.4413,    // the distance is measured in units used for the search query (miles)
@@ -6937,11 +7516,12 @@ export class BaseClient {
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
      * // returned might not be exactly the same as the input values
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * // [
-     * //     [13.36138933897018433, 38.11555639549629859],
-     * //     [15.08726745843887329, 37.50266842333162032],
-     * //     null
+     * //     [13.36138933897018433, 38.11555639549629859], // Returns the position of member `Palermo`
+     * //     [15.08726745843887329, 37.50266842333162032], // Returns the position of member `Catania`
+     * //     null                                          // Returns null for non existent key.
      * // ]
      * ```
      */
@@ -6976,11 +7556,11 @@ export class BaseClient {
      * await client.zadd("zSet2", { four: 4.0 });
      * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
      * // Output:
-     * // "three" with score 3 and "two" with score 2 were popped from "zSet1"
      * // [ "zSet1", [
      * //     { element: 'three', score: 3 },
      * //     { element: 'two', score: 2 }
      * // ] ]
+     * // `three` with score 3 and `two` with score 2 were popped from `zSet1`.
      * ```
      */
     public async zmpop(
@@ -7025,11 +7605,11 @@ export class BaseClient {
      * await client.zadd("zSet2", { four: 4.0 });
      * console.log(await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.1, 2));
      * // Output:
-     * // "three" with score 3 and "two" with score 2 were popped from "zSet1"
      * // [ "zSet1", [
      * //     { element: 'three', score: 3 },
      * //     { element: 'two', score: 2 }
      * // ] ]
+     * // `three` with score 3 and `two` with score 2 were popped from `zSet1`
      * ```
      */
     public async bzmpop(
@@ -7065,12 +7645,18 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zincrBy method to increment the value of a member's score
      * await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2});
+     *
      * console.log(await client.zincrby("my_sorted_set", 1.2, "member"));
-     * // Output: 11.7 - The member existed in the set before score was altered, the new score is 11.7.
+     * // Output: 11.7
+     * // The member existed in the set before score was altered, the new score is 11.7.
+     *
      * console.log(await client.zincrby("my_sorted_set", -1.7, "member"));
-     * // Output: 10.0 - Negative increment, decrements the score.
+     * // Output: 10.0
+     * // Negative increment, decrements the score.
+     *
      * console.log(await client.zincrby("my_sorted_set", 5.5, "non_existing_member"));
-     * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
+     * // Output: 5.5
+     * // A new member is added to the sorted set with the score of 5.5.
      * ```
      */
     public async zincrby(
@@ -7172,7 +7758,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.geodist("mySortedSet", "Place1", "Place2", { unit: GeoUnit.KILOMETERS });
-     * console.log(num); // Output: the distance between Place1 and Place2.
+     * console.log(num);
+     * // Output: the distance between Place1 and Place2.
      * ```
      */
     public async geodist(
@@ -7199,7 +7786,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.geohash("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
-     * console.log(result); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * console.log(result);
+     * // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * // An array of GeoHash string.
      * ```
      */
     public async geohash(
@@ -7228,7 +7817,9 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcs("testKey1", "testKey2");
-     * console.log(result); // Output: 'acd'
+     * console.log(result);
+     * // Output: 'acd'
+     * // Returned the longest common subsequence of strings stored at `testKey1` and `testKey2`.
      * ```
      */
     public async lcs(
@@ -7255,7 +7846,9 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcsLen("testKey1", "testKey2");
-     * console.log(result); // Output: 3
+     * console.log(result);
+     * // Output: 3
+     * // The total length of all the longest common subsequences between the strings stored at `testKey1` and `testKey2`.
      * ```
      */
     public async lcsLen(
@@ -7297,7 +7890,8 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"key1": "ohmytext", "key2": "mynewtext"});
      * const result = await client.lcsIdx("key1", "key2");
-     * console.log(result); // Output:
+     * console.log(result);
+     * // Output:
      * {
      *     "matches" :
      *     [
@@ -7352,7 +7946,9 @@ export class BaseClient {
      * await client.set("key1", "value1");
      * await client.set("key2", "value2");
      * const result = await client.touch(["key1", "key2", "nonExistingKey"]);
-     * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
+     * console.log(result);
+     * // Output: 2
+     * // The last access time of 2 keys has been updated.
      * ```
      */
     public async touch(keys: GlideString[]): Promise<number> {
@@ -7380,18 +7976,27 @@ export class BaseClient {
      * @example
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
+     * console.log(response);
+     * // Output: "OK"
+     *
      * const transaction = new Batch(true).set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
-     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * console.log(result);
+     *
+     * // Output: "OK"
+     * // Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
+     * console.log(response);
+     * // Output: "OK"
+     *
      * const transaction = new Batch(true).set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
-     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * console.log(result);
+     * // Output: null
+     * // null is returned when the watched key is modified before transaction execution.
      * ```
      */
     public async watch(keys: GlideString[]): Promise<"OK"> {
@@ -7415,7 +8020,8 @@ export class BaseClient {
      * ```typescript
      * await client.set(key, value);
      * let response = await client.wait(1, 1000);
-     * console.log(response); // Output: return 1 when a replica is reached or 0 if 1000ms is reached.
+     * console.log(response);
+     * // Output: return 1 when a replica is reached or 0 if 1000ms is reached.
      * ```
      */
     public async wait(numreplicas: number, timeout: number): Promise<number> {
@@ -7437,9 +8043,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * const len = await client.setrange("key", 6, "GLIDE");
-     * console.log(len); // Output: 11 - New key was created with length of 11 symbols
+     * console.log(len);
+     * // Output: 11
+     * // New key was created with length of 11 symbols
+     *
      * const value = await client.get("key");
-     * console.log(result); // Output: "\0\0\0\0\0\0GLIDE" - The string was padded with zero bytes
+     * console.log(result);
+     * // Output: "\0\0\0\0\0\0GLIDE"
+     * // The string was padded with zero bytes
      * ```
      */
     public async setrange(
@@ -7464,12 +8075,15 @@ export class BaseClient {
      * ```typescript
      * const len = await client.append("key", "Hello");
      * console.log(len);
-     *     // Output: 5 - Indicates that "Hello" has been appended to the value of "key", which was initially
-     *     // empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+     * // Output: 5
+     * // Indicates that "Hello" has been appended to the value of "key", which was initially
+     * // empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+     *
      * len = await client.append("key", " world");
      * console.log(result);
-     *     // Output: 11 - Indicates that " world" has been appended to the value of "key", resulting in a
-     *     // new value of "Hello world" with a length of 11.
+     * // Output: 11
+     * // Indicates that " world" has been appended to the value of "key", resulting in a
+     * // new value of "Hello world" with a length of 11.
      * ```
      */
     public async append(key: GlideString, value: GlideString): Promise<number> {
@@ -7489,13 +8103,15 @@ export class BaseClient {
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
+     *     If no member could be popped, returns `null`.
      *
      * @example
      * ```typescript
      * await client.lpush("testKey", ["one", "two", "three"]);
      * await client.lpush("testKey2", ["five", "six", "seven"]);
      * const result = await client.lmpop(["testKey", "testKey2"], ListDirection.LEFT, 1L);
-     * console.log(result); // Output: { key: "testKey", elements: ["three"] }
+     * console.log(result);
+     * // Output: { key: "testKey", elements: ["three"] }
      * ```
      */
     public async lmpop(
@@ -7537,7 +8153,8 @@ export class BaseClient {
      * await client.lpush("testKey", ["one", "two", "three"]);
      * await client.lpush("testKey2", ["five", "six", "seven"]);
      * const result = await client.blmpop(["testKey", "testKey2"], ListDirection.LEFT, 0.1, 1);
-     * console.log(result"testKey"); // Output: { key: "testKey", elements: ["three"] }
+     * console.log(result"testKey");
+     * // Output: { key: "testKey", elements: ["three"] }
      * ```
      */
     public async blmpop(
@@ -7574,10 +8191,12 @@ export class BaseClient {
      * @example
      * ```typescript
      * const channels = await client.pubsubChannels();
-     * console.log(channels); // Output: ["channel1", "channel2"]
+     * console.log(channels);
+     * // Output: ["channel1", "channel2"]
      *
      * const newsChannels = await client.pubsubChannels("news.*");
-     * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
+     * console.log(newsChannels);
+     * // Output: ["news.sports", "news.weather"]
      * ```
      */
     public async pubsubChannels(
@@ -7603,7 +8222,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * const patternCount = await client.pubsubNumpat();
-     * console.log(patternCount); // Output: 3
+     * console.log(patternCount);
+     * // Output: 3
      * ```
      */
     public async pubsubNumPat(): Promise<number> {
@@ -7623,11 +8243,12 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result1 = await client.pubsubNumsub(["channel1", "channel2"]);
-     * console.log(result1); // Output:
-     * // [{ channel: "channel1", numSub: 3}, { channel: "channel2", numSub: 5 }]
+     * console.log(result1);
+     * // Output: [{ channel: "channel1", numSub: 3}, { channel: "channel2", numSub: 5 }]
      *
      * const result2 = await client.pubsubNumsub([]);
-     * console.log(result2); // Output: []
+     * console.log(result2);
+     * // Output: []
      * ```
      */
     public async pubsubNumSub(
@@ -7667,7 +8288,9 @@ export class BaseClient {
      * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
      * await client.lpush("user_ids", ["2", "1"]);
      * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * console.log(result);
+     * // Output: [ 'Bob', 'Alice' ]
+     * // Returns a list of the names sorted by age
      * ```
      */
     public async sort(
@@ -7700,7 +8323,9 @@ export class BaseClient {
      * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
      * await client.lpush("user_ids", ["2", "1"]);
      * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * console.log(result);
+     * // Output: [ 'Bob', 'Alice' ]
+     * // Returns a list of the names sorted by age
      * ```
      */
     public async sortReadOnly(
@@ -7738,8 +8363,13 @@ export class BaseClient {
      * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
      * await client.lpush("user_ids", ["2", "1"]);
      * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
+     * console.log(sortedElements);
+     * // Output: 2
+     * // number of elements sorted and stored
+     *
+     * console.log(await client.lrange("sortedList", 0, -1));
+     * // Output: [ 'Bob', 'Alice' ]
+     * // Returns a list of the names sorted by age stored in `sortedList`
      * ```
      */
     public async sortStore(
@@ -7770,6 +8400,7 @@ export class BaseClient {
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
+
         return {
             protocol,
             clientName: options.clientName,
@@ -7783,6 +8414,8 @@ export class BaseClient {
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
+            connectionRetryStrategy: options.connectionBackoff,
+            lazyConnect: options.lazyConnect ?? false,
         };
     }
 
@@ -7796,6 +8429,17 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+
+        // Apply TLS configuration if present
+        if (options.tlsAdvancedConfiguration?.insecure) {
+            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+                throw new ConfigurationError(
+                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                );
+            }
+        }
     }
 
     /**
@@ -7921,7 +8565,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.updateConnectionPassword("newPassword", true) // "OK"
+     * await client.updateConnectionPassword("newPassword", true)
+     * // Output: "OK"
      * ```
      */
     async updateConnectionPassword(

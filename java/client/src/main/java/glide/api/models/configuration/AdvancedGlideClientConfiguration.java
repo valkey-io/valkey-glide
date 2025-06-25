@@ -14,6 +14,8 @@ import lombok.experimental.SuperBuilder;
  *     <pre>{@code
  * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)
+ *     .tlsAdvancedConfiguration(
+ *        TlsAdvancedConfiguration.builder().useInsecureTLS(false).build())
  *     .build();
  * }</pre>
  */

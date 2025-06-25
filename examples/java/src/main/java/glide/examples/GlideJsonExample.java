@@ -1,11 +1,17 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
+import static glide.api.logging.Logger.log;
 import static glide.api.logging.Logger.Level.ERROR;
 import static glide.api.logging.Logger.Level.INFO;
 import static glide.api.logging.Logger.Level.WARN;
-import static glide.api.logging.Logger.log;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
@@ -17,11 +23,6 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.TimeoutException;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 public class GlideJsonExample {
 
@@ -43,6 +44,8 @@ public class GlideJsonExample {
         GlideClusterClientConfiguration config =
                 GlideClusterClientConfiguration.builder()
                         .addresses(nodeList)
+                        // Set request timeout - recommended to configure based on your use case.
+                        .requestTimeout(500)
                         // Enable this field if the servers are configured with TLS.
                         // .useTLS(true);
                         .build();
