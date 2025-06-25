@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -580,19 +581,17 @@ func ExampleClient_HScan() {
 		// other fields here
 	}
 
-	result, err := client.HSet(context.Background(), "my_hash", fields)
-	resCursor, resCollection, err := client.HScan(context.Background(), "my_hash", "0")
+	client.HSet(context.Background(), "my_hash", fields)
+	result, err := client.HScan(context.Background(), "my_hash", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCollection)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 1
-	// 0
-	// [field1 someValue]
+	// Cursor: 0
+	// Collection: [field1 someValue]
 }
 
 func ExampleClusterClient_HScan() {
@@ -604,19 +603,17 @@ func ExampleClusterClient_HScan() {
 		// other fields here
 	}
 
-	result, err := client.HSet(context.Background(), "my_hash", fields)
-	resCursor, resCollection, err := client.HScan(context.Background(), "my_hash", "0")
+	client.HSet(context.Background(), "my_hash", fields)
+	result, err := client.HScan(context.Background(), "my_hash", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(resCollection)
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
 
 	// Output:
-	// 1
-	// 0
-	// [field1 someValue]
+	// Cursor: 0
+	// Collection: [field1 someValue]
 }
 
 func ExampleClient_HRandField() {
@@ -736,22 +733,19 @@ func ExampleClient_HScanWithOptions() {
 		"b": "2",
 	}
 
-	result, err := client.HSet(context.Background(), "my_hash", fields)
+	client.HSet(context.Background(), "my_hash", fields)
 	opts := options.NewHashScanOptions().SetMatch("a")
-	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", *opts)
+	result, err := client.HScanWithOptions(context.Background(), "my_hash", models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(
-		resCollection,
-	) // The resCollection only contains the hash map entry that matches with the match option provided with the command
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+	// The collection only contains the hash map entry that matches with the match option provided with the command
 
 	// Output:
-	// 2
-	// 0
-	// [a 1]
+	// Cursor: 0
+	// Collection: [a 1]
 }
 
 func ExampleClusterClient_HScanWithOptions() {
@@ -762,20 +756,17 @@ func ExampleClusterClient_HScanWithOptions() {
 		"b": "2",
 	}
 
-	result, err := client.HSet(context.Background(), "my_hash", fields)
+	client.HSet(context.Background(), "my_hash", fields)
 	opts := options.NewHashScanOptions().SetMatch("a")
-	resCursor, resCollection, err := client.HScanWithOptions(context.Background(), "my_hash", "0", *opts)
+	result, err := client.HScanWithOptions(context.Background(), "my_hash", models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
-	fmt.Println(resCursor)
-	fmt.Println(
-		resCollection,
-	) // The resCollection only contains the hash map entry that matches with the match option provided with the command
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+	// The collection only contains the hash map entry that matches with the match option provided with the command
 
 	// Output:
-	// 2
-	// 0
-	// [a 1]
+	// Cursor: 0
+	// Collection: [a 1]
 }

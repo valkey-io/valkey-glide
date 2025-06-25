@@ -42,7 +42,7 @@ pub struct Client {
 /// # Safety
 /// * The callback must copy the pointer in a sync manner and return ASAP. Any further data processing should be done in another thread to avoid
 ///   starving `tokio`'s thread pool.
-/// * The callee is responsible to free memory by calling [`free_respose`] with the given pointer once only.
+/// * The callee is responsible to free memory by calling [`free_response`] with the given pointer once only.
 pub type SuccessCallback = unsafe extern "C-unwind" fn(usize, *const ResponseValue) -> ();
 
 /// Failure callback that is called when a command fails.
@@ -73,7 +73,7 @@ struct CommandExecutionCore {
 }
 
 /// # Safety
-/// Unsafe, becase calls to an FFI function. See the safety documentation of [`FailureCallback`].
+/// Unsafe, because calls to an FFI function. See the safety documentation of [`FailureCallback`].
 unsafe fn report_error(
     failure_callback: FailureCallback,
     callback_index: usize,
@@ -266,14 +266,14 @@ pub unsafe extern "C-unwind" fn command(
 ///
 /// # Safety
 /// * `client_ptr` must not be `null`.
-/// * `client_ptr` must be able to be safely casted to a valid [`Box<Client>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
+/// * `client_ptr` must be able to be safely casted to a valid [`Arc<Client>`] via [`Arc::from_raw`]. See the safety documentation of [`Arc::from_raw`].
 /// * This function should only be called should with a pointer created by [`create_client`], before [`close_client`] was called with the pointer.
 /// * `batch_ptr` must not be `null`.
 /// * `batch_ptr` must be able to be safely casted to a valid [`BatchInfo`]. See the safety documentation of [`create_pipeline`].
 /// * `options_ptr` could be `null`, but if it is not `null`, it must be a valid [`BatchOptionsInfo`] pointer. See the safety documentation of [`get_pipeline_options`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn batch(
+pub unsafe extern "C-unwind" fn batch(
     client_ptr: *const c_void,
     callback_index: usize,
     batch_ptr: *const BatchInfo,
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn batch(
 /// * `ptr` must be able to be safely casted to a valid [`Box<ResponseValue>`] via [`Box::from_raw`]. See the safety documentation of [`Box::from_raw`].
 #[allow(rustdoc::private_intra_doc_links)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_respose(ptr: *mut ResponseValue) {
+pub unsafe extern "C" fn free_response(ptr: *mut ResponseValue) {
     unsafe {
         Box::leak(Box::from_raw(ptr)).free_memory();
     }

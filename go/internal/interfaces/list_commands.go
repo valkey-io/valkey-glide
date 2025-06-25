@@ -69,21 +69,21 @@ type ListCommands interface {
 
 	LPushX(ctx context.Context, key string, elements []string) (int64, error)
 
-	LMPop(ctx context.Context, keys []string, listDirection constants.ListDirection) (map[string][]string, error)
+	LMPop(ctx context.Context, keys []string, listDirection constants.ListDirection) ([]models.KeyValues, error)
 
 	LMPopCount(
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
 		count int64,
-	) (map[string][]string, error)
+	) ([]models.KeyValues, error)
 
 	BLMPop(
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
 		timeout time.Duration,
-	) (map[string][]string, error)
+	) ([]models.KeyValues, error)
 
 	BLMPopCount(
 		ctx context.Context,
@@ -91,7 +91,7 @@ type ListCommands interface {
 		listDirection constants.ListDirection,
 		count int64,
 		timeout time.Duration,
-	) (map[string][]string, error)
+	) ([]models.KeyValues, error)
 
 	LSet(ctx context.Context, key string, index int64, element string) (string, error)
 

@@ -19,9 +19,9 @@ type GenericCommands interface {
 
 	Move(ctx context.Context, key string, dbIndex int64) (bool, error)
 
-	Scan(ctx context.Context, cursor int64) (string, []string, error)
+	Scan(ctx context.Context, cursor models.Cursor) (models.ScanResult, error)
 
-	ScanWithOptions(ctx context.Context, cursor int64, scanOptions options.ScanOptions) (string, []string, error)
+	ScanWithOptions(ctx context.Context, cursor models.Cursor, scanOptions options.ScanOptions) (models.ScanResult, error)
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
 }

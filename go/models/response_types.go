@@ -35,16 +35,10 @@ type MemberAndScore struct {
 	Score  float64
 }
 
-// Response type of [XRange] and [XRevRange] commands.
-type XRangeResponse struct {
-	StreamId string
-	Entries  [][]string
-}
-
 // Response type of [XAutoClaim] command.
 type XAutoClaimResponse struct {
 	NextEntry       string
-	ClaimedEntries  map[string][][]string
+	ClaimedEntries  []StreamEntry
 	DeletedMessages []string
 }
 
@@ -87,6 +81,14 @@ func CreateNilFloat64Result() Result[float64] {
 	return Result[float64]{val: 0, isNil: true}
 }
 
+func CreateResultOf[T any](val T) Result[T] {
+	return Result[T]{val: val, isNil: false}
+}
+
+func CreateNilResultOf[T any]() Result[T] {
+	return Result[T]{isNil: true}
+}
+
 func CreateKeyWithMemberAndScoreResult(kmsVal KeyWithMemberAndScore) Result[KeyWithMemberAndScore] {
 	return Result[KeyWithMemberAndScore]{val: kmsVal, isNil: false}
 }
@@ -103,6 +105,17 @@ func CreateKeyWithArrayOfMembersAndScoresResult(
 
 func CreateNilKeyWithArrayOfMembersAndScoresResult() Result[KeyWithArrayOfMembersAndScores] {
 	return Result[KeyWithArrayOfMembersAndScores]{val: KeyWithArrayOfMembersAndScores{"", nil}, isNil: true}
+}
+
+func CreateRankAndScoreResult(
+	rank int64,
+	score float64,
+) Result[RankAndScore] {
+	return Result[RankAndScore]{val: RankAndScore{Rank: rank, Score: score}, isNil: false}
+}
+
+func CreateNilRankAndScoreResult() Result[RankAndScore] {
+	return Result[RankAndScore]{val: RankAndScore{Rank: 0, Score: 0}, isNil: true}
 }
 
 // Enum to distinguish value types stored in `ClusterValue`
@@ -282,4 +295,186 @@ type XInfoGroupInfo struct {
 	// that number can't be determined.
 	// Included in the response only on valkey 7.0.0 and above.
 	Lag Result[int64]
+}
+
+// StreamEntry represents a single entry/element in a stream
+type StreamEntry struct {
+	// The unique identifier of the entry
+	ID string
+	// The fields associated with the entry
+	Fields []FieldValue
+}
+
+// FieldValue represents the Key-value pairs added to the entry.
+type FieldValue struct {
+	// The name of the field
+	Field string
+	// The value of the field
+	Value string
+}
+
+// StreamResponse represents a stream with its entries
+type StreamResponse struct {
+	// The entries in the stream
+	Entries []StreamEntry
+}
+
+// XClaimResponse represents a claimed entry in a stream
+type XClaimResponse struct {
+	// The fields associated with the claimed entry
+	Fields []FieldValue
+}
+
+// XInfoStreamResponse represents the information about a stream
+type XInfoStreamResponse struct {
+	// The number of entries in the stream
+	Length int64
+	// The number of keys in the underlying radix data structure
+	RadixTreeKeys int64
+	// The number of nodes in the underlying radix data structure
+	RadixTreeNodes int64
+	// The number of consumer groups defined for the stream
+	Groups int64
+	// The ID of the least-recently entry that was added to the stream
+	LastGeneratedID string
+	// The maximal entry ID that was deleted from the stream
+	MaxDeletedEntryID Result[string]
+	// The count of all entries added to the stream during its lifetime
+	EntriesAdded Result[int64]
+	// The ID and field-value tuples of the first entry in the stream
+	FirstEntry StreamEntry
+	// The ID and field-value tuples of the last entry in the stream
+	LastEntry StreamEntry
+}
+
+// The information for each pending entry for each group in `XInfoStream` command with full option
+type PendingEntry struct {
+	// The ID of the message
+	Id string
+	// The name of consumer
+	Name string
+	// The unix timestamp when the message was delivered to the consumer
+	DeliveredTime int64
+	// The number of times the message was delivered
+	DeliveredCount int64
+}
+
+// The information for each pending entry for each consumer item in `XInfoStream` command with full option
+type ConsumerPendingEntry struct {
+	// The ID of the message
+	Id string
+	// The unix timestamp when the message was delivered to the consumer
+	DeliveredTime int64
+	// The number of times the message was delivered
+	DeliveredCount int64
+}
+
+// XInfoStreamConsumerInfo represents a consumer information returned by `XInfoStream` command with full option.
+type XInfoStreamConsumerInfo struct {
+	// The consumer's name.
+	Name string
+	// The time stamp of the last attempted interaction.
+	SeenTime int64
+	// The time stamp of the last successful interaction.
+	ActiveTime Result[int64]
+	// The number of entries in the PEL: pending messages for the consumer, which are messages that were delivered but are yet
+	// to be acknowledged.
+	PelCount int64
+	// A list containing the pending entries information.
+	Pending []ConsumerPendingEntry
+}
+
+// XInfoGroupInfo represents a group information returned by `XInfoStream` command with full option
+// in full mode.
+type XInfoStreamGroupInfo struct {
+	// The consumer group's name.
+	Name string
+	// The ID of the last entry delivered to the group's consumers.
+	LastDeliveredId string
+	// The logical "read counter" of the last entry delivered to the group's consumers.
+	// Included in the response only on valkey 7.0.0 and above.
+	EntriesRead Result[int64]
+	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
+	// that number can't be determined.
+	// Included in the response only on valkey 7.0.0 and above.
+	Lag Result[int64]
+	// The count of the group's Pending Entries List (PEL), which are messages that were delivered
+	// but are yet to be acknowledged.
+	PelCount int64
+	// The group's Pending Entries List (PEL), which are messages that were delivered but are yet to be
+	// acknowledged.
+	Pending []PendingEntry
+	// The list of consumer information for the stream
+	Consumers []XInfoStreamConsumerInfo
+}
+
+// XInfoStreamFullOptionsResponse represents the information about a stream with the full option.
+type XInfoStreamFullOptionsResponse struct {
+	// The number of entries in the stream
+	Length int64
+	// The number of keys in the underlying radix data structure
+	RadixTreeKeys int64
+	// The number of nodes in the underlying radix data structure
+	RadixTreeNodes int64
+	// The ID of the least-recently entry that was added to the stream
+	LastGeneratedID string
+	// The maximal entry ID that was deleted from the stream
+	MaxDeletedEntryID Result[string]
+	// The count of all entries added to the stream during its lifetime
+	EntriesAdded Result[int64]
+	// The ID and field-value tuples of the first entry in the stream
+	FirstEntry StreamEntry
+	// The ID and field-value tuples of the last entry in the stream
+	LastEntry StreamEntry
+	// The list of consumer groups defined for the stream
+	Groups []XInfoStreamGroupInfo
+	// The list of stream entries
+	Entries []StreamEntry
+	// The first entry id recorded
+	RecordedFirstEntryId Result[string]
+}
+
+// KeyValues represents a key and a list of associated values
+type KeyValues struct {
+	// The key associated with the values
+	Key string
+	// The slice of string values associated with the key
+	Values []string
+}
+
+// RankAndScore represents the rank and score of a given member
+type RankAndScore struct {
+	// The rank of the member
+	Rank int64
+	// The score of the member
+	Score float64
+}
+
+// LCSMatch represents a longest common subsequence match.
+type LCSMatch struct {
+	// MatchString is the actual longest common subsequence string.
+	MatchString string
+	// Matches is a slice of LCSMatchedPosition objects.
+	Matches []LCSMatchedPosition
+	// Len is the total length of all the longest common subsequences.
+	Len int64
+}
+
+// LCSMatchedPosition represents the position of a longest common subsequence match.
+type LCSMatchedPosition struct {
+	// Key1 is the position in the first string.
+	Key1 LCSPosition
+	// Key2 is the position in the second string.
+	Key2 LCSPosition
+
+	// if WithMatchLen is specified, the array also contains the length of each match, otherwise the length is 0.
+	MatchLen int64
+}
+
+// LCSPosition represents a position in a longest common subsequence match.
+type LCSPosition struct {
+	// Start is the starting index of the match.
+	Start int64
+	// End is the ending index of the match.
+	End int64
 }

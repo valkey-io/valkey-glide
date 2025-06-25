@@ -81,7 +81,8 @@
         "staged": "lint-staged",
         "prereq": "npm install",
         "artifacts": "napi artifacts",
-        "prepublishOnly": "cd ../.. && napi prepublish --config npm/glide/package.json -t npm --skip-gh-release"
+        "prepublishOnly": "cd ../.. && napi prepublish --config npm/glide/package.json -t npm --skip-gh-release",
+        "docs": "npm run build && ./docs/build-docs"
     },
     "devDependencies": {
         "@jest/globals": "29",

@@ -5,6 +5,7 @@ package glide
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -49,7 +50,7 @@ func ExampleClient_ExecWithOptions_transaction() {
 	batch := pipeline.NewStandaloneBatch(true)
 	batch.Set("key", "1").CustomCommand([]string{"incr", "key"}).Get("key")
 	// Set a timeout of 1000 milliseconds
-	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000)
+	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000 * time.Millisecond)
 
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
@@ -66,7 +67,7 @@ func ExampleClient_ExecWithOptions_pipeline() {
 	batch := pipeline.NewStandaloneBatch(false)
 	batch.Set("key1", "value1").Set("key2", "value2").Get("key1").Get("key2")
 	// Set a timeout of 1000 milliseconds
-	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000)
+	options := pipeline.NewStandaloneBatchOptions().WithTimeout(1000 * time.Millisecond)
 
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
@@ -113,7 +114,7 @@ func ExampleClusterClient_ExecWithOptions_transaction() {
 	batch := pipeline.NewClusterBatch(true)
 	batch.Set("key", "1").CustomCommand([]string{"incr", "key"}).Get("key")
 	// Set a timeout of 1000 milliseconds
-	options := pipeline.NewClusterBatchOptions().WithTimeout(1000)
+	options := pipeline.NewClusterBatchOptions().WithTimeout(1000 * time.Millisecond)
 
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {

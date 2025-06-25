@@ -1,4 +1,3 @@
-/* eslint-disable no-var */
 /// <reference types="jest" />
 import { afterEach, beforeAll } from "@jest/globals";
 import minimist from "minimist";

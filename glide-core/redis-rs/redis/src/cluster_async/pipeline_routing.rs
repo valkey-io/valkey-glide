@@ -71,7 +71,7 @@ impl<C> NodePipelineContext<C> {
 }
 
 /// `NodeResponse` represents a response from a node along with its source node address.
-type NodeResponse = (Value, String);
+type NodeResponse = (Option<String>, Value);
 /// `PipelineResponses` represents the responses for each pipeline command.
 /// The outer `Vec` represents the pipeline commands, and each inner `Vec` contains (response, address) pairs.
 /// Since some commands can be executed across multiple nodes (e.g., multi-node commands), a single command
@@ -493,24 +493,24 @@ fn add_pipeline_result(
                     responses.resize(
                         inner_index + 1,
                         (
+                            None,
                             Value::ServerError(ServerError::ExtensionError {
                                 code: "PipelineNoResponse".to_string(),
                                 detail: (Some("no response from node".to_string())), // we initialize it with an error, but it should be overwritten
                             }),
-                            "".to_string(),
                         ),
                     );
                 }
-                responses[inner_index] = (value, address);
+                responses[inner_index] = (Some(address), value);
             }
             None => {
                 // If we have no `inner_index`, we expect this command to be a single node command, and therefore, have a single response
                 // If the vector responses is empty, we add the value and address
                 // If the vector is not empty, we check if it's only response is a ServerError, if so, we override it with the new value and address, since that means we have retried the command (e.g. on `MOVED` or `ASK` errors)
                 if responses.is_empty() {
-                    responses.push((value, address));
-                } else if let Value::ServerError(_) = responses[0].0 {
-                    responses[0] = (value, address);
+                    responses.push((Some(address), value));
+                } else if let Value::ServerError(_) = responses[0].1 {
+                    responses[0] = (Some(address), value);
                 } else {
                     return Err((
                         OperationTarget::FatalError,

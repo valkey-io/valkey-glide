@@ -251,7 +251,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 //
 // For example:
 //
-//	config := NewGlideClientConfiguration().
+//	config := NewClientConfiguration().
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
@@ -392,7 +392,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 //
 // For example:
 //
-//	config := NewGlideClusterClientConfiguration().
+//	config := NewClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
 //	        Host: "sample-address-0001.use1.cache.amazonaws.com", Port: api.DefaultPort}).
 //	    WithAddress(&NodeAddress{
@@ -486,7 +486,7 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 	return nil
 }
 
-// Represents advanced configuration settings for a Standalone [Client] used in [ClientConfiguration].
+// Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].
 type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
 }
@@ -511,7 +511,7 @@ func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	return config
 }
 
-// Represents advanced configuration settings for a Standalone [ClusterClient] used in
+// Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout time.Duration

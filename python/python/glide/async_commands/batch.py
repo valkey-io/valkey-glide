@@ -1695,8 +1695,8 @@ class BaseBatch:
         Commands response:
             TOK: A simple "OK" response.
 
-            If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
-            (which causes `key` to be removed).
+            If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+            and the key is removed.
 
             If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 
@@ -1712,16 +1712,18 @@ class BaseBatch:
     ) -> TBatch:
         """
         Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-        If `count` is positive, it removes elements equal to `element` moving from head to tail.
-        If `count` is negative, it removes elements equal to `element` moving from tail to head.
-        If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
-        equal to `element`.
 
         See [valkey.io](https://valkey.io/commands/lrem/) for more details.
 
         Args:
             key (TEncodable): The key of the list.
             count (int): The count of occurrences of elements equal to `element` to remove.
+
+                - If `count` is positive, it removes elements equal to `element` moving from head to tail.
+                - If `count` is negative, it removes elements equal to `element` moving from tail to head.
+                - If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
+                  equal to `element`.
+
             element (TEncodable): The element to remove from the list.
 
         Commands response:

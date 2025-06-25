@@ -8,9 +8,9 @@ import (
 
 // Optional arguments to `BitPos` in [BitMapCommands]
 type BitPosOptions struct {
-	start           *int64
-	end             *int64
-	bitMapIndexType BitmapIndexType
+	Start           int64
+	End             int64
+	BitMapIndexType BitmapIndexType
 }
 
 func NewBitPosOptions() *BitPosOptions {
@@ -19,40 +19,28 @@ func NewBitPosOptions() *BitPosOptions {
 
 // SetStart defines start byte to calculate bitpos in bitpos command.
 func (options *BitPosOptions) SetStart(start int64) *BitPosOptions {
-	options.start = &start
+	options.Start = start
 	return options
 }
 
 // SetEnd defines end byte to calculate bitpos in bitpos command.
 func (options *BitPosOptions) SetEnd(end int64) *BitPosOptions {
-	options.end = &end
+	options.End = end
 	return options
 }
 
 // SetBitmapIndexType to specify start and end are in BYTE or BIT
 func (options *BitPosOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) *BitPosOptions {
-	options.bitMapIndexType = bitMapIndexType
+	options.BitMapIndexType = bitMapIndexType
 	return options
 }
 
 // ToArgs converts the options to a list of arguments.
 func (opts *BitPosOptions) ToArgs() ([]string, error) {
-	args := []string{}
+	args := []string{utils.IntToString(opts.Start), utils.IntToString(opts.End)}
 
-	if opts.start == nil {
-		return args, nil
-	}
-
-	args = append(args, utils.IntToString(*opts.start))
-
-	if opts.end == nil {
-		return args, nil
-	}
-
-	args = append(args, utils.IntToString(*opts.end))
-
-	if opts.bitMapIndexType == BIT || opts.bitMapIndexType == BYTE {
-		args = append(args, string(opts.bitMapIndexType))
+	if opts.BitMapIndexType == BIT || opts.BitMapIndexType == BYTE {
+		args = append(args, string(opts.BitMapIndexType))
 	}
 
 	return args, nil

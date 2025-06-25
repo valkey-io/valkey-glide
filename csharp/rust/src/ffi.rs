@@ -151,6 +151,7 @@ pub(crate) unsafe fn create_connection_request(
         periodic_checks: None,
         pubsub_subscriptions: None,
         inflight_requests_limit: None,
+        lazy_connect: false,
     }
 }
 

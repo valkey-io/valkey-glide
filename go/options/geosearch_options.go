@@ -21,6 +21,7 @@ type Location struct {
 // The interface representing origin of the search for the `GeoSearch` command
 type GeoSearchOrigin interface {
 	ToArgs() ([]string, error)
+	dummyGeoSearchOrigin()
 }
 
 // The search origin represented by a [GeospatialData] position
@@ -37,6 +38,8 @@ func (o *GeoCoordOrigin) ToArgs() ([]string, error) {
 	}, nil
 }
 
+func (o *GeoCoordOrigin) dummyGeoSearchOrigin() {}
+
 // The search origin represented by an existing member in the sorted set
 type GeoMemberOrigin struct {
 	Member string
@@ -50,47 +53,49 @@ func (o *GeoMemberOrigin) ToArgs() ([]string, error) {
 	}, nil
 }
 
+func (o *GeoMemberOrigin) dummyGeoSearchOrigin() {}
+
 // The search options for the `GeoSearch` command
 type GeoSearchShape struct {
-	shape  constants.SearchShape
-	radius float64
-	width  float64
-	height float64
-	unit   constants.GeoUnit
+	Shape  constants.SearchShape
+	Radius float64
+	Width  float64
+	Height float64
+	Unit   constants.GeoUnit
 }
 
 // Creates a new [GeoSearchShape] for a circle search by radius
 func NewCircleSearchShape(radius float64, unit constants.GeoUnit) *GeoSearchShape {
 	return &GeoSearchShape{
-		shape:  constants.BYRADIUS,
-		radius: radius,
-		width:  0,
-		height: 0,
-		unit:   unit,
+		Shape:  constants.BYRADIUS,
+		Radius: radius,
+		Width:  0,
+		Height: 0,
+		Unit:   unit,
 	}
 }
 
 // Creates a new [GeoSearchShape] for a box search by width and height
 func NewBoxSearchShape(width float64, height float64, unit constants.GeoUnit) *GeoSearchShape {
 	return &GeoSearchShape{
-		shape:  constants.BYBOX,
-		width:  width,
-		height: height,
-		unit:   unit,
+		Shape:  constants.BYBOX,
+		Width:  width,
+		Height: height,
+		Unit:   unit,
 	}
 }
 
 // Converts the [GeoSearchShape] to the arguments for the `GeoSearch` command
 func (o *GeoSearchShape) ToArgs() ([]string, error) {
-	switch o.shape {
+	switch o.Shape {
 	case constants.BYRADIUS:
-		return []string{string(o.shape), utils.FloatToString(o.radius), string(o.unit)}, nil
+		return []string{string(o.Shape), utils.FloatToString(o.Radius), string(o.Unit)}, nil
 	case constants.BYBOX:
 		return []string{
-			string(o.shape),
-			utils.FloatToString(o.width),
-			utils.FloatToString(o.height),
-			string(o.unit),
+			string(o.Shape),
+			utils.FloatToString(o.Width),
+			utils.FloatToString(o.Height),
+			string(o.Unit),
 		}, nil
 	}
 	return nil, errors.New("invalid geosearch shape")
@@ -154,18 +159,16 @@ func (o *GeoSearchInfoOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `GeoSearch` that contains up to 2 optional inputs
 type GeoSearchResultOptions struct {
-	sortOrder  OrderBy
-	count      int64
-	countIsSet bool
-	isAny      bool
+	SortOrder OrderBy
+	Count     int64
+	IsAny     bool
 }
 
 func NewGeoSearchResultOptions() *GeoSearchResultOptions {
 	return &GeoSearchResultOptions{
-		sortOrder:  "",
-		count:      0,
-		countIsSet: false,
-		isAny:      false,
+		SortOrder: "",
+		Count:     0,
+		IsAny:     false,
 	}
 }
 
@@ -173,20 +176,19 @@ func NewGeoSearchResultOptions() *GeoSearchResultOptions {
 // - ASC: Sort returned items from the nearest to the farthest, relative to the center point.
 // - DESC: Sort returned items from the farthest to the nearest, relative to the center point.
 func (o *GeoSearchResultOptions) SetSortOrder(sortOrder OrderBy) *GeoSearchResultOptions {
-	o.sortOrder = sortOrder
+	o.SortOrder = sortOrder
 	return o
 }
 
 // Optional argument for `GeoSearch` that sets the number of results to return.
 func (o *GeoSearchResultOptions) SetCount(count int64) *GeoSearchResultOptions {
-	o.count = count
-	o.countIsSet = true
+	o.Count = count
 	return o
 }
 
 // Optional argument for `GeoSearch` that sets the query to return any results.
 func (o *GeoSearchResultOptions) SetIsAny(isAny bool) *GeoSearchResultOptions {
-	o.isAny = isAny
+	o.IsAny = isAny
 	return o
 }
 
@@ -194,15 +196,15 @@ func (o *GeoSearchResultOptions) SetIsAny(isAny bool) *GeoSearchResultOptions {
 func (o *GeoSearchResultOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	if o.sortOrder != "" {
-		args = append(args, string(o.sortOrder))
+	if o.SortOrder != "" {
+		args = append(args, string(o.SortOrder))
 	}
 
-	if o.countIsSet {
+	if o.Count != 0 {
 		args = append(args, constants.CountKeyword)
-		args = append(args, utils.IntToString(o.count))
+		args = append(args, utils.IntToString(o.Count))
 
-		if o.isAny {
+		if o.IsAny {
 			args = append(args, "ANY")
 		}
 	}

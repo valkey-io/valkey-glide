@@ -1,8 +1,8 @@
 {
     "compilerOptions": {
-        "target": "ES2021",
+        "target": "ESNext",
         "module": "CommonJS",
-        "lib": ["ES2021"],
+        "lib": ["ESNext"],
         "rootDir": "./src",
         "outDir": "./build-ts",
         "declaration": true,
@@ -23,7 +23,7 @@
         "transpileOnly": true,
         "compilerOptions": {
             "module": "CommonJS",
-            "target": "ES2021",
+            "target": "esnext",
             "esModuleInterop": true
         },
         "esm": true
