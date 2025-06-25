@@ -219,7 +219,8 @@ jobs:
                       utils/clusters/**
 
     lint:
-        if: ${{ false }}  # Temporarily disable lint job, until the SER types can be fixed to resolve the lint errors
+        if: ${{ false }}
+        # Temporarily disable lint job, until the SER types can be fixed to resolve the lint errors
         timeout-minutes: 10
         runs-on: ubuntu-latest
         steps:
