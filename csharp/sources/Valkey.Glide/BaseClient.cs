@@ -3,6 +3,7 @@
 using System.Runtime.InteropServices;
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 using Valkey.Glide.Pipeline;
 
@@ -15,7 +16,7 @@ using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
-public abstract class BaseClient : IDisposable, IStringBaseCommands
+public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetBaseCommands
 {
     #region public methods
     public async Task<string> Set(GlideString key, GlideString value)
@@ -23,6 +24,21 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     public async Task<GlideString?> Get(GlideString key)
         => await Command(RequestType.Get, [key], response => HandleServerResponse<GlideString>(response, true));
+
+    public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap)
+    {
+        var args = new List<GlideString> { key };
+        args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
+        return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
+    }
+
+    public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap, ZAddOptions options)
+    {
+        var args = new List<GlideString> { key };
+        args.AddRange(options.ToArgs());
+        args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
+        return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
+    }
 
     public void Dispose()
     {
@@ -89,6 +105,24 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
         // All memory allocated is auto-freed by `using` operator
     }
 
+    private async Task<long> ExecuteLongCommand(RequestType requestType, GlideString[] arguments, Route? route = null)
+    {
+        // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
+        using Cmd cmd = new(requestType, arguments);
+
+        // 2. Allocate memory for route
+        using FFI.Route? ffiRoute = route?.ToFfi();
+
+        // 3. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall();
+        CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
+
+        // 4. Get a response and Handle it
+        return HandleLongResponse(await message);
+
+        // All memory allocated is auto-freed by `using` operator
+    }
+
     protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
     {
         // 1. Allocate memory for batch, which allocates all nested Cmds
@@ -109,6 +143,24 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands
 
     protected internal static string HandleOk(IntPtr response)
         => HandleServerResponse<string>(response, false);
+
+    private static long HandleLongResponse(IntPtr response)
+    {
+        object? result = HandleResponse(response);
+        FreeResponse(response);
+        return result is long longValue ? longValue : throw new RequestException($"Unexpected return type from Glide: got {result?.GetType().GetRealTypeName()} expected long");
+    }
+
+    private static GlideString[] ConvertMembersScoreMapToArgs(Dictionary<GlideString, double> membersScoreMap)
+    {
+        var args = new List<GlideString>();
+        foreach (var kvp in membersScoreMap)
+        {
+            args.Add(kvp.Value.ToString());
+            args.Add(kvp.Key);
+        }
+        return args.ToArray();
+    }
 
     protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
