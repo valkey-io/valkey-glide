@@ -27,17 +27,14 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
 
     public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap)
     {
-        List<GlideString> args = new() { key };
-        args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
-        return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
+        GlideString[] args = [key, .. ConvertMembersScoreMapToArgs(membersScoreMap)];
+        return await ExecuteLongCommand(RequestType.ZAdd, args);
     }
 
     public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap, ZAddOptions options)
     {
-        List<GlideString> args = new() { key };
-        args.AddRange(options.ToArgs());
-        args.AddRange(ConvertMembersScoreMapToArgs(membersScoreMap));
-        return await ExecuteLongCommand(RequestType.ZAdd, args.ToArray());
+        GlideString[] args = [key, .. options.ToArgs(), .. ConvertMembersScoreMapToArgs(membersScoreMap)];
+        return await ExecuteLongCommand(RequestType.ZAdd, args);
     }
 
     public void Dispose()
@@ -152,15 +149,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
     }
 
     private static GlideString[] ConvertMembersScoreMapToArgs(Dictionary<GlideString, double> membersScoreMap)
-    {
-        List<GlideString> args = new();
-        foreach (var kvp in membersScoreMap)
-        {
-            args.Add(kvp.Value.ToString());
-            args.Add(kvp.Key);
-        }
-        return args.ToArray();
-    }
+        => [.. membersScoreMap.SelectMany(kvp => (GlideString[])[kvp.Value.ToString(), kvp.Key])];
 
     protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
         => HandleServerResponse<T, T>(response, isNullable, o => o);
