@@ -661,6 +661,7 @@ pub fn create_connection_request(
     if let Some(client_az) = &configuration.client_az {
         connection_request.client_az = client_az.deref().into();
     }
+    connection_request.lazy_connect = configuration.lazy_connect;
 
     connection_request
 }
@@ -678,6 +679,7 @@ pub struct TestConfiguration {
     pub client_name: Option<String>,
     pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
+    pub lazy_connect: bool,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -729,8 +731,9 @@ fn init() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
     // This needs to be done before any TLS connections are made
-    let _ =
-        rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
+    let _ = rustls::crypto::CryptoProvider::install_default(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    );
 }
 
 pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientForTests) {

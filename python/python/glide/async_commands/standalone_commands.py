@@ -871,8 +871,6 @@ class StandaloneCommands(CoreCommands):
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.watch("sampleKey")
-                'OK'
             >>> await client.unwatch()
                 'OK'
         """
