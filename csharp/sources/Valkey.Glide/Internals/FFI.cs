@@ -304,6 +304,7 @@ internal class FFI
         Info = 1130,
         ZAdd = 1304,
         ZCard = 1305,
+        ZCount = 1306,
         ZRange = 1319,
         ZRem = 1324,
         Get = 1504,

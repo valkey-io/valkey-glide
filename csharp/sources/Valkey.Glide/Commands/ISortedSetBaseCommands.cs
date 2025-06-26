@@ -78,6 +78,26 @@ internal interface ISortedSetBaseCommands
     Task<long> ZCard(GlideString key);
 
     /// <summary>
+    /// Returns the number of members in the sorted set stored at <paramref name="key"/> with scores between <paramref name="minScore"/> and <paramref name="maxScore"/>.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result1 = await client.ZCount("my_sorted_set", ScoreBoundary.Inclusive(5.0), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity));
+    /// long result2 = await client.ZCount("my_sorted_set", ScoreBoundary.Inclusive(5.0), ScoreBoundary.Exclusive(10.0));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <param name="minScore">The minimum score to count from. Can be an inclusive/exclusive score boundary or positive/negative infinity.</param>
+    /// <param name="maxScore">The maximum score to count up to. Can be an inclusive/exclusive score boundary or positive/negative infinity.</param>
+    /// <returns>The number of members in the specified score range.
+    /// If <paramref name="key"/> does not exist, it is treated as an empty sorted set, and the command returns <c>0</c>.
+    /// If <paramref name="maxScore"/> &lt; <paramref name="minScore"/>, <c>0</c> is returned.</returns>
+    /// <see href="https://valkey.io/commands/zcount/">valkey.io</see>
+    Task<long> ZCount(GlideString key, ScoreBoundary minScore, ScoreBoundary maxScore);
+
+    /// <summary>
     /// Returns the specified range of elements in the sorted set stored at <paramref name="key"/>.
     /// ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
     /// </summary>

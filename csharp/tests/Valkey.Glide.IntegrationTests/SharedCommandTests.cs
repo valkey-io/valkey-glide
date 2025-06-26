@@ -225,6 +225,56 @@ public class SharedCommandTests(TestConfiguration config)
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task ZCountBasicTest(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Add some members
+        var membersScoreMap = new Dictionary<GlideString, double>
+        {
+            { "one", 1.0 },
+            { "two", 2.0 },
+            { "three", 3.0 }
+        };
+
+        long addResult = await client.ZAdd(key, membersScoreMap);
+        Assert.Equal(3, addResult);
+
+        // Test range negative to positive infinity
+        long result1 = await client.ZCount(key, ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity));
+        Assert.Equal(3, result1);
+
+        // Test range 1 (exclusive) to 3 (inclusive) - should return 2 (members "two" and "three")
+        long result2 = await client.ZCount(key, ScoreBoundary.Exclusive(1.0), ScoreBoundary.Inclusive(3.0));
+        Assert.Equal(2, result2);
+
+        // Test range negative infinity to 3 (inclusive) - should return all 3 members
+        long result3 = await client.ZCount(key, ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Inclusive(3.0));
+        Assert.Equal(3, result3);
+
+        // Test incorrect range (start > end) - should return 0
+        long result4 = await client.ZCount(key, ScoreBoundary.Infinite(InfBoundary.PositiveInfinity), ScoreBoundary.Inclusive(3.0));
+        Assert.Equal(0, result4);
+
+        // Test with non-existing key - should return 0
+        long result5 = await client.ZCount("nonExistingKey", ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity));
+        Assert.Equal(0, result5);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task ZCountErrorCasesTest(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test wrong key type - should throw error
+        await client.Set(key, "test");
+        await Assert.ThrowsAsync<RequestException>(async () =>
+            await client.ZCount(key, ScoreBoundary.Infinite(InfBoundary.NegativeInfinity), ScoreBoundary.Infinite(InfBoundary.PositiveInfinity)));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task ZRangeSimpleTest(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();

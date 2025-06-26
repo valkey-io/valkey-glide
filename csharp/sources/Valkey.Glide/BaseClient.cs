@@ -49,6 +49,12 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         return await ExecuteLongCommand(RequestType.ZCard, args);
     }
 
+    public async Task<long> ZCount(GlideString key, ScoreBoundary minScore, ScoreBoundary maxScore)
+    {
+        GlideString[] args = [key, minScore.ToString(), maxScore.ToString()];
+        return await ExecuteLongCommand(RequestType.ZCount, args);
+    }
+
     public async Task<GlideString[]> ZRange(GlideString key, IZRangeQuery rangeQuery)
     {
         GlideString[] args = [key, .. rangeQuery.ToArgs()];
