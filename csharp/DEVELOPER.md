@@ -136,13 +136,13 @@ cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 dotnet test
 
 In Windows CMD:
 
-```bash
+```cmd
 set cluster-endpoints=localhost:7000 && set standalone-endpoints=localhost:6379 && dotnet test
 ```
 
 In Powershell:
 
-```bash
+```powershell
 [Environment]::SetEnvironmentVariable('cluster-endpoints', 'localhost:7000')
 [Environment]::SetEnvironmentVariable('standalone-endpoints', 'localhost:6379')
 dotnet test
