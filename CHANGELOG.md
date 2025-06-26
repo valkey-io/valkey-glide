@@ -103,6 +103,7 @@
 * Go: Add Opentelemetry support of creating spans ([#3932](https://github.com/valkey-io/valkey-glide/pull/3932))
 * Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 * Go: XInfoStream example fix ([#4185](https://github.com/valkey-io/valkey-glide/pull/4185))
+* Node: Validate clientAZ when using AZ affinity strategies ([#4267](https://github.com/valkey-io/valkey-glide/pull/4267))
 
 #### Breaking Changes
 
