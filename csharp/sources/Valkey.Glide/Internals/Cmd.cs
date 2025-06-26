@@ -28,7 +28,7 @@ internal class Request // TODO naming
         public readonly bool IsNullable;
         public readonly Func<R, T> Converter;
         public readonly RequestType Request;
-        public readonly ArgsArray Args;
+        public readonly ArgsArray ArgsArray;
 
 #pragma warning disable IDE0046 // Convert to conditional expression
         public Func<object?, object?> GetConverter() => value =>
@@ -52,14 +52,14 @@ internal class Request // TODO naming
         };
 #pragma warning restore IDE0046 // Convert to conditional expression
 
-        public Cmd ToFfi() => new(Request, Args.Args);
+        public Cmd ToFfi() => new(Request, ArgsArray.Args);
 
-        public new string ToString() => $"{Request} [{string.Join(' ', Args.Args.ToStrings())}]";
+        public new string ToString() => $"{Request} [{string.Join(' ', ArgsArray.Args.ToStrings())}]";
 
         public Cmd(RequestType request, GlideString[] args, bool isNullable, Func<R, T> converter)
         {
             Request = request;
-            Args = new() { Args = args };
+            ArgsArray = new() { Args = args };
             IsNullable = isNullable;
             Converter = converter;
         }
@@ -68,14 +68,14 @@ internal class Request // TODO naming
         /// Convert a command to one which handles a multi-node cluster value.
         /// </summary>
         public Cmd<Dictionary<GlideString, object>, Dictionary<string, T>> ToMultiNodeValue()
-            => new(Request, Args.Args, IsNullable, map => ResponseConverters.HandleMultiNodeValue(map, Converter));
+            => new(Request, ArgsArray.Args, IsNullable, map => ResponseConverters.HandleMultiNodeValue(map, Converter));
 
         /// <summary>
         /// Convert a command to one which handles a <see cref="ClusterValue{T}" />.
         /// </summary>
         /// <param name="isSingleValue">Whether current command call returns a single value.</param>
         public Cmd<object, ClusterValue<T>> ToClusterValue(bool isSingleValue)
-            => new(Request, Args.Args, IsNullable, ResponseConverters.MakeClusterValueHandler(Converter, isSingleValue));
+            => new(Request, ArgsArray.Args, IsNullable, ResponseConverters.MakeClusterValueHandler(Converter, isSingleValue));
     }
 
     internal record ArgsArray

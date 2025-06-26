@@ -30,8 +30,9 @@ internal class ResponseConverters
     /// </summary>
     /// <typeparam name="R">GLIDE's return type per node.</typeparam>
     /// <typeparam name="T">Command's return type.</typeparam>
-    /// <param name="dict">Value to handle.</param>
+    /// <param name="dict">Value from GLIDE core to handle.</param>
     /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/> (dictionary values).</param>
+    /// <returns>A converted value.</returns>
     public static Dictionary<string, T> HandleMultiNodeValue<R, T>(Dictionary<GlideString, object> dict, Func<R, T> converter)
         => dict.DownCastKeys().ConvertValues(converter);
 
@@ -40,11 +41,11 @@ internal class ResponseConverters
     /// </summary>
     /// <typeparam name="R">GLIDE's return type.</typeparam>
     /// <typeparam name="T">Command's return type.</typeparam>
-    /// <param name="value"></param>
-    /// <param name="isNullable"></param>
+    /// <param name="value">Value from GLIDE core to handle.</param>
+    /// <param name="isNullable">Whether it could be nullable.</param>
     /// <param name="converter">Optional function to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
-    /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <returns>A converted value.</returns>
+    /// <exception cref="Exception">When <paramref name="value"/> has incorrect type or value.</exception>
     public static T HandleServerValue<R, T>(object? value, bool isNullable, Func<R, T> converter)
     {
         if (value is null)
