@@ -76,7 +76,7 @@ public class SharedCommandTests(TestConfiguration config)
                 else
                 {
                     // TODO use assertDeepEquals
-                    Assert.Equal(expectedInfo[i].ExpectedValue, actualResult[i]);
+                    Assert.Equivalent(expectedInfo[i].ExpectedValue, actualResult[i]);
                 }
             }
             catch (Exception e)
