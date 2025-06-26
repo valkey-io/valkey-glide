@@ -10,7 +10,7 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -52,7 +52,7 @@ where
 
 pub(crate) async fn get_or_create_conn<C>(
     addr: &str,
-    node: Option<AsyncClusterNode<C>>,
+    node: Option<Arc<AsyncClusterNode<C>>>,
     params: &ClusterParams,
     conn_type: RefreshConnectionType,
     glide_connection_options: GlideConnectionOptions,
@@ -60,17 +60,21 @@ pub(crate) async fn get_or_create_conn<C>(
 where
     C: ConnectionLike + Send + Clone + Sync + Connect + 'static,
 {
-    if let Some(node) = node {
+    if let Some(arc_node) = node {
+        // Dereference the Arc to get the node for connections check
+        let node = arc_node.as_ref();
+        
         // We won't check whether the DNS address of this node has changed and now points to a new IP.
         // Instead, we depend on managed Redis services to close the connection for refresh if the node has changed.
-        match check_node_connections(&node, params, conn_type, addr).await {
-            None => Ok(node),
+        match check_node_connections(node, params, conn_type, addr).await {
+            // No need to clone the node, just return the Arc
+            None => Ok((*arc_node).clone()),
             Some(conn_type) => connect_and_check(
                 addr,
                 params.clone(),
                 None,
                 conn_type,
-                Some(node),
+                Some(arc_node.clone()), // Pass the Arc-wrapped node
                 glide_connection_options,
             )
             .await
@@ -173,7 +177,7 @@ async fn connect_and_check_only_management_conn<C>(
     addr: &str,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
-    prev_node: AsyncClusterNode<C>,
+    prev_node: Arc<AsyncClusterNode<C>>, // Now takes Arc<AsyncClusterNode<C>>
     disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
 ) -> ConnectAndCheckResult<C>
 where
@@ -184,6 +188,9 @@ where
         crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
             | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
     );
+
+    // Get a reference to node to avoid cloning
+    let node_ref = prev_node.as_ref();
 
     match create_connection::<C>(
         addr,
@@ -200,15 +207,15 @@ where
     )
     .await
     {
-        Err(conn_err) => failed_management_connection(addr, prev_node.user_connection, conn_err),
+        Err(conn_err) => failed_management_connection(addr, node_ref.user_connection.clone(), conn_err),
 
         Ok(mut connection) => {
             if let Err(err) = setup_management_connection(&mut connection.conn).await {
-                return failed_management_connection(addr, prev_node.user_connection, err);
+                return failed_management_connection(addr, node_ref.user_connection.clone(), err);
             }
 
             ConnectAndCheckResult::Success(ClusterNode {
-                user_connection: prev_node.user_connection,
+                user_connection: node_ref.user_connection.clone(), // Clone from reference
                 management_connection: Some(connection.into_future()),
             })
         }
@@ -259,8 +266,23 @@ impl<C> From<AsyncClusterNode<C>> for ConnectAndCheckResult<C> {
     }
 }
 
+impl<C> From<Arc<AsyncClusterNode<C>>> for ConnectAndCheckResult<C> {
+    fn from(value: Arc<AsyncClusterNode<C>>) -> Self {
+        ConnectAndCheckResult::Success((*value).clone())
+    }
+}
+
 impl<C> From<RedisResult<AsyncClusterNode<C>>> for ConnectAndCheckResult<C> {
     fn from(value: RedisResult<AsyncClusterNode<C>>) -> Self {
+        match value {
+            Ok(value) => value.into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
+impl<C> From<RedisResult<Arc<AsyncClusterNode<C>>>> for ConnectAndCheckResult<C> {
+    fn from(value: RedisResult<Arc<AsyncClusterNode<C>>>) -> Self {
         match value {
             Ok(value) => value.into(),
             Err(err) => err.into(),
@@ -274,7 +296,7 @@ pub async fn connect_and_check<C>(
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     conn_type: RefreshConnectionType,
-    node: Option<AsyncClusterNode<C>>,
+    node: Option<Arc<AsyncClusterNode<C>>>,
     glide_connection_options: GlideConnectionOptions,
 ) -> ConnectAndCheckResult<C>
 where
@@ -293,18 +315,19 @@ where
                 Ok(tuple) => tuple,
                 Err(err) => return err.into(),
             };
-            let management_conn = node.and_then(|node| node.management_connection);
+            // Extract management_connection from Arc wrapped node without cloning the whole node
+            let management_conn = node.and_then(|arc_node| arc_node.management_connection.clone());
             AsyncClusterNode::new(user_conn.into_future(), management_conn).into()
         }
         RefreshConnectionType::OnlyManagementConnection => {
             // Refreshing only the management connection requires the node to exist alongside a user connection. Otherwise, refresh all connections.
             match node {
-                Some(node) => {
+                Some(arc_node) => {
                     connect_and_check_only_management_conn(
                         addr,
                         params,
                         socket_addr,
-                        node,
+                        Arc::clone(&arc_node), // Use Arc::clone to avoid cloning the whole node
                         glide_connection_options.disconnect_notifier,
                     )
                     .await
