@@ -11,6 +11,12 @@ on:
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
+            - node/rust-client/**
+            - python/**
+            - cpp/**
+            - csharp/rust/**
+            - java/**
+            - benchmarks/rust/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -25,6 +31,12 @@ on:
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
+            - node/rust-client/**
+            - python/**
+            - cpp/**
+            - csharp/rust/**
+            - java/**
+            - benchmarks/rust/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -178,3 +190,39 @@ jobs:
                   cargo-toml-folder: benchmarks/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint benchmark
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: node/rust-client
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint node
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: python
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint python
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: cpp
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint cpp
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: csharp/rust
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint csharp
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: java
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint java
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: glide-core/telemetry
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint telemetry
