@@ -4192,8 +4192,8 @@ export function runBaseTests(config: {
                 // Manually simulate release of script1 reference
                 script1.release();
 
-                // Add a delay to ensure script release completes before flush
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                // Add delay to ensure script release completes before flush (using 500ms like other async operations)
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Flush the script cache from the server
                 expect(await client.scriptFlush()).toEqual("OK");
@@ -4211,8 +4211,8 @@ export function runBaseTests(config: {
                 // Release script2 and flush again
                 script2.release();
 
-                // Add a delay to ensure script release completes before flush
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                // Add delay to ensure script release completes before flush (using 500ms like other async operations)
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 expect(await client.scriptFlush()).toEqual("OK");
 
