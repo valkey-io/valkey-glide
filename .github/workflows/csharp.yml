@@ -220,7 +220,7 @@ jobs:
 
     lint:
         if: ${{ false }}
-		# TODO: re-enable after fixed
+        # TODO: re-enable after fixed
         # Temporarily disable lint job, until the SER types can be fixed to resolve the lint errors
         timeout-minutes: 10
         runs-on: ubuntu-latest
