@@ -166,7 +166,12 @@ impl StandaloneClient {
                         &address, &retry, &info, tls, &sender, discover, timeout,
                     )
                     .await
-                    .map_err(|err| (format!("{host}:{port}", host = address.host, port = address.port), err))
+                    .map_err(|err| {
+                        (
+                            format!("{host}:{port}", host = address.host, port = address.port),
+                            err,
+                        )
+                    })
                 }
             })
             .buffer_unordered(node_count);

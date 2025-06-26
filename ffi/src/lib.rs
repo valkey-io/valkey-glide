@@ -463,7 +463,7 @@ impl ClientAdapter {
                     if let Some(failure_callback) = failure_callback {
                         unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                     } else {
-                        eprintln!("Error converting value to CommandResponse: {:?}", err);
+                        eprintln!("Error converting value to CommandResponse: {err:?}");
                         return create_error_result_with_redis_error(err);
                     }
                 }
@@ -472,7 +472,7 @@ impl ClientAdapter {
                 if let Some(failure_callback) = failure_callback {
                     unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                 } else {
-                    eprintln!("Error executing command: {:?}", err);
+                    eprintln!("Error executing command: {err:?}");
                     return create_error_result_with_redis_error(err);
                 }
             }
@@ -2099,8 +2099,7 @@ pub unsafe extern "C" fn init_open_telemetry(
 
     if flush_interval_ms <= 0 {
         let error_msg = format!(
-            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-            flush_interval_ms
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {flush_interval_ms})"
         );
         return CString::new(error_msg)
             .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
@@ -2183,8 +2182,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
     match parent_span.add_span(name) {
         Ok(child_span) => Ok(child_span),
         Err(error_msg) => Err(format!(
-            "Opentelemetry failed to create child span with name `{}`. Error: {:?}",
-            name, error_msg
+            "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
         )),
     }
 }

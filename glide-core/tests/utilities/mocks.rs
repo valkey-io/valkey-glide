@@ -163,7 +163,10 @@ impl ServerMock {
 
             logger_core::log_info(
                 "Test",
-                format!("{thread_id:?} ServerMock exited", thread_id = std::thread::current().id()),
+                format!(
+                    "{thread_id:?} ServerMock exited",
+                    thread_id = std::thread::current().id()
+                ),
             );
         });
 

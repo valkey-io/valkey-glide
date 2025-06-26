@@ -404,9 +404,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
         Err(error_msg) => {
             log_error(
                 "OpenTelemetry error",
-                format!(
-                    "Failed to create child span with name `{name}`. Error: {error_msg:?}"
-                ),
+                format!("Failed to create child span with name `{name}`. Error: {error_msg:?}"),
             );
             None
         }

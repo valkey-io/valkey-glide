@@ -570,8 +570,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
     // Set flush interval if provided
     if flush_interval_ms <= 0 {
         return Err(PyTypeError::new_err(format!(
-            "InvalidInput: flush_interval_ms must be a positive integer (got: {})",
-            flush_interval_ms
+            "InvalidInput: flush_interval_ms must be a positive integer (got: {flush_interval_ms})"
         )));
     }
     config_builder = config_builder
@@ -581,8 +580,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
         Ok(handle) => handle,
         Err(err) => {
             return Err(PyTypeError::new_err(format!(
-                "Failed to get or init runtime: {}",
-                err
+                "Failed to get or init runtime: {err}"
             )));
         }
     };
@@ -595,8 +593,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
                 format!("Failed to initialize OpenTelemetry: {e}"),
             );
             return Err(PyTypeError::new_err(format!(
-                "Failed to initialize OpenTelemetry: {}",
-                e
+                "Failed to initialize OpenTelemetry: {e}"
             )));
         }
         Ok(())

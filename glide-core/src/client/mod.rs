@@ -497,7 +497,10 @@ impl Client {
                     return Err((
                         ErrorKind::ResponseError,
                         "Received non-array response for transaction",
-                        format!("(response was {value_type:?})", value_type = get_value_type(&value)),
+                        format!(
+                            "(response was {value_type:?})",
+                            value_type = get_value_type(&value)
+                        ),
                     )
                         .into());
                 }
@@ -1052,7 +1055,10 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
     let connection_timeout =
         format_optional_value("Connection timeout", request.connection_timeout);
-    let database_id = format!("\ndatabase ID: {database_id}", database_id = request.database_id);
+    let database_id = format!(
+        "\ndatabase ID: {database_id}",
+        database_id = request.database_id
+    );
     let rfr_strategy = request
         .read_from
         .clone()

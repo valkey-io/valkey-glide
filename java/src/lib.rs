@@ -668,14 +668,20 @@ pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics
         &mut env,
         &mut map,
         "total_connections",
-        &format!("{total_connections}", total_connections = Telemetry::total_connections()),
+        &format!(
+            "{total_connections}",
+            total_connections = Telemetry::total_connections()
+        ),
     );
 
     linked_hashmap::put_strings(
         &mut env,
         &mut map,
         "total_clients",
-        &format!("{total_clients}", total_clients = Telemetry::total_clients()),
+        &format!(
+            "{total_clients}",
+            total_clients = Telemetry::total_clients()
+        ),
     );
 
     map
@@ -721,8 +727,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                 // Validate flush interval
                 if flush_interval_ms <= 0 {
                     return Err(FFIError::OpenTelemetry(format!(
-                        "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-                        flush_interval_ms
+                        "InvalidInput: flushIntervalMs must be a positive integer (got: {flush_interval_ms})"
                     )));
                 }
 
@@ -737,8 +742,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                             Some(traces_sample_percentage as u32)
                         } else {
                             return Err(FFIError::OpenTelemetry(format!(
-                                "InvalidInput: traces_sample_percentage must be a positive integer (got: {})",
-                                traces_sample_percentage
+                                "InvalidInput: traces_sample_percentage must be a positive integer (got: {traces_sample_percentage})"
                                 ))
                             );
                         },
@@ -761,8 +765,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                     Ok(handle) => handle,
                     Err(err) => {
                         return Err(FFIError::OpenTelemetry(format!(
-                            "Failed to get or init runtime: {}",
-                            err
+                            "Failed to get or init runtime: {err}"
                         )))
                     }
                 };
@@ -775,8 +778,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                             format!("Failed to initialize OpenTelemetry: {e}"),
                         );
                         return Err(FFIError::OpenTelemetry(format!(
-                            "Failed to initialize OpenTelemetry: {}",
-                            e
+                            "Failed to initialize OpenTelemetry: {e}"
                         )));
                     }
                     Ok(())

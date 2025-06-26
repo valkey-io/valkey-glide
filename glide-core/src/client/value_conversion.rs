@@ -1360,7 +1360,10 @@ fn convert_to_array_of_pairs(
         _ => Err((
             ErrorKind::TypeError,
             "Response couldn't be converted to an array of key-value pairs",
-            format!("(response was {value_type:?})", value_type = get_value_type(&response)),
+            format!(
+                "(response was {value_type:?})",
+                value_type = get_value_type(&response)
+            ),
         )
             .into()),
     }
