@@ -4192,13 +4192,13 @@ export function runBaseTests(config: {
                 // Manually simulate release of script1 reference
                 script1.release();
 
-                // Add a small delay to ensure script release completes before flush
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                // Add a delay to ensure script release completes before flush
+                await new Promise((resolve) => setTimeout(resolve, 100));
 
                 // Flush the script cache from the server
                 expect(await client.scriptFlush()).toEqual("OK");
 
-                // Script should not exist on the server anymore
+                // Verify script is flushed from server before proceeding
                 expect(await client.scriptExists([script1.getHash()])).toEqual([
                     false,
                 ]);
@@ -4211,12 +4211,12 @@ export function runBaseTests(config: {
                 // Release script2 and flush again
                 script2.release();
 
-                // Add a small delay to ensure script release completes before flush
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                // Add a delay to ensure script release completes before flush
+                await new Promise((resolve) => setTimeout(resolve, 100));
 
                 expect(await client.scriptFlush()).toEqual("OK");
 
-                // Script should not exist on the server anymore
+                // Verify script is flushed from server before final test
                 expect(await client.scriptExists([script2.getHash()])).toEqual([
                     false,
                 ]);
