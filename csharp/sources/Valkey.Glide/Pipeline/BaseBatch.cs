@@ -32,7 +32,7 @@ public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T
     internal FFI.Batch ToFFI() => new([.. _commands.Select(c => c.ToFfi())], IsAtomic);
 
     /// <summary>
-    /// Convert a response reseived from the server.
+    /// Convert a response received from the server.
     /// </summary>
     internal object?[]? ConvertResponse(object?[]? response)
     {
@@ -42,7 +42,7 @@ public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T
         }
 
         Debug.Assert(response.Length == _commands.Count,
-            $"Response misaligned: received {response.Length} responses while submitted {_commands.Count} commands");
+            $"Response misaligned: received {response.Length} responses but submitted {_commands.Count} commands");
 
         for (int i = 0; i < response?.Length; i++)
         {
