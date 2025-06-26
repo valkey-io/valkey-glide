@@ -57,7 +57,7 @@ impl Drop for RedisCluster {
         let pids: Vec<String> = self
             .servers
             .iter()
-            .map(|server| format!("{}", server.pid))
+            .map(|server| format!("{pid}", pid = server.pid))
             .collect();
         let pids = pids.join(",");
         Self::execute_cluster_script(

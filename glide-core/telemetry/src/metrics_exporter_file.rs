@@ -72,7 +72,7 @@ impl PushMetricExporter for FileMetricExporter {
         let json_string = serde_json::to_string(&metrics_json)
             .map_err(|e| MetricError::Other(format!("Failed to serialize metrics to JSON: {e}")))?;
 
-        writeln!(file, "{}", json_string)
+        writeln!(file, "{json_string}")
             .map_err(|e| MetricError::Other(format!("File write error: {e}")))?;
 
         Ok(())

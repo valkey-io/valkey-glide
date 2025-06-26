@@ -138,7 +138,7 @@ fn parse_endpoint(endpoint: &str) -> Result<GlideOpenTelemetrySignalsExporter, E
                     Err(e) => {
                         return Err(Error::new(
                             ErrorKind::InvalidInput,
-                            format!("Error checking if parent directory exists: {}", e),
+                            format!("Error checking if parent directory exists: {e}"),
                         ));
                     }
                 }
@@ -328,7 +328,7 @@ impl GlideSpan {
     /// Add child span to this span and return it
     pub fn add_span(&self, name: &str) -> Result<GlideSpan, opentelemetry::trace::TraceError> {
         let inner_span = self.inner.add_span(name).map_err(|err| {
-            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+            TraceError::from(format!("Failed to create child span '{name}': {err}"))
         })?;
 
         Ok(GlideSpan { inner: inner_span })
@@ -545,7 +545,7 @@ impl GlideOpenTelemetry {
         let trace_exporter = match trace_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p.clone()).map_err(|e| {
-                    GlideOTELError::Other(format!("Failed to create traces exporter: {}", e))
+                    GlideOTELError::Other(format!("Failed to create traces exporter: {e}"))
                 })?;
                 build_span_exporter(batch_config, exporter)
             }
@@ -584,7 +584,7 @@ impl GlideOpenTelemetry {
         let metrics_exporter = match metrics_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::FileMetricExporter::new(p.clone()).map_err(|e| {
-                    GlideOTELError::Other(format!("Failed to create metrics exporter: {}", e))
+                    GlideOTELError::Other(format!("Failed to create metrics exporter: {e}"))
                 })?;
                 opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)

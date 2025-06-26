@@ -668,14 +668,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics
         &mut env,
         &mut map,
         "total_connections",
-        &format!("{}", Telemetry::total_connections()),
+        &format!("{total_connections}", total_connections = Telemetry::total_connections()),
     );
 
     linked_hashmap::put_strings(
         &mut env,
         &mut map,
         "total_clients",
-        &format!("{}", Telemetry::total_clients()),
+        &format!("{total_clients}", total_clients = Telemetry::total_clients()),
     );
 
     map
@@ -732,7 +732,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                 if let Some(endpoint) = traces_endpoint {
                     config = config.with_trace_exporter(
                         glide_core::GlideOpenTelemetrySignalsExporter::from_str(&endpoint)
-                            .map_err(|e| FFIError::OpenTelemetry(format!("{}", e)))?,
+                            .map_err(|e| FFIError::OpenTelemetry(format!("{e}")))?,
                         if traces_sample_percentage >= 0 {
                             Some(traces_sample_percentage as u32)
                         } else {
@@ -749,7 +749,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                 if let Some(endpoint) = metrics_endpoint {
                     config = config.with_metrics_exporter(
                         glide_core::GlideOpenTelemetrySignalsExporter::from_str(&endpoint)
-                            .map_err(|e| FFIError::OpenTelemetry(format!("{}", e)))?,
+                            .map_err(|e| FFIError::OpenTelemetry(format!("{e}")))?,
                     );
                 }
 
@@ -772,7 +772,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                         logger_core::log(
                             logger_core::Level::Error,
                             "OpenTelemetry",
-                            format!("Failed to initialize OpenTelemetry: {}", e),
+                            format!("Failed to initialize OpenTelemetry: {e}"),
                         );
                         return Err(FFIError::OpenTelemetry(format!(
                             "Failed to initialize OpenTelemetry: {}",

@@ -70,7 +70,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to map",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -96,7 +96,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to map of {string: double}",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -107,7 +107,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to set",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -136,7 +136,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to Array (ZRankResponseType)",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -158,7 +158,7 @@ pub(crate) fn convert_to_expected_type(
                             _ => Err((
                                 ErrorKind::TypeError,
                                 "Could not convert value to boolean",
-                                format!("(response was {:?})", get_value_type(&item)),
+                                format!("(response was {value_type:?})", value_type = get_value_type(&item)),
                             )
                                 .into()),
                         },
@@ -173,14 +173,14 @@ pub(crate) fn convert_to_expected_type(
                 _ => Err((
                     ErrorKind::TypeError,
                     "Response couldn't be converted to boolean",
-                    format!("(response was {:?})", get_value_type(&value)),
+                    format!("(response was {value_type:?})", value_type = get_value_type(&value)),
                 )
                     .into()),
             },
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to Json Toggle return type",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -189,7 +189,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -206,7 +206,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of doubles",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -237,7 +237,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to ZMPOP return type",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -271,7 +271,7 @@ pub(crate) fn convert_to_expected_type(
                         _ => Err((
                             ErrorKind::TypeError,
                             "Response couldn't be converted to an array of array of double or null. Inner value of Array must be Array or Null",
-                            format!("(response was {:?})", get_value_type(&item)),
+                            format!("(response was {value_type:?})", value_type = get_value_type(&item)),
                         )
                             .into()),
                     })
@@ -282,7 +282,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of array of double or null",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -305,7 +305,7 @@ pub(crate) fn convert_to_expected_type(
                 _ => Err((
                     ErrorKind::TypeError,
                     "LOLWUT response couldn't be converted to a user-friendly format",
-                    format!("(response was {:?})", get_value_type(&value)),
+                    format!("(response was {value_type:?})", value_type = get_value_type(&value)),
                 )
                     .into()),
             }
@@ -370,7 +370,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array containing a key, member, and score",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -502,7 +502,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -518,7 +518,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -652,7 +652,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an XAUTOCLAIM response",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -883,7 +883,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to XInfoStreamFullReturnType",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -932,7 +932,7 @@ pub(crate) fn convert_to_expected_type(
                         return Err((
                             ErrorKind::TypeError,
                             "Response couldn't be converted for FT.AGGREGATE",
-                            format!("(`fields` was {:?})", get_value_type(&aggregation)),
+                            format!("(`fields` was {value_type:?})", value_type = get_value_type(&aggregation)),
                         )
                             .into());
                     };
@@ -947,7 +947,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted for FT.AGGREGATE",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into()),
         },
@@ -993,7 +993,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted for FT.SEARCH",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into())
         },
@@ -1070,7 +1070,7 @@ pub(crate) fn convert_to_expected_type(
                     return Err((
                         ErrorKind::TypeError,
                         "Response couldn't be converted for FT.INFO",
-                        format!("(`fields` was {:?})", get_value_type(&fields_value)),
+                        format!("(`fields` was {value_type:?})", value_type = get_value_type(&fields_value)),
                     ).into());
                 };
                 let fields = fields.into_iter().map(|field| {
@@ -1094,7 +1094,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted for FT.INFO",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into())
         },
@@ -1132,7 +1132,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted for FT.PROFILE",
-                format!("(response was {:?})", get_value_type(&value)),
+                format!("(response was {value_type:?})", value_type = get_value_type(&value)),
             )
                 .into())
         }
@@ -1360,7 +1360,7 @@ fn convert_to_array_of_pairs(
         _ => Err((
             ErrorKind::TypeError,
             "Response couldn't be converted to an array of key-value pairs",
-            format!("(response was {:?})", get_value_type(&response)),
+            format!("(response was {value_type:?})", value_type = get_value_type(&response)),
         )
             .into()),
     }

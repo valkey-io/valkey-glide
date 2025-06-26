@@ -252,7 +252,7 @@ mod standalone_client_tests {
             }
             logger_core::log_info(
                 "Test",
-                format!("sending {} messages", config.number_of_requests_sent),
+                format!("sending {number_of_requests_sent} messages", number_of_requests_sent = config.number_of_requests_sent),
             );
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

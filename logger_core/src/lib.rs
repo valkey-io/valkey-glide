@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_directory_from_env() {
-        let dir_path = format!("{}/glide-logs", std::env::temp_dir().display());
+        let dir_path = format!("{temp_dir}/glide-logs", temp_dir = std::env::temp_dir().display());
         // Case 1: try to create an already existing folder
         // make sure we are starting fresh
         let _ = std::fs::remove_dir_all(&dir_path);

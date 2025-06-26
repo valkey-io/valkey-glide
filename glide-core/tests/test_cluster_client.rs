@@ -351,7 +351,7 @@ mod cluster_client_tests {
             Err(e) => {
                 logger_core::log_warn(
                     "TestClusterLazyHelper",
-                    format!("CLIENT LIST with AllMasters routing failed: {:?}", e),
+                    format!("CLIENT LIST with AllMasters routing failed: {e:?}"),
                 );
             }
         }

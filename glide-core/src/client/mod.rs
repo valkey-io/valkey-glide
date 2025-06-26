@@ -497,7 +497,7 @@ impl Client {
                     return Err((
                         ErrorKind::ResponseError,
                         "Received non-array response for transaction",
-                        format!("(response was {:?})", get_value_type(&value)),
+                        format!("(response was {value_type:?})", value_type = get_value_type(&value)),
                     )
                         .into());
                 }
@@ -1028,7 +1028,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let addresses = request
         .addresses
         .iter()
-        .map(|address| format!("{}:{}", address.host, address.port))
+        .map(|address| format!("{host}:{port}", host = address.host, port = address.port))
         .collect::<Vec<_>>()
         .join(", ");
     let tls_mode = request
@@ -1052,7 +1052,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
     let connection_timeout =
         format_optional_value("Connection timeout", request.connection_timeout);
-    let database_id = format!("\ndatabase ID: {}", request.database_id);
+    let database_id = format!("\ndatabase ID: {database_id}", database_id = request.database_id);
     let rfr_strategy = request
         .read_from
         .clone()
@@ -1070,8 +1070,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         })
         .unwrap_or_default();
     let connection_retry_strategy = request.connection_retry_strategy.as_ref().map(|strategy|
-            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}, jitter: {:?}",
-        strategy.number_of_retries, strategy.exponent_base, strategy.factor, strategy.jitter_percent)).unwrap_or_default();
+            format!("\nreconnect backoff strategy: number of increasing duration retries: {number_of_retries}, base: {exponent_base}, factor: {factor}, jitter: {jitter_percent:?}",
+        number_of_retries = strategy.number_of_retries, exponent_base = strategy.exponent_base, factor = strategy.factor, jitter_percent = strategy.jitter_percent)).unwrap_or_default();
     let protocol = request
         .protocol
         .map(|protocol| format!("\nProtocol: {protocol:?}"))

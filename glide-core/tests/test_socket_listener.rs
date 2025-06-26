@@ -1235,8 +1235,8 @@ mod socket_listener {
 
         const CALLBACK_INDEX: u32 = 0;
         // making sure both keys are in a different slot
-        let key = format!("{{abc}}f{}", generate_random_string(KEY_LENGTH));
-        let key2 = format!("{{xyz}}f{}", generate_random_string(KEY_LENGTH));
+        let key = format!("{{abc}}f{random_string}", random_string = generate_random_string(KEY_LENGTH));
+        let key2 = format!("{{xyz}}f{random_string}", random_string = generate_random_string(KEY_LENGTH));
 
         let commands = vec![
             CommandComponents {

@@ -147,7 +147,7 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
         );
         map.insert(
             "kind".to_owned(),
-            Value::String(format!("{:?}", span.span_kind)),
+            Value::String(format!("{span_kind:?}", span_kind = span.span_kind)),
         );
 
         let datetime: DateTime<Utc> = span.start_time.into();
@@ -164,7 +164,7 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
 
         map.insert(
             "status".to_owned(),
-            Value::String(format!("{:?}", span.status)),
+            Value::String(format!("{status:?}", status = span.status)),
         );
 
         // Add the span attributes

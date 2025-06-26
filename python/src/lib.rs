@@ -552,14 +552,14 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
     // Initialize OpenTelemetry traces exporter
     if let Some(traces) = open_telemetry_config.traces {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
-            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {}", e)))?;
+            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {e}")))?;
         config_builder = config_builder.with_trace_exporter(exporter, traces.sample_percentage);
     }
 
     // Initialize OpenTelemetry metrics exporter
     if let Some(metrics) = open_telemetry_config.metrics {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
-            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {}", e)))?;
+            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {e}")))?;
         config_builder = config_builder.with_metrics_exporter(exporter);
     }
 
@@ -592,7 +592,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
             log(
                 Level::Error,
                 "OpenTelemetry".to_string(),
-                format!("Failed to initialize OpenTelemetry: {}", e),
+                format!("Failed to initialize OpenTelemetry: {e}"),
             );
             return Err(PyTypeError::new_err(format!(
                 "Failed to initialize OpenTelemetry: {}",
