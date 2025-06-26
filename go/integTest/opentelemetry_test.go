@@ -478,6 +478,65 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
 	})
 }
 
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSendCommandSpan() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
+		// Force garbage collection
+		runtime.GC()
+
+		// Get initial memory stats
+		var startMem runtime.MemStats
+		runtime.ReadMemStats(&startMem)
+
+		// Wait for any existing spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Remove any existing span file
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			err = os.Remove(validEndpointTraces)
+			require.NoError(suite.T(), err)
+		}
+
+		// Execute commands with 0% sampling
+		for i := 0; i < 10; i++ {
+			_, err := client.Set(context.Background(), "GlideClusterClient_test_send_command_span", "value")
+			require.NoError(suite.T(), err)
+		}
+
+		// Wait for spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Count send_command spans
+		sendCommandSpanCount := 0
+		for _, name := range spans.SpanNames {
+			if name == "send_command" {
+				sendCommandSpanCount++
+			}
+		}
+
+		// Verify we have exactly 10 send_command spans
+		assert.Equal(suite.T(), 10, sendCommandSpanCount, "Should have exactly 10 send_command spans")
+
+		// Force garbage collection again
+		runtime.GC()
+
+		// Get final memory stats
+		var endMem runtime.MemStats
+		runtime.ReadMemStats(&endMem)
+
+		// Allow small fluctuations (10% increase)
+		maxAllowedMemory := float64(startMem.HeapAlloc) * 1.1
+		assert.Less(suite.T(), float64(endMem.HeapAlloc), maxAllowedMemory,
+			"Memory usage should not increase significantly")
+	})
+}
+
 func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemoryLeak() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
