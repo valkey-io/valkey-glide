@@ -15,9 +15,9 @@ namespace Valkey.Glide;
 /// <summary>
 /// Client used for connection to standalone servers. Use <see cref="CreateClient"/> to request a client.
 /// </summary>
-public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands, IServerManagementCommands
+public class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands, IServerManagementCommands
 {
-    private GlideClient() { }
+    internal GlideClient() { }
 
     // TODO add pubsub and other params to example and remarks
     /// <summary>
