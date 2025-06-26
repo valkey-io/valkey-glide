@@ -8403,14 +8403,13 @@ export class BaseClient {
 
         // Validate that clientAz is set when using AZ affinity strategies
         if (
-            options.readFrom === "AZAffinity" ||
-            options.readFrom === "AZAffinityReplicasAndPrimary"
+            (options.readFrom === "AZAffinity" ||
+                options.readFrom === "AZAffinityReplicasAndPrimary") &&
+            !options.clientAz
         ) {
-            if (!options.clientAz) {
-                throw new ConfigurationError(
-                    `clientAz must be set when readFrom is set to ${options.readFrom}`,
-                );
-            }
+            throw new ConfigurationError(
+                `clientAz must be set when readFrom is set to ${options.readFrom}`,
+            );
         }
 
         return {
