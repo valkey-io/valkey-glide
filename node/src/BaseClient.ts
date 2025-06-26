@@ -8401,6 +8401,15 @@ export class BaseClient {
             | connection_request.ProtocolVersion
             | undefined;
 
+        // Validate that clientAz is set when using AZ affinity strategies
+        if (options.readFrom === "AZAffinity" || options.readFrom === "AZAffinityReplicasAndPrimary") {
+            if (!options.clientAz) {
+                throw new ConfigurationError(
+                    `clientAz must be set when readFrom is set to ${options.readFrom}`,
+                );
+            }
+        }
+
         return {
             protocol,
             clientName: options.clientName,
