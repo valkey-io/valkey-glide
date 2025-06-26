@@ -101,6 +101,7 @@ cd valkey-glide
 2. Build the C# wrapper
 
 ```bash
+cd csharp
 dotnet build
 ```
 
@@ -109,10 +110,16 @@ dotnet build
 Run test suite from `csharp` directory:
 
 ```bash
-dotnet test
-```
+# Run tests on supported dotnet versions sequentially
+dotnet test -m:1
 
-You can also specify which framework version to use for testing (by defaults it runs on net6.0 and net8.0) by adding `--framework net8.0` or `--framework net6.0` accordingly.
+# Run tests on supported dotnet versions in parallel (may conflict and fail)
+dotnet test
+
+# Run tests with a specific dotnet version
+dotnet test --framework net8.0
+dotnet test --framework net6.0
+```
 
 By default, `dotnet test` produces no reporting and does not display the test results.  To log the test results to the console and/or produce a test report, you can use the `--logger` attribute with the test command.  For example:
 
