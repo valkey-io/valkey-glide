@@ -356,9 +356,7 @@ mod cluster_client_tests {
 
         logger_core::log_info(
             "TestClusterLazyHelper",
-            format!(
-                "Total clients found on shared primaries (AllMasters): {total_clients}"
-            ),
+            format!("Total clients found on shared primaries (AllMasters): {total_clients}"),
         );
         total_clients
     }

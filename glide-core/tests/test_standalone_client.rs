@@ -30,9 +30,9 @@ mod standalone_client_tests {
                 // Handles RESP3
                 text.lines().count()
             }
-            _ => panic!(
-                "CLIENT LIST did not return a BulkString or VerbatimString, got: {result:?}"
-            ),
+            _ => {
+                panic!("CLIENT LIST did not return a BulkString or VerbatimString, got: {result:?}")
+            }
         }
     }
 
