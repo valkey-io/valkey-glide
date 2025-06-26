@@ -105,7 +105,6 @@
 * Go: XInfoStream example fix ([#4185](https://github.com/valkey-io/valkey-glide/pull/4185))
 * Node: Validate clientAZ when using AZ affinity strategies ([#4267](https://github.com/valkey-io/valkey-glide/pull/4267))
 
-
 #### Breaking Changes
 
 * Go: Drop support for Go 1.20 ([#3513](https://github.com/valkey-io/valkey-glide/pull/3513))
