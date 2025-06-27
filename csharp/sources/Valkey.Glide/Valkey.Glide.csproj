@@ -31,6 +31,7 @@
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,35 +40,24 @@
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Condition="'$(Configuration)' == 'Debug'"
-          Command="cargo build"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
+    <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true" WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
-    <Exec Condition="'$(Configuration)' == 'Release'"
-          Command="cargo build --release"
-          EnvironmentVariables="CARGO_TERM_COLOR=always"
-          ConsoleToMSBuild="true"
-          WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
+    <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true" WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
   </Target>
 
   <ItemGroup Condition="'$(Configuration)' != 'Lint'">
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/glide_rs.dll"
-             Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>lib%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so"
-             Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.dylib"
-             Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.dylib" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
