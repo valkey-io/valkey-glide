@@ -1,11 +1,9 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands.Options;
-using Valkey.Glide.SER_Compat;
 
 namespace Valkey.Glide.IntegrationTests;
 
-[Obsolete("Testing obsolete API")]
 public class DBTests
 {
     [Theory]

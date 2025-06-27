@@ -3,21 +3,22 @@
 using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.ConnectionConfiguration;
 
-namespace Valkey.Glide.SER_Compat;
+#pragma warning disable IDE0130 // Namespace does not match folder structure
+namespace Valkey.Glide;
+#pragma warning restore IDE0130 // Namespace does not match folder structure
 
 // TODO
 // 1. IDisposable
+// 2. Use compatible conf
+// 3. Server type auto-detect in GLIDE core maybe
 /// <summary>
 /// Connection methods common to both standalone and cluster clients.<br />
-/// This API is obsolete and no longer supported. <br />
-/// Please use <see cref="GlideClient" /> or <see cref="GlideClusterClient" /> instead.
+/// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-[Obsolete("This API is obsolete and no longer supported. Please use `GlideClient` and `GlideClusterClient` instead.", false)]
 public sealed class ConnectionMultiplexer
 {
     /*
     // TODO below
-    // from SER:
     // ========================
 
     /// <summary>
@@ -71,9 +72,6 @@ public sealed class ConnectionMultiplexer
     public static ConnectionMultiplexer Connect(ConfigurationOptions configuration, TextWriter? log = null) { ... }
     */
 
-    // TODO:
-    // 1. Use SER-compatible conf
-    // 2. Server type auto-detect in GLIDE core maybe
     public static async Task<ConnectionMultiplexer> ConnectAsync(string host, ushort port)
     {
         GlideClient standalone = await GlideClient.CreateClient(new StandaloneClientConfigurationBuilder()

@@ -6,18 +6,17 @@ using Valkey.Glide.Commands.Options;
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Internals.FFI;
 
-namespace Valkey.Glide.SER_Compat;
+#pragma warning disable IDE0130 // Namespace does not match folder structure
+namespace Valkey.Glide;
+#pragma warning restore IDE0130 // Namespace does not match folder structure
 
 /// <summary>
 /// Describes functionality that is common to both standalone and cluster servers.<br />
-/// This API is obsolete and no longer supported.<br />
-/// Please use <see cref="GlideClient" /> or <see cref="GlideClusterClient" /> instead.
+/// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-[Obsolete("This API is obsolete and no longer supported. Please use `GlideClient` and `GlideClusterClient` instead.", false)]
 public interface IDatabase : IStringBaseCommands, IGenericCommands, IServerManagementCommands
 { }
 
-[Obsolete]
 internal class DatabaseImpl : GlideClient, IDatabase
 {
     public new async Task<string> Info() => await Info([]);
