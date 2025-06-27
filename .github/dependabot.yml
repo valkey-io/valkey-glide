@@ -1,0 +1,47 @@
+version: 2
+updates:
+    - package-ecosystem: "npm"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "npm"
+      directory: "/node"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "pip"
+      directory: "/python"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "cargo"
+      directory: "/glide-core"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "cargo"
+      directory: "/node/rust-client"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "cargo"
+      directory: "/python"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "gradle"
+      directory: "/java"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "nuget"
+      directory: "/csharp"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
+    - package-ecosystem: "gomod"
+      directory: "/go"
+      schedule:
+          interval: "weekly"
+      open-pull-requests-limit: 10
