@@ -552,14 +552,14 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
     // Initialize OpenTelemetry traces exporter
     if let Some(traces) = open_telemetry_config.traces {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
-            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {}", e)))?;
+            .map_err(|e| PyTypeError::new_err(format!("Invalid traces endpoint: {e}")))?;
         config_builder = config_builder.with_trace_exporter(exporter, traces.sample_percentage);
     }
 
     // Initialize OpenTelemetry metrics exporter
     if let Some(metrics) = open_telemetry_config.metrics {
         let exporter = GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
-            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {}", e)))?;
+            .map_err(|e| PyTypeError::new_err(format!("Invalid metrics endpoint: {e}")))?;
         config_builder = config_builder.with_metrics_exporter(exporter);
     }
 
@@ -570,8 +570,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
     // Set flush interval if provided
     if flush_interval_ms <= 0 {
         return Err(PyTypeError::new_err(format!(
-            "InvalidInput: flush_interval_ms must be a positive integer (got: {})",
-            flush_interval_ms
+            "InvalidInput: flush_interval_ms must be a positive integer (got: {flush_interval_ms})"
         )));
     }
     config_builder = config_builder
@@ -581,8 +580,7 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
         Ok(handle) => handle,
         Err(err) => {
             return Err(PyTypeError::new_err(format!(
-                "Failed to get or init runtime: {}",
-                err
+                "Failed to get or init runtime: {err}"
             )));
         }
     };
@@ -592,11 +590,10 @@ pub fn init_opentelemetry(open_telemetry_config: OpenTelemetryConfig) -> PyResul
             log(
                 Level::Error,
                 "OpenTelemetry".to_string(),
-                format!("Failed to initialize OpenTelemetry: {}", e),
+                format!("Failed to initialize OpenTelemetry: {e}"),
             );
             return Err(PyTypeError::new_err(format!(
-                "Failed to initialize OpenTelemetry: {}",
-                e
+                "Failed to initialize OpenTelemetry: {e}"
             )));
         }
         Ok(())

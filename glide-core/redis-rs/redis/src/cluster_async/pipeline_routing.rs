@@ -116,7 +116,7 @@ fn add_command_to_node_pipeline_map<C>(
         if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
             log_error(
                 "OpenTelemetry:retry_error",
-                format!("Failed to record retry attempt: {}", e),
+                format!("Failed to record retry attempt: {e}"),
             );
         }
     }
@@ -1243,7 +1243,7 @@ fn get_original_cmd(
         .get_command(index)
         .ok_or_else(|| ServerError::ExtensionError {
             code: "IndexNotFoundInPipelineResponses".to_string(),
-            detail: Some(format!("Index {} was not found in pipeline", index)),
+            detail: Some(format!("Index {index} was not found in pipeline")),
         })?;
 
     // If the command requires multi-slot handling, the `inner_index` helps identify the corresponding sub-command.
@@ -1261,8 +1261,7 @@ fn get_original_cmd(
             let inner_index = inner_index.ok_or_else(|| ServerError::ExtensionError {
                 code: "IndexNotFoundInPipelineResponses".to_string(),
                 detail: Some(format!(
-                    "Inner index is required for a multi-slot command: {:?}",
-                    cmd
+                    "Inner index is required for a multi-slot command: {cmd:?}"
                 )),
             })?;
 
@@ -1271,8 +1270,7 @@ fn get_original_cmd(
                 .ok_or_else(|| ServerError::ExtensionError {
                     code: "IndexNotFoundInPipelineResponses".to_string(),
                     detail: Some(format!(
-                "Inner index {} for multi-slot command {:?} was not found in command slots {:?}",
-                inner_index, cmd, slots
+                "Inner index {inner_index} for multi-slot command {cmd:?} was not found in command slots {slots:?}"
             )),
                 })?;
 

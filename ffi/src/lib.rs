@@ -463,7 +463,7 @@ impl ClientAdapter {
                     if let Some(failure_callback) = failure_callback {
                         unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                     } else {
-                        eprintln!("Error converting value to CommandResponse: {:?}", err);
+                        eprintln!("Error converting value to CommandResponse: {err:?}");
                         return create_error_result_with_redis_error(err);
                     }
                 }
@@ -472,7 +472,7 @@ impl ClientAdapter {
                 if let Some(failure_callback) = failure_callback {
                     unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                 } else {
-                    eprintln!("Error executing command: {:?}", err);
+                    eprintln!("Error executing command: {err:?}");
                     return create_error_result_with_redis_error(err);
                 }
             }
@@ -1281,7 +1281,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
                         "simple_route was not a valid enum variant",
-                        format!("Value: {}", value),
+                        format!("Value: {value}"),
                     )));
                 }
             };
@@ -1327,7 +1327,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
         _ => Err(RedisError::from((
             ErrorKind::ClientError,
             "Unknown route type.",
-            format!("Value: {:?}", route),
+            format!("Value: {route:?}"),
         ))),
     }
 }
@@ -1341,7 +1341,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<
         RedisError::from((
             ErrorKind::ClientError,
             "Received unexpected slot id type",
-            format!("Value: {:?}", slot_type),
+            format!("Value: {slot_type:?}"),
         ))
     })
 }
@@ -1885,7 +1885,7 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
         match unsafe { create_cmd(*cmd_ptr) } {
             Ok(cmd) => pipeline.add_command(cmd),
-            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+            Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
         };
     }
     if info.is_atomic {
@@ -2061,7 +2061,7 @@ pub unsafe extern "C" fn init_open_telemetry(
                 config = config.with_trace_exporter(exporter, sample_percentage);
             }
             Err(e) => {
-                let error_msg = format!("Invalid traces exporter configuration: {}", e);
+                let error_msg = format!("Invalid traces exporter configuration: {e}");
                 return CString::new(error_msg)
                     .unwrap_or_else(|_| {
                         CString::new("Couldn't convert error message to C string").unwrap()
@@ -2081,7 +2081,7 @@ pub unsafe extern "C" fn init_open_telemetry(
                 config = config.with_metrics_exporter(exporter);
             }
             Err(e) => {
-                let error_msg = format!("Invalid metrics exporter configuration: {}", e);
+                let error_msg = format!("Invalid metrics exporter configuration: {e}");
                 return CString::new(error_msg)
                     .unwrap_or_else(|_| {
                         CString::new("Couldn't convert error message to C string").unwrap()
@@ -2099,8 +2099,7 @@ pub unsafe extern "C" fn init_open_telemetry(
 
     if flush_interval_ms <= 0 {
         let error_msg = format!(
-            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-            flush_interval_ms
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {flush_interval_ms})"
         );
         return CString::new(error_msg)
             .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
@@ -2118,7 +2117,7 @@ pub unsafe extern "C" fn init_open_telemetry(
             {
                 Ok(_) => std::ptr::null(), // Success
                 Err(e) => {
-                    let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                    let error_msg = format!("Failed to initialize OpenTelemetry: {e}");
                     CString::new(error_msg)
                         .unwrap_or_else(|_| {
                             CString::new("Couldn't convert error message to C string").unwrap()
@@ -2183,8 +2182,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
     match parent_span.add_span(name) {
         Ok(child_span) => Ok(child_span),
         Err(error_msg) => Err(format!(
-            "Opentelemetry failed to create child span with name `{}`. Error: {:?}",
-            name, error_msg
+            "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
         )),
     }
 }
