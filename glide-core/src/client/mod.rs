@@ -710,12 +710,14 @@ impl Client {
             return result;
         };
         if err.kind() == ErrorKind::NoScriptError {
-            let Some(code) = get_script(hash) else {
-                return Err(err);
-            };
-            let load = load_cmd(&code);
-            self.send_command(&load, None).await?;
-            self.send_command(&eval, routing).await
+            if let Some(code) = get_script(hash) {
+                // Try to load the script and retry EVALSHA
+                let load = load_cmd(&code);
+                self.send_command(&load, None).await?;
+                self.send_command(&eval, routing).await
+            } else {
+                Err(err)
+            }
         } else {
             Err(err)
         }
