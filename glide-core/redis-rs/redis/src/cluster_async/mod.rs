@@ -958,7 +958,7 @@ impl<C> Future for Request<C> {
                 if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
                     log_error(
                         "OpenTelemetry:retry_error",
-                        format!("Failed to record retry attempt: {}", e),
+                        format!("Failed to record retry attempt: {e}"),
                     );
                 }
 
@@ -3024,7 +3024,7 @@ where
                             let err = RedisError::from((
                                 ErrorKind::ClientError,
                                 "Slot refresh task panicked",
-                                format!("{:?}", join_err),
+                                format!("{join_err:?}"),
                             ));
                             return Poll::Ready(Err(err));
                         }

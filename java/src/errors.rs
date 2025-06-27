@@ -27,11 +27,11 @@ impl From<FromUtf8Error> for FFIError {
 impl std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FFIError::Jni(err) => write!(f, "{}", err),
-            FFIError::Uds(err) => write!(f, "{}", err),
-            FFIError::Utf8(err) => write!(f, "{}", err),
-            FFIError::Logger(err) => write!(f, "{}", err),
-            FFIError::OpenTelemetry(err) => write!(f, "{}", err),
+            FFIError::Jni(err) => write!(f, "{err}"),
+            FFIError::Uds(err) => write!(f, "{err}"),
+            FFIError::Utf8(err) => write!(f, "{err}"),
+            FFIError::Logger(err) => write!(f, "{err}"),
+            FFIError::OpenTelemetry(err) => write!(f, "{err}"),
         }
     }
 }
@@ -82,7 +82,7 @@ pub fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
         Err(_err) => {
             // Following https://github.com/jni-rs/jni-rs/issues/76#issuecomment-363523906
             // and throwing a runtime exception is not feasible here because of https://github.com/jni-rs/jni-rs/issues/432
-            error!("Native function {} panicked.", ffi_func_name);
+            error!("Native function {ffi_func_name} panicked.");
             None
         }
     }
@@ -94,17 +94,11 @@ pub fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, mes
         Ok(false) => {
             env.throw_new(exception_type.to_string(), message)
                 .unwrap_or_else(|err| {
-                    error!(
-                        "Failed to create exception with string {}: {}",
-                        message, err
-                    );
+                    error!("Failed to create exception with string {message}: {err}");
                 });
         }
         Err(err) => {
-            error!(
-                "Failed to check if an exception is currently being thrown: {}",
-                err
-            );
+            error!("Failed to check if an exception is currently being thrown: {err}");
         }
     }
 }

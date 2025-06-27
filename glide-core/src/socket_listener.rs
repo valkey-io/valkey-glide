@@ -236,7 +236,7 @@ async fn write_result(
         Err(ClientUsageError::Redis(err)) => {
             let error_message = error_message(&err);
             log_warn("received error", error_message.as_str());
-            log_debug("received error", format!("for callback {}", callback_index));
+            log_debug("received error", format!("for callback {callback_index}"));
             if let Some(span) = otel_command_span {
                 span.set_status(GlideSpanStatus::Error((&error_message).into()));
             }
@@ -404,10 +404,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
         Err(error_msg) => {
             log_error(
                 "OpenTelemetry error",
-                format!(
-                    "Failed to create child span with name `{}`. Error: {:?}",
-                    name, error_msg
-                ),
+                format!("Failed to create child span with name `{name}`. Error: {error_msg:?}"),
             );
             None
         }
@@ -742,7 +739,7 @@ async fn push_manager_loop(mut push_rx: mpsc::UnboundedReceiver<PushInfo>, write
                 return;
             }
             Some(push_msg) => {
-                log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+                log_debug("push manager loop", format!("got PushInfo: {push_msg:?}"));
                 let mut response = Response::new();
                 response.callback_idx = 0; // callback_idx is not used with push notifications
                 response.is_push = true;

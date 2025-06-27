@@ -105,7 +105,7 @@ mod test_cluster_pipeline {
 
         // Search for the specified error type.
         let mut error_count: Option<usize> = None;
-        let error_prefix = format!("errorstat_{}:count=", error_type);
+        let error_prefix = format!("errorstat_{error_type}:count=");
 
         for info in info_result.values() {
             for line in info.lines() {
@@ -128,10 +128,9 @@ mod test_cluster_pipeline {
         match error_count {
             Some(count) => assert_eq!(
                 count, expected_count,
-                "Expected {} count {} but found {}",
-                error_type, expected_count, count
+                "Expected {error_type} count {expected_count} but found {count}"
             ),
-            None => panic!("{} not found in INFO errorstats output", error_type),
+            None => panic!("{error_type} not found in INFO errorstats output"),
         }
     }
 
@@ -254,8 +253,7 @@ mod test_cluster_pipeline {
             bad_results
                 .iter()
                 .all(|r| matches!(r, Value::ServerError(err) if err.err_code().contains("ConnectionNotFound"))),
-            "Expected server error responses for the bad key operations, but got: {:?}",
-            bad_results
+            "Expected server error responses for the bad key operations, but got: {bad_results:?}"
         );
     }
 
@@ -319,10 +317,9 @@ mod test_cluster_pipeline {
                 assert_eq!(
                     result, expected,
                     "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Actual result: {:?}",
-                    moved_key, key2, key_slot, result
+                     Keys chosen: ('{moved_key}', '{key2}')\n\
+                     key_slot: {key_slot}\n\
+                     Actual result: {result:?}"
                 );
             } else {
                 assert!(
@@ -401,10 +398,9 @@ mod test_cluster_pipeline {
                 assert_eq!(
                     response, expected,
                     "Pipeline result did not match expected output.\n\
-                        Keys chosen: ('{}')\n\
-                        key_slot: {}\n\
-                        Actual result: {:?}",
-                    moved_key, key_slot, response
+                        Keys chosen: ('{moved_key}')\n\
+                        key_slot: {key_slot}\n\
+                        Actual result: {response:?}"
                 );
             } else {
                 assert!(result.is_err());
@@ -630,10 +626,7 @@ mod test_cluster_pipeline {
                             Value::BulkString(b"3".to_vec())
                         ])
                     ],
-                    "Expected MSET to succeed and MGET to return the values, but got: {:?} key: {} key2: {}",
-                    result,
-                    moved_key,
-                    key2
+                    "Expected MSET to succeed and MGET to return the values, but got: {result:?} key: {moved_key} key2: {key2}"
                 );
             } else {
                 assert!(
@@ -746,13 +739,9 @@ mod test_cluster_pipeline {
                 result[0..2],
                 expected,
                 "Pipeline result did not match expected output.\n\
-                 Keys chosen: ('{}', '{}')\n\
-                 key_slot: {}\n\
-                 Actual result: {:?}",
-                migrated_key,
-                key,
-                key_slot,
-                result
+                 Keys chosen: ('{migrated_key}', '{key}')\n\
+                 key_slot: {key_slot}\n\
+                 Actual result: {result:?}"
             );
 
             match retry {
@@ -762,13 +751,9 @@ mod test_cluster_pipeline {
                         result[2],
                         Value::Array(vec![Value::BulkString(b"value".to_vec()), Value::Nil]),
                         "Pipeline result did not match expected output.\n\
-                         Keys chosen: ('{}', '{}')\n\
-                         key_slot: {}\n\
-                         Actual result: {:?}",
-                        migrated_key,
-                        key,
-                        key_slot,
-                        result
+                         Keys chosen: ('{migrated_key}', '{key}')\n\
+                         key_slot: {key_slot}\n\
+                         Actual result: {result:?}"
                     );
                 }
                 false => {
@@ -776,13 +761,9 @@ mod test_cluster_pipeline {
                     assert!(
                         matches!(result[2], Value::ServerError(ref err) if err.kind() == ErrorKind::TryAgain),
                         "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Actual result: {:?}",
-                        migrated_key,
-                        key,
-                        key_slot,
-                        result
+                     Keys chosen: ('{migrated_key}', '{key}')\n\
+                     key_slot: {key_slot}\n\
+                     Actual result: {result:?}"
                     );
                 }
             }
@@ -881,11 +862,8 @@ mod test_cluster_pipeline {
                         result,
                         [Value::Int(2), Value::Nil, Value::Okay],
                         "Pipeline result did not match expected output.\n\
-                         Keys chosen: ('{}', '{}')\n\
-                         Actual result: {:?}",
-                        key,
-                        key2,
-                        result
+                         Keys chosen: ('{key}', '{key2}')\n\
+                         Actual result: {result:?}"
                     );
                 }
                 false => {
@@ -901,11 +879,8 @@ mod test_cluster_pipeline {
                             }
                         }),
                         "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     Actual result: {:?}",
-                        key,
-                        key2,
-                        result
+                     Keys chosen: ('{key}', '{key2}')\n\
+                     Actual result: {result:?}"
                     );
                 }
             }
@@ -927,7 +902,7 @@ mod test_cluster_pipeline {
         let mut connection = cluster.async_connection(None).await;
 
         // Define pipeline with GET commands.
-        let keys = (1..=15).map(|i| format!("key{}", i));
+        let keys = (1..=15).map(|i| format!("key{i}"));
         let mut pipeline = redis::pipe();
         for key in keys {
             pipeline.get(key);
@@ -1025,7 +1000,7 @@ mod test_cluster_pipeline {
 
         // Use a fixed hash tag to force all keys into the same Redis slot
         let slot_key = "{test123}";
-        let keys: Vec<String> = (1..=15).map(|i| format!("{}key{}", slot_key, i)).collect();
+        let keys: Vec<String> = (1..=15).map(|i| format!("{slot_key}key{i}")).collect();
 
         let mut pipeline = redis::pipe();
         for key in &keys {
@@ -1105,8 +1080,7 @@ mod test_cluster_pipeline {
         // Assert that each replica processed exactly 5 GET calls.
         assert!(
             replica_counts.iter().all(|&count| count == 5),
-            "Expected each replica to process exactly 5 GET calls, but got: {replica_counts:?}. INFO output: {:#?}",
-            info_result
+            "Expected each replica to process exactly 5 GET calls, but got: {replica_counts:?}. INFO output: {info_result:#?}"
         );
     }
 
@@ -1165,7 +1139,7 @@ mod test_cluster_pipeline {
 
         // Define pipeline with GET commands.
         let mut pipeline = redis::pipe();
-        let keys = (1..=15).map(|i| format!("{{{}}}:{}", key, i));
+        let keys = (1..=15).map(|i| format!("{{{key}}}:{i}"));
         for key in keys {
             pipeline.get(key);
         }
@@ -1205,7 +1179,7 @@ mod test_cluster_pipeline {
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(res).unwrap();
         let get_cmdstat = "cmdstat_get:calls=".to_string();
         let n_get_cmdstat = format!("cmdstat_get:calls={}", pipeline.len());
-        let client_az = format!("availability_zone:{}", az);
+        let client_az = format!("availability_zone:{az}");
 
         let mut matching_entries_count: usize = 0;
 

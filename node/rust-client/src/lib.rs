@@ -212,7 +212,7 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
         config = config.with_trace_exporter(
             GlideOpenTelemetrySignalsExporter::from_str(&traces.endpoint)
                 .map_err(ConnectionError::IoError)
-                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{e}")))?,
             traces.sample_percentage,
         );
     }
@@ -222,7 +222,7 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
         config = config.with_metrics_exporter(
             GlideOpenTelemetrySignalsExporter::from_str(&metrics.endpoint)
                 .map_err(ConnectionError::IoError)
-                .map_err(|e| napi::Error::new(Status::Unknown, format!("{}", e)))?,
+                .map_err(|e| napi::Error::new(Status::Unknown, format!("{e}")))?,
         );
     }
 
@@ -234,8 +234,7 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
         return Err(napi::Error::new(
             Status::Unknown,
             format!(
-                "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-                flush_interval_ms
+                "InvalidInput: flushIntervalMs must be a positive integer (got: {flush_interval_ms})"
             ),
         ));
     }
@@ -247,7 +246,7 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
         Err(err) => {
             return Err(napi::Error::new(
                 Status::Unknown,
-                format!("Failed to get or init runtime: {}", err),
+                format!("Failed to get or init runtime: {err}"),
             ));
         }
     };
@@ -257,11 +256,11 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
             log(
                 Level::Error,
                 "OpenTelemetry".to_string(),
-                format!("Failed to initialize OpenTelemetry: {}", e),
+                format!("Failed to initialize OpenTelemetry: {e}"),
             );
             return Err(napi::Error::new(
                 Status::Unknown,
-                format!("Failed to initialize OpenTelemetry: {}", e),
+                format!("Failed to initialize OpenTelemetry: {e}"),
             ));
         }
         Ok(())
@@ -575,7 +574,7 @@ pub fn drop_otel_span(span_ptr: BigInt) {
     log(
         Level::Error,
         "OpenTelemetry".to_string(),
-        format!("Failed to drop span. {}", error_msg),
+        format!("Failed to drop span. {error_msg}"),
     );
 }
 

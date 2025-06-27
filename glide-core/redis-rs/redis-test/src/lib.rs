@@ -26,9 +26,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use redis::{
-    Cmd, ConnectionLike, ErrorKind, Pipeline, PipelineRetryStrategy, RedisError, RedisResult, Value,
-};
+use redis::{Cmd, ConnectionLike, ErrorKind, Pipeline, RedisError, RedisResult, Value};
 
 #[cfg(feature = "aio")]
 use futures::{future, FutureExt};

@@ -39,7 +39,7 @@ fn err_parser(line: &str) -> ServerError {
             if let Err(e) = GlideOpenTelemetry::record_moved_error() {
                 log_error(
                     "OpenTelemetry:moved_error",
-                    format!("Failed to record moved error: {}", e),
+                    format!("Failed to record moved error: {e}"),
                 );
             }
             ServerErrorKind::Moved

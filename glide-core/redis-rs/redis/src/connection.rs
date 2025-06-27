@@ -612,7 +612,7 @@ impl ActualConnection {
                         RedisError::from((
                             ErrorKind::InvalidClientConfig,
                             "Invalid hostname for TLS",
-                            format!("{}", e),
+                            format!("{e}"),
                         ))
                     })?
                     .to_owned();
@@ -621,7 +621,7 @@ impl ActualConnection {
                         RedisError::from((
                             ErrorKind::InvalidClientConfig,
                             "Failed to create TLS connection",
-                            format!("{}", e),
+                            format!("{e}"),
                         ))
                     })?;
                 let reader = match timeout {

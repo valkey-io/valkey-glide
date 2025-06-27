@@ -773,7 +773,7 @@ mod basic {
         assert_eq!(
             *received_clone.lock().unwrap(),
             (0..10)
-                .map(|index| format!("foo:{}", index))
+                .map(|index| format!("foo:{index}"))
                 .chain(std::iter::once("bar:-1".to_string()))
                 .collect::<Vec<_>>()
         );

@@ -2299,7 +2299,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 3);
@@ -2382,7 +2382,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
         // expect 2 keys
         assert_eq!(converted_map.len(), 2);
@@ -2494,7 +2494,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 2);
@@ -3204,7 +3204,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 3);
@@ -3241,7 +3241,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 2);
@@ -3290,7 +3290,7 @@ mod tests {
         let array_result = if let Value::Array(array) = array_result {
             array
         } else {
-            panic!("Expected an Array, but got {:?}", array_result);
+            panic!("Expected an Array, but got {array_result:?}");
         };
         assert_eq!(array_result.len(), 2);
 
@@ -3328,7 +3328,7 @@ mod tests {
         let array_result = if let Value::Array(array) = array_result {
             array
         } else {
-            panic!("Expected an Array, but got {:?}", array_result);
+            panic!("Expected an Array, but got {array_result:?}");
         };
         assert_eq!(array_result.len(), 3);
 

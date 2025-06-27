@@ -330,8 +330,7 @@ mod cluster_client_tests {
                             logger_core::log_warn(
                                 "TestClusterLazyHelper",
                                 format!(
-                                    "CLIENT LIST from a primary (AllMasters) returned unexpected inner type for a node's result: {:?}",
-                                    node_result_value
+                                    "CLIENT LIST from a primary (AllMasters) returned unexpected inner type for a node's result: {node_result_value:?}"
                                 ),
                             );
                         }
@@ -343,25 +342,21 @@ mod cluster_client_tests {
                 logger_core::log_warn(
                     "TestClusterLazyHelper",
                     format!(
-                        "CLIENT LIST with AllMasters routing returned an unexpected type (expected Map): {:?}",
-                        other_type
+                        "CLIENT LIST with AllMasters routing returned an unexpected type (expected Map): {other_type:?}"
                     ),
                 );
             }
             Err(e) => {
                 logger_core::log_warn(
                     "TestClusterLazyHelper",
-                    format!("CLIENT LIST with AllMasters routing failed: {:?}", e),
+                    format!("CLIENT LIST with AllMasters routing failed: {e:?}"),
                 );
             }
         }
 
         logger_core::log_info(
             "TestClusterLazyHelper",
-            format!(
-                "Total clients found on shared primaries (AllMasters): {}",
-                total_clients
-            ),
+            format!("Total clients found on shared primaries (AllMasters): {total_clients}"),
         );
         total_clients
     }
@@ -409,8 +404,7 @@ mod cluster_client_tests {
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients before lazy client init (protocol={:?} on dedicated cluster A): {}",
-                    protocol, clients_before_lazy_init
+                    "Clients before lazy client init (protocol={protocol:?} on dedicated cluster A): {clients_before_lazy_init}"
                 ),
             );
 
@@ -437,22 +431,19 @@ mod cluster_client_tests {
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients after lazy client init (protocol={:?} on dedicated cluster A): {}",
-                    protocol, clients_after_lazy_init
+                    "Clients after lazy client init (protocol={protocol:?} on dedicated cluster A): {clients_after_lazy_init}"
                 ),
             );
             assert_eq!(
                 clients_after_lazy_init, clients_before_lazy_init,
-                "Lazy client (on dedicated cluster A) should not establish new connections before the first command. Before: {}, After: {}. protocol={:?}",
-                clients_before_lazy_init, clients_after_lazy_init, protocol
+                "Lazy client (on dedicated cluster A) should not establish new connections before the first command. Before: {clients_before_lazy_init}, After: {clients_after_lazy_init}. protocol={protocol:?}"
             );
 
             // 7. Send the first command using the lazy client to Cluster A.
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Sending first command to lazy client (PING) (protocol={:?} on dedicated cluster A)",
-                    protocol
+                    "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated cluster A)"
                 ),
             );
             let ping_response = lazy_glide_client
@@ -475,16 +466,12 @@ mod cluster_client_tests {
             logger_core::log_info(
                 "TestClusterLazy",
                 format!(
-                    "Clients after first command (protocol={:?} on dedicated cluster A): {}",
-                    protocol, clients_after_first_command
+                    "Clients after first command (protocol={protocol:?} on dedicated cluster A): {clients_after_first_command}"
                 ),
             );
             assert!(
                 clients_after_first_command > clients_before_lazy_init,
-                "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {}, After: {}. protocol={:?}",
-                clients_before_lazy_init,
-                clients_after_first_command,
-                protocol
+                "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {clients_before_lazy_init}, After: {clients_after_first_command}. protocol={protocol:?}"
             );
         });
     }

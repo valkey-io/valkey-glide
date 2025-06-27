@@ -501,7 +501,7 @@ pub(crate) mod shared_client_tests {
                 .client
                 .send_transaction(&pipeline, None, None, false)
                 .await;
-            assert!(result.is_err(), "Received {:?}", result);
+            assert!(result.is_err(), "Received {result:?}");
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
         });
@@ -694,13 +694,12 @@ pub(crate) mod shared_client_tests {
                 false => {
                     let res = match res {
                         Ok(Value::Array(arr)) => arr,
-                        _ => panic!("Expected an array response, got: {:?}", res),
+                        _ => panic!("Expected an array response, got: {res:?}"),
                     };
                     assert_eq!(
                         &res[..2],
                         &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
-                        "Pipeline result: {:?}",
-                        res
+                        "Pipeline result: {res:?}"
                     );
 
                     assert!(
@@ -1367,7 +1366,7 @@ pub(crate) mod shared_client_tests {
 
             let arr = match result {
                 Value::Array(ref arr) => arr,
-                _ => panic!("Expected array result, got: {:?}", result),
+                _ => panic!("Expected array result, got: {result:?}"),
             };
 
             assert_eq!(arr[0], Value::Okay, "Pipeline result: {arr:?}");

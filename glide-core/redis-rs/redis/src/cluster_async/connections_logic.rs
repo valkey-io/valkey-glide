@@ -159,10 +159,7 @@ where
             RedisError::from((
                 ErrorKind::IoError,
                 "Failed to refresh both connections",
-                format!(
-                    "Node: {:?} received errors: `{:?}`, `{:?}`",
-                    addr, err_1, err_2
-                ),
+                format!("Node: {addr:?} received errors: `{err_1:?}`, `{err_2:?}`"),
             ))
             .into()
         }

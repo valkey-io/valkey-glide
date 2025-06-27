@@ -769,7 +769,7 @@ mod basic_async {
                 sub_conn.subscribe(channel_name.clone()).await?;
 
                 let rcv_msg = rx.recv().await.unwrap();
-                println!("Received PushInfo: {:?}", rcv_msg);
+                println!("Received PushInfo: {rcv_msg:?}");
 
                 Ok::<_, RedisError>(())
             })

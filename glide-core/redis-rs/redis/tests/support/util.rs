@@ -121,10 +121,7 @@ pub async fn engine_version_less_than(min_version: &str) -> bool {
     let test_version = get_cluster_version().await;
     let min_version_usize = version_to_usize(min_version).unwrap();
     if test_version < min_version_usize {
-        println!(
-            "The engine version is {:?}, which is lower than {:?}",
-            test_version, min_version
-        );
+        println!("The engine version is {test_version:?}, which is lower than {min_version:?}");
         return true;
     }
     false

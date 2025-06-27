@@ -722,7 +722,7 @@ mod socket_listener {
         };
         let received_value = pointer_to_value(pointer);
         let Value::Map(values) = *received_value else {
-            panic!("Unexpected value {:?}", received_value);
+            panic!("Unexpected value {received_value:?}");
         };
         assert_eq!(values.len(), 3);
         for i in 0..3 {

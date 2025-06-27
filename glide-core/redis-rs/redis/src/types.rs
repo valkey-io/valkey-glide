@@ -234,7 +234,7 @@ impl ServerError {
             ServerError::ExtensionError { detail, .. } | ServerError::KnownError { detail, .. } => {
                 if let Some(existing) = detail {
                     // Append with a separator.
-                    existing.push_str(format!("; {}", other).as_str());
+                    existing.push_str(format!("; {other}").as_str());
                 } else {
                     *detail = Some(other.to_string());
                 }
@@ -304,12 +304,12 @@ impl From<RedisError> for ServerError {
                 if let Some(mapped) = kind.into() {
                     ServerError::KnownError {
                         kind: mapped,
-                        detail: Some(format!("{} {}", desc, detail)),
+                        detail: Some(format!("{desc} {detail}")),
                     }
                 } else {
                     ServerError::ExtensionError {
                         code: kind.to_string(),
-                        detail: Some(format!("{} {}", desc, detail)),
+                        detail: Some(format!("{desc} {detail}")),
                     }
                 }
             }
@@ -466,7 +466,7 @@ impl fmt::Display for VerbatimFormat {
 impl fmt::Display for PushKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PushKind::Other(kind) => write!(f, "{}", kind),
+            PushKind::Other(kind) => write!(f, "{kind}"),
             PushKind::Invalidate => write!(f, "invalidate"),
             PushKind::Message => write!(f, "message"),
             PushKind::PMessage => write!(f, "pmessage"),
@@ -686,10 +686,10 @@ impl fmt::Debug for Value {
                 ref format,
                 ref text,
             } => {
-                write!(fmt, "verbatim-string({:?},{:?})", format, text)
+                write!(fmt, "verbatim-string({format:?},{text:?})")
             }
-            Value::BigNumber(ref m) => write!(fmt, "big-number({:?})", m),
-            Value::ServerError(ref err) => write!(fmt, "server-error({:?})", err),
+            Value::BigNumber(ref m) => write!(fmt, "big-number({m:?})"),
+            Value::ServerError(ref err) => write!(fmt, "server-error({err:?})"),
         }
     }
 }

@@ -30,10 +30,9 @@ mod standalone_client_tests {
                 // Handles RESP3
                 text.lines().count()
             }
-            _ => panic!(
-                "CLIENT LIST did not return a BulkString or VerbatimString, got: {:?}",
-                result
-            ),
+            _ => {
+                panic!("CLIENT LIST did not return a BulkString or VerbatimString, got: {result:?}")
+            }
         }
     }
 
@@ -555,8 +554,7 @@ mod standalone_client_tests {
             logger_core::log_info(
                 "TestStandaloneLazy",
                 format!(
-                    "Clients before lazy client init (protocol={:?} on dedicated server): {}",
-                    protocol, clients_before_lazy_init
+                    "Clients before lazy client init (protocol={protocol:?} on dedicated server): {clients_before_lazy_init}"
                 ),
             );
 
@@ -587,22 +585,19 @@ mod standalone_client_tests {
             logger_core::log_info(
                 "TestStandaloneLazy",
                 format!(
-                    "Clients after lazy client init (protocol={:?} on dedicated server): {}",
-                    protocol, clients_after_lazy_init
+                    "Clients after lazy client init (protocol={protocol:?} on dedicated server): {clients_after_lazy_init}"
                 ),
             );
             assert_eq!(
                 clients_after_lazy_init, clients_before_lazy_init,
-                "Lazy client (on dedicated server) should not connect before the first command. Before: {}, After: {}. protocol={:?}",
-                clients_before_lazy_init, clients_after_lazy_init, protocol
+                "Lazy client (on dedicated server) should not connect before the first command. Before: {clients_before_lazy_init}, After: {clients_after_lazy_init}. protocol={protocol:?}"
             );
 
             // 7. Send the first command using the lazy client (which is a GlideClient)
             logger_core::log_info(
                 "TestStandaloneLazy",
                 format!(
-                    "Sending first command to lazy client (PING) (protocol={:?} on dedicated server)",
-                    protocol
+                    "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated server)"
                 ),
             );
             let ping_response = lazy_glide_client_enum
@@ -624,17 +619,13 @@ mod standalone_client_tests {
             logger_core::log_info(
                 "TestStandaloneLazy",
                 format!(
-                    "Clients after first command (protocol={:?} on dedicated server): {}",
-                    protocol, clients_after_first_command
+                    "Clients after first command (protocol={protocol:?} on dedicated server): {clients_after_first_command}"
                 ),
             );
             assert_eq!(
                 clients_after_first_command,
                 clients_before_lazy_init + 1,
-                "Lazy client (on dedicated server) should connect after the first command. Before: {}, After: {}. protocol={:?}",
-                clients_before_lazy_init,
-                clients_after_first_command,
-                protocol
+                "Lazy client (on dedicated server) should connect after the first command. Before: {clients_before_lazy_init}, After: {clients_after_first_command}. protocol={protocol:?}"
             );
         });
     }
