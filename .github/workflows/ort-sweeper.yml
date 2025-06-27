@@ -1,5 +1,9 @@
 name: ORT - Trigger periodic checks for relevant branches
 
+permissions:
+    contents: read
+    actions: write
+
 on:
     schedule:
         - cron: "0 0 * * *" # Runs daily at 00:00 UTC
