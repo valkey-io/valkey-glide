@@ -537,10 +537,7 @@ impl TestClusterContext {
                 match result {
                     Ok(_) => {}
                     Err(err) => {
-                        println!(
-                            "Failed to set slot {} to IMPORTING with error {}",
-                            slot, err
-                        );
+                        println!("Failed to set slot {slot} to IMPORTING with error {err}");
                     }
                 }
                 let mut set_cmd = redis::cmd("CLUSTER");
@@ -554,10 +551,7 @@ impl TestClusterContext {
                 match result {
                     Ok(_) => {}
                     Err(err) => {
-                        println!(
-                            "Failed to set slot {} to MIGRATING with error {}",
-                            slot, err
-                        );
+                        println!("Failed to set slot {slot} to MIGRATING with error {err}");
                     }
                 }
                 // Get a key from the slot
@@ -571,7 +565,7 @@ impl TestClusterContext {
                         val
                     }
                     Err(err) => {
-                        println!("Failed to get keys in slot {}: {:?}", slot, err);
+                        println!("Failed to get keys in slot {slot}: {err:?}");
                         continue;
                     }
                 };
@@ -595,19 +589,15 @@ impl TestClusterContext {
                     Ok(Value::SimpleString(str)) => {
                         if str != "NOKEY" {
                             println!(
-                                "Failed to migrate key {} to target node with status {}",
-                                key, str
+                                "Failed to migrate key {key} to target node with status {str}"
                             );
                         } else {
-                            println!("Key {} does not exist", key);
+                            println!("Key {key} does not exist");
                         }
                     }
                     Ok(_) => {}
                     Err(err) => {
-                        println!(
-                            "Failed to migrate key {} to target node with error {}",
-                            key, err
-                        );
+                        println!("Failed to migrate key {key} to target node with error {err}");
                     }
                 }
                 // Tell the source and target nodes to propagate the slot change to the cluster
@@ -622,10 +612,7 @@ impl TestClusterContext {
                 match result {
                     Ok(_) => {}
                     Err(err) => {
-                        println!(
-                            "Failed to set slot {} to target NODE with error {}",
-                            slot, err
-                        );
+                        println!("Failed to set slot {slot} to target NODE with error {err}");
                     }
                 };
                 self.wait_for_connection_is_ready(&from_route)
@@ -801,7 +788,7 @@ impl TestClusterContext {
             .arg(destination_node.0.clone());
         let all_nodes = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
         if let Err(e) = cluster_conn.route_command(&move_cmd, all_nodes).await {
-            panic!("Failed to move slot: {}", e);
+            panic!("Failed to move slot: {e}");
         }
 
         // Return the RoutingInfo for the destination node.
@@ -863,7 +850,7 @@ impl TestClusterContext {
             .route_command(&migrating_cmd, current_route)
             .await
         {
-            panic!("Failed to set slot to MIGRATING: {}", e);
+            panic!("Failed to set slot to MIGRATING: {e}");
         }
 
         // Set slot to IMPORTING on the destination node.
@@ -880,7 +867,7 @@ impl TestClusterContext {
         });
 
         if let Err(e) = cluster_conn.route_command(&importing_cmd, dest_route).await {
-            panic!("Failed to set slot to IMPORTING: {}", e);
+            panic!("Failed to set slot to IMPORTING: {e}");
         }
 
         dest_node_id.to_string()
