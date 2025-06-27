@@ -114,10 +114,7 @@ impl Server {
         let child = match run_server("valkey-server") {
             Ok(child) => child,
             Err(e) => {
-                eprintln!(
-                    "Failed to start valkey-server: {}. Trying redis-server...",
-                    e
-                );
+                eprintln!("Failed to start valkey-server: {e}. Trying redis-server...");
                 run_server("redis-server")
                     .expect("Failed to start both valkey-server and redis-server")
             }
