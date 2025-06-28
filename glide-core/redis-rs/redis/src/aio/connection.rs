@@ -412,7 +412,7 @@ where
 {
     tracing::debug!(
         "Creating {conn_type} connection for node: {node:?}{}",
-        ip.map(|ip| format!(", IP: {:?}", ip)).unwrap_or_default()
+        ip.map(|ip| format!(", IP: {ip:?}")).unwrap_or_default()
     );
 }
 

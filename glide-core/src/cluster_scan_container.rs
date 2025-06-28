@@ -22,10 +22,7 @@ pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
     CONTAINER.lock().unwrap().insert(id.clone(), scan_state);
     log_debug(
         "scan_state_cursor insert",
-        format!(
-            "Inserted to container scan_state_cursor with id: `{:?}`",
-            id
-        ),
+        format!("Inserted to container scan_state_cursor with id: `{id:?}`"),
     );
     id
 }
@@ -34,20 +31,14 @@ pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
     let scan_state_rc = CONTAINER.lock().unwrap().get(&id).cloned();
     log_debug(
         "scan_state_cursor get",
-        format!(
-            "Retrieved from container scan_state_cursor with id: `{:?}`",
-            id
-        ),
+        format!("Retrieved from container scan_state_cursor with id: `{id:?}`"),
     );
     match scan_state_rc {
         Some(scan_state_rc) => Ok(scan_state_rc),
         None => Err(redis::RedisError::from((
             redis::ErrorKind::ResponseError,
             "Invalid scan_state_cursor id",
-            format!(
-                "The scan_state_cursor sent with id: `{:?}` does not exist",
-                id
-            ),
+            format!("The scan_state_cursor sent with id: `{id:?}` does not exist"),
         ))),
     }
 }
@@ -55,10 +46,7 @@ pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
 pub fn remove_scan_state_cursor(id: String) {
     log_debug(
         "scan_state_cursor remove",
-        format!(
-            "Removed from container scan_state_cursor with id: `{:?}`",
-            id
-        ),
+        format!("Removed from container scan_state_cursor with id: `{id:?}`"),
     );
     CONTAINER.lock().unwrap().remove(&id);
 }
