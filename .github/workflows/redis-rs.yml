@@ -1,5 +1,9 @@
 name: Redis-rs CI
 
+permissions:
+    contents: read
+    actions: write
+
 on:
     push:
         branches:

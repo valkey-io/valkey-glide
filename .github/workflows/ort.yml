@@ -1,5 +1,10 @@
 name: The OSS Review Toolkit (ORT)
 
+permissions:
+    contents: read
+    pull-requests: write
+    actions: read
+
 on:
     pull_request:
 
