@@ -2,12 +2,13 @@
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
+using Valkey.Glide.Internals;
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
-using static Valkey.Glide.Internals.FFI;
 using static Valkey.Glide.Pipeline.Options;
+using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
@@ -66,20 +67,18 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
             : await Batch(batch, raiseOnError, options);
 
     public async Task<ClusterValue<object?>> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp => HandleCustomCommandClusterResponse(resp));
+        => await Command(Request.CustomCommand(args, resp => ResponseConverters.HandleCustomCommandClusterValue(resp)));
 
     public async Task<ClusterValue<object?>> CustomCommand(GlideString[] args, Route route)
-        => await Command(RequestType.CustomCommand, args, resp => HandleCustomCommandClusterResponse(resp, route), route);
+        => await Command(Request.CustomCommand(args, resp => ResponseConverters.HandleCustomCommandClusterValue(resp, route)), route);
 
     public async Task<Dictionary<string, string>> Info() => await Info([]);
 
     public async Task<Dictionary<string, string>> Info(InfoOptions.Section[] sections)
-        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
-            => HandleMultiNodeResponse<GlideString, string>(resp, gs => gs.ToString()));
+        => await Command(Request.Info(sections).ToMultiNodeValue());
 
     public async Task<ClusterValue<string>> Info(Route route) => await Info([], route);
 
     public async Task<ClusterValue<string>> Info(InfoOptions.Section[] sections, Route route)
-        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
-            => HandleClusterValueResponse<GlideString, string>(resp, false, route, gs => gs.ToString()), route);
+        => await Command(Request.Info(sections).ToClusterValue(route is SingleNodeRoute), route);
 }
