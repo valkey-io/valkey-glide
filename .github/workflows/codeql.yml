@@ -62,24 +62,24 @@ jobs:
             - if: matrix.build-mode == 'manual'
               shell: bash
               run: |
-                if [ "${{ matrix.language }}" == "c-cpp" ]; then
-                  # Build only the C++ components needed for analysis
-                  cd glide-core
-                  cargo build --release
-                elif [ "${{ matrix.language }}" == "go" ]; then
-                  # Build Go modules and dependencies
-                  cd go
-                  go mod download
-                  go build ./...
-                elif [ "${{ matrix.language }}" == "java-kotlin" ]; then
-                  # Install protobuf compiler and build Java components
-                  sudo apt-get update
-                  sudo apt-get install -y protobuf-compiler
-                  cd java
-                  ./gradlew compileJava
-                else
-                  echo 'TODO: build commands for other languages.'
-                fi
+                  if [ "${{ matrix.language }}" == "c-cpp" ]; then
+                    # Build only the C++ components needed for analysis
+                    cd glide-core
+                    cargo build --release
+                  elif [ "${{ matrix.language }}" == "go" ]; then
+                    # Build Go modules and dependencies
+                    cd go
+                    go mod download
+                    go build ./...
+                  elif [ "${{ matrix.language }}" == "java-kotlin" ]; then
+                    # Install protobuf compiler and build Java components
+                    sudo apt-get update
+                    sudo apt-get install -y protobuf-compiler
+                    cd java
+                    ./gradlew compileJava
+                  else
+                    echo 'TODO: build commands for other languages.'
+                  fi
 
             - name: Perform CodeQL Analysis
               uses: github/codeql-action/analyze@v3
