@@ -1,15 +1,17 @@
 name: C# - Continuous Deployment
 
 on:
-    pull_request:
-        paths:
-            - .github/workflows/csharp-cd.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/workflows/install-rust-and-protoc/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
-            - .github/json_matrices/**
-            - .github/workflows/create-test-matrices/action.yml
+    # Temporary disabled until an agreement has been reached.
+    # See https://github.com/valkey-io/valkey-glide/pull/3601#discussion_r2166555519
+    # pull_request:
+    #     paths:
+    #         - .github/workflows/csharp-cd.yml
+    #         - .github/workflows/start-self-hosted-runner/action.yml
+    #         - .github/workflows/install-rust-and-protoc/action.yml
+    #         - .github/workflows/install-shared-dependencies/action.yml
+    #         - .github/workflows/install-engine/action.yml
+    #         - .github/json_matrices/**
+    #         - .github/workflows/create-test-matrices/action.yml
     push:
         tags:
             - "v*.*"
@@ -19,7 +21,7 @@ on:
                 description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
                 required: true
             publish:
-                description: "Publish"
+                description: "Publish to NuGet"
                 required: true
                 type: boolean
                 default: false
@@ -28,22 +30,6 @@ permissions:
     id-token: write
 
 jobs:
-    #start-self-hosted-runner:
-    #    if: github.repository_owner == 'valkey-io'
-    #    runs-on: ubuntu-latest
-    #    environment: AWS_ACTIONS
-    #    steps:
-    #        - name: Checkout
-    #          uses: actions/checkout@v4
-    #          with:
-    #              fetch-depth: 0
-    #        - name: Start self hosted EC2 runner
-    #          uses: ./.github/workflows/start-self-hosted-runner
-    #          with:
-    #              role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-    #              aws-region: ${{ secrets.AWS_REGION }}
-    #              ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
     load-platform-matrix:
         name: Load Platform Matrix
         runs-on: ubuntu-latest
@@ -57,7 +43,7 @@ jobs:
               id: load-matrix
               run: |
                   echo "Reading .github/json_matrices/build-matrix.json..."
-                  MATRIX_JSON=$(jq -c '[.[] | select(.languages | index("dotnet"))]' .github/json_matrices/build-matrix.json)
+                  MATRIX_JSON=$(jq -c '[.[] | select(.languages | index("csharp"))]' .github/json_matrices/build-matrix.json)
                   echo "Loaded matrix: $MATRIX_JSON"
 
                   # Set it as step output (must be single-line JSON string)
@@ -77,6 +63,8 @@ jobs:
             matrix:
                 build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
+            # Note: This script uses both powershell and bash for the scripts,
+            #       as the windows build has some problems otherwise.
             - name: Output Matrix Parameters for this job
               run: |
                   echo "Job running with the following matrix configuration:"
@@ -97,7 +85,6 @@ jobs:
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
               with:
-                  submodules: "true"
                   fetch-depth: 0
 
             - name: Set the release version
@@ -359,6 +346,7 @@ jobs:
             - name: Upload packages to NuGet
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
               run: dotnet nuget push csharp/assets/Valkey.Glide.Assets.All/bin/Release/*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+              # ToDo: Gather rust symbols and upload as snupkg https://learn.microsoft.com/en-us/nuget/create-packages/symbol-packages-snupkg
 
     publish-dotnet-projects-nuget:
         name: Publish normal packages to NuGet

@@ -14,6 +14,15 @@
         <WarningLevel>0</WarningLevel>
         <Configurations>Lint;Release;Debug</Configurations>
         <IsPackable>True</IsPackable>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <IncludeSymbols>true</IncludeSymbols>
+        <IncludeSources>true</IncludeSources>
+        <Deterministic>true</Deterministic>
+        <SupportUrl>https://github.com/valkey-io/valkey-glide/issues</SupportUrl>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/valkey-io/valkey-glide</RepositoryUrl>
+        <NeutralLanguage>en-US</NeutralLanguage>
+        <DefaultLanguage>en-US</DefaultLanguage>
     </PropertyGroup>
 
     <PropertyGroup>
