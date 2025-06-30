@@ -2,11 +2,11 @@
 
 namespace Valkey.Glide;
 
-internal static class RedisLiterals
+internal static class ValkeyLiterals
 {
     // unlike primary commands, these do not get altered by the command-map; we may as
     // well compute the bytes once and share them
-    public static readonly RedisValue
+    public static readonly ValkeyValue
         ACLCAT = "ACLCAT",
         ADDR = "ADDR",
         AFTER = "AFTER",
@@ -166,7 +166,7 @@ internal static class RedisLiterals
         timeout = "timeout",
         yes = "yes";
 
-    internal static RedisValue Get(Bitwise operation) => operation switch
+    internal static ValkeyValue Get(Bitwise operation) => operation switch
     {
         Bitwise.And => AND,
         Bitwise.Or => OR,

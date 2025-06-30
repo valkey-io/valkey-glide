@@ -7,7 +7,7 @@ namespace Valkey.Glide;
 /// </summary>
 public readonly struct StreamAutoClaimResult
 {
-    internal StreamAutoClaimResult(RedisValue nextStartId, StreamEntry[] claimedEntries, RedisValue[] deletedIds)
+    internal StreamAutoClaimResult(ValkeyValue nextStartId, StreamEntry[] claimedEntries, ValkeyValue[] deletedIds)
     {
         NextStartId = nextStartId;
         ClaimedEntries = claimedEntries;
@@ -17,17 +17,17 @@ public readonly struct StreamAutoClaimResult
     /// <summary>
     /// A null <see cref="StreamAutoClaimResult"/>, indicating no results.
     /// </summary>
-    public static StreamAutoClaimResult Null { get; } = new StreamAutoClaimResult(RedisValue.Null, Array.Empty<StreamEntry>(), Array.Empty<RedisValue>());
+    public static StreamAutoClaimResult Null { get; } = new StreamAutoClaimResult(ValkeyValue.Null, Array.Empty<StreamEntry>(), Array.Empty<ValkeyValue>());
 
     /// <summary>
     /// Whether this object is null/empty.
     /// </summary>
-    public bool IsNull => NextStartId.IsNull && ClaimedEntries == Array.Empty<StreamEntry>() && DeletedIds == Array.Empty<RedisValue>();
+    public bool IsNull => NextStartId.IsNull && ClaimedEntries == Array.Empty<StreamEntry>() && DeletedIds == Array.Empty<ValkeyValue>();
 
     /// <summary>
     /// The stream ID to be used in the next call to StreamAutoClaim.
     /// </summary>
-    public RedisValue NextStartId { get; }
+    public ValkeyValue NextStartId { get; }
 
     /// <summary>
     /// An array of <see cref="StreamEntry"/> for the successfully claimed entries.
@@ -37,5 +37,5 @@ public readonly struct StreamAutoClaimResult
     /// <summary>
     /// An array of message IDs deleted from the stream.
     /// </summary>
-    public RedisValue[] DeletedIds { get; }
+    public ValkeyValue[] DeletedIds { get; }
 }

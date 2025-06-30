@@ -26,7 +26,7 @@ public enum ServerType
     Twemproxy,
 
     /// <summary>
-    /// Redis cluster via <a href="https://github.com/envoyproxy/envoy">envoyproxy</a>.
+    /// Valkey cluster via <a href="https://github.com/envoyproxy/envoy">envoyproxy</a>.
     /// </summary>
     Envoyproxy,
 }

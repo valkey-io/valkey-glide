@@ -14,24 +14,24 @@ namespace Valkey.Glide;
 /// <summary>
 /// Represents a key that can be stored in redis.
 /// </summary>
-public readonly struct RedisKey : IEquatable<RedisKey>
+public readonly struct ValkeyKey : IEquatable<ValkeyKey>
 {
-    internal RedisKey(byte[]? keyPrefix, object? keyValue)
+    internal ValkeyKey(byte[]? keyPrefix, object? keyValue)
     {
         KeyPrefix = keyPrefix?.Length == 0 ? null : keyPrefix;
         KeyValue = keyValue;
     }
 
     /// <summary>
-    /// Creates a <see cref="RedisKey"/> from a string.
+    /// Creates a <see cref="ValkeyKey"/> from a string.
     /// </summary>
-    public RedisKey(string? key) : this(null, key) { }
+    public ValkeyKey(string? key) : this(null, key) { }
 
-    internal RedisKey AsPrefix() => new RedisKey((byte[]?)this, null);
+    internal ValkeyKey AsPrefix() => new ValkeyKey((byte[]?)this, null);
 
     internal bool IsNull => KeyPrefix == null && KeyValue == null;
 
-    internal static RedisKey Null { get; } = new RedisKey(null, null);
+    internal static ValkeyKey Null { get; } = new ValkeyKey(null, null);
 
     internal bool IsEmpty
     {
@@ -50,93 +50,93 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator !=(RedisKey x, RedisKey y) => !x.EqualsImpl(in y);
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator !=(ValkeyKey x, ValkeyKey y) => !x.EqualsImpl(in y);
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator !=(string x, RedisKey y) => !y.EqualsImpl(new RedisKey(x));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator !=(string x, ValkeyKey y) => !y.EqualsImpl(new ValkeyKey(x));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator !=(byte[] x, RedisKey y) => !y.EqualsImpl(new RedisKey(null, x));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator !=(byte[] x, ValkeyKey y) => !y.EqualsImpl(new ValkeyKey(null, x));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator !=(RedisKey x, string y) => !x.EqualsImpl(new RedisKey(y));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator !=(ValkeyKey x, string y) => !x.EqualsImpl(new ValkeyKey(y));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator !=(RedisKey x, byte[] y) => !x.EqualsImpl(new RedisKey(null, y));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator !=(ValkeyKey x, byte[] y) => !x.EqualsImpl(new ValkeyKey(null, y));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator ==(RedisKey x, RedisKey y) => x.EqualsImpl(in y);
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator ==(ValkeyKey x, ValkeyKey y) => x.EqualsImpl(in y);
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator ==(string x, RedisKey y) => y.EqualsImpl(new RedisKey(x));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator ==(string x, ValkeyKey y) => y.EqualsImpl(new ValkeyKey(x));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator ==(byte[] x, RedisKey y) => y.EqualsImpl(new RedisKey(null, x));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator ==(byte[] x, ValkeyKey y) => y.EqualsImpl(new ValkeyKey(null, x));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator ==(RedisKey x, string y) => x.EqualsImpl(new RedisKey(y));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator ==(ValkeyKey x, string y) => x.EqualsImpl(new ValkeyKey(y));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisChannel"/> to compare.</param>
-    public static bool operator ==(RedisKey x, byte[] y) => x.EqualsImpl(new RedisKey(null, y));
+    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    public static bool operator ==(ValkeyKey x, byte[] y) => x.EqualsImpl(new ValkeyKey(null, y));
 
     /// <summary>
     /// See <see cref="object.Equals(object?)"/>.
     /// </summary>
-    /// <param name="obj">The <see cref="RedisKey"/> to compare to.</param>
+    /// <param name="obj">The <see cref="ValkeyKey"/> to compare to.</param>
     public override bool Equals(object? obj) => obj switch
     {
         null => IsNull,
-        RedisKey key => EqualsImpl(in key),
-        string s => EqualsImpl(new RedisKey(s)),
-        byte[] b => EqualsImpl(new RedisKey(null, b)),
+        ValkeyKey key => EqualsImpl(in key),
+        string s => EqualsImpl(new ValkeyKey(s)),
+        byte[] b => EqualsImpl(new ValkeyKey(null, b)),
         _ => false,
     };
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="other">The <see cref="RedisKey"/> to compare to.</param>
-    public bool Equals(RedisKey other) => EqualsImpl(in other);
+    /// <param name="other">The <see cref="ValkeyKey"/> to compare to.</param>
+    public bool Equals(ValkeyKey other) => EqualsImpl(in other);
 
-    private bool EqualsImpl(in RedisKey other)
+    private bool EqualsImpl(in ValkeyKey other)
     {
         if (IsNull)
         {
@@ -148,12 +148,12 @@ public readonly struct RedisKey : IEquatable<RedisKey>
         }
 
         // if there's no prefix, we might be able to do a simple compare
-        if (RedisValue.Equals(KeyPrefix, other.KeyPrefix))
+        if (ValkeyValue.Equals(KeyPrefix, other.KeyPrefix))
         {
             if ((object?)KeyValue == (object?)other.KeyValue) return true; // ref equal
 
             if (KeyValue is string keyString1 && other.KeyValue is string keyString2) return keyString1 == keyString2;
-            if (KeyValue is byte[] keyBytes1 && other.KeyValue is byte[] keyBytes2) return RedisValue.Equals(keyBytes1, keyBytes2);
+            if (KeyValue is byte[] keyBytes1 && other.KeyValue is byte[] keyBytes2) return ValkeyValue.Equals(keyBytes1, keyBytes2);
         }
 
         int len = TotalLength();
@@ -177,7 +177,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
             return result;
         }
 
-        static bool CopyCompare(in RedisKey x, in RedisKey y, int length, Span<byte> span)
+        static bool CopyCompare(in ValkeyKey x, in ValkeyKey y, int length, Span<byte> span)
         {
             Span<byte> span1 = span.Slice(0, length), span2 = span.Slice(length, length);
             var written = x.CopyTo(span1);
@@ -196,7 +196,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
 
         // the simplest way to do this is to use the CopyTo version, which normalizes that
         if (IsNull) return -1;
-        if (TryGetSimpleBuffer(out var buffer)) return RedisValue.GetHashCode(buffer);
+        if (TryGetSimpleBuffer(out var buffer)) return ValkeyValue.GetHashCode(buffer);
         var len = TotalLength();
         if (len == 0) return 0;
 
@@ -205,7 +205,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
             Span<byte> span = stackalloc byte[len];
             var written = CopyTo(span);
             Debug.Assert(written == len);
-            return RedisValue.GetHashCode(span);
+            return ValkeyValue.GetHashCode(span);
         }
         else
         {
@@ -213,7 +213,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
             var span = new Span<byte>(arr, 0, len);
             var written = CopyTo(span);
             Debug.Assert(written == len);
-            var result = RedisValue.GetHashCode(span);
+            var result = ValkeyValue.GetHashCode(span);
             ArrayPool<byte>.Shared.Return(arr);
             return result;
         }
@@ -224,7 +224,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     /// </summary>
     public override string ToString() => ((string?)this) ?? "(null)";
 
-    internal RedisValue AsRedisValue()
+    internal ValkeyValue AsValkeyValue()
     {
         if (KeyPrefix == null && KeyValue is string keyString) return keyString;
         return (byte[]?)this;
@@ -236,30 +236,30 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     }
 
     /// <summary>
-    /// Create a <see cref="RedisKey"/> from a <see cref="string"/>.
+    /// Create a <see cref="ValkeyKey"/> from a <see cref="string"/>.
     /// </summary>
     /// <param name="key">The string to get a key from.</param>
-    public static implicit operator RedisKey(string? key)
+    public static implicit operator ValkeyKey(string? key)
     {
         if (key == null) return default;
-        return new RedisKey(null, key);
+        return new ValkeyKey(null, key);
     }
 
     /// <summary>
-    /// Create a <see cref="RedisKey"/> from a <see cref="T:byte[]"/>.
+    /// Create a <see cref="ValkeyKey"/> from a <see cref="T:byte[]"/>.
     /// </summary>
     /// <param name="key">The byte array to get a key from.</param>
-    public static implicit operator RedisKey(byte[]? key)
+    public static implicit operator ValkeyKey(byte[]? key)
     {
         if (key == null) return default;
-        return new RedisKey(null, key);
+        return new ValkeyKey(null, key);
     }
 
     /// <summary>
-    /// Obtain the <see cref="RedisKey"/> as a <see cref="T:byte[]"/>.
+    /// Obtain the <see cref="ValkeyKey"/> as a <see cref="T:byte[]"/>.
     /// </summary>
     /// <param name="key">The key to get a byte array for.</param>
-    public static implicit operator byte[]?(RedisKey key)
+    public static implicit operator byte[]?(ValkeyKey key)
     {
         if (key.IsNull) return null;
         if (key.TryGetSimpleBuffer(out var arr)) return arr;
@@ -276,7 +276,7 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     /// Obtain the key as a <see cref="string"/>.
     /// </summary>
     /// <param name="key">The key to get a string for.</param>
-    public static implicit operator string?(RedisKey key)
+    public static implicit operator string?(ValkeyKey key)
     {
         if (key.KeyPrefix is null)
         {
@@ -314,23 +314,23 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     /// <summary>
     /// Concatenate two keys.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisKey"/> to add.</param>
-    /// <param name="y">The second <see cref="RedisKey"/> to add.</param>
+    /// <param name="x">The first <see cref="ValkeyKey"/> to add.</param>
+    /// <param name="y">The second <see cref="ValkeyKey"/> to add.</param>
     [Obsolete("Prefer WithPrefix")]
-    public static RedisKey operator +(RedisKey x, RedisKey y) =>
-        new RedisKey(ConcatenateBytes(x.KeyPrefix, x.KeyValue, y.KeyPrefix), y.KeyValue);
+    public static ValkeyKey operator +(ValkeyKey x, ValkeyKey y) =>
+        new ValkeyKey(ConcatenateBytes(x.KeyPrefix, x.KeyValue, y.KeyPrefix), y.KeyValue);
 
-    internal static RedisKey WithPrefix(byte[]? prefix, RedisKey value)
+    internal static ValkeyKey WithPrefix(byte[]? prefix, ValkeyKey value)
     {
         if (prefix == null || prefix.Length == 0) return value;
-        if (value.KeyPrefix == null) return new RedisKey(prefix, value.KeyValue);
-        if (value.KeyValue == null) return new RedisKey(prefix, value.KeyPrefix);
+        if (value.KeyPrefix == null) return new ValkeyKey(prefix, value.KeyValue);
+        if (value.KeyValue == null) return new ValkeyKey(prefix, value.KeyPrefix);
 
         // two prefixes; darn
         byte[] copy = new byte[prefix.Length + value.KeyPrefix.Length];
         Buffer.BlockCopy(prefix, 0, copy, 0, prefix.Length);
         Buffer.BlockCopy(value.KeyPrefix, 0, copy, prefix.Length, value.KeyPrefix.Length);
-        return new RedisKey(copy, value.KeyValue);
+        return new ValkeyKey(copy, value.KeyValue);
     }
 
     internal static byte[]? ConcatenateBytes(byte[]? a, object? b, byte[]? c)
@@ -366,22 +366,22 @@ public readonly struct RedisKey : IEquatable<RedisKey>
     }
 
     /// <summary>
-    /// <para>Prepends p to this RedisKey, returning a new RedisKey.</para>
+    /// <para>Prepends p to this ValkeyKey, returning a new ValkeyKey.</para>
     /// <para>
     /// Avoids some allocations if possible, repeated Prepend/Appends make it less possible.
     /// </para>
     /// </summary>
     /// <param name="prefix">The prefix to prepend.</param>
-    public RedisKey Prepend(RedisKey prefix) => WithPrefix(prefix, this);
+    public ValkeyKey Prepend(ValkeyKey prefix) => WithPrefix(prefix, this);
 
     /// <summary>
-    /// <para>Appends p to this RedisKey, returning a new RedisKey.</para>
+    /// <para>Appends p to this ValkeyKey, returning a new ValkeyKey.</para>
     /// <para>
     /// Avoids some allocations if possible, repeated Prepend/Appends make it less possible.
     /// </para>
     /// </summary>
     /// <param name="suffix">The suffix to append.</param>
-    public RedisKey Append(RedisKey suffix) => WithPrefix(this, suffix);
+    public ValkeyKey Append(ValkeyKey suffix) => WithPrefix(this, suffix);
 
     internal bool TryGetSimpleBuffer([NotNullWhen(true)] out byte[]? arr)
     {

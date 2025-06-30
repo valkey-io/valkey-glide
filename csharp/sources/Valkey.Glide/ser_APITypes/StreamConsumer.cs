@@ -1,11 +1,11 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Describes a consumer off a Redis Stream.
+/// Describes a consumer off a Valkey Stream.
 /// </summary>
 public readonly struct StreamConsumer
 {
-    internal StreamConsumer(RedisValue name, int pendingMessageCount)
+    internal StreamConsumer(ValkeyValue name, int pendingMessageCount)
     {
         Name = name;
         PendingMessageCount = pendingMessageCount;
@@ -14,7 +14,7 @@ public readonly struct StreamConsumer
     /// <summary>
     /// The name of the consumer.
     /// </summary>
-    public RedisValue Name { get; }
+    public ValkeyValue Name { get; }
 
     /// <summary>
     /// The number of messages that have been delivered by not yet acknowledged by the consumer.
