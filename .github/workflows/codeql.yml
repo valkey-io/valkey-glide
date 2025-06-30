@@ -19,6 +19,7 @@ on:
             - release-*
     schedule:
         - cron: "37 18 * * 6"
+    workflow_dispatch:
 
 jobs:
     analyze:
@@ -33,7 +34,7 @@ jobs:
             matrix:
                 include:
                     - language: csharp
-                      build-mode: none
+                      build-mode: autobuild
                     - language: go
                       build-mode: autobuild
                     - language: java-kotlin
@@ -42,6 +43,10 @@ jobs:
                       build-mode: none
                     - language: python
                       build-mode: none
+                    - language: rust
+                      build-mode: none
+                    - language: c-cpp
+                      build-mode: autobuild
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
