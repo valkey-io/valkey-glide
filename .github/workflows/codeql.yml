@@ -34,7 +34,7 @@ jobs:
             matrix:
                 include:
                     - language: csharp
-                      build-mode: autobuild
+                      build-mode: manual
                     - language: go
                       build-mode: autobuild
                     - language: java-kotlin
@@ -71,10 +71,19 @@ jobs:
                     cd go
                     go mod download
                     go build ./...
+                  elif [ "${{ matrix.language }}" == "csharp" ]; then
+                    # Build C# components (excluding problematic integration tests)
+                    cd csharp
+                    dotnet build sources/Valkey.Glide/Valkey.Glide.csproj
+                    dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj
                   elif [ "${{ matrix.language }}" == "java-kotlin" ]; then
-                    # Install protobuf compiler and build Java components
-                    sudo apt-get update
-                    sudo apt-get install -y protobuf-compiler
+                    # Install newer protobuf compiler (required version 29.0+)
+                    PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                    curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+                    sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
+                    sudo chmod +x /usr/local/bin/protoc
+                    protoc --version
+                    # Build Java components
                     cd java
                     ./gradlew compileJava
                   else
