@@ -83,6 +83,8 @@ jobs:
                     sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
                     sudo chmod +x /usr/local/bin/protoc
                     protoc --version
+                    # Install cargo-zigbuild for cross-compilation
+                    cargo install cargo-zigbuild
                     # Build Java components
                     cd java
                     ./gradlew compileJava
