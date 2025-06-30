@@ -6,7 +6,7 @@
 /// </summary>
 public readonly struct StreamPendingMessageInfo
 {
-    internal StreamPendingMessageInfo(RedisValue messageId, RedisValue consumerName, long idleTimeInMs, int deliveryCount)
+    internal StreamPendingMessageInfo(ValkeyValue messageId, ValkeyValue consumerName, long idleTimeInMs, int deliveryCount)
     {
         MessageId = messageId;
         ConsumerName = consumerName;
@@ -17,12 +17,12 @@ public readonly struct StreamPendingMessageInfo
     /// <summary>
     /// The ID of the pending message.
     /// </summary>
-    public RedisValue MessageId { get; }
+    public ValkeyValue MessageId { get; }
 
     /// <summary>
     /// The consumer that received the pending message.
     /// </summary>
-    public RedisValue ConsumerName { get; }
+    public ValkeyValue ConsumerName { get; }
 
     /// <summary>
     /// The time that has passed since the message was last delivered to a consumer.

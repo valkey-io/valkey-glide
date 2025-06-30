@@ -8,14 +8,14 @@ namespace Valkey.Glide;
 /// </summary>
 public readonly struct NameValueEntry : IEquatable<NameValueEntry>
 {
-    internal readonly RedisValue name, value;
+    internal readonly ValkeyValue name, value;
 
     /// <summary>
     /// Initializes a <see cref="NameValueEntry"/> value.
     /// </summary>
     /// <param name="name">The name for this entry.</param>
     /// <param name="value">The value for this entry.</param>
-    public NameValueEntry(RedisValue name, RedisValue value)
+    public NameValueEntry(ValkeyValue name, ValkeyValue value)
     {
         this.name = name;
         this.value = value;
@@ -24,25 +24,25 @@ public readonly struct NameValueEntry : IEquatable<NameValueEntry>
     /// <summary>
     /// The name of the field.
     /// </summary>
-    public RedisValue Name => name;
+    public ValkeyValue Name => name;
 
     /// <summary>
     /// The value of the field.
     /// </summary>
-    public RedisValue Value => value;
+    public ValkeyValue Value => value;
 
     /// <summary>
     /// Converts to a key/value pair.
     /// </summary>
     /// <param name="value">The <see cref="NameValueEntry"/> to create a <see cref="KeyValuePair{TKey, TValue}"/> from.</param>
-    public static implicit operator KeyValuePair<RedisValue, RedisValue>(NameValueEntry value) =>
-        new KeyValuePair<RedisValue, RedisValue>(value.name, value.value);
+    public static implicit operator KeyValuePair<ValkeyValue, ValkeyValue>(NameValueEntry value) =>
+        new KeyValuePair<ValkeyValue, ValkeyValue>(value.name, value.value);
 
     /// <summary>
     /// Converts from a key/value pair.
     /// </summary>
     /// <param name="value">The <see cref="KeyValuePair{TKey, TValue}"/> to get a <see cref="NameValueEntry"/> from.</param>
-    public static implicit operator NameValueEntry(KeyValuePair<RedisValue, RedisValue> value) =>
+    public static implicit operator NameValueEntry(KeyValuePair<ValkeyValue, ValkeyValue> value) =>
         new NameValueEntry(value.Key, value.Value);
 
     /// <summary>

@@ -5,7 +5,7 @@ using System.Net;
 namespace Valkey.Glide;
 
 /// <summary>
-/// Filter determining which Redis clients to kill.
+/// Filter determining which Valkey clients to kill.
 /// </summary>
 /// <seealso href="https://redis.io/docs/latest/commands/client-kill/"/>
 public class ClientKillFilter
@@ -120,30 +120,30 @@ public class ClientKillFilter
         return this;
     }
 
-    internal List<RedisValue> ToList(bool withReplicaCommands)
+    internal List<ValkeyValue> ToList(bool withReplicaCommands)
     {
-        var parts = new List<RedisValue>(15)
+        var parts = new List<ValkeyValue>(15)
         {
-            RedisLiterals.KILL,
+            ValkeyLiterals.KILL,
         };
         if (Id != null)
         {
-            parts.Add(RedisLiterals.ID);
+            parts.Add(ValkeyLiterals.ID);
             parts.Add(Id.Value);
         }
         if (ClientType != null)
         {
-            parts.Add(RedisLiterals.TYPE);
+            parts.Add(ValkeyLiterals.TYPE);
             switch (ClientType.Value)
             {
                 case Glide.ClientType.Normal:
-                    parts.Add(RedisLiterals.normal);
+                    parts.Add(ValkeyLiterals.normal);
                     break;
                 case Glide.ClientType.Replica:
-                    parts.Add(withReplicaCommands ? RedisLiterals.replica : RedisLiterals.slave);
+                    parts.Add(withReplicaCommands ? ValkeyLiterals.replica : ValkeyLiterals.slave);
                     break;
                 case Glide.ClientType.PubSub:
-                    parts.Add(RedisLiterals.pubsub);
+                    parts.Add(ValkeyLiterals.pubsub);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(ClientType));
@@ -151,27 +151,27 @@ public class ClientKillFilter
         }
         if (Username != null)
         {
-            parts.Add(RedisLiterals.USERNAME);
+            parts.Add(ValkeyLiterals.USERNAME);
             parts.Add(Username);
         }
         if (Endpoint != null)
         {
-            parts.Add(RedisLiterals.ADDR);
-            parts.Add((RedisValue)Format.ToString(Endpoint));
+            parts.Add(ValkeyLiterals.ADDR);
+            parts.Add((ValkeyValue)Format.ToString(Endpoint));
         }
         if (ServerEndpoint != null)
         {
-            parts.Add(RedisLiterals.LADDR);
-            parts.Add((RedisValue)Format.ToString(ServerEndpoint));
+            parts.Add(ValkeyLiterals.LADDR);
+            parts.Add((ValkeyValue)Format.ToString(ServerEndpoint));
         }
         if (SkipMe != null)
         {
-            parts.Add(RedisLiterals.SKIPME);
-            parts.Add(SkipMe.Value ? RedisLiterals.yes : RedisLiterals.no);
+            parts.Add(ValkeyLiterals.SKIPME);
+            parts.Add(SkipMe.Value ? ValkeyLiterals.yes : ValkeyLiterals.no);
         }
         if (MaxAgeInSeconds != null)
         {
-            parts.Add(RedisLiterals.MAXAGE);
+            parts.Add(ValkeyLiterals.MAXAGE);
             parts.Add(MaxAgeInSeconds);
         }
         return parts;

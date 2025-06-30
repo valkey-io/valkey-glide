@@ -10,24 +10,24 @@ public readonly struct ListPopResult
     /// <summary>
     /// A null ListPopResult, indicating no results.
     /// </summary>
-    public static ListPopResult Null { get; } = new ListPopResult(RedisKey.Null, Array.Empty<RedisValue>());
+    public static ListPopResult Null { get; } = new ListPopResult(ValkeyKey.Null, Array.Empty<ValkeyValue>());
 
     /// <summary>
     /// Whether this object is null/empty.
     /// </summary>
-    public bool IsNull => Key.IsNull && Values == Array.Empty<RedisValue>();
+    public bool IsNull => Key.IsNull && Values == Array.Empty<ValkeyValue>();
 
     /// <summary>
     /// The key of the list that this set of entries came form.
     /// </summary>
-    public RedisKey Key { get; }
+    public ValkeyKey Key { get; }
 
     /// <summary>
     /// The values from the list.
     /// </summary>
-    public RedisValue[] Values { get; }
+    public ValkeyValue[] Values { get; }
 
-    internal ListPopResult(RedisKey key, RedisValue[] values)
+    internal ListPopResult(ValkeyKey key, ValkeyValue[] values)
     {
         Key = key;
         Values = values;

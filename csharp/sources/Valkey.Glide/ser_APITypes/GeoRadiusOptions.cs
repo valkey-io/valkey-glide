@@ -15,17 +15,17 @@ public enum GeoRadiusOptions
     None = 0,
 
     /// <summary>
-    /// Redis will return the coordinates of any results.
+    /// Valkey will return the coordinates of any results.
     /// </summary>
     WithCoordinates = 1,
 
     /// <summary>
-    /// Redis will return the distance from center for all results.
+    /// Valkey will return the distance from center for all results.
     /// </summary>
     WithDistance = 2,
 
     /// <summary>
-    /// Redis will return the geo hash value as an integer. (This is the score in the sorted set).
+    /// Valkey will return the geo hash value as an integer. (This is the score in the sorted set).
     /// </summary>
     WithGeoHash = 4,
 
@@ -37,19 +37,19 @@ public enum GeoRadiusOptions
 
 internal static class GeoRadiusOptionsExtensions
 {
-    internal static void AddArgs(this GeoRadiusOptions options, List<RedisValue> values)
+    internal static void AddArgs(this GeoRadiusOptions options, List<ValkeyValue> values)
     {
         if ((options & GeoRadiusOptions.WithCoordinates) != 0)
         {
-            values.Add(RedisLiterals.WITHCOORD);
+            values.Add(ValkeyLiterals.WITHCOORD);
         }
         if ((options & GeoRadiusOptions.WithDistance) != 0)
         {
-            values.Add(RedisLiterals.WITHDIST);
+            values.Add(ValkeyLiterals.WITHDIST);
         }
         if ((options & GeoRadiusOptions.WithGeoHash) != 0)
         {
-            values.Add(RedisLiterals.WITHHASH);
+            values.Add(ValkeyLiterals.WITHHASH);
         }
     }
 }

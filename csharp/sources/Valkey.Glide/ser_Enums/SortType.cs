@@ -12,7 +12,7 @@ public enum SortType
 
     /// <summary>
     /// Elements are sorted using their alphabetic form
-    /// (Redis is UTF-8 aware as long as the !LC_COLLATE environment variable is set at the server).
+    /// (Valkey is UTF-8 aware as long as the !LC_COLLATE environment variable is set at the server).
     /// </summary>
     Alphabetic,
 }

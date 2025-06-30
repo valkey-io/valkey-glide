@@ -5,7 +5,7 @@
 /// </summary>
 public readonly struct StreamInfo
 {
-    internal StreamInfo(int length, int radixTreeKeys, int radixTreeNodes, int groups, StreamEntry firstEntry, StreamEntry lastEntry, RedisValue lastGeneratedId)
+    internal StreamInfo(int length, int radixTreeKeys, int radixTreeNodes, int groups, StreamEntry firstEntry, StreamEntry lastEntry, ValkeyValue lastGeneratedId)
     {
         Length = length;
         RadixTreeKeys = radixTreeKeys;
@@ -49,5 +49,5 @@ public readonly struct StreamInfo
     /// <summary>
     /// The last generated id.
     /// </summary>
-    public RedisValue LastGeneratedId { get; }
+    public ValkeyValue LastGeneratedId { get; }
 }

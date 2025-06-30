@@ -1,7 +1,7 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Track status of a command while communicating with Redis.
+/// Track status of a command while communicating with Valkey.
 /// </summary>
 public enum CommandStatus
 {
@@ -11,17 +11,17 @@ public enum CommandStatus
     Unknown,
 
     /// <summary>
-    /// ConnectionMultiplexer has not yet started writing this command to Redis.
+    /// ConnectionMultiplexer has not yet started writing this command to Valkey.
     /// </summary>
     WaitingToBeSent,
 
     /// <summary>
-    /// Command has been sent to Redis.
+    /// Command has been sent to Valkey.
     /// </summary>
     Sent,
 
     /// <summary>
-    /// Command is in the backlog, waiting to be processed and written to Redis.
+    /// Command is in the backlog, waiting to be processed and written to Valkey.
     /// </summary>
     WaitingInBacklog,
 }

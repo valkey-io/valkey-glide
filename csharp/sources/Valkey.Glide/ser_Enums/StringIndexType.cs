@@ -20,10 +20,10 @@ public enum StringIndexType
 
 internal static class StringIndexTypeExtensions
 {
-    internal static RedisValue ToLiteral(this StringIndexType indexType) => indexType switch
+    internal static ValkeyValue ToLiteral(this StringIndexType indexType) => indexType switch
     {
-        StringIndexType.Bit => RedisLiterals.BIT,
-        StringIndexType.Byte => RedisLiterals.BYTE,
+        StringIndexType.Bit => ValkeyLiterals.BIT,
+        StringIndexType.Byte => ValkeyLiterals.BYTE,
         _ => throw new ArgumentOutOfRangeException(nameof(indexType)),
     };
 }

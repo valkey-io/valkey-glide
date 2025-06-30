@@ -26,7 +26,7 @@ public abstract class GeoSearchShape
         Unit = unit;
     }
 
-    internal abstract void AddArgs(List<RedisValue> args);
+    internal abstract void AddArgs(List<ValkeyValue> args);
 }
 
 /// <summary>
@@ -49,11 +49,11 @@ public class GeoSearchCircle : GeoSearchShape
     internal override int ArgCount => 3;
 
     /// <summary>
-    /// Gets the <see cref="RedisValue"/>s for this shape.
+    /// Gets the <see cref="ValkeyValue"/>s for this shape.
     /// </summary>
-    internal override void AddArgs(List<RedisValue> args)
+    internal override void AddArgs(List<ValkeyValue> args)
     {
-        args.Add(RedisLiterals.BYRADIUS);
+        args.Add(ValkeyLiterals.BYRADIUS);
         args.Add(_radius);
         args.Add(Unit.ToLiteral());
     }
@@ -82,9 +82,9 @@ public class GeoSearchBox : GeoSearchShape
 
     internal override int ArgCount => 4;
 
-    internal override void AddArgs(List<RedisValue> args)
+    internal override void AddArgs(List<ValkeyValue> args)
     {
-        args.Add(RedisLiterals.BYBOX);
+        args.Add(ValkeyLiterals.BYBOX);
         args.Add(_width);
         args.Add(_height);
         args.Add(Unit.ToLiteral());

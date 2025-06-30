@@ -11,7 +11,7 @@ public readonly struct GeoEntry : IEquatable<GeoEntry>
     /// <summary>
     /// The name of the GeoEntry.
     /// </summary>
-    public RedisValue Member { get; }
+    public ValkeyValue Member { get; }
 
     /// <summary>
     /// Describes the longitude and latitude of a GeoEntry.
@@ -24,7 +24,7 @@ public readonly struct GeoEntry : IEquatable<GeoEntry>
     /// <param name="longitude">The longitude position to use.</param>
     /// <param name="latitude">The latitude position to use.</param>
     /// <param name="member">The value to store for this position.</param>
-    public GeoEntry(double longitude, double latitude, RedisValue member)
+    public GeoEntry(double longitude, double latitude, ValkeyValue member)
     {
         Member = member;
         Position = new GeoPosition(longitude, latitude);

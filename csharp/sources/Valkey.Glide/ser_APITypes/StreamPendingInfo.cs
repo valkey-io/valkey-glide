@@ -5,7 +5,7 @@
 /// </summary>
 public readonly struct StreamPendingInfo
 {
-    internal StreamPendingInfo(int pendingMessageCount, RedisValue lowestId, RedisValue highestId, StreamConsumer[] consumers)
+    internal StreamPendingInfo(int pendingMessageCount, ValkeyValue lowestId, ValkeyValue highestId, StreamConsumer[] consumers)
     {
         PendingMessageCount = pendingMessageCount;
         LowestPendingMessageId = lowestId;
@@ -21,12 +21,12 @@ public readonly struct StreamPendingInfo
     /// <summary>
     /// The lowest message ID in the set of pending messages.
     /// </summary>
-    public RedisValue LowestPendingMessageId { get; }
+    public ValkeyValue LowestPendingMessageId { get; }
 
     /// <summary>
     /// The highest message ID in the set of pending messages.
     /// </summary>
-    public RedisValue HighestPendingMessageId { get; }
+    public ValkeyValue HighestPendingMessageId { get; }
 
     /// <summary>
     /// An array of consumers within the consumer group that have pending messages.

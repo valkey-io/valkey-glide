@@ -7,7 +7,7 @@ namespace Valkey.Glide;
 /// </summary>
 public readonly struct GeoPosition : IEquatable<GeoPosition>
 {
-    internal static string GetRedisUnit(GeoUnit unit) => unit switch
+    internal static string GetValkeyUnit(GeoUnit unit) => unit switch
     {
         GeoUnit.Meters => "m",
         GeoUnit.Kilometers => "km",

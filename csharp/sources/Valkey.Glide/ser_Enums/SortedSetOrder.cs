@@ -23,10 +23,10 @@ public enum SortedSetOrder
 
 internal static class SortedSetOrderByExtensions
 {
-    internal static RedisValue GetLiteral(this SortedSetOrder sortedSetOrder) => sortedSetOrder switch
+    internal static ValkeyValue GetLiteral(this SortedSetOrder sortedSetOrder) => sortedSetOrder switch
     {
-        SortedSetOrder.ByLex => RedisLiterals.BYLEX,
-        SortedSetOrder.ByScore => RedisLiterals.BYSCORE,
-        _ => RedisValue.Null,
+        SortedSetOrder.ByLex => ValkeyLiterals.BYLEX,
+        SortedSetOrder.ByScore => ValkeyLiterals.BYSCORE,
+        _ => ValkeyValue.Null,
     };
 }

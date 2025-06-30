@@ -4,7 +4,7 @@ using System.ComponentModel;
 namespace Valkey.Glide;
 
 /// <summary>
-/// The underlying result type as defined by Redis.
+/// The underlying result type as defined by Valkey.
 /// </summary>
 public enum ResultType : byte
 {
@@ -78,7 +78,7 @@ public enum ResultType : byte
     BlobError = (1 << 3) | Error,
 
     /// <summary>
-    /// A binary safe string that should be displayed to humans without any escaping or filtering. For instance the output of <c>LATENCY DOCTOR</c> in Redis.
+    /// A binary safe string that should be displayed to humans without any escaping or filtering. For instance the output of <c>LATENCY DOCTOR</c> in Valkey.
     /// </summary>
     VerbatimString = (1 << 3) | BulkString,
 

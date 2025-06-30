@@ -13,7 +13,7 @@ public readonly struct GeoRadiusResult
     /// <summary>
     /// The matched member.
     /// </summary>
-    public RedisValue Member { get; }
+    public ValkeyValue Member { get; }
 
     /// <summary>
     /// The distance of the matched member from the center of the geo radius command.
@@ -38,7 +38,7 @@ public readonly struct GeoRadiusResult
     /// <param name="distance">The distance from the result.</param>
     /// <param name="hash">The hash of the result.</param>
     /// <param name="position">The GeoPosition of the result.</param>
-    public GeoRadiusResult(in RedisValue member, double? distance, long? hash, GeoPosition? position)
+    public GeoRadiusResult(in ValkeyValue member, double? distance, long? hash, GeoPosition? position)
     {
         Member = member;
         Distance = distance;

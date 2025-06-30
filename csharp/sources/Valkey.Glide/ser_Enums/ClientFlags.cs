@@ -89,7 +89,7 @@ public enum ClientFlags : long
     /// <summary>
     /// The client is a replica in MONITOR mode.
     /// </summary>
-    [Obsolete("Starting with Redis version 5, Redis has moved to 'replica' terminology. Please use " + nameof(ReplicaMonitor) + " instead, this will be removed in 3.0.")]
+    [Obsolete("Starting with Valkey version 5, Valkey has moved to 'replica' terminology. Please use " + nameof(ReplicaMonitor) + " instead, this will be removed in 3.0.")]
     [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
     SlaveMonitor = 1,
 
@@ -101,7 +101,7 @@ public enum ClientFlags : long
     /// <summary>
     /// The client is a normal replica server.
     /// </summary>
-    [Obsolete("Starting with Redis version 5, Redis has moved to 'replica' terminology. Please use " + nameof(Replica) + " instead, this will be removed in 3.0.")]
+    [Obsolete("Starting with Valkey version 5, Valkey has moved to 'replica' terminology. Please use " + nameof(Replica) + " instead, this will be removed in 3.0.")]
     [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
     Slave = 2,
 

@@ -20,10 +20,10 @@ public enum Order
 
 internal static class OrderExtensions
 {
-    internal static RedisValue ToLiteral(this Order order) => order switch
+    internal static ValkeyValue ToLiteral(this Order order) => order switch
     {
-        Order.Ascending => RedisLiterals.ASC,
-        Order.Descending => RedisLiterals.DESC,
+        Order.Ascending => ValkeyLiterals.ASC,
+        Order.Descending => ValkeyLiterals.DESC,
         _ => throw new ArgumentOutOfRangeException(nameof(order)),
     };
 }

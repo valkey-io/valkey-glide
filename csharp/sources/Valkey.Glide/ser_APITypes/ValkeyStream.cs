@@ -1,11 +1,11 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Describes a Redis Stream with an associated array of entries.
+/// Describes a Valkey Stream with an associated array of entries.
 /// </summary>
-public readonly struct RedisStream
+public readonly struct ValkeyStream
 {
-    internal RedisStream(RedisKey key, StreamEntry[] entries)
+    internal ValkeyStream(ValkeyKey key, StreamEntry[] entries)
     {
         Key = key;
         Entries = entries;
@@ -14,7 +14,7 @@ public readonly struct RedisStream
     /// <summary>
     /// The key for the stream.
     /// </summary>
-    public RedisKey Key { get; }
+    public ValkeyKey Key { get; }
 
     /// <summary>
     /// An array of entries contained within the stream.

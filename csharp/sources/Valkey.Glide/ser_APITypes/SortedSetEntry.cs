@@ -9,15 +9,15 @@ namespace Valkey.Glide;
 /// </summary>
 public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable, IComparable<SortedSetEntry>
 {
-    internal readonly RedisValue element;
+    internal readonly ValkeyValue element;
     internal readonly double score;
 
     /// <summary>
     /// Initializes a <see cref="SortedSetEntry"/> value.
     /// </summary>
-    /// <param name="element">The <see cref="RedisValue"/> to get an entry for.</param>
+    /// <param name="element">The <see cref="ValkeyValue"/> to get an entry for.</param>
     /// <param name="score">The redis score for <paramref name="element"/>.</param>
-    public SortedSetEntry(RedisValue element, double score)
+    public SortedSetEntry(ValkeyValue element, double score)
     {
         this.element = element;
         this.score = score;
@@ -26,7 +26,7 @@ public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable,
     /// <summary>
     /// The unique element stored in the sorted set.
     /// </summary>
-    public RedisValue Element => element;
+    public ValkeyValue Element => element;
 
     /// <summary>
     /// The score against the element.
@@ -45,19 +45,19 @@ public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable,
     /// </summary>
     [Browsable(false)]
     [EditorBrowsable(EditorBrowsableState.Never), Obsolete("Please use Element", false)]
-    public RedisValue Key => element;
+    public ValkeyValue Key => element;
 
     /// <summary>
     /// Converts to a key/value pair.
     /// </summary>
     /// <param name="value">The <see cref="SortedSetEntry"/> to get a <see cref="KeyValuePair{TKey, TValue}"/> for.</param>
-    public static implicit operator KeyValuePair<RedisValue, double>(SortedSetEntry value) => new KeyValuePair<RedisValue, double>(value.element, value.score);
+    public static implicit operator KeyValuePair<ValkeyValue, double>(SortedSetEntry value) => new KeyValuePair<ValkeyValue, double>(value.element, value.score);
 
     /// <summary>
     /// Converts from a key/value pair.
     /// </summary>
     /// <param name="value">The  <see cref="KeyValuePair{TKey, TValue}"/> to get a <see cref="SortedSetEntry"/> for.</param>
-    public static implicit operator SortedSetEntry(KeyValuePair<RedisValue, double> value) => new SortedSetEntry(value.Key, value.Value);
+    public static implicit operator SortedSetEntry(KeyValuePair<ValkeyValue, double> value) => new SortedSetEntry(value.Key, value.Value);
 
     /// <summary>
     /// A "{element}: {score}" string representation of the entry.

@@ -35,12 +35,12 @@ public enum ExpireWhen
 
 internal static class ExpiryOptionExtensions
 {
-    internal static RedisValue ToLiteral(this ExpireWhen op) => op switch
+    internal static ValkeyValue ToLiteral(this ExpireWhen op) => op switch
     {
-        ExpireWhen.HasNoExpiry => RedisLiterals.NX,
-        ExpireWhen.HasExpiry => RedisLiterals.XX,
-        ExpireWhen.GreaterThanCurrentExpiry => RedisLiterals.GT,
-        ExpireWhen.LessThanCurrentExpiry => RedisLiterals.LT,
+        ExpireWhen.HasNoExpiry => ValkeyLiterals.NX,
+        ExpireWhen.HasExpiry => ValkeyLiterals.XX,
+        ExpireWhen.GreaterThanCurrentExpiry => ValkeyLiterals.GT,
+        ExpireWhen.LessThanCurrentExpiry => ValkeyLiterals.LT,
         _ => throw new ArgumentOutOfRangeException(nameof(op)),
     };
 }
