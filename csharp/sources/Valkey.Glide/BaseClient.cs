@@ -17,6 +17,103 @@ namespace Valkey.Glide;
 public abstract partial class BaseClient : IDisposable
 {
     #region public methods
+
+    /**
+    =================================
+    SET COMMANDS
+    =================================
+    */
+    public async Task<bool> SetAdd(RedisKey key, RedisValue value, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), value.ToString()];
+        return await CommandValueType(RequestType.SAdd, args, response => HandleServerResponseValueType<long, bool>(response, false, res => res == 1));
+    }
+
+    public async Task<long> SetAdd(RedisKey key, RedisValue[] values, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
+        return await CommandValueType(RequestType.SAdd, args, response => HandleServerResponseValueType<long>(response));
+    }
+
+    public async Task<bool> SetRemove(RedisKey key, RedisValue value, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), value.ToString()];
+        return await CommandValueType(RequestType.SRem, args, response => HandleServerResponseValueType<long, bool>(response, false, res => res == 1));
+    }
+
+    public async Task<long> SetRemove(RedisKey key, RedisValue[] values, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
+        return await CommandValueType(RequestType.SRem, args, response => HandleServerResponseValueType<long>(response));
+    }
+
+    public async Task<RedisValue[]> SetMembers(RedisKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(RequestType.SMembers, [key.ToString()], response => HandleServerResponse<HashSet<object>, RedisValue[]>(response, false, set => set.Select(obj => (RedisValue)obj.ToString()).ToArray()));
+
+    public async Task<long> SetLength(RedisKey key, CommandFlags flags = CommandFlags.None)
+        => await CommandValueType(RequestType.SCard, [key.ToString()], response => HandleServerResponseValueType<long>(response));
+
+    public async Task<long> SetIntersectionLength(RedisKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
+    {
+        List<GlideString> args = [keys.Length.ToString(), .. keys.Select(k => k.ToString())];
+        if (limit > 0)
+        {
+            args.Add(Constants.LimitKeyword);
+            args.Add(limit.ToString());
+        }
+        return await CommandValueType(RequestType.SInterCard, args.ToArray(), response => HandleServerResponseValueType<long>(response));
+    }
+
+    public async Task<RedisValue> SetPop(RedisKey key, CommandFlags flags = CommandFlags.None)
+    {
+        return await CommandValueType(RequestType.SPop, [key.ToString()], response =>
+        {
+            var result = HandleServerResponse<GlideString>(response, true);
+            return result is not null ? (RedisValue)result.ToString() : RedisValue.Null;
+        });
+    }
+
+    public async Task<RedisValue[]> SetPop(RedisKey key, long count, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), count.ToString()];
+        return await Command(RequestType.SPop, args, response => HandleServerResponse<HashSet<object>, RedisValue[]>(response, false, set => set.Select(obj => (RedisValue)obj.ToString()).ToArray()));
+    }
+
+    public async Task<RedisValue[]> SetCombine(SetOperation operation, RedisKey first, RedisKey second, CommandFlags flags = CommandFlags.None)
+        => await SetCombine(operation, [first, second], flags);
+
+    public async Task<RedisValue[]> SetCombine(SetOperation operation, RedisKey[] keys, CommandFlags flags = CommandFlags.None)
+    {
+        RequestType requestType = operation switch
+        {
+            SetOperation.Union => RequestType.SUnion,
+            SetOperation.Intersect => RequestType.SInter,
+            SetOperation.Difference => RequestType.SDiff,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        GlideString[] args = keys.Select(k => (GlideString)k.ToString()).ToArray();
+        return await Command(requestType, args, response => HandleServerResponse<HashSet<object>, RedisValue[]>(response, false, set => set.Select(obj => (RedisValue)obj.ToString()).ToArray()));
+    }
+
+    public async Task<long> SetCombineAndStore(SetOperation operation, RedisKey destination, RedisKey first, RedisKey second, CommandFlags flags = CommandFlags.None)
+        => await SetCombineAndStore(operation, destination, [first, second], flags);
+
+    public async Task<long> SetCombineAndStore(SetOperation operation, RedisKey destination, RedisKey[] keys, CommandFlags flags = CommandFlags.None)
+    {
+        RequestType requestType = operation switch
+        {
+            SetOperation.Union => RequestType.SUnionStore,
+            SetOperation.Intersect => RequestType.SInterStore,
+            SetOperation.Difference => RequestType.SDiffStore,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        List<GlideString> args = [destination.ToString()];
+        args.AddRange(keys.Select(k => (GlideString)k.ToString()));
+        return await CommandValueType(requestType, args.ToArray(), response => HandleServerResponseValueType<long>(response));
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);
@@ -72,6 +169,33 @@ public abstract partial class BaseClient : IDisposable
     /// <param name="route"></param>
     /// <returns></returns>
     internal async Task<T> Command<R, T>(Request.Cmd<R, T> command, Route? route = null)
+    {
+        // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
+        using Cmd cmd = command.ToFfi();
+
+        // 2. Allocate memory for route
+        using FFI.Route? ffiRoute = route?.ToFfi();
+
+        // 3. Sumbit request to the rust part
+        Message message = _messageContainer.GetMessageForCall();
+        CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
+
+        // 4. Get a response and Handle it
+        IntPtr response = await message;
+        try
+        {
+            return HandleServerValue(HandleResponse(response), command.IsNullable, command.Converter);
+        }
+        finally
+        {
+            FreeResponse(response);
+        }
+
+        // All memory allocated is auto-freed by `using` operator
+    }
+
+    // TODO: remove
+    internal async Task<T> CommandValueType<T>(RequestType requestType, GlideString[] arguments, Func<IntPtr, T> responseHandler, Route? route = null) where T : struct
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
         using Cmd cmd = command.ToFfi();
