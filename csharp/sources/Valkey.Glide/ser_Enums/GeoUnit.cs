@@ -30,12 +30,12 @@ public enum GeoUnit
 
 internal static class GeoUnitExtensions
 {
-    internal static RedisValue ToLiteral(this GeoUnit unit) => unit switch
+    internal static ValkeyValue ToLiteral(this GeoUnit unit) => unit switch
     {
-        GeoUnit.Feet => RedisLiterals.ft,
-        GeoUnit.Kilometers => RedisLiterals.km,
-        GeoUnit.Meters => RedisLiterals.m,
-        GeoUnit.Miles => RedisLiterals.mi,
+        GeoUnit.Feet => ValkeyLiterals.ft,
+        GeoUnit.Kilometers => ValkeyLiterals.km,
+        GeoUnit.Meters => ValkeyLiterals.m,
+        GeoUnit.Miles => ValkeyLiterals.mi,
         _ => throw new ArgumentOutOfRangeException(nameof(unit)),
     };
 }

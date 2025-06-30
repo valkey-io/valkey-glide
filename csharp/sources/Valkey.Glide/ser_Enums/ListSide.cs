@@ -20,10 +20,10 @@ public enum ListSide
 
 internal static class ListSideExtensions
 {
-    internal static RedisValue ToLiteral(this ListSide side) => side switch
+    internal static ValkeyValue ToLiteral(this ListSide side) => side switch
     {
-        ListSide.Left => RedisLiterals.LEFT,
-        ListSide.Right => RedisLiterals.RIGHT,
+        ListSide.Left => ValkeyLiterals.LEFT,
+        ListSide.Right => ValkeyLiterals.RIGHT,
         _ => throw new ArgumentOutOfRangeException(nameof(side)),
     };
 }

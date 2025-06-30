@@ -9,85 +9,85 @@ using System.Threading.Tasks;
 namespace Valkey.Glide.Commands;
 internal interface IHashCommands
 {
-    /// <inheritdoc cref="IDatabase.HashDecrement(RedisKey, RedisValue, long, CommandFlags)"/>
-    Task<long> HashDecrementAsync(RedisKey key, RedisValue hashField, long value = 1, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashDecrement(ValkeyKey, ValkeyValue, long, CommandFlags)"/>
+    Task<long> HashDecrementAsync(ValkeyKey key, ValkeyValue hashField, long value = 1, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashDecrement(RedisKey, RedisValue, double, CommandFlags)"/>
-    Task<double> HashDecrementAsync(RedisKey key, RedisValue hashField, double value, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashDecrement(ValkeyKey, ValkeyValue, double, CommandFlags)"/>
+    Task<double> HashDecrementAsync(ValkeyKey key, ValkeyValue hashField, double value, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashDelete(RedisKey, RedisValue, CommandFlags)"/>
-    Task<bool> HashDeleteAsync(RedisKey key, RedisValue hashField, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashDelete(ValkeyKey, ValkeyValue, CommandFlags)"/>
+    Task<bool> HashDeleteAsync(ValkeyKey key, ValkeyValue hashField, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashDelete(RedisKey, RedisValue[], CommandFlags)"/>
-    Task<long> HashDeleteAsync(RedisKey key, RedisValue[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashDelete(ValkeyKey, ValkeyValue[], CommandFlags)"/>
+    Task<long> HashDeleteAsync(ValkeyKey key, ValkeyValue[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashExists(RedisKey, RedisValue, CommandFlags)"/>
-    Task<bool> HashExistsAsync(RedisKey key, RedisValue hashField, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashExists(ValkeyKey, ValkeyValue, CommandFlags)"/>
+    Task<bool> HashExistsAsync(ValkeyKey key, ValkeyValue hashField, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashFieldExpire(RedisKey, RedisValue[], TimeSpan, ExpireWhen, CommandFlags)"/>
-    Task<ExpireResult[]> HashFieldExpireAsync(RedisKey key, RedisValue[] hashFields, TimeSpan expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashFieldExpire(ValkeyKey, ValkeyValue[], TimeSpan, ExpireWhen, CommandFlags)"/>
+    Task<ExpireResult[]> HashFieldExpireAsync(ValkeyKey key, ValkeyValue[] hashFields, TimeSpan expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashFieldExpire(RedisKey, RedisValue[], DateTime, ExpireWhen, CommandFlags)"/>
-    Task<ExpireResult[]> HashFieldExpireAsync(RedisKey key, RedisValue[] hashFields, DateTime expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashFieldExpire(ValkeyKey, ValkeyValue[], DateTime, ExpireWhen, CommandFlags)"/>
+    Task<ExpireResult[]> HashFieldExpireAsync(ValkeyKey key, ValkeyValue[] hashFields, DateTime expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashFieldGetExpireDateTime(RedisKey, RedisValue[], CommandFlags)"/>
-    Task<long[]> HashFieldGetExpireDateTimeAsync(RedisKey key, RedisValue[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashFieldGetExpireDateTime(ValkeyKey, ValkeyValue[], CommandFlags)"/>
+    Task<long[]> HashFieldGetExpireDateTimeAsync(ValkeyKey key, ValkeyValue[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="HashFieldPersistAsync(RedisKey, RedisValue[], CommandFlags)"/>
-    Task<PersistResult[]> HashFieldPersistAsync(RedisKey key, RedisValue[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="HashFieldPersistAsync(ValkeyKey, ValkeyValue[], CommandFlags)"/>
+    Task<PersistResult[]> HashFieldPersistAsync(ValkeyKey key, ValkeyValue[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashFieldGetTimeToLive(RedisKey, RedisValue[], CommandFlags)"/>
-    Task<long[]> HashFieldGetTimeToLiveAsync(RedisKey key, RedisValue[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashFieldGetTimeToLive(ValkeyKey, ValkeyValue[], CommandFlags)"/>
+    Task<long[]> HashFieldGetTimeToLiveAsync(ValkeyKey key, ValkeyValue[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashGet(RedisKey, RedisValue, CommandFlags)"/>
-    Task<RedisValue> HashGetAsync(RedisKey key, RedisValue hashField, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashGet(ValkeyKey, ValkeyValue, CommandFlags)"/>
+    Task<ValkeyValue> HashGetAsync(ValkeyKey key, ValkeyValue hashField, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashGetLease(RedisKey, RedisValue, CommandFlags)"/>
-    //Task<Lease<byte>?> HashGetLeaseAsync(RedisKey key, RedisValue hashField, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashGetLease(ValkeyKey, ValkeyValue, CommandFlags)"/>
+    //Task<Lease<byte>?> HashGetLeaseAsync(ValkeyKey key, ValkeyValue hashField, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashGet(RedisKey, RedisValue[], CommandFlags)"/>
-    Task<RedisValue[]> HashGetAsync(RedisKey key, RedisValue[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashGet(ValkeyKey, ValkeyValue[], CommandFlags)"/>
+    Task<ValkeyValue[]> HashGetAsync(ValkeyKey key, ValkeyValue[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashGetAll(RedisKey, CommandFlags)"/>
-    Task<HashEntry[]> HashGetAllAsync(RedisKey key, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashGetAll(ValkeyKey, CommandFlags)"/>
+    Task<HashEntry[]> HashGetAllAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashIncrement(RedisKey, RedisValue, long, CommandFlags)"/>
-    Task<long> HashIncrementAsync(RedisKey key, RedisValue hashField, long value = 1, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashIncrement(ValkeyKey, ValkeyValue, long, CommandFlags)"/>
+    Task<long> HashIncrementAsync(ValkeyKey key, ValkeyValue hashField, long value = 1, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashIncrement(RedisKey, RedisValue, double, CommandFlags)"/>
-    Task<double> HashIncrementAsync(RedisKey key, RedisValue hashField, double value, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashIncrement(ValkeyKey, ValkeyValue, double, CommandFlags)"/>
+    Task<double> HashIncrementAsync(ValkeyKey key, ValkeyValue hashField, double value, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashKeys(RedisKey, CommandFlags)"/>
-    Task<RedisValue[]> HashKeysAsync(RedisKey key, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashKeys(ValkeyKey, CommandFlags)"/>
+    Task<ValkeyValue[]> HashKeysAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashLength(RedisKey, CommandFlags)"/>
-    Task<long> HashLengthAsync(RedisKey key, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashLength(ValkeyKey, CommandFlags)"/>
+    Task<long> HashLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashRandomField(RedisKey, CommandFlags)"/>
-    Task<RedisValue> HashRandomFieldAsync(RedisKey key, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashRandomField(ValkeyKey, CommandFlags)"/>
+    Task<ValkeyValue> HashRandomFieldAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashRandomFields(RedisKey, long, CommandFlags)"/>
-    Task<RedisValue[]> HashRandomFieldsAsync(RedisKey key, long count, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashRandomFields(ValkeyKey, long, CommandFlags)"/>
+    Task<ValkeyValue[]> HashRandomFieldsAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashRandomFieldsWithValues(RedisKey, long, CommandFlags)"/>
-    Task<HashEntry[]> HashRandomFieldsWithValuesAsync(RedisKey key, long count, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashRandomFieldsWithValues(ValkeyKey, long, CommandFlags)"/>
+    Task<HashEntry[]> HashRandomFieldsWithValuesAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashScan(RedisKey, RedisValue, int, long, int, CommandFlags)"/>
-    //IAsyncEnumerable<HashEntry> HashScanAsync(RedisKey key, RedisValue pattern = default, int pageSize = RedisBase.CursorUtils.DefaultLibraryPageSize, long cursor = RedisBase.CursorUtils.Origin, int pageOffset = 0, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashScan(ValkeyKey, ValkeyValue, int, long, int, CommandFlags)"/>
+    //IAsyncEnumerable<HashEntry> HashScanAsync(ValkeyKey key, ValkeyValue pattern = default, int pageSize = ValkeyBase.CursorUtils.DefaultLibraryPageSize, long cursor = ValkeyBase.CursorUtils.Origin, int pageOffset = 0, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashScanNoValues(RedisKey, RedisValue, int, long, int, CommandFlags)"/>
-    //IAsyncEnumerable<RedisValue> HashScanNoValuesAsync(RedisKey key, RedisValue pattern = default, int pageSize = RedisBase.CursorUtils.DefaultLibraryPageSize, long cursor = RedisBase.CursorUtils.Origin, int pageOffset = 0, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashScanNoValues(ValkeyKey, ValkeyValue, int, long, int, CommandFlags)"/>
+    //IAsyncEnumerable<ValkeyValue> HashScanNoValuesAsync(ValkeyKey key, ValkeyValue pattern = default, int pageSize = ValkeyBase.CursorUtils.DefaultLibraryPageSize, long cursor = ValkeyBase.CursorUtils.Origin, int pageOffset = 0, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashSet(RedisKey, HashEntry[], CommandFlags)"/>
-    Task HashSetAsync(RedisKey key, HashEntry[] hashFields, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashSet(ValkeyKey, HashEntry[], CommandFlags)"/>
+    Task HashSetAsync(ValkeyKey key, HashEntry[] hashFields, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashSet(RedisKey, RedisValue, RedisValue, When, CommandFlags)"/>
-    Task<bool> HashSetAsync(RedisKey key, RedisValue hashField, RedisValue value, When when = When.Always, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashSet(ValkeyKey, ValkeyValue, ValkeyValue, When, CommandFlags)"/>
+    Task<bool> HashSetAsync(ValkeyKey key, ValkeyValue hashField, ValkeyValue value, When when = When.Always, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashStringLength(RedisKey, RedisValue, CommandFlags)"/>
-    Task<long> HashStringLengthAsync(RedisKey key, RedisValue hashField, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashStringLength(ValkeyKey, ValkeyValue, CommandFlags)"/>
+    Task<long> HashStringLengthAsync(ValkeyKey key, ValkeyValue hashField, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="IDatabase.HashValues(RedisKey, CommandFlags)"/>
-    Task<RedisValue[]> HashValuesAsync(RedisKey key, CommandFlags flags = CommandFlags.None);
+    /// <inheritdoc cref="IDatabase.HashValues(ValkeyKey, CommandFlags)"/>
+    Task<ValkeyValue[]> HashValuesAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
 }

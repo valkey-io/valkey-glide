@@ -8,7 +8,7 @@ namespace Valkey.Glide;
 public enum SaveType
 {
     /// <summary>
-    /// Instruct Redis to start an Append Only File rewrite process.
+    /// Instruct Valkey to start an Append Only File rewrite process.
     /// The rewrite will create a small optimized version of the current Append Only File.
     /// </summary>
     /// <remarks><seealso href="https://redis.io/commands/bgrewriteaof"/></remarks>
@@ -16,7 +16,7 @@ public enum SaveType
 
     /// <summary>
     /// Save the DB in background. The OK code is immediately returned.
-    /// Redis forks, the parent continues to serve the clients, the child saves the DB on disk then exits.
+    /// Valkey forks, the parent continues to serve the clients, the child saves the DB on disk then exits.
     /// A client my be able to check if the operation succeeded using the LASTSAVE command.
     /// </summary>
     /// <remarks><seealso href="https://redis.io/commands/bgsave"/></remarks>

@@ -3,14 +3,14 @@
 namespace Valkey.Glide;
 
 /// <summary>
-/// Describes an entry contained in a Redis Stream.
+/// Describes an entry contained in a Valkey Stream.
 /// </summary>
 public readonly struct StreamEntry
 {
     /// <summary>
     /// Creates an stream entry.
     /// </summary>
-    public StreamEntry(RedisValue id, NameValueEntry[] values)
+    public StreamEntry(ValkeyValue id, NameValueEntry[] values)
     {
         Id = id;
         Values = values;
@@ -19,12 +19,12 @@ public readonly struct StreamEntry
     /// <summary>
     /// A null stream entry.
     /// </summary>
-    public static StreamEntry Null { get; } = new StreamEntry(RedisValue.Null, Array.Empty<NameValueEntry>());
+    public static StreamEntry Null { get; } = new StreamEntry(ValkeyValue.Null, Array.Empty<NameValueEntry>());
 
     /// <summary>
     /// The ID assigned to the message.
     /// </summary>
-    public RedisValue Id { get; }
+    public ValkeyValue Id { get; }
 
     /// <summary>
     /// The values contained within the message.
@@ -34,7 +34,7 @@ public readonly struct StreamEntry
     /// <summary>
     /// Search for a specific field by name, returning the value.
     /// </summary>
-    public RedisValue this[RedisValue fieldName]
+    public ValkeyValue this[ValkeyValue fieldName]
     {
         get
         {
@@ -47,12 +47,12 @@ public readonly struct StreamEntry
                         return values[i].value;
                 }
             }
-            return RedisValue.Null;
+            return ValkeyValue.Null;
         }
     }
 
     /// <summary>
-    /// Indicates that the Redis Stream Entry is null.
+    /// Indicates that the Valkey Stream Entry is null.
     /// </summary>
-    public bool IsNull => Id == RedisValue.Null && Values == Array.Empty<NameValueEntry>();
+    public bool IsNull => Id == ValkeyValue.Null && Values == Array.Empty<NameValueEntry>();
 }

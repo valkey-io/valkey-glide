@@ -22,7 +22,7 @@ public enum ClientType
     /// <summary>
     /// Replication connections.
     /// </summary>
-    [Obsolete("Starting with Redis version 5, Redis has moved to 'replica' terminology. Please use " + nameof(Replica) + " instead, this will be removed in 3.0.")]
+    [Obsolete("Starting with Valkey version 5, Valkey has moved to 'replica' terminology. Please use " + nameof(Replica) + " instead, this will be removed in 3.0.")]
     [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
     Slave = 1,
 

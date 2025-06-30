@@ -5,12 +5,12 @@ namespace Valkey.Glide;
 /// <summary>
 /// Describes a value/expiry pair.
 /// </summary>
-public readonly struct RedisValueWithExpiry
+public readonly struct ValkeyValueWithExpiry
 {
     /// <summary>
-    /// Creates a <see cref="RedisValueWithExpiry"/> from a <see cref="RedisValue"/> and a <see cref="Nullable{TimeSpan}"/>.
+    /// Creates a <see cref="ValkeyValueWithExpiry"/> from a <see cref="ValkeyValue"/> and a <see cref="Nullable{TimeSpan}"/>.
     /// </summary>
-    public RedisValueWithExpiry(RedisValue value, TimeSpan? expiry)
+    public ValkeyValueWithExpiry(ValkeyValue value, TimeSpan? expiry)
     {
         Value = value;
         Expiry = expiry;
@@ -24,5 +24,5 @@ public readonly struct RedisValueWithExpiry
     /// <summary>
     /// The value of this record.
     /// </summary>
-    public RedisValue Value { get; }
+    public ValkeyValue Value { get; }
 }

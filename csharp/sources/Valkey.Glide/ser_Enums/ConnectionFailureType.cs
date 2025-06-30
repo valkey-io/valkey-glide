@@ -21,7 +21,7 @@ public enum ConnectionFailureType
     SocketFailure,
 
     /// <summary>
-    /// Either SSL Stream or Redis authentication failed.
+    /// Either SSL Stream or Valkey authentication failed.
     /// </summary>
     AuthenticationFailure,
 

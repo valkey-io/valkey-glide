@@ -25,14 +25,14 @@ public enum SetOperation
 
 internal static class SetOperationExtensions
 {
-    internal static RedisCommand ToCommand(this SetOperation operation, bool store) => operation switch
+    internal static ValkeyCommand ToCommand(this SetOperation operation, bool store) => operation switch
     {
-        SetOperation.Intersect when store => RedisCommand.ZINTERSTORE,
-        SetOperation.Intersect => RedisCommand.ZINTER,
-        SetOperation.Union when store => RedisCommand.ZUNIONSTORE,
-        SetOperation.Union => RedisCommand.ZUNION,
-        SetOperation.Difference when store => RedisCommand.ZDIFFSTORE,
-        SetOperation.Difference => RedisCommand.ZDIFF,
+        SetOperation.Intersect when store => ValkeyCommand.ZINTERSTORE,
+        SetOperation.Intersect => ValkeyCommand.ZINTER,
+        SetOperation.Union when store => ValkeyCommand.ZUNIONSTORE,
+        SetOperation.Union => ValkeyCommand.ZUNION,
+        SetOperation.Difference when store => ValkeyCommand.ZDIFFSTORE,
+        SetOperation.Difference => ValkeyCommand.ZDIFF,
         _ => throw new ArgumentOutOfRangeException(nameof(operation)),
     };
 }

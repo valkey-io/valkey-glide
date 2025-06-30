@@ -16,24 +16,24 @@ namespace Valkey.Glide;
 /// <summary>
 /// Represents values that can be stored in redis.
 /// </summary>
-public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisValue>, IComparable, IConvertible
+public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<ValkeyValue>, IComparable, IConvertible
 {
-    internal static readonly RedisValue[] EmptyArray = Array.Empty<RedisValue>();
+    internal static readonly ValkeyValue[] EmptyArray = Array.Empty<ValkeyValue>();
 
     private readonly object? _objectOrSentinel;
     private readonly ReadOnlyMemory<byte> _memory;
     private readonly long _overlappedBits64;
 
-    private RedisValue(long overlappedValue64, ReadOnlyMemory<byte> memory, object? objectOrSentinel)
+    private ValkeyValue(long overlappedValue64, ReadOnlyMemory<byte> memory, object? objectOrSentinel)
     {
         _overlappedBits64 = overlappedValue64;
         _memory = memory;
         _objectOrSentinel = objectOrSentinel;
     }
 
-    internal RedisValue(object obj, long overlappedBits)
+    internal ValkeyValue(object obj, long overlappedBits)
     {
-        // this creates a bodged RedisValue which should **never**
+        // this creates a bodged ValkeyValue which should **never**
         // be seen directly; the contents are ... unexpected
         _overlappedBits64 = overlappedBits;
         _objectOrSentinel = obj;
@@ -41,9 +41,9 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Creates a <see cref="RedisValue"/> from a string.
+    /// Creates a <see cref="ValkeyValue"/> from a string.
     /// </summary>
-    public RedisValue(string value) : this(0, default, value) { }
+    public ValkeyValue(string value) : this(0, default, value) { }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Roslynator", "RCS1085:Use auto-implemented property.", Justification = "Intentional field ref")]
     internal object? DirectObject => _objectOrSentinel;
@@ -88,7 +88,7 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     /// Parse this object as a value - to be used alongside Box.
     /// </summary>
     /// <param name="value">The value to unbox.</param>
-    public static RedisValue Unbox(object? value)
+    public static ValkeyValue Unbox(object? value)
     {
         var val = TryParse(value, out var valid);
         if (!valid) throw new ArgumentException("Could not parse value", nameof(value));
@@ -98,17 +98,17 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     /// <summary>
     /// Represents the string <c>""</c>.
     /// </summary>
-    public static RedisValue EmptyString { get; } = new RedisValue(0, default, Sentinel_Raw);
+    public static ValkeyValue EmptyString { get; } = new ValkeyValue(0, default, Sentinel_Raw);
 
     // note: it is *really important* that this s_EmptyString assignment happens *after* the EmptyString initializer above!
     private static readonly object s_DoubleNAN = double.NaN, s_DoublePosInf = double.PositiveInfinity, s_DoubleNegInf = double.NegativeInfinity,
-        s_EmptyString = RedisValue.EmptyString;
+        s_EmptyString = ValkeyValue.EmptyString;
     private static readonly object[] s_CommonInt32 = Enumerable.Range(-1, 22).Select(i => (object)i).ToArray(); // [-1,20] = 22 values
 
     /// <summary>
     /// A null value.
     /// </summary>
-    public static RedisValue Null { get; } = new RedisValue(0, default, null);
+    public static ValkeyValue Null { get; } = new ValkeyValue(0, default, null);
 
     /// <summary>
     /// Indicates whether the **underlying** value is a primitive integer (signed or unsigned); this is **not**
@@ -144,11 +144,11 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     public bool HasValue => !IsNullOrEmpty;
 
     /// <summary>
-    /// Indicates whether two RedisValue values are equivalent.
+    /// Indicates whether two ValkeyValue values are equivalent.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisValue"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisValue"/> to compare.</param>
-    public static bool operator !=(RedisValue x, RedisValue y) => !(x == y);
+    /// <param name="x">The first <see cref="ValkeyValue"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyValue"/> to compare.</param>
+    public static bool operator !=(ValkeyValue x, ValkeyValue y) => !(x == y);
 
     private double OverlappedValueDouble
     {
@@ -169,11 +169,11 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Indicates whether two RedisValue values are equivalent.
+    /// Indicates whether two ValkeyValue values are equivalent.
     /// </summary>
-    /// <param name="x">The first <see cref="RedisValue"/> to compare.</param>
-    /// <param name="y">The second <see cref="RedisValue"/> to compare.</param>
-    public static bool operator ==(RedisValue x, RedisValue y)
+    /// <param name="x">The first <see cref="ValkeyValue"/> to compare.</param>
+    /// <param name="y">The second <see cref="ValkeyValue"/> to compare.</param>
+    public static bool operator ==(ValkeyValue x, ValkeyValue y)
     {
         x = x.Simplify();
         y = y.Simplify();
@@ -222,24 +222,24 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     /// <summary>
     /// See <see cref="object.Equals(object)"/>.
     /// </summary>
-    /// <param name="obj">The other <see cref="RedisValue"/> to compare.</param>
+    /// <param name="obj">The other <see cref="ValkeyValue"/> to compare.</param>
     public override bool Equals(object? obj)
     {
         if (obj == null) return IsNull;
-        if (obj is RedisValue typed) return Equals(typed);
+        if (obj is ValkeyValue typed) return Equals(typed);
         var other = TryParse(obj, out var valid);
         return valid && this == other; // can't be equal if parse fail
     }
 
     /// <summary>
-    /// Indicates whether two RedisValue values are equivalent.
+    /// Indicates whether two ValkeyValue values are equivalent.
     /// </summary>
-    /// <param name="other">The <see cref="RedisValue"/> to compare to.</param>
-    public bool Equals(RedisValue other) => this == other;
+    /// <param name="other">The <see cref="ValkeyValue"/> to compare to.</param>
+    public bool Equals(ValkeyValue other) => this == other;
 
     /// <inheritdoc/>
     public override int GetHashCode() => GetHashCode(this);
-    private static int GetHashCode(RedisValue x)
+    private static int GetHashCode(ValkeyValue x)
     {
         x = x.Simplify();
         return x.Type switch
@@ -352,12 +352,12 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     };
 
     /// <summary>
-    /// Compare against a RedisValue for relative order.
+    /// Compare against a ValkeyValue for relative order.
     /// </summary>
-    /// <param name="other">The other <see cref="RedisValue"/> to compare.</param>
-    public int CompareTo(RedisValue other) => CompareTo(this, other);
+    /// <param name="other">The other <see cref="ValkeyValue"/> to compare.</param>
+    public int CompareTo(ValkeyValue other) => CompareTo(this, other);
 
-    private static int CompareTo(RedisValue x, RedisValue y)
+    private static int CompareTo(ValkeyValue x, ValkeyValue y)
     {
         try
         {
@@ -423,7 +423,7 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
         return CompareTo(val);
     }
 
-    internal static RedisValue TryParse(object? obj, out bool valid)
+    internal static ValkeyValue TryParse(object? obj, out bool valid)
     {
         valid = true;
         switch (obj)
@@ -440,7 +440,7 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
             case float v: return v;
             case ReadOnlyMemory<byte> v: return v;
             case Memory<byte> v: return v;
-            case RedisValue v: return v;
+            case ValkeyValue v: return v;
             default:
                 valid = false;
                 return Null;
@@ -448,140 +448,140 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="int"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="int"/>.
     /// </summary>
-    /// <param name="value">The <see cref="int"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(int value) => new RedisValue(value, default, Sentinel_SignedInteger);
+    /// <param name="value">The <see cref="int"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(int value) => new ValkeyValue(value, default, Sentinel_SignedInteger);
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{int}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{int}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{int}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(int? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    /// <param name="value">The <see cref="T:Nullable{int}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(int? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="long"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="long"/>.
     /// </summary>
-    /// <param name="value">The <see cref="long"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(long value) => new RedisValue(value, default, Sentinel_SignedInteger);
+    /// <param name="value">The <see cref="long"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(long value) => new ValkeyValue(value, default, Sentinel_SignedInteger);
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{long}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{long}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{long}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(long? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    /// <param name="value">The <see cref="T:Nullable{long}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(long? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="ulong"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="ulong"/>.
     /// </summary>
-    /// <param name="value">The <see cref="ulong"/> to convert to a <see cref="RedisValue"/>.</param>
+    /// <param name="value">The <see cref="ulong"/> to convert to a <see cref="ValkeyValue"/>.</param>
     [CLSCompliant(false)]
-    public static implicit operator RedisValue(ulong value)
+    public static implicit operator ValkeyValue(ulong value)
     {
         const ulong MSB = 1UL << 63;
         return (value & MSB) == 0
-            ? new RedisValue((long)value, default, Sentinel_SignedInteger) // prefer signed whenever we can
-            : new RedisValue(unchecked((long)value), default, Sentinel_UnsignedInteger); // with unsigned as the fallback
+            ? new ValkeyValue((long)value, default, Sentinel_SignedInteger) // prefer signed whenever we can
+            : new ValkeyValue(unchecked((long)value), default, Sentinel_UnsignedInteger); // with unsigned as the fallback
     }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{ulong}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{ulong}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{ulong}"/> to convert to a <see cref="RedisValue"/>.</param>
+    /// <param name="value">The <see cref="T:Nullable{ulong}"/> to convert to a <see cref="ValkeyValue"/>.</param>
     [CLSCompliant(false)]
-    public static implicit operator RedisValue(ulong? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    public static implicit operator ValkeyValue(ulong? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="uint"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="uint"/>.
     /// </summary>
-    /// <param name="value">The <see cref="uint"/> to convert to a <see cref="RedisValue"/>.</param>
+    /// <param name="value">The <see cref="uint"/> to convert to a <see cref="ValkeyValue"/>.</param>
     [CLSCompliant(false)]
-    public static implicit operator RedisValue(uint value) => new RedisValue(value, default, Sentinel_SignedInteger); // 32-bits always fits as signed
+    public static implicit operator ValkeyValue(uint value) => new ValkeyValue(value, default, Sentinel_SignedInteger); // 32-bits always fits as signed
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{uint}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{uint}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{uint}"/> to convert to a <see cref="RedisValue"/>.</param>
+    /// <param name="value">The <see cref="T:Nullable{uint}"/> to convert to a <see cref="ValkeyValue"/>.</param>
     [CLSCompliant(false)]
-    public static implicit operator RedisValue(uint? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    public static implicit operator ValkeyValue(uint? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="double"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="double"/>.
     /// </summary>
-    /// <param name="value">The <see cref="double"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(double value)
+    /// <param name="value">The <see cref="double"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(double value)
     {
         try
         {
             var i64 = (long)value;
             // note: double doesn't offer integer accuracy at 64 bits, so we know it can't be unsigned (only use that for 64-bit)
-            if (value == i64) return new RedisValue(i64, default, Sentinel_SignedInteger);
+            if (value == i64) return new ValkeyValue(i64, default, Sentinel_SignedInteger);
         }
         catch { }
-        return new RedisValue(BitConverter.DoubleToInt64Bits(value), default, Sentinel_Double);
+        return new ValkeyValue(BitConverter.DoubleToInt64Bits(value), default, Sentinel_Double);
     }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{double}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{double}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{double}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(double? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    /// <param name="value">The <see cref="T:Nullable{double}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(double? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from a <see cref="T:ReadOnlyMemory{byte}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from a <see cref="T:ReadOnlyMemory{byte}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:ReadOnlyMemory{byte}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(ReadOnlyMemory<byte> value)
+    /// <param name="value">The <see cref="T:ReadOnlyMemory{byte}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(ReadOnlyMemory<byte> value)
     {
         if (value.Length == 0) return EmptyString;
-        return new RedisValue(0, value, Sentinel_Raw);
+        return new ValkeyValue(0, value, Sentinel_Raw);
     }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from a <see cref="T:Memory{byte}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from a <see cref="T:Memory{byte}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Memory{byte}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(Memory<byte> value) => (ReadOnlyMemory<byte>)value;
+    /// <param name="value">The <see cref="T:Memory{byte}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(Memory<byte> value) => (ReadOnlyMemory<byte>)value;
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="string"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="string"/>.
     /// </summary>
-    /// <param name="value">The <see cref="string"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(string? value)
-    {
-        if (value == null) return Null;
-        if (value.Length == 0) return EmptyString;
-        return new RedisValue(0, default, value);
-    }
-
-    /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:byte[]"/>.
-    /// </summary>
-    /// <param name="value">The <see cref="T:byte[]"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(byte[]? value)
+    /// <param name="value">The <see cref="string"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(string? value)
     {
         if (value == null) return Null;
         if (value.Length == 0) return EmptyString;
-        return new RedisValue(0, new Memory<byte>(value), value);
+        return new ValkeyValue(0, default, value);
     }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="bool"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:byte[]"/>.
     /// </summary>
-    /// <param name="value">The <see cref="bool"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(bool value) => new RedisValue(value ? 1 : 0, default, Sentinel_SignedInteger);
+    /// <param name="value">The <see cref="T:byte[]"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(byte[]? value)
+    {
+        if (value == null) return Null;
+        if (value.Length == 0) return EmptyString;
+        return new ValkeyValue(0, new Memory<byte>(value), value);
+    }
 
     /// <summary>
-    /// Creates a new <see cref="RedisValue"/> from an <see cref="T:Nullable{bool}"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="bool"/>.
     /// </summary>
-    /// <param name="value">The <see cref="T:Nullable{bool}"/> to convert to a <see cref="RedisValue"/>.</param>
-    public static implicit operator RedisValue(bool? value) => value == null ? Null : (RedisValue)value.GetValueOrDefault();
+    /// <param name="value">The <see cref="bool"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(bool value) => new ValkeyValue(value ? 1 : 0, default, Sentinel_SignedInteger);
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="bool"/>.
+    /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{bool}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator bool(RedisValue value) => (long)value switch
+    /// <param name="value">The <see cref="T:Nullable{bool}"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(bool? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
+
+    /// <summary>
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="bool"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator bool(ValkeyValue value) => (long)value switch
     {
         0 => false,
         1 => true,
@@ -589,17 +589,17 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     };
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="int"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="int"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator int(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator int(ValkeyValue value)
         => checked((int)(long)value);
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="long"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="long"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator long(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator long(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -612,11 +612,11 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="uint"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="uint"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
     [CLSCompliant(false)]
-    public static explicit operator uint(RedisValue value)
+    public static explicit operator uint(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -629,11 +629,11 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="long"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="long"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
     [CLSCompliant(false)]
-    public static explicit operator ulong(RedisValue value)
+    public static explicit operator ulong(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -646,10 +646,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="double"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="double"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator double(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator double(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -663,10 +663,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="decimal"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="decimal"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator decimal(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator decimal(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -680,10 +680,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="float"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="float"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator float(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator float(ValkeyValue value)
     {
         value = value.Simplify();
         return value.Type switch
@@ -709,68 +709,68 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{double}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{double}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator double?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator double?(ValkeyValue value)
         => value.IsNull ? (double?)null : (double)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{float}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{float}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator float?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator float?(ValkeyValue value)
         => value.IsNull ? (float?)null : (float)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{decimal}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{decimal}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator decimal?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator decimal?(ValkeyValue value)
         => value.IsNull ? (decimal?)null : (decimal)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{long}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{long}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator long?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator long?(ValkeyValue value)
         => value.IsNull ? (long?)null : (long)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{ulong}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{ulong}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
     [CLSCompliant(false)]
-    public static explicit operator ulong?(RedisValue value)
+    public static explicit operator ulong?(ValkeyValue value)
         => value.IsNull ? (ulong?)null : (ulong)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{int}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{int}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator int?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator int?(ValkeyValue value)
         => value.IsNull ? (int?)null : (int)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{uint}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{uint}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
     [CLSCompliant(false)]
-    public static explicit operator uint?(RedisValue value)
+    public static explicit operator uint?(ValkeyValue value)
         => value.IsNull ? (uint?)null : (uint)value;
 
     /// <summary>
-    /// Converts the <see cref="RedisValue"/> to a <see cref="T:Nullable{bool}"/>.
+    /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{bool}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static explicit operator bool?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static explicit operator bool?(ValkeyValue value)
         => value.IsNull ? (bool?)null : (bool)value;
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="string"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="string"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static implicit operator string?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static implicit operator string?(ValkeyValue value)
     {
         switch (value.Type)
         {
@@ -821,10 +821,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="T:byte[]"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="T:byte[]"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static implicit operator byte[]?(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static implicit operator byte[]?(ValkeyValue value)
     {
         switch (value.Type)
         {
@@ -859,10 +859,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Converts a <see cref="RedisValue"/> to a <see cref="ReadOnlyMemory{T}"/>.
+    /// Converts a <see cref="ValkeyValue"/> to a <see cref="ReadOnlyMemory{T}"/>.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to convert.</param>
-    public static implicit operator ReadOnlyMemory<byte>(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
+    public static implicit operator ReadOnlyMemory<byte>(ValkeyValue value)
         => value.Type == StorageType.Raw ? value._memory : (byte[]?)value;
 
     TypeCode IConvertible.GetTypeCode() => TypeCode.Object;
@@ -885,7 +885,7 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
         if (conversionType == null) throw new ArgumentNullException(nameof(conversionType));
         if (conversionType == typeof(byte[])) return ((byte[]?)this)!;
         if (conversionType == typeof(ReadOnlyMemory<byte>)) return (ReadOnlyMemory<byte>)this;
-        if (conversionType == typeof(RedisValue)) return this;
+        if (conversionType == typeof(ValkeyValue)) return this;
         return System.Type.GetTypeCode(conversionType) switch
         {
             TypeCode.Boolean => (bool)this,
@@ -917,10 +917,10 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     /// Note: we don't use this aggressively ahead of time, a: because of extra CPU,
     /// but more importantly b: because it can change values - for example, if they start
     /// with "123.000", it should **stay** as "123.000", not become 123L; this could be
-    /// a hash key or similar - we don't want to break it; RedisConnection uses
+    /// a hash key or similar - we don't want to break it; ValkeyConnection uses
     /// the storage type, not the "does it look like a long?" - for this reason.
     /// </summary>
-    internal RedisValue Simplify()
+    internal ValkeyValue Simplify()
     {
         long i64;
         ulong u64;
@@ -1043,11 +1043,11 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     }
 
     /// <summary>
-    /// Create a <see cref="RedisValue"/> from a <see cref="MemoryStream"/>.
+    /// Create a <see cref="ValkeyValue"/> from a <see cref="MemoryStream"/>.
     /// It will *attempt* to use the internal buffer directly, but if this isn't possible it will fallback to <see cref="MemoryStream.ToArray"/>.
     /// </summary>
     /// <param name="stream">The <see cref="MemoryStream"/> to create a value from.</param>
-    public static RedisValue CreateFrom(MemoryStream stream)
+    public static ValkeyValue CreateFrom(MemoryStream stream)
     {
         if (stream == null) return Null;
         if (stream.Length == 0) return Array.Empty<byte>();
@@ -1086,8 +1086,8 @@ public readonly struct RedisValue : IEquatable<RedisValue>, IComparable<RedisVal
     /// <summary>
     /// Indicates whether the current value has the supplied value as a prefix.
     /// </summary>
-    /// <param name="value">The <see cref="RedisValue"/> to check.</param>
-    public bool StartsWith(RedisValue value)
+    /// <param name="value">The <see cref="ValkeyValue"/> to check.</param>
+    public bool StartsWith(ValkeyValue value)
     {
         if (IsNull || value.IsNull) return false;
         if (value.IsNullOrEmpty) return true;

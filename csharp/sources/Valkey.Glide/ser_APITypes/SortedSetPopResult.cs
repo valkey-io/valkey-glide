@@ -10,7 +10,7 @@ public readonly struct SortedSetPopResult
     /// <summary>
     /// A null SortedSetPopResult, indicating no results.
     /// </summary>
-    public static SortedSetPopResult Null { get; } = new SortedSetPopResult(RedisKey.Null, Array.Empty<SortedSetEntry>());
+    public static SortedSetPopResult Null { get; } = new SortedSetPopResult(ValkeyKey.Null, Array.Empty<SortedSetEntry>());
 
     /// <summary>
     /// Whether this object is null/empty.
@@ -20,14 +20,14 @@ public readonly struct SortedSetPopResult
     /// <summary>
     /// The key of the sorted set these entries came form.
     /// </summary>
-    public RedisKey Key { get; }
+    public ValkeyKey Key { get; }
 
     /// <summary>
     /// The provided entries of the sorted set.
     /// </summary>
     public SortedSetEntry[] Entries { get; }
 
-    internal SortedSetPopResult(RedisKey key, SortedSetEntry[] entries)
+    internal SortedSetPopResult(ValkeyKey key, SortedSetEntry[] entries)
     {
         Key = key;
         Entries = entries;
