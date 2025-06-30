@@ -44,11 +44,11 @@ mod test_cluster_scan_async {
             let slot_distribution =
                 cluster.get_slots_ranges_distribution(&cluster.get_cluster_nodes().await);
             for (_, _, _, slot_ranges) in slot_distribution {
-                println!("slot_ranges: {:?}", slot_ranges);
+                println!("slot_ranges: {slot_ranges:?}");
                 for slot_range in slot_ranges {
                     let (slot_start, slot_end) = (slot_range[0], slot_range[1]);
 
-                    println!("slot_start: {}, slot_end: {}", slot_start, slot_end);
+                    println!("slot_start: {slot_start}, slot_end: {slot_end}");
                     if slot_start >= start && slot_start <= end {
                         invalid = true;
                         continue;
@@ -80,7 +80,7 @@ mod test_cluster_scan_async {
 
         // Set some keys
         for i in 0..10 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -110,7 +110,7 @@ mod test_cluster_scan_async {
         keys.sort();
         keys.dedup();
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(key.to_owned(), format!("key{}", i));
+            assert_eq!(key.to_owned(), format!("key{i}"));
         }
     }
 
@@ -128,7 +128,7 @@ mod test_cluster_scan_async {
         let mut expected_keys: Vec<String> = Vec::new();
 
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -176,7 +176,7 @@ mod test_cluster_scan_async {
         let mut expected_keys: Vec<String> = Vec::new();
 
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -228,7 +228,7 @@ mod test_cluster_scan_async {
         let mut expected_keys: Vec<String> = Vec::new();
 
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -274,7 +274,7 @@ mod test_cluster_scan_async {
                     match ready {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("error: {:?}", e);
+                            println!("error: {e:?}");
                             break;
                         }
                     }
@@ -306,7 +306,7 @@ mod test_cluster_scan_async {
         let mut connection = cluster.async_connection(None).await;
         // Set some keys
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -348,7 +348,7 @@ mod test_cluster_scan_async {
                 match ready {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("error: {:?}", e);
+                        println!("error: {e:?}");
                         break;
                     }
                 }
@@ -374,7 +374,7 @@ mod test_cluster_scan_async {
                 RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
             )
             .await;
-        print!("config result: {:?}", res);
+        print!("config result: {res:?}");
         let args = ClusterScanArgs::builder()
             .allow_non_covered_slots(true)
             .build();
@@ -385,7 +385,7 @@ mod test_cluster_scan_async {
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = match res {
                 Ok((cursor, keys)) => (cursor.clone(), keys),
                 Err(e) => {
-                    println!("error: {:?}", e);
+                    println!("error: {e:?}");
                     break;
                 }
             };
@@ -429,7 +429,7 @@ mod test_cluster_scan_async {
         let replicas = cluster.get_replicas(&cluster_nodes).await;
 
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -447,7 +447,7 @@ mod test_cluster_scan_async {
                 .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await;
             if scan_response.is_err() {
-                println!("error: {:?}", scan_response);
+                println!("error: {scan_response:?}");
             }
             let (next_cursor, scan_keys) = scan_response.unwrap();
             scan_state_rc = next_cursor;
@@ -478,7 +478,7 @@ mod test_cluster_scan_async {
                     match ready {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("error: {:?}", e);
+                            println!("error: {e:?}");
                             break;
                         }
                     }
@@ -522,7 +522,7 @@ mod test_cluster_scan_async {
                     match ready {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("error: {:?}", e);
+                            println!("error: {e:?}");
                             break;
                         }
                     }
@@ -539,7 +539,7 @@ mod test_cluster_scan_async {
                     match ready {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("error: {:?}", e);
+                            println!("error: {e:?}");
                             break;
                         }
                     }
@@ -594,7 +594,7 @@ mod test_cluster_scan_async {
             match ready {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("error: {:?}", e);
+                    println!("error: {e:?}");
                     break;
                 }
             }
@@ -605,7 +605,7 @@ mod test_cluster_scan_async {
         let replicas = cluster.get_replicas(&cluster_nodes).await;
 
         for i in 0..1000 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -623,7 +623,7 @@ mod test_cluster_scan_async {
                 .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await;
             if scan_response.is_err() {
-                println!("error: {:?}", scan_response);
+                println!("error: {scan_response:?}");
             }
             let (next_cursor, scan_keys) = scan_response.unwrap();
             scan_state_rc = next_cursor;
@@ -647,7 +647,7 @@ mod test_cluster_scan_async {
                     match ready {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("error: {:?}", e);
+                            println!("error: {e:?}");
                             break;
                         }
                     }
@@ -673,7 +673,7 @@ mod test_cluster_scan_async {
         let mut i = 0;
         // Set some keys
         loop {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -702,7 +702,7 @@ mod test_cluster_scan_async {
             if scan_state_rc.is_finished() {
                 break;
             }
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             i += 1;
             let res: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
@@ -734,7 +734,7 @@ mod test_cluster_scan_async {
         let mut i = 0;
         // Set some keys
         loop {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -764,7 +764,7 @@ mod test_cluster_scan_async {
                 break;
             }
             i -= 1;
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
 
             let res: Result<(), redis::RedisError> = redis::cmd("del")
                 .arg(&key)
@@ -796,14 +796,14 @@ mod test_cluster_scan_async {
         let mut i = 0;
         // Set some keys
         loop {
-            let key = format!("key:pattern:{}", i);
+            let key = format!("key:pattern:{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
                 .query_async(&mut connection)
                 .await;
             expected_keys.push(key);
-            let non_relevant_key = format!("key{}", i);
+            let non_relevant_key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&non_relevant_key)
                 .arg("value")
@@ -860,14 +860,14 @@ mod test_cluster_scan_async {
         let mut i = 0;
         // Set some keys
         loop {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SADD")
                 .arg(&key)
                 .arg("value")
                 .query_async(&mut connection)
                 .await;
             expected_keys.push(key);
-            let key = format!("key-that-is-not-set{}", i);
+            let key = format!("key-that-is-not-set{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -924,7 +924,7 @@ mod test_cluster_scan_async {
         let mut i = 0;
         // Set some keys
         loop {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -1003,7 +1003,7 @@ mod test_cluster_scan_async {
         let mut connection = cluster.async_connection(None).await;
         let mut i = 0;
         loop {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -1023,7 +1023,7 @@ mod test_cluster_scan_async {
                 .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await;
             if scan_response.is_err() {
-                println!("error: {:?}", scan_response);
+                println!("error: {scan_response:?}");
             }
             let (next_cursor, scan_keys) = scan_response.unwrap();
             scan_state_rc = next_cursor;
@@ -1047,7 +1047,7 @@ mod test_cluster_scan_async {
                 .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await;
             if scan_response.is_err() {
-                println!("error: {:?}", scan_response);
+                println!("error: {scan_response:?}");
             }
             let (next_cursor, scan_keys) = scan_response.unwrap();
             scan_state_rc = next_cursor;
@@ -1090,7 +1090,7 @@ mod test_cluster_scan_async {
         match ready {
             Ok(_) => {}
             Err(e) => {
-                println!("error: {:?}", e);
+                println!("error: {e:?}");
             }
         }
 
@@ -1101,7 +1101,7 @@ mod test_cluster_scan_async {
         let mut excepted_keys: Vec<String> = vec![];
         // Set some keys
         for i in 0..100 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let res: Result<(), redis::RedisError> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -1171,7 +1171,7 @@ mod test_cluster_scan_async {
             .await;
 
         for i in 0..100 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _res: RedisResult<()> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")
@@ -1187,7 +1187,7 @@ mod test_cluster_scan_async {
         match ready {
             Ok(_) => {}
             Err(e) => {
-                println!("error: {:?}", e);
+                println!("error: {e:?}");
             }
         }
 
@@ -1261,12 +1261,12 @@ mod test_cluster_scan_async {
         match ready {
             Ok(_) => {}
             Err(e) => {
-                println!("error: {:?}", e);
+                println!("error: {e:?}");
             }
         }
 
         for i in 0..100 {
-            let key = format!("key{}", i);
+            let key = format!("key{i}");
             let _res: RedisResult<()> = redis::cmd("SET")
                 .arg(&key)
                 .arg("value")

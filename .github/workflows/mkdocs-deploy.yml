@@ -1,5 +1,9 @@
 name: Deploy mkdocs website to GitHub Pages
 
+permissions:
+    contents: read
+    pages: write
+
 on:
     workflow_dispatch:
 
