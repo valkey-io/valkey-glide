@@ -83,11 +83,9 @@ jobs:
                     sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
                     sudo chmod +x /usr/local/bin/protoc
                     protoc --version
-                    # Install cargo-zigbuild for cross-compilation
-                    cargo install cargo-zigbuild
-                    # Build Java components
+                    # Build only Java components (skip Rust build for CodeQL analysis)
                     cd java
-                    ./gradlew compileJava
+                    ./gradlew :client:processResources :client:compileJava --exclude-task :client:buildRust
                   else
                     echo 'TODO: build commands for other languages.'
                   fi
