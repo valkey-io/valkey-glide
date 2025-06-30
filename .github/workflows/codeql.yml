@@ -36,9 +36,9 @@ jobs:
                     - language: csharp
                       build-mode: autobuild
                     - language: go
-                      build-mode: none
+                      build-mode: autobuild
                     - language: java-kotlin
-                      build-mode: autobuild # This mode only analyzes Java. Set this to 'autobuild' or 'manual' to analyze Kotlin too.
+                      build-mode: manual
                     - language: javascript-typescript
                       build-mode: none
                     - language: python
@@ -71,8 +71,14 @@ jobs:
                   cd go
                   go mod download
                   go build ./...
+                elif [ "${{ matrix.language }}" == "java-kotlin" ]; then
+                  # Install protobuf compiler and build Java components
+                  sudo apt-get update
+                  sudo apt-get install -y protobuf-compiler
+                  cd java
+                  ./gradlew compileJava
                 else
-                  echo 'TODO: build commands for all java and kotlin codes.'
+                  echo 'TODO: build commands for other languages.'
                 fi
 
             - name: Perform CodeQL Analysis
