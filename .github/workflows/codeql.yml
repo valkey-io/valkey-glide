@@ -46,7 +46,7 @@ jobs:
                     - language: rust
                       build-mode: none
                     - language: c-cpp
-                      build-mode: autobuild
+                      build-mode: manual
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -62,7 +62,18 @@ jobs:
             - if: matrix.build-mode == 'manual'
               shell: bash
               run: |
+                if [ "${{ matrix.language }}" == "c-cpp" ]; then
+                  # Build only the C++ components needed for analysis
+                  cd glide-core
+                  cargo build --release
+                elif [ "${{ matrix.language }}" == "go" ]; then
+                  # Build Go modules and dependencies
+                  cd go
+                  go mod download
+                  go build ./...
+                else
                   echo 'TODO: build commands for all java and kotlin codes.'
+                fi
 
             - name: Perform CodeQL Analysis
               uses: github/codeql-action/analyze@v3
