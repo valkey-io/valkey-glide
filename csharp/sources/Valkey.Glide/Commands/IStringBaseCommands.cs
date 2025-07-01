@@ -40,4 +40,25 @@ internal interface IStringBaseCommands
     /// Otherwise, returns <see langword="null" />.
     /// </returns>
     Task<GlideString?> Get(GlideString key);
+
+    /// <summary>
+    /// Overwrites part of the string stored at <paramref name="key" />, starting at the specified <paramref name="offset" />, 
+    /// for the entire length of <paramref name="value" />. If the <paramref name="offset" /> is larger than the current 
+    /// length of the string at <paramref name="key" />, the string will be padded with zero-bytes to make <paramref name="offset" /> fit. 
+    /// Creates the <paramref name="key" /> if it doesn't exist.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long length = await client.SetRange("key", 6, "GLIDE");
+    /// // length is 11 if key was created, or the length of the modified string
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The key of the string to update.</param>
+    /// <param name="offset">The position in the string where <paramref name="value" /> should be written.</param>
+    /// <param name="value">The string written with <paramref name="offset" />.</param>
+    /// <returns>The length of the string stored at <paramref name="key" /> after it was modified.</returns>
+    /// <see href="https://valkey.io/commands/setrange/">valkey.io</see>
+    Task<long> SetRange(GlideString key, int offset, GlideString value);
 }

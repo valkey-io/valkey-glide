@@ -304,6 +304,7 @@ internal class FFI
         Info = 1130,
         Get = 1504,
         Set = 1517,
+        SetRange = 1520,
     }
 
     internal enum RouteType : uint
