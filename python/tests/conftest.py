@@ -567,7 +567,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
         try:
             await _attempt_teardown(request, cluster_mode, protocol)
             return  # Success, exit the function
-        except Exception as e:
+        except (ClosingError, TimeoutError) as e:
             if attempt == max_retries - 1:
                 # Last attempt failed, log the error but don't fail the test
                 Logger.warning(f"Test teardown failed after {max_retries} attempts: {e}")
