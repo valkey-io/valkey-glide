@@ -47,7 +47,7 @@ jobs:
                       build-mode: none
                     - language: c-cpp
                       build-mode: manual
-                    - language: github-actions
+                    - language: actions
                       build-mode: none
 
         steps:
@@ -95,6 +95,8 @@ jobs:
               if: matrix.language == 'go'
               shell: bash
               run: |
+                  # Ensure Go bin directory is in PATH
+                  export PATH=$PATH:$(go env GOPATH)/bin
                   # Check if protoc-gen-go is already installed
                   if ! command -v protoc-gen-go &> /dev/null; then
                       echo "Installing protoc-gen-go..."
@@ -122,6 +124,8 @@ jobs:
               if: matrix.language == 'go'
               shell: bash
               run: |
+                  # Ensure Go bin directory is in PATH
+                  export PATH=$PATH:$(go env GOPATH)/bin
                   # Generate protobuf files and build Go module
                   cd go
                   make generate-protobuf
