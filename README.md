@@ -84,6 +84,16 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 
 Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io/valkey-glide/wiki).
 
+## Ecosystem
+
+Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance its functionality across different frameworks and use cases:
+
+- **[node-flexible-rate-limiter](https://www.npmjs.com/package/node-flexible-rate-limiter)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
+- **[fastify-valkey-glide](https://www.npmjs.com/package/fastify-valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
+- **[aiocache](https://pypi.org/project/aiocache/)** - Python async caching framework with Valkey GLIDE backend support for high-performance distributed caching
+- **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
+- **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)
+
 ## Getting Help
 
 If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/valkey-io/valkey-glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:
