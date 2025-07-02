@@ -7,42 +7,42 @@ namespace Valkey.Glide;
 
 public abstract partial class BaseClient : ISetCommands
 {
-    public async Task<bool> SetAdd(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetAdd(key, value));
+    public async Task<bool> SetAddAsync(ValkeyKey key, ValkeyValue value, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetAddAsync(key, value));
 
-    public async Task<long> SetAdd(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetAdd(key, values));
+    public async Task<long> SetAddAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetAddAsync(key, values));
 
-    public async Task<bool> SetRemove(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetRemove(key, value));
+    public async Task<bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetRemoveAsync(key, value));
 
-    public async Task<long> SetRemove(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetRemove(key, values));
+    public async Task<long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetRemoveAsync(key, values));
 
-    public async Task<ValkeyValue[]> SetMembers(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetMembers(key));
+    public async Task<ValkeyValue[]> SetMembersAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetMembersAsync(key));
 
-    public async Task<long> SetLength(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetLength(key));
+    public async Task<long> SetLengthAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetLengthAsync(key));
 
-    public async Task<long> SetIntersectionLength(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetIntersectionLength(keys, limit));
+    public async Task<long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetIntersectionLengthAsync(keys, limit));
 
-    public async Task<ValkeyValue> SetPop(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetPop(key));
+    public async Task<ValkeyValue> SetPopAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetPopAsync(key));
 
-    public async Task<ValkeyValue[]> SetPop(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetPop(key, count));
+    public async Task<ValkeyValue[]> SetPopAsync(ValkeyKey key, long count, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetPopAsync(key, count));
 
-    public async Task<ValkeyValue[]> SetCombine(SetOperation operation, ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None)
-        => await SetCombine(operation, [first, second], flags);
+    public async Task<ValkeyValue[]> SetCombineAsync(SetOperation operation, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetCombineAsync(operation, [first, second], ignored);
 
-    public async Task<ValkeyValue[]> SetCombine(SetOperation operation, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetCombine(operation, keys));
+    public async Task<ValkeyValue[]> SetCombineAsync(SetOperation operation, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetCombineAsync(operation, keys));
 
-    public async Task<long> SetCombineAndStore(SetOperation operation, ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None)
-        => await SetCombineAndStore(operation, destination, [first, second], flags);
+    public async Task<long> SetCombineAndStoreAsync(SetOperation operation, ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetCombineAndStoreAsync(operation, destination, [first, second], ignored);
 
-    public async Task<long> SetCombineAndStore(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SetCombineAndStore(operation, destination, keys));
+    public async Task<long> SetCombineAndStoreAsync(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetCombineAndStoreAsync(operation, destination, keys));
 }

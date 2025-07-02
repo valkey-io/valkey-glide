@@ -17,7 +17,6 @@ namespace Valkey.Glide;
 public abstract partial class BaseClient : IDisposable
 {
     #region public methods
-
     public void Dispose()
     {
         GC.SuppressFinalize(this);
