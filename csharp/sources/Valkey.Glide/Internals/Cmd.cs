@@ -3,6 +3,7 @@
 using System.Diagnostics;
 
 using Valkey.Glide.Commands.Options;
+using Valkey.Glide.Commands.Constants;
 
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
@@ -103,66 +104,65 @@ internal class Request // TODO naming
     SET COMMANDS
     =================================
     */
-    public static Cmd<long, bool> SetAdd(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, bool> SetAdd(ValkeyKey key, ValkeyValue value)
     {
         GlideString[] args = [key.ToString(), value.ToString()];
         return new(RequestType.SAdd, args, false, response => response == 1);
     }
 
-    public static Cmd<long, long> SetAdd(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SetAdd(ValkeyKey key, ValkeyValue[] values)
     {
         GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
         return Simple<long>(RequestType.SAdd, args);
     }
 
-    public static Cmd<long, bool> SetRemove(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, bool> SetRemove(ValkeyKey key, ValkeyValue value)
     {
         GlideString[] args = [key.ToString(), value.ToString()];
         return new(RequestType.SRem, args, false, response => response == 1);
     }
 
-    public static Cmd<long, long> SetRemove(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SetRemove(ValkeyKey key, ValkeyValue[] values)
     {
         GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
         return Simple<long>(RequestType.SRem, args);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembers(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembers(ValkeyKey key)
     {
         GlideString[] args = [key.ToString()];
         return new(RequestType.SMembers, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
 
-    public static Cmd<long, long> SetLength(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SetLength(ValkeyKey key)
     {
         GlideString[] args = [key.ToString()];
         return Simple<long>(RequestType.SCard, args);
     }
 
-    public static Cmd<long, long> SetIntersectionLength(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SetIntersectionLength(ValkeyKey[] keys, long limit = 0)
     {
         List<GlideString> args = [keys.Length.ToString(), .. keys.Select(k => k.ToString())];
         if (limit > 0)
         {
-            args.Add("LIMIT");
-            args.Add(limit.ToString());
+            args.AddRange([Constants.LimitKeyword, limit.ToString()]);
         }
-        return Simple<long>(RequestType.SInterCard, args.ToArray());
+        return Simple<long>(RequestType.SInterCard, [.. args]);
     }
 
-    public static Cmd<GlideString, ValkeyValue> SetPop(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    public static Cmd<GlideString, ValkeyValue> SetPop(ValkeyKey key)
     {
         GlideString[] args = [key.ToString()];
         return new(RequestType.SPop, args, true, result => result is not null ? (ValkeyValue)result.ToString() : ValkeyValue.Null);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetPop(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetPop(ValkeyKey key, long count)
     {
         GlideString[] args = [key.ToString(), count.ToString()];
         return new(RequestType.SPop, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetCombine(SetOperation operation, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetCombine(SetOperation operation, ValkeyKey[] keys)
     {
         RequestType requestType = operation switch
         {
@@ -176,7 +176,7 @@ internal class Request // TODO naming
         return new(requestType, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
 
-    public static Cmd<long, long> SetCombineAndStore(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SetCombineAndStore(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys)
     {
         RequestType requestType = operation switch
         {
@@ -186,8 +186,8 @@ internal class Request // TODO naming
             _ => throw new ArgumentOutOfRangeException(nameof(operation))
         };
 
-        List<GlideString> args = [destination.ToString(), .. keys.Select(k => (GlideString)k.ToString())];
-        return Simple<long>(requestType, args.ToArray());
+        GlideString[] args = [destination.ToString(), .. keys.Select(k => (GlideString)k.ToString())];
+        return Simple<long>(requestType, args);
     }
 
     /// <summary>
