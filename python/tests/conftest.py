@@ -574,7 +574,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 return
             else:
                 # Wait before retrying with exponential backoff
-                delay = base_delay * (2 ** attempt)
+                delay = min(base_delay * (2 ** attempt), MAX_BACKOFF_TIME)
                 Logger.warning(f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}")
                 await asyncio.sleep(delay)
 
