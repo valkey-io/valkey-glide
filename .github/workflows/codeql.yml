@@ -28,7 +28,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -81,7 +80,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -195,7 +193,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -261,7 +258,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -300,7 +296,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -339,7 +334,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -379,7 +373,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
@@ -424,7 +417,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             security-events: write
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
         steps:
             - name: Checkout repository
