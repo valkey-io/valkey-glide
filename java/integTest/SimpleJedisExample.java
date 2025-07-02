@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.JedisPool;
 
 /**
  * Simple example demonstrating how to use the Jedis compatibility layer

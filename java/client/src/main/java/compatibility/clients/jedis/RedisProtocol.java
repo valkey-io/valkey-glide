@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package redis.clients.jedis;
+package compatibility.clients.jedis;
 
 /** Redis protocol version enumeration for Jedis compatibility. */
 public enum RedisProtocol {

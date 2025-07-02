@@ -10,8 +10,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.JedisPool;
 
 /**
  * Simple comparison test that validates the GLIDE Jedis compatibility layer

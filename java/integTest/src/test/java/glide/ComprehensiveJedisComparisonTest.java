@@ -4,8 +4,8 @@ package glide;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.*;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.JedisPool;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

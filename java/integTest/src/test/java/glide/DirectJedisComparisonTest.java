@@ -4,17 +4,21 @@ package glide;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.*;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+// NEW PACKAGE NAME: compatibility.clients.jedis (was redis.clients.jedis)
+import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.JedisPool;
 
 /**
  * Direct side-by-side comparison test that calls both GLIDE compatibility layer
  * and validates against expected actual Jedis behavior.
  * 
  * This test demonstrates the exact pattern you requested:
- * 1. Call GLIDE Jedis compatibility layer
+ * 1. Call GLIDE Jedis compatibility layer (compatibility.clients.jedis)
  * 2. Compare with expected actual Jedis behavior
  * 3. Validate results are identical
+ * 
+ * NOTE: Package name updated from redis.clients.jedis to compatibility.clients.jedis
+ * to avoid conflicts with actual Jedis and make it clear this is a compatibility layer.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DirectJedisComparisonTest {

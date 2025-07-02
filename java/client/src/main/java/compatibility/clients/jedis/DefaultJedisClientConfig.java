@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package redis.clients.jedis;
+package compatibility.clients.jedis;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;

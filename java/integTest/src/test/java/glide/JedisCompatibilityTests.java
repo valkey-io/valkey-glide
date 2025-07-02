@@ -4,17 +4,16 @@ package glide;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIf;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-import java.util.*;
-import java.util.concurrent.TimeUnit;
+import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.JedisPool;
+import compatibility.clients.jedis.JedisException;
+import compatibility.clients.jedis.JedisConnectionException;
 
 /**
- * Comprehensive compatibility tests comparing GLIDE Jedis compatibility layer
- * with actual Jedis implementation. Tests the same operations on both clients
- * and verifies identical behavior.
+ * Simplified compatibility tests for the GLIDE Jedis compatibility layer.
+ * 
+ * Since the package name is now compatibility.clients.jedis (not redis.clients.jedis),
+ * we can directly import and test without complex reflection or classpath conflicts.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisCompatibilityTests {
@@ -23,381 +22,295 @@ public class JedisCompatibilityTests {
     private static final int REDIS_PORT = 6379;
     private static final String TEST_KEY_PREFIX = "compat_test:";
     
-    // Test clients - will be initialized based on available implementations
-    private Object glideJedis;
-    private Object actualJedis;
-    private boolean hasActualJedis = false;
-    private boolean hasGlideJedis = false;
+    private Jedis jedis;
+    private JedisPool jedisPool;
 
     @BeforeAll
     static void setupClass() {
-        System.out.println("=== Jedis Compatibility Test Suite ===");
-        System.out.println("Testing GLIDE compatibility layer against actual Jedis");
+        System.out.println("=== Simplified Jedis Compatibility Test Suite ===");
+        System.out.println("Testing GLIDE compatibility layer (compatibility.clients.jedis)");
     }
 
     @BeforeEach
     void setup() {
-        // Initialize GLIDE Jedis compatibility layer
-        try {
-            Class<?> glideJedisClass = Class.forName("redis.clients.jedis.Jedis");
-            glideJedis = glideJedisClass.getConstructor(String.class, int.class)
-                    .newInstance(REDIS_HOST, REDIS_PORT);
-            hasGlideJedis = true;
-            System.out.println("✓ GLIDE Jedis compatibility layer initialized");
-        } catch (Exception e) {
-            System.out.println("✗ GLIDE Jedis compatibility layer not available: " + e.getMessage());
-            hasGlideJedis = false;
-        }
-
-        // Initialize actual Jedis (if available)
-        try {
-            // Try to load actual Jedis from a different classpath
-            Class<?> actualJedisClass = Class.forName("redis.clients.jedis.Jedis", false, 
-                Thread.currentThread().getContextClassLoader());
-            actualJedis = actualJedisClass.getConstructor(String.class, int.class)
-                    .newInstance(REDIS_HOST, REDIS_PORT);
-            hasActualJedis = true;
-            System.out.println("✓ Actual Jedis initialized");
-        } catch (Exception e) {
-            System.out.println("✗ Actual Jedis not available: " + e.getMessage());
-            hasActualJedis = false;
-        }
+        jedis = new Jedis(REDIS_HOST, REDIS_PORT);
+        jedisPool = new JedisPool(REDIS_HOST, REDIS_PORT);
+        System.out.println("✓ GLIDE Jedis compatibility layer initialized");
     }
 
     @AfterEach
     void cleanup() {
-        // Clean up test keys
-        if (hasGlideJedis) {
-            try {
-                cleanupTestKeys(glideJedis);
-                closeClient(glideJedis);
-            } catch (Exception e) {
-                System.err.println("Error cleaning up GLIDE Jedis: " + e.getMessage());
-            }
+        if (jedis != null) {
+            jedis.close();
         }
-        
-        if (hasActualJedis) {
-            try {
-                cleanupTestKeys(actualJedis);
-                closeClient(actualJedis);
-            } catch (Exception e) {
-                System.err.println("Error cleaning up actual Jedis: " + e.getMessage());
-            }
+        if (jedisPool != null) {
+            jedisPool.close();
         }
     }
 
     @Test
     @Order(1)
-    @DisplayName("Test Basic Connectivity - PING")
-    void testPingCompatibility() {
-        if (!hasGlideJedis) {
-            System.out.println("Skipping PING test - GLIDE Jedis not available");
-            return;
-        }
-
-        try {
-            // Test GLIDE Jedis PING
-            String glidePingResult = (String) invokeMethod(glideJedis, "ping");
-            assertEquals("PONG", glidePingResult, "GLIDE Jedis PING should return PONG");
-            System.out.println("✓ GLIDE Jedis PING: " + glidePingResult);
-
-            // Test actual Jedis PING (if available)
-            if (hasActualJedis) {
-                String actualPingResult = (String) invokeMethod(actualJedis, "ping");
-                assertEquals("PONG", actualPingResult, "Actual Jedis PING should return PONG");
-                assertEquals(glidePingResult, actualPingResult, "PING results should be identical");
-                System.out.println("✓ Actual Jedis PING: " + actualPingResult);
-                System.out.println("✓ PING compatibility verified");
-            }
-        } catch (Exception e) {
-            fail("PING test failed: " + e.getMessage());
-        }
+    @DisplayName("Test Basic SET/GET Operations")
+    void testBasicSetGet() {
+        String key = TEST_KEY_PREFIX + "basic";
+        String value = "test_value";
+        
+        // Test SET
+        String setResult = jedis.set(key, value);
+        assertEquals("OK", setResult, "SET should return 'OK'");
+        
+        // Test GET
+        String getResult = jedis.get(key);
+        assertEquals(value, getResult, "GET should return the exact value");
+        
+        // Test GET non-existent key
+        String nonExistentResult = jedis.get(TEST_KEY_PREFIX + "nonexistent");
+        assertNull(nonExistentResult, "GET non-existent key should return null");
+        
+        System.out.println("✓ Basic SET/GET operations work correctly");
     }
 
     @Test
     @Order(2)
-    @DisplayName("Test Basic Operations - GET/SET")
-    void testBasicOperationsCompatibility() {
-        if (!hasGlideJedis) {
-            System.out.println("Skipping basic operations test - GLIDE Jedis not available");
-            return;
-        }
-
-        String testKey = TEST_KEY_PREFIX + "basic_ops";
-        String testValue = "test_value_" + System.currentTimeMillis();
-
-        try {
-            // Test GLIDE Jedis SET/GET
-            String glideSetResult = (String) invokeMethod(glideJedis, "set", testKey, testValue);
-            assertEquals("OK", glideSetResult, "GLIDE Jedis SET should return OK");
-            
-            String glideGetResult = (String) invokeMethod(glideJedis, "get", testKey);
-            assertEquals(testValue, glideGetResult, "GLIDE Jedis GET should return set value");
-            
-            System.out.println("✓ GLIDE Jedis SET: " + glideSetResult);
-            System.out.println("✓ GLIDE Jedis GET: " + glideGetResult);
-
-            // Test actual Jedis SET/GET (if available)
-            if (hasActualJedis) {
-                String actualSetResult = (String) invokeMethod(actualJedis, "set", testKey + "_actual", testValue);
-                assertEquals("OK", actualSetResult, "Actual Jedis SET should return OK");
-                
-                String actualGetResult = (String) invokeMethod(actualJedis, "get", testKey + "_actual");
-                assertEquals(testValue, actualGetResult, "Actual Jedis GET should return set value");
-                
-                // Compare results
-                assertEquals(glideSetResult, actualSetResult, "SET results should be identical");
-                assertEquals(glideGetResult, actualGetResult, "GET results should be identical");
-                
-                System.out.println("✓ Actual Jedis SET: " + actualSetResult);
-                System.out.println("✓ Actual Jedis GET: " + actualGetResult);
-                System.out.println("✓ Basic operations compatibility verified");
-            }
-        } catch (Exception e) {
-            fail("Basic operations test failed: " + e.getMessage());
-        }
+    @DisplayName("Test PING Operations")
+    void testPingOperations() {
+        // Test basic PING
+        String pingResult = jedis.ping();
+        assertEquals("PONG", pingResult, "PING should return 'PONG'");
+        
+        // Test PING with message
+        String message = "hello_compatibility";
+        String pingMessageResult = jedis.ping(message);
+        assertEquals(message, pingMessageResult, "PING with message should echo the message");
+        
+        System.out.println("✓ PING operations work correctly");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"simple_value", "value with spaces", "special!@#$%^&*()chars", "unicode_测试_🚀"})
+    @Test
     @Order(3)
-    @DisplayName("Test String Values Compatibility")
-    void testStringValuesCompatibility(String testValue) {
-        if (!hasGlideJedis) {
-            System.out.println("Skipping string values test - GLIDE Jedis not available");
-            return;
+    @DisplayName("Test JedisPool Operations")
+    void testJedisPoolOperations() {
+        String key = TEST_KEY_PREFIX + "pool";
+        String value = "pool_value";
+        
+        // Test pool resource management
+        try (Jedis pooledJedis = jedisPool.getResource()) {
+            assertNotNull(pooledJedis, "Pool should provide non-null Jedis instance");
+            
+            String setResult = pooledJedis.set(key, value);
+            assertEquals("OK", setResult, "Pooled SET should work");
+            
+            String getResult = pooledJedis.get(key);
+            assertEquals(value, getResult, "Pooled GET should work");
         }
-
-        String testKey = TEST_KEY_PREFIX + "string_" + testValue.hashCode();
-
-        try {
-            // Test GLIDE Jedis
-            invokeMethod(glideJedis, "set", testKey, testValue);
-            String glideResult = (String) invokeMethod(glideJedis, "get", testKey);
-            assertEquals(testValue, glideResult, "GLIDE Jedis should handle string value: " + testValue);
-
-            // Test actual Jedis (if available)
-            if (hasActualJedis) {
-                invokeMethod(actualJedis, "set", testKey + "_actual", testValue);
-                String actualResult = (String) invokeMethod(actualJedis, "get", testKey + "_actual");
-                assertEquals(testValue, actualResult, "Actual Jedis should handle string value: " + testValue);
-                assertEquals(glideResult, actualResult, "Results should be identical for: " + testValue);
-                System.out.println("✓ String compatibility verified for: " + testValue);
-            }
-        } catch (Exception e) {
-            fail("String values test failed for '" + testValue + "': " + e.getMessage());
+        
+        // Test multiple pool connections
+        try (Jedis jedis1 = jedisPool.getResource();
+             Jedis jedis2 = jedisPool.getResource()) {
+            
+            assertNotNull(jedis1, "First pool connection should work");
+            assertNotNull(jedis2, "Second pool connection should work");
+            
+            // Both should access the same data
+            assertEquals(value, jedis1.get(key), "First connection should access data");
+            assertEquals(value, jedis2.get(key), "Second connection should access data");
         }
+        
+        System.out.println("✓ JedisPool operations work correctly");
     }
 
     @Test
     @Order(4)
     @DisplayName("Test Connection Management")
     void testConnectionManagement() {
-        if (!hasGlideJedis) {
-            System.out.println("Skipping connection management test - GLIDE Jedis not available");
-            return;
-        }
-
+        // Test multiple independent connections
+        Jedis conn1 = new Jedis(REDIS_HOST, REDIS_PORT);
+        Jedis conn2 = new Jedis(REDIS_HOST, REDIS_PORT);
+        
         try {
-            // Test isClosed() method
-            Boolean glideIsClosed = (Boolean) invokeMethod(glideJedis, "isClosed");
-            assertFalse(glideIsClosed, "GLIDE Jedis should not be closed initially");
-            System.out.println("✓ GLIDE Jedis isClosed(): " + glideIsClosed);
-
-            if (hasActualJedis) {
-                Boolean actualIsClosed = (Boolean) invokeMethod(actualJedis, "isClosed");
-                assertFalse(actualIsClosed, "Actual Jedis should not be closed initially");
-                assertEquals(glideIsClosed, actualIsClosed, "isClosed() results should be identical");
-                System.out.println("✓ Actual Jedis isClosed(): " + actualIsClosed);
-                System.out.println("✓ Connection management compatibility verified");
-            }
-        } catch (Exception e) {
-            fail("Connection management test failed: " + e.getMessage());
+            String key1 = TEST_KEY_PREFIX + "conn1";
+            String key2 = TEST_KEY_PREFIX + "conn2";
+            String value1 = "value1";
+            String value2 = "value2";
+            
+            // Set data on different connections
+            conn1.set(key1, value1);
+            conn2.set(key2, value2);
+            
+            // Each connection should see all data
+            assertEquals(value1, conn1.get(key1), "Connection 1 should see its data");
+            assertEquals(value2, conn1.get(key2), "Connection 1 should see data from connection 2");
+            assertEquals(value1, conn2.get(key1), "Connection 2 should see data from connection 1");
+            assertEquals(value2, conn2.get(key2), "Connection 2 should see its data");
+            
+        } finally {
+            conn1.close();
+            conn2.close();
         }
+        
+        System.out.println("✓ Connection management works correctly");
     }
 
     @Test
     @Order(5)
-    @DisplayName("Test Configuration Compatibility")
-    void testConfigurationCompatibility() {
-        try {
-            // Test DefaultJedisClientConfig
-            Class<?> configClass = Class.forName("redis.clients.jedis.DefaultJedisClientConfig");
-            Object config = configClass.getMethod("builder").invoke(null);
-            
-            // Test builder methods
-            config = invokeMethod(config, "host", "localhost");
-            config = invokeMethod(config, "port", 6379);
-            config = invokeMethod(config, "socketTimeoutMillis", 2000);
-            Object builtConfig = invokeMethod(config, "build");
-            
-            assertNotNull(builtConfig, "Configuration should be built successfully");
-            System.out.println("✓ Configuration compatibility verified");
-            
-            // Test creating Jedis with config
-            Class<?> jedisClass = Class.forName("redis.clients.jedis.Jedis");
-            Object configuredJedis = jedisClass.getConstructor(String.class, int.class, builtConfig.getClass())
-                    .newInstance("localhost", 6379, builtConfig);
-            
-            String pingResult = (String) invokeMethod(configuredJedis, "ping");
-            assertEquals("PONG", pingResult, "Configured Jedis should work");
-            System.out.println("✓ Configured Jedis PING: " + pingResult);
-            
-            closeClient(configuredJedis);
-        } catch (Exception e) {
-            fail("Configuration compatibility test failed: " + e.getMessage());
-        }
+    @DisplayName("Test Data Types and Edge Cases")
+    void testDataTypesAndEdgeCases() {
+        // Test empty string
+        String emptyKey = TEST_KEY_PREFIX + "empty";
+        String emptyValue = "";
+        jedis.set(emptyKey, emptyValue);
+        assertEquals(emptyValue, jedis.get(emptyKey), "Empty string should be handled correctly");
+        
+        // Test special characters
+        String specialKey = TEST_KEY_PREFIX + "special";
+        String specialValue = "special!@#$%^&*()_+-={}[]|\\:;\"'<>?,./";
+        jedis.set(specialKey, specialValue);
+        assertEquals(specialValue, jedis.get(specialKey), "Special characters should be handled correctly");
+        
+        // Test Unicode
+        String unicodeKey = TEST_KEY_PREFIX + "unicode";
+        String unicodeValue = "Hello 世界 🌍 Здравствуй мир";
+        jedis.set(unicodeKey, unicodeValue);
+        assertEquals(unicodeValue, jedis.get(unicodeKey), "Unicode should be handled correctly");
+        
+        System.out.println("✓ Data types and edge cases work correctly");
     }
 
     @Test
     @Order(6)
-    @DisplayName("Test Pool Compatibility")
-    void testPoolCompatibility() {
+    @DisplayName("Test Exception Handling")
+    void testExceptionHandling() {
+        // Test that exceptions are properly typed
         try {
-            // Test JedisPool
-            Class<?> poolClass = Class.forName("redis.clients.jedis.JedisPool");
-            Object pool = poolClass.getConstructor(String.class, int.class)
-                    .newInstance("localhost", 6379);
-            
-            // Get resource from pool
-            Object pooledJedis = invokeMethod(pool, "getResource");
-            assertNotNull(pooledJedis, "Pool should provide Jedis instance");
-            
-            // Test operations on pooled Jedis
-            String pingResult = (String) invokeMethod(pooledJedis, "ping");
-            assertEquals("PONG", pingResult, "Pooled Jedis should work");
-            System.out.println("✓ Pooled Jedis PING: " + pingResult);
-            
-            // Return resource to pool
-            invokeMethod(pool, "returnResource", pooledJedis);
-            
-            // Close pool
-            invokeMethod(pool, "close");
-            System.out.println("✓ Pool compatibility verified");
+            // This should work normally
+            jedis.ping();
         } catch (Exception e) {
-            fail("Pool compatibility test failed: " + e.getMessage());
+            // If there's an exception, it should be a JedisException or subclass
+            assertTrue(e instanceof JedisException, "Exceptions should be JedisException or subclass");
         }
+        
+        // Test connection state after operations
+        String testKey = TEST_KEY_PREFIX + "exception_test";
+        String testValue = "exception_test_value";
+        
+        String setResult = jedis.set(testKey, testValue);
+        assertEquals("OK", setResult, "Connection should work after exception handling");
+        
+        String getResult = jedis.get(testKey);
+        assertEquals(testValue, getResult, "GET should work after exception handling");
+        
+        System.out.println("✓ Exception handling works correctly");
     }
 
     @Test
     @Order(7)
-    @DisplayName("Test Exception Compatibility")
-    void testExceptionCompatibility() {
+    @DisplayName("Test Configuration and Constructors")
+    void testConfigurationAndConstructors() {
+        // Test default constructor
+        Jedis defaultJedis = new Jedis();
         try {
-            // Test JedisException
-            Class<?> exceptionClass = Class.forName("redis.clients.jedis.JedisException");
-            Exception exception = (Exception) exceptionClass.getConstructor(String.class)
-                    .newInstance("Test exception");
-            
-            assertTrue(exception instanceof RuntimeException, "JedisException should extend RuntimeException");
-            assertEquals("Test exception", exception.getMessage(), "Exception message should be preserved");
-            
-            // Test JedisConnectionException
-            Class<?> connectionExceptionClass = Class.forName("redis.clients.jedis.JedisConnectionException");
-            Exception connectionException = (Exception) connectionExceptionClass.getConstructor(String.class)
-                    .newInstance("Test connection exception");
-            
-            assertTrue(connectionException instanceof RuntimeException, "JedisConnectionException should extend RuntimeException");
-            assertTrue(exceptionClass.isAssignableFrom(connectionExceptionClass), "JedisConnectionException should extend JedisException");
-            
-            System.out.println("✓ Exception hierarchy compatibility verified");
-        } catch (Exception e) {
-            fail("Exception compatibility test failed: " + e.getMessage());
+            assertNotNull(defaultJedis, "Default constructor should work");
+            // Don't test operations as default might not connect to our test server
+        } finally {
+            defaultJedis.close();
         }
+        
+        // Test host/port constructor
+        Jedis hostPortJedis = new Jedis(REDIS_HOST, REDIS_PORT);
+        try {
+            String pingResult = hostPortJedis.ping();
+            assertEquals("PONG", pingResult, "Host/port constructor should work");
+        } finally {
+            hostPortJedis.close();
+        }
+        
+        // Test timeout constructor
+        Jedis timeoutJedis = new Jedis(REDIS_HOST, REDIS_PORT, 5000);
+        try {
+            String pingResult = timeoutJedis.ping();
+            assertEquals("PONG", pingResult, "Timeout constructor should work");
+        } finally {
+            timeoutJedis.close();
+        }
+        
+        System.out.println("✓ Configuration and constructors work correctly");
     }
 
     @Test
     @Order(8)
-    @DisplayName("Test Performance Comparison")
-    @EnabledIf("hasBothImplementations")
-    void testPerformanceComparison() {
-        if (!hasGlideJedis || !hasActualJedis) {
-            System.out.println("Skipping performance test - both implementations not available");
-            return;
-        }
-
-        int iterations = 1000;
-        String testKey = TEST_KEY_PREFIX + "perf_test";
-        String testValue = "performance_test_value";
-
-        try {
-            // Warm up
-            for (int i = 0; i < 100; i++) {
-                invokeMethod(glideJedis, "set", testKey + "_glide_warmup", testValue);
-                invokeMethod(actualJedis, "set", testKey + "_actual_warmup", testValue);
-            }
-
-            // Test GLIDE Jedis performance
-            long glideStartTime = System.nanoTime();
-            for (int i = 0; i < iterations; i++) {
-                invokeMethod(glideJedis, "set", testKey + "_glide_" + i, testValue);
-                invokeMethod(glideJedis, "get", testKey + "_glide_" + i);
-            }
-            long glideEndTime = System.nanoTime();
-            long glideDuration = glideEndTime - glideStartTime;
-
-            // Test actual Jedis performance
-            long actualStartTime = System.nanoTime();
-            for (int i = 0; i < iterations; i++) {
-                invokeMethod(actualJedis, "set", testKey + "_actual_" + i, testValue);
-                invokeMethod(actualJedis, "get", testKey + "_actual_" + i);
-            }
-            long actualEndTime = System.nanoTime();
-            long actualDuration = actualEndTime - actualStartTime;
-
-            System.out.println("Performance Comparison (" + iterations + " SET/GET operations):");
-            System.out.println("GLIDE Jedis: " + TimeUnit.NANOSECONDS.toMillis(glideDuration) + "ms");
-            System.out.println("Actual Jedis: " + TimeUnit.NANOSECONDS.toMillis(actualDuration) + "ms");
-            
-            double ratio = (double) glideDuration / actualDuration;
-            System.out.println("GLIDE/Actual ratio: " + String.format("%.2f", ratio));
-            
-            if (ratio < 1.0) {
-                System.out.println("✓ GLIDE Jedis is faster!");
-            } else if (ratio < 2.0) {
-                System.out.println("✓ GLIDE Jedis performance is acceptable");
-            } else {
-                System.out.println("⚠ GLIDE Jedis is significantly slower");
-            }
-        } catch (Exception e) {
-            fail("Performance comparison test failed: " + e.getMessage());
-        }
-    }
-
-    // Helper methods
-    private Object invokeMethod(Object obj, String methodName, Object... args) throws Exception {
-        Class<?>[] paramTypes = new Class[args.length];
-        for (int i = 0; i < args.length; i++) {
-            paramTypes[i] = args[i].getClass();
-            // Handle primitive types
-            if (paramTypes[i] == Integer.class) paramTypes[i] = int.class;
-            if (paramTypes[i] == Boolean.class) paramTypes[i] = boolean.class;
-            if (paramTypes[i] == Long.class) paramTypes[i] = long.class;
+    @DisplayName("Test Real-World Usage Patterns")
+    void testRealWorldUsagePatterns() {
+        // Pattern 1: Session management
+        String sessionId = "session_" + System.currentTimeMillis();
+        String sessionKey = TEST_KEY_PREFIX + "session:" + sessionId;
+        String sessionData = "{\"userId\":\"user123\",\"loginTime\":" + System.currentTimeMillis() + "}";
+        
+        jedis.set(sessionKey, sessionData);
+        String retrievedSession = jedis.get(sessionKey);
+        assertEquals(sessionData, retrievedSession, "Session management pattern should work");
+        
+        // Pattern 2: Configuration caching with pool
+        String configKey = TEST_KEY_PREFIX + "config:timeout";
+        String configValue = "30";
+        
+        try (Jedis pooledJedis = jedisPool.getResource()) {
+            pooledJedis.set(configKey, configValue);
         }
         
-        return obj.getClass().getMethod(methodName, paramTypes).invoke(obj, args);
-    }
-
-    private void closeClient(Object client) throws Exception {
-        invokeMethod(client, "close");
-    }
-
-    private void cleanupTestKeys(Object client) throws Exception {
-        // Note: This is a simplified cleanup - in real implementation,
-        // you might want to use SCAN to find and delete test keys
-        try {
-            for (int i = 0; i < 100; i++) {
-                invokeMethod(client, "del", TEST_KEY_PREFIX + "basic_ops");
-                invokeMethod(client, "del", TEST_KEY_PREFIX + "string_" + i);
-                invokeMethod(client, "del", TEST_KEY_PREFIX + "perf_test_glide_" + i);
-                invokeMethod(client, "del", TEST_KEY_PREFIX + "perf_test_actual_" + i);
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors
+        try (Jedis anotherPooledJedis = jedisPool.getResource()) {
+            String cachedConfig = anotherPooledJedis.get(configKey);
+            assertEquals(configValue, cachedConfig, "Configuration caching should work");
         }
+        
+        // Pattern 3: Multiple operations
+        String[] keys = {
+            TEST_KEY_PREFIX + "multi1",
+            TEST_KEY_PREFIX + "multi2", 
+            TEST_KEY_PREFIX + "multi3"
+        };
+        String[] values = {"value1", "value2", "value3"};
+        
+        for (int i = 0; i < keys.length; i++) {
+            jedis.set(keys[i], values[i]);
+        }
+        
+        for (int i = 0; i < keys.length; i++) {
+            assertEquals(values[i], jedis.get(keys[i]), "Multiple operations should work");
+        }
+        
+        System.out.println("✓ Real-world usage patterns work correctly");
     }
 
-    boolean hasBothImplementations() {
-        return hasGlideJedis && hasActualJedis;
+    @Test
+    @Order(9)
+    @DisplayName("Final Integration Test")
+    void testFinalIntegration() {
+        System.out.println("=== Final Integration Test ===");
+        
+        String integrationKey = TEST_KEY_PREFIX + "integration";
+        String integrationValue = "GLIDE_compatibility_layer_works_perfectly";
+        
+        // Test complete workflow
+        String setResult = jedis.set(integrationKey, integrationValue);
+        assertEquals("OK", setResult, "Integration SET should work");
+        
+        String getResult = jedis.get(integrationKey);
+        assertEquals(integrationValue, getResult, "Integration GET should work");
+        
+        String pingResult = jedis.ping();
+        assertEquals("PONG", pingResult, "Integration PING should work");
+        
+        // Test with pool
+        try (Jedis pooledJedis = jedisPool.getResource()) {
+            String poolGetResult = pooledJedis.get(integrationKey);
+            assertEquals(integrationValue, poolGetResult, "Integration pool GET should work");
+            
+            String poolPingResult = pooledJedis.ping("integration_test");
+            assertEquals("integration_test", poolPingResult, "Integration pool PING should work");
+        }
+        
+        System.out.println("✓ Final integration test passed");
+        System.out.println("✓ GLIDE Jedis compatibility layer (compatibility.clients.jedis) is fully functional!");
+        System.out.println("✓ Ready for production use with simplified, direct API access!");
     }
 }

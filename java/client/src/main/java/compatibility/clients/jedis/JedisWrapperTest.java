@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package redis.clients.jedis;
+package compatibility.clients.jedis;
 
 /**
  * Test class to verify the Jedis wrapper functionality. This class contains the exact code examples
