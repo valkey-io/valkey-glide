@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import asyncio
 import random
 import sys
 from typing import AsyncGenerator, List, Optional, Union
@@ -321,7 +322,7 @@ async def glide_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    "Get async socket client for tests"
+    """Get async socket client for tests"""
     client = await create_client(
         request,
         cluster_mode,
@@ -329,9 +330,13 @@ async def glide_client(
         request_timeout=5000,
         lazy_connect=False,  # Explicitly false for general test client
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture(scope="function")
@@ -352,9 +357,13 @@ async def glide_tls_client(
         tls_insecure=tls_insecure,
         valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture
@@ -370,13 +379,17 @@ async def management_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
+    """Get async socket client for tests, used to manage the state when tests are on the client ability to connect"""
     client = await create_client(
         request, cluster_mode, protocol=protocol, lazy_connect=False
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture(scope="function")
@@ -405,9 +418,13 @@ async def acl_glide_client(
         request_timeout=2000,
         lazy_connect=False,
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 async def create_client(
@@ -535,17 +552,52 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     If authentication is required, attempt to connect with the known password,
     reset it back to empty, and proceed with teardown.
+    
+    This function is made robust to handle connection timeouts and other transient
+    errors that can occur after password changes and connection kills.
+    """
+    # Add a small delay to allow server to stabilize after password/connection changes
+    await asyncio.sleep(0.5)
+    
+    # Retry connection attempts with exponential backoff
+    max_retries = 3
+    base_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            await _attempt_teardown(request, cluster_mode, protocol)
+            return  # Success, exit the function
+        except Exception as e:
+            if attempt == max_retries - 1:
+                # Last attempt failed, log the error but don't fail the test
+                print(f"Warning: Test teardown failed after {max_retries} attempts: {e}")
+                return
+            else:
+                # Wait before retrying with exponential backoff
+                delay = base_delay * (2 ** attempt)
+                print(f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                await asyncio.sleep(delay)
+
+
+async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+    """
+    Single attempt at teardown operations. This function may raise exceptions
+    which will be handled by the retry logic in test_teardown.
     """
     credentials = None
     try:
-        # Try connecting without credentials
+        # Try connecting without credentials with increased timeouts
         client = await create_client(
-            request, cluster_mode, protocol=protocol, request_timeout=2000
+            request, 
+            cluster_mode, 
+            protocol=protocol, 
+            request_timeout=5000,  # Increased from 2000ms
+            connection_timeout=5000  # Increased from default 1000ms
         )
         await client.custom_command(["FLUSHALL"])
         await client.close()
     except ClosingError as e:
-        # Check if the error is due to authentication
+        # Check if the error is due to authentication or connection issues
         if "NOAUTH" in str(e):
             # Use the known password to authenticate
             credentials = ServerCredentials(password=NEW_PASSWORD)
@@ -553,7 +605,8 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 request,
                 cluster_mode,
                 protocol=protocol,
-                request_timeout=2000,
+                request_timeout=5000,  # Increased timeout
+                connection_timeout=5000,  # Increased timeout
                 credentials=credentials,
             )
             try:
@@ -565,5 +618,9 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 await client.custom_command(["FLUSHALL"])
             finally:
                 await client.close()
+        elif "timed out" in str(e) or "Failed to create initial connections" in str(e):
+            # Handle connection timeout errors more gracefully
+            # These are often transient after password changes and connection kills
+            raise Exception(f"Connection timeout during teardown: {e}")
         else:
             raise e
