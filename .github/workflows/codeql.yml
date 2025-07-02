@@ -95,7 +95,6 @@ jobs:
                           - 'glide-core/src/**'
                           - 'glide-core/redis-rs/redis/src/**'
                           - 'ffi/src/**'
-                          - 'utils/cluster_manager.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
