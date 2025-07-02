@@ -31,6 +31,6 @@ internal interface IBatch
 
     /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/summary" />
     /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/param" />
-    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info()" /></returns>
+    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info(Section[])" /></returns>
     IBatch Info(Section[] sections);
 }

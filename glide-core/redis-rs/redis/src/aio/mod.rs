@@ -133,7 +133,7 @@ where
             Err(RedisError::from((
                 ErrorKind::ResponseError,
                 "Failed to execute INFO command. ",
-                format!("{:?}", e),
+                format!("{e:?}"),
             )))
         }
     }
