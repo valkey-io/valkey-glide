@@ -5,7 +5,6 @@ using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
-using static Valkey.Glide.Internals.FFI;
 
 #pragma warning disable IDE0130 // Namespace does not match folder structure
 namespace Valkey.Glide;
