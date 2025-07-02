@@ -1,7 +1,7 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Describes a consumer within a consumer group, retrieved using the XINFO CONSUMERS command. <see cref="IDatabase.StreamConsumerInfo"/>.
+/// Describes a consumer within a consumer group, retrieved using the XINFO CONSUMERS command.
 /// </summary>
 public readonly struct StreamConsumerInfo
 {

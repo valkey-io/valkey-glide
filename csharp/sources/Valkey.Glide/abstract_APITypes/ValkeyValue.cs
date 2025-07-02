@@ -409,8 +409,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
             //ConnectionMultiplexer.TraceWithoutContext(ex.Message);
             throw ex;
         }
-        // if all else fails, consider equivalent
-        return 0;
     }
 
     int IComparable.CompareTo(object? obj)
@@ -475,7 +473,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Creates a new <see cref="ValkeyValue"/> from an <see cref="ulong"/>.
     /// </summary>
     /// <param name="value">The <see cref="ulong"/> to convert to a <see cref="ValkeyValue"/>.</param>
-    [CLSCompliant(false)]
     public static implicit operator ValkeyValue(ulong value)
     {
         const ulong MSB = 1UL << 63;
@@ -488,21 +485,18 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{ulong}"/>.
     /// </summary>
     /// <param name="value">The <see cref="T:Nullable{ulong}"/> to convert to a <see cref="ValkeyValue"/>.</param>
-    [CLSCompliant(false)]
     public static implicit operator ValkeyValue(ulong? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
     /// Creates a new <see cref="ValkeyValue"/> from an <see cref="uint"/>.
     /// </summary>
     /// <param name="value">The <see cref="uint"/> to convert to a <see cref="ValkeyValue"/>.</param>
-    [CLSCompliant(false)]
     public static implicit operator ValkeyValue(uint value) => new ValkeyValue(value, default, Sentinel_SignedInteger); // 32-bits always fits as signed
 
     /// <summary>
     /// Creates a new <see cref="ValkeyValue"/> from an <see cref="T:Nullable{uint}"/>.
     /// </summary>
     /// <param name="value">The <see cref="T:Nullable{uint}"/> to convert to a <see cref="ValkeyValue"/>.</param>
-    [CLSCompliant(false)]
     public static implicit operator ValkeyValue(uint? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
@@ -615,7 +609,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Converts a <see cref="ValkeyValue"/> to a <see cref="uint"/>.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
-    [CLSCompliant(false)]
     public static explicit operator uint(ValkeyValue value)
     {
         value = value.Simplify();
@@ -632,7 +625,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Converts a <see cref="ValkeyValue"/> to a <see cref="long"/>.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
-    [CLSCompliant(false)]
     public static explicit operator ulong(ValkeyValue value)
     {
         value = value.Simplify();
@@ -740,7 +732,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{ulong}"/>.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
-    [CLSCompliant(false)]
     public static explicit operator ulong?(ValkeyValue value)
         => value.IsNull ? (ulong?)null : (ulong)value;
 
@@ -755,7 +746,6 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// Converts the <see cref="ValkeyValue"/> to a <see cref="T:Nullable{uint}"/>.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
-    [CLSCompliant(false)]
     public static explicit operator uint?(ValkeyValue value)
         => value.IsNull ? (uint?)null : (uint)value;
 

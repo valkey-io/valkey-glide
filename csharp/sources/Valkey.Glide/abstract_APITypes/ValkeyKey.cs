@@ -50,71 +50,71 @@ public readonly struct ValkeyKey : IEquatable<ValkeyKey>
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator !=(ValkeyKey x, ValkeyKey y) => !x.EqualsImpl(in y);
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator !=(string x, ValkeyKey y) => !y.EqualsImpl(new ValkeyKey(x));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator !=(byte[] x, ValkeyKey y) => !y.EqualsImpl(new ValkeyKey(null, x));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator !=(ValkeyKey x, string y) => !x.EqualsImpl(new ValkeyKey(y));
 
     /// <summary>
     /// Indicate whether two keys are not equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator !=(ValkeyKey x, byte[] y) => !x.EqualsImpl(new ValkeyKey(null, y));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator ==(ValkeyKey x, ValkeyKey y) => x.EqualsImpl(in y);
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator ==(string x, ValkeyKey y) => y.EqualsImpl(new ValkeyKey(x));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator ==(byte[] x, ValkeyKey y) => y.EqualsImpl(new ValkeyKey(null, x));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator ==(ValkeyKey x, string y) => x.EqualsImpl(new ValkeyKey(y));
 
     /// <summary>
     /// Indicate whether two keys are equal.
     /// </summary>
-    /// <param name="x">The first <see cref="ValkeyChannel"/> to compare.</param>
-    /// <param name="y">The second <see cref="ValkeyChannel"/> to compare.</param>
+    /// <param name="x">The first ValkeyChannel to compare.</param>
+    /// <param name="y">The second ValkeyChannel to compare.</param>
     public static bool operator ==(ValkeyKey x, byte[] y) => x.EqualsImpl(new ValkeyKey(null, y));
 
     /// <summary>
@@ -416,16 +416,16 @@ public readonly struct ValkeyKey : IEquatable<ValkeyKey>
 #if NETCOREAPP
                     written += Encoding.UTF8.GetBytes(s, destination);
 #else
-                        unsafe
+                    unsafe
+                    {
+                        fixed (byte* bPtr = destination)
                         {
-                            fixed (byte* bPtr = destination)
+                            fixed (char* cPtr = s)
                             {
-                                fixed (char* cPtr = s)
-                                {
-                                    written += Encoding.UTF8.GetBytes(cPtr, s.Length, bPtr, destination.Length);
-                                }
+                                written += Encoding.UTF8.GetBytes(cPtr, s.Length, bPtr, destination.Length);
                             }
                         }
+                    }
 #endif
                 }
                 break;

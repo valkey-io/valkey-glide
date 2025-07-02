@@ -1,7 +1,7 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Describes stream information retrieved using the XINFO STREAM command. <see cref="IDatabase.StreamInfo"/>.
+/// Describes stream information retrieved using the XINFO STREAM command.
 /// </summary>
 public readonly struct StreamInfo
 {
