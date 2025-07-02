@@ -630,6 +630,6 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
         elif "timed out" in str(e) or "Failed to create initial connections" in str(e):
             # Handle connection timeout errors more gracefully
             # These are often transient after password changes and connection kills
-            raise Exception(f"Connection timeout during teardown: {e}")
+            raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
