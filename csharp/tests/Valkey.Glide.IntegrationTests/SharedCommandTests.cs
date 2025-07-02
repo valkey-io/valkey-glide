@@ -138,6 +138,10 @@ public class SharedCommandTests(TestConfiguration config)
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task TestSetIntersectionLength(BaseClient client)
     {
+        Assert.SkipWhen(
+            TestConfiguration.SERVER_VERSION.CompareTo(new Version("7.0.0")) < 0,
+            "SetIntersectionLength is supported since 7.0.0"
+        );
         string key1 = "{prefix}-" + Guid.NewGuid().ToString();
         string key2 = "{prefix}-" + Guid.NewGuid().ToString();
         string key3 = "{prefix}-" + Guid.NewGuid().ToString();
