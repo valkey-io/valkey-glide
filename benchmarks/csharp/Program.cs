@@ -8,7 +8,6 @@ using CommandLine;
 
 using LinqStatistics;
 
-//using StackExchange.Redis;
 using SER_Connection = StackExchange.Redis.ConnectionMultiplexer;
 using SER_Db = StackExchange.Redis.IDatabase;
 
