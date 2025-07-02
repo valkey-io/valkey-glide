@@ -34,6 +34,11 @@ DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
 DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
 
+# Test teardown retry configuration
+TEST_TEARDOWN_MAX_RETRIES = 3
+TEST_TEARDOWN_BASE_DELAY = 1  # seconds
+MAX_BACKOFF_TIME = 8  # seconds
+
 Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
 
