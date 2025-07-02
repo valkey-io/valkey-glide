@@ -22,11 +22,106 @@ on:
     workflow_dispatch:
 
 jobs:
+    detect-changes:
+        name: Detect changed languages
+        runs-on: ubuntu-latest
+        outputs:
+            csharp: ${{ steps.changes.outputs.csharp }}
+            go: ${{ steps.changes.outputs.go }}
+            java-kotlin: ${{ steps.changes.outputs.java-kotlin }}
+            javascript-typescript: ${{ steps.changes.outputs.javascript-typescript }}
+            python: ${{ steps.changes.outputs.python }}
+            rust: ${{ steps.changes.outputs.rust }}
+            c-cpp: ${{ steps.changes.outputs.c-cpp }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Detect changes
+              id: changes
+              shell: bash
+              run: |
+                  # For scheduled runs and pushes to main, run all languages
+                  if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+                    echo "csharp=true" >> $GITHUB_OUTPUT
+                    echo "go=true" >> $GITHUB_OUTPUT
+                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
+                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
+                    echo "python=true" >> $GITHUB_OUTPUT
+                    echo "rust=true" >> $GITHUB_OUTPUT
+                    echo "c-cpp=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  # For PRs, detect changed files
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+                  else
+                    # For pushes to feature branches, compare with main
+                    CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+                  fi
+
+                  echo "Changed files:"
+                  echo "$CHANGED_FILES"
+
+                  # If CodeQL workflow itself is changed, run all languages
+                  if echo "$CHANGED_FILES" | grep -q "\.github/workflows/codeql\.yml"; then
+                    echo "CodeQL workflow changed - running all languages"
+                    echo "csharp=true" >> $GITHUB_OUTPUT
+                    echo "go=true" >> $GITHUB_OUTPUT
+                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
+                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
+                    echo "python=true" >> $GITHUB_OUTPUT
+                    echo "rust=true" >> $GITHUB_OUTPUT
+                    echo "c-cpp=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  # Initialize all languages as false
+                  echo "csharp=false" >> $GITHUB_OUTPUT
+                  echo "go=false" >> $GITHUB_OUTPUT
+                  echo "java-kotlin=false" >> $GITHUB_OUTPUT
+                  echo "javascript-typescript=false" >> $GITHUB_OUTPUT
+                  echo "python=false" >> $GITHUB_OUTPUT
+                  echo "rust=false" >> $GITHUB_OUTPUT
+                  echo "c-cpp=false" >> $GITHUB_OUTPUT
+
+                  # Check for each language
+                  if echo "$CHANGED_FILES" | grep -E "^csharp/|\.cs$|\.csproj$|\.sln$"; then
+                    echo "csharp=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^go/|\.go$|go\.mod$|go\.sum$"; then
+                    echo "go=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^java/|\.java$|\.kt$|\.gradle$|gradlew|\.kts$"; then
+                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^node/|\.js$|\.ts$|\.json$|\.mjs$|\.jsx$|\.tsx$|package\.json|package-lock\.json|yarn\.lock"; then
+                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^python/|\.py$|requirements.*\.txt$|pyproject\.toml$|setup\.py$|Pipfile"; then
+                    echo "python=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^(glide-core|ffi|cpp)/|\.rs$|Cargo\.(toml|lock)$|\.cpp$|\.cc$|\.cxx$|\.h$|\.hpp$|CMakeLists\.txt"; then
+                    echo "rust=true" >> $GITHUB_OUTPUT
+                  fi
+
+                  if echo "$CHANGED_FILES" | grep -E "^cpp/|\.cpp$|\.cc$|\.cxx$|\.c$|\.h$|\.hpp$|CMakeLists\.txt"; then
+                    echo "c-cpp=true" >> $GITHUB_OUTPUT
+                  fi
+
     analyze:
         name: Analyze (${{ matrix.language }})
         runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+        needs: detect-changes
         permissions:
-            # required for all workflows
             security-events: write
 
         strategy:
@@ -49,48 +144,80 @@ jobs:
                       build-mode: manual
         steps:
             - name: Checkout repository
+              if: |
+                (matrix.language == 'csharp' && needs.detect-changes.outputs.csharp == 'true') ||
+                (matrix.language == 'go' && needs.detect-changes.outputs.go == 'true') ||
+                (matrix.language == 'java-kotlin' && needs.detect-changes.outputs.java-kotlin == 'true') ||
+                (matrix.language == 'javascript-typescript' && needs.detect-changes.outputs.javascript-typescript == 'true') ||
+                (matrix.language == 'python' && needs.detect-changes.outputs.python == 'true') ||
+                (matrix.language == 'rust' && needs.detect-changes.outputs.rust == 'true') ||
+                (matrix.language == 'c-cpp' && needs.detect-changes.outputs.c-cpp == 'true')
               uses: actions/checkout@v4
 
             # Initializes the CodeQL tools for scanning.
             - name: Initialize CodeQL
+              if: |
+                (matrix.language == 'csharp' && needs.detect-changes.outputs.csharp == 'true') ||
+                (matrix.language == 'go' && needs.detect-changes.outputs.go == 'true') ||
+                (matrix.language == 'java-kotlin' && needs.detect-changes.outputs.java-kotlin == 'true') ||
+                (matrix.language == 'javascript-typescript' && needs.detect-changes.outputs.javascript-typescript == 'true') ||
+                (matrix.language == 'python' && needs.detect-changes.outputs.python == 'true') ||
+                (matrix.language == 'rust' && needs.detect-changes.outputs.rust == 'true') ||
+                (matrix.language == 'c-cpp' && needs.detect-changes.outputs.c-cpp == 'true')
               uses: github/codeql-action/init@v3
               with:
                   languages: ${{ matrix.language }}
                   build-mode: ${{ matrix.build-mode }}
                   config-file: .github/codeql/codeql-config.yml
 
-            - if: matrix.build-mode == 'manual'
+            # Manual build steps for C++
+            - name: Build C++ components
+              if: matrix.language == 'c-cpp' && matrix.build-mode == 'manual' && needs.detect-changes.outputs.c-cpp == 'true'
               shell: bash
               run: |
-                  if [ "${{ matrix.language }}" == "c-cpp" ]; then
-                    # Build only the C++ components needed for analysis
-                    cd glide-core
-                    cargo build --release
-                  elif [ "${{ matrix.language }}" == "go" ]; then
-                    # Build Go modules and dependencies
-                    cd go
-                    go mod download
-                    go build ./...
-                  elif [ "${{ matrix.language }}" == "csharp" ]; then
-                    # Build C# components (excluding problematic integration tests)
-                    cd csharp
-                    dotnet build sources/Valkey.Glide/Valkey.Glide.csproj
-                    dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj
-                  elif [ "${{ matrix.language }}" == "java-kotlin" ]; then
-                    # Install newer protobuf compiler (required version 29.0+)
-                    PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                    curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
-                    sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
-                    sudo chmod +x /usr/local/bin/protoc
-                    protoc --version
-                    # Build only Java components (skip Rust build for CodeQL analysis)
-                    cd java
-                    ./gradlew :client:processResources :client:compileJava --exclude-task :client:buildRust
-                  else
-                    echo 'TODO: build commands for other languages.'
-                  fi
+                  # Build only the C++ components needed for analysis
+                  cd glide-core
+                  cargo build --release
+
+            # Manual build steps for C#
+            - name: Setup .NET
+              if: matrix.language == 'csharp' && matrix.build-mode == 'manual' && needs.detect-changes.outputs.csharp == 'true'
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: '8.0.x'
+
+            - name: Build C# components
+              if: matrix.language == 'csharp' && matrix.build-mode == 'manual' && needs.detect-changes.outputs.csharp == 'true'
+              shell: bash
+              run: |
+                  # Build C# project with Lint configuration to skip Rust build
+                  cd csharp
+                  dotnet build --configuration Lint --framework net8.0
+
+            # Manual build steps for Java/Kotlin
+            - name: Build Java/Kotlin components
+              if: matrix.language == 'java-kotlin' && matrix.build-mode == 'manual' && needs.detect-changes.outputs.java-kotlin == 'true'
+              shell: bash
+              run: |
+                  # Install newer protobuf compiler (required version 29.0+)
+                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                  curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+                  sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
+                  sudo chmod +x /usr/local/bin/protoc
+                  protoc --version
+                  # Build only Java components (skip Rust build for CodeQL analysis)
+                  cd java
+                  ./gradlew :client:processResources :client:compileJava --exclude-task :client:buildRust
 
             - name: Perform CodeQL Analysis
+              if: |
+                (matrix.language == 'csharp' && needs.detect-changes.outputs.csharp == 'true') ||
+                (matrix.language == 'go' && needs.detect-changes.outputs.go == 'true') ||
+                (matrix.language == 'java-kotlin' && needs.detect-changes.outputs.java-kotlin == 'true') ||
+                (matrix.language == 'javascript-typescript' && needs.detect-changes.outputs.javascript-typescript == 'true') ||
+                (matrix.language == 'python' && needs.detect-changes.outputs.python == 'true') ||
+                (matrix.language == 'rust' && needs.detect-changes.outputs.rust == 'true') ||
+                (matrix.language == 'c-cpp' && needs.detect-changes.outputs.c-cpp == 'true')
               uses: github/codeql-action/analyze@v3
               with:
                   category: "/language:${{matrix.language}}"
