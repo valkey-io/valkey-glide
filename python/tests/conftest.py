@@ -560,8 +560,8 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     await asyncio.sleep(0.5)
     
     # Retry connection attempts with exponential backoff
-    max_retries = 3
-    base_delay = 1.0
+    max_retries = TEST_TEARDOWN_MAX_RETRIES
+    base_delay = TEST_TEARDOWN_BASE_DELAY
     
     for attempt in range(max_retries):
         try:
