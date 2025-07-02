@@ -22,107 +22,10 @@ on:
     workflow_dispatch:
 
 jobs:
-    # Detect which languages have changes to optimize CI runtime
-    detect-changes:
-        name: Detect changed languages
-        runs-on: ubuntu-latest
-        outputs:
-            csharp: ${{ steps.changes.outputs.csharp }}
-            go: ${{ steps.changes.outputs.go }}
-            java-kotlin: ${{ steps.changes.outputs.java-kotlin }}
-            javascript-typescript: ${{ steps.changes.outputs.javascript-typescript }}
-            python: ${{ steps.changes.outputs.python }}
-            rust: ${{ steps.changes.outputs.rust }}
-            c-cpp: ${{ steps.changes.outputs.c-cpp }}
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-
-            - name: Detect changes
-              id: changes
-              shell: bash
-              run: |
-                  # For scheduled runs and pushes to main, run all languages
-                  if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-                    echo "csharp=true" >> $GITHUB_OUTPUT
-                    echo "go=true" >> $GITHUB_OUTPUT
-                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
-                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
-                    echo "python=true" >> $GITHUB_OUTPUT
-                    echo "rust=true" >> $GITHUB_OUTPUT
-                    echo "c-cpp=true" >> $GITHUB_OUTPUT
-                    exit 0
-                  fi
-
-                  # For PRs, detect changed files
-                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-                    CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
-                  else
-                    # For pushes to feature branches, compare with main
-                    CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
-                  fi
-
-                  echo "Changed files:"
-                  echo "$CHANGED_FILES"
-
-                  # If CodeQL workflow itself is changed, run all languages
-                  if echo "$CHANGED_FILES" | grep -q "\.github/workflows/codeql\.yml"; then
-                    echo "CodeQL workflow changed - running all languages"
-                    echo "csharp=true" >> $GITHUB_OUTPUT
-                    echo "go=true" >> $GITHUB_OUTPUT
-                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
-                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
-                    echo "python=true" >> $GITHUB_OUTPUT
-                    echo "rust=true" >> $GITHUB_OUTPUT
-                    echo "c-cpp=true" >> $GITHUB_OUTPUT
-                    exit 0
-                  fi
-
-                  # Initialize all languages as false
-                  echo "csharp=false" >> $GITHUB_OUTPUT
-                  echo "go=false" >> $GITHUB_OUTPUT
-                  echo "java-kotlin=false" >> $GITHUB_OUTPUT
-                  echo "javascript-typescript=false" >> $GITHUB_OUTPUT
-                  echo "python=false" >> $GITHUB_OUTPUT
-                  echo "rust=false" >> $GITHUB_OUTPUT
-                  echo "c-cpp=false" >> $GITHUB_OUTPUT
-
-                  # Check for each language
-                  if echo "$CHANGED_FILES" | grep -E "^csharp/|\.cs$|\.csproj$|\.sln$"; then
-                    echo "csharp=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^go/|\.go$|go\.mod$|go\.sum$"; then
-                    echo "go=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^java/|\.java$|\.kt$|\.gradle$|gradlew|\.kts$"; then
-                    echo "java-kotlin=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^node/|\.js$|\.ts$|\.json$|\.mjs$|\.jsx$|\.tsx$|package\.json|package-lock\.json|yarn\.lock"; then
-                    echo "javascript-typescript=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^python/|\.py$|requirements.*\.txt$|pyproject\.toml$|setup\.py$|Pipfile"; then
-                    echo "python=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^(glide-core|ffi|cpp)/|\.rs$|Cargo\.(toml|lock)$|\.cpp$|\.cc$|\.cxx$|\.h$|\.hpp$|CMakeLists\.txt"; then
-                    echo "rust=true" >> $GITHUB_OUTPUT
-                  fi
-
-                  if echo "$CHANGED_FILES" | grep -E "^cpp/|\.cpp$|\.cc$|\.cxx$|\.c$|\.h$|\.hpp$|CMakeLists\.txt"; then
-                    echo "c-cpp=true" >> $GITHUB_OUTPUT
-                  fi
-
-    # Run CodeQL analysis for each language with conditional execution
+    # Run CodeQL analysis for each language
     analyze:
         name: Analyze (${{ matrix.language }})
         runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
-        needs: detect-changes
         permissions:
             security-events: write
 
@@ -133,7 +36,7 @@ jobs:
                     - language: csharp
                       build-mode: manual
                     - language: go
-                      build-mode: autobuild
+                      build-mode: manual
                     - language: java-kotlin
                       build-mode: manual
                     - language: javascript-typescript
@@ -144,17 +47,14 @@ jobs:
                       build-mode: none
                     - language: c-cpp
                       build-mode: manual
-
-        env:
-            SHOULD_RUN: ${{ (matrix.language == 'csharp' && needs.detect-changes.outputs.csharp == 'true') || (matrix.language == 'go' && needs.detect-changes.outputs.go == 'true') || (matrix.language == 'java-kotlin' && needs.detect-changes.outputs.java-kotlin == 'true') || (matrix.language == 'javascript-typescript' && needs.detect-changes.outputs.javascript-typescript == 'true') || (matrix.language == 'python' && needs.detect-changes.outputs.python == 'true') || (matrix.language == 'rust' && needs.detect-changes.outputs.rust == 'true') || (matrix.language == 'c-cpp' && needs.detect-changes.outputs.c-cpp == 'true') }}
+                    - language: actions
+                      build-mode: none
 
         steps:
             - name: Checkout repository
-              if: env.SHOULD_RUN == 'true'
               uses: actions/checkout@v4
 
             - name: Initialize CodeQL
-              if: env.SHOULD_RUN == 'true'
               uses: github/codeql-action/init@v3
               with:
                   languages: ${{ matrix.language }}
@@ -163,21 +63,96 @@ jobs:
 
             # C++ Build
             - name: Build C++ components
-              if: matrix.language == 'c-cpp' && env.SHOULD_RUN == 'true'
+              if: matrix.language == 'c-cpp'
               shell: bash
               run: |
                   cd glide-core
                   cargo build --release
 
+            # Go Build
+            - name: Set up Go cache
+              if: matrix.language == 'go'
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cache/go-build
+                      ~/go/pkg/mod
+                      ~/go/bin
+                  key: ${{ runner.os }}-go-${{ hashFiles('go/go.mod', 'go/go.sum') }}-protoc-gen-go-v1.33.0
+                  restore-keys: |
+                      ${{ runner.os }}-go-
+
+            - name: Cache protoc binary
+              if: matrix.language == 'go'
+              uses: actions/cache@v4
+              with:
+                  path: /usr/local/bin/protoc
+                  key: ${{ runner.os }}-protoc-29.1
+                  restore-keys: |
+                      ${{ runner.os }}-protoc-
+
+            - name: Install protoc-gen-go
+              if: matrix.language == 'go'
+              shell: bash
+              run: |
+                  # Ensure Go bin directory is in PATH
+                  export PATH=$PATH:$(go env GOPATH)/bin
+                  # Check if protoc-gen-go is already installed
+                  if ! command -v protoc-gen-go &> /dev/null; then
+                      echo "Installing protoc-gen-go..."
+                      go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+                  else
+                      echo "protoc-gen-go already installed: $(protoc-gen-go --version)"
+                  fi
+
+            - name: Install protoc compiler
+              if: matrix.language == 'go'
+              shell: bash
+              run: |
+                  # Check if protoc is already installed with correct version
+                  if ! command -v protoc &> /dev/null || ! protoc --version | grep -q "29.1"; then
+                      echo "Installing protoc 29.1..."
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+                      sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
+                      sudo chmod +x /usr/local/bin/protoc
+                  else
+                      echo "protoc already installed: $(protoc --version)"
+                  fi
+
+            - name: Build Go components
+              if: matrix.language == 'go'
+              shell: bash
+              run: |
+                  # Ensure Go bin directory is in PATH
+                  export PATH=$PATH:$(go env GOPATH)/bin
+
+                  # Create minimal lib.h to satisfy CGO imports for CodeQL analysis
+                  echo "Creating minimal lib.h for CodeQL analysis..."
+                  echo "// Minimal header for CodeQL analysis" > go/lib.h
+                  echo "#ifndef LIB_H" >> go/lib.h
+                  echo "#define LIB_H" >> go/lib.h
+                  echo "// Placeholder definitions for CodeQL analysis" >> go/lib.h
+                  echo "#endif" >> go/lib.h
+
+                  # Generate protobuf files
+                  cd go
+                  make generate-protobuf
+
+                  # For CodeQL analysis, we just need the source code available
+                  # Try to build but don't fail if it can't link with Rust library
+                  echo "Attempting Go build for CodeQL analysis..."
+                  go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
+
             # C# Build
             - name: Setup .NET
-              if: matrix.language == 'csharp' && env.SHOULD_RUN == 'true'
+              if: matrix.language == 'csharp'
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: "8.0.x"
 
             - name: Build C# components
-              if: matrix.language == 'csharp' && env.SHOULD_RUN == 'true'
+              if: matrix.language == 'csharp'
               shell: bash
               run: |
                   cd csharp
@@ -185,22 +160,34 @@ jobs:
                   dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Debug --framework net8.0
 
             # Java/Kotlin Build
+            - name: Cache protoc binary for Java
+              if: matrix.language == 'java-kotlin'
+              uses: actions/cache@v4
+              with:
+                  path: /usr/local/bin/protoc
+                  key: ${{ runner.os }}-protoc-29.1
+                  restore-keys: |
+                      ${{ runner.os }}-protoc-
+
             - name: Build Java/Kotlin components
-              if: matrix.language == 'java-kotlin' && env.SHOULD_RUN == 'true'
+              if: matrix.language == 'java-kotlin'
               shell: bash
               run: |
-                  # Install newer protobuf compiler (required version 29.0+)
-                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                  curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
-                  sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
-                  sudo chmod +x /usr/local/bin/protoc
-                  protoc --version
+                  # Check if protoc is already installed with correct version
+                  if ! command -v protoc &> /dev/null || ! protoc --version | grep -q "29.1"; then
+                      echo "Installing protoc 29.1..."
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+                      sudo unzip protoc-29.1-linux-x86_64.zip -d /usr/local
+                      sudo chmod +x /usr/local/bin/protoc
+                  else
+                      echo "protoc already installed: $(protoc --version)"
+                  fi
                   # Build only Java components (skip Rust build for CodeQL analysis)
                   cd java
                   ./gradlew :client:processResources :client:compileJava --exclude-task :client:buildRust
 
             - name: Perform CodeQL Analysis
-              if: env.SHOULD_RUN == 'true'
               uses: github/codeql-action/analyze@v3
               with:
                   category: "/language:${{matrix.language}}"
