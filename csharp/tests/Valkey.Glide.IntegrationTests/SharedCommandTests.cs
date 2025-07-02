@@ -53,8 +53,8 @@ public class SharedCommandTests(TestConfiguration config)
     {
         string key = Guid.NewGuid().ToString();
 
-        Assert.Equal(2, await client.SetAdd(key, new RedisValue[] { "test1", "test2" }));
-        Assert.Equal(1, await client.SetAdd(key, new RedisValue[] { "test3" }));
+        Assert.Equal(2, await client.SetAdd(key, new ValkeyValue[] { "test1", "test2" }));
+        Assert.Equal(1, await client.SetAdd(key, new ValkeyValue[] { "test3" }));
         Assert.True(await client.SetAdd(key, "test4"));
         Assert.False(await client.SetAdd(key, "test4"));
 
@@ -70,10 +70,10 @@ public class SharedCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         Assert.True(await client.SetAdd(key, "a", CommandFlags.FireAndForget));
-        Assert.Equal(1, await client.SetAdd(key, new RedisValue[] { "1" }, CommandFlags.FireAndForget));
-        Assert.Equal(2, await client.SetAdd(key, new RedisValue[] { "11", "2" }, CommandFlags.FireAndForget));
-        Assert.Equal(3, await client.SetAdd(key, new RedisValue[] { "10", "3", "1.5" }, CommandFlags.FireAndForget));
-        Assert.Equal(4, await client.SetAdd(key, new RedisValue[] { "2.2", "-1", "s", "t" }, CommandFlags.FireAndForget));
+        Assert.Equal(1, await client.SetAdd(key, new ValkeyValue[] { "1" }, CommandFlags.FireAndForget));
+        Assert.Equal(2, await client.SetAdd(key, new ValkeyValue[] { "11", "2" }, CommandFlags.FireAndForget));
+        Assert.Equal(3, await client.SetAdd(key, new ValkeyValue[] { "10", "3", "1.5" }, CommandFlags.FireAndForget));
+        Assert.Equal(4, await client.SetAdd(key, new ValkeyValue[] { "2.2", "-1", "s", "t" }, CommandFlags.FireAndForget));
 
         var vals = await client.SetMembers(key);
         string s = string.Join(",", vals.OrderByDescending(x => x));
@@ -85,12 +85,12 @@ public class SharedCommandTests(TestConfiguration config)
     public async Task TestSRem(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        RedisValue[] members = { "member1", "member2", "member3" };
+        ValkeyValue[] members = { "member1", "member2", "member3" };
 
         // Test regular remove and remove on non-existent members
         Assert.Equal(3, await client.SetAdd(key, members, CommandFlags.FireAndForget));
-        Assert.Equal(2, await client.SetRemove(key, new RedisValue[] { "member1", "member2" }, CommandFlags.FireAndForget));
-        Assert.Equal(0, await client.SetRemove(key, new RedisValue[] { "idontexist1", "idontexist2" }, CommandFlags.FireAndForget));
+        Assert.Equal(2, await client.SetRemove(key, new ValkeyValue[] { "member1", "member2" }, CommandFlags.FireAndForget));
+        Assert.Equal(0, await client.SetRemove(key, new ValkeyValue[] { "idontexist1", "idontexist2" }, CommandFlags.FireAndForget));
 
         // Test singular remove
         Assert.True(await client.SetRemove(key, "member3", CommandFlags.FireAndForget));
@@ -100,10 +100,10 @@ public class SharedCommandTests(TestConfiguration config)
         Assert.Equal(3, await client.SetAdd(key, members, CommandFlags.FireAndForget));
 
         // Mix existing and non-existing members
-        Assert.Equal(1, await client.SetRemove(key, new RedisValue[] { "member1", "idontexist2" }, CommandFlags.FireAndForget));
+        Assert.Equal(1, await client.SetRemove(key, new ValkeyValue[] { "member1", "idontexist2" }, CommandFlags.FireAndForget));
 
         // Remove on non-existent key
-        Assert.Equal(0, await client.SetRemove(key + "2", new RedisValue[] { "member2", "member3" }, CommandFlags.FireAndForget));
+        Assert.Equal(0, await client.SetRemove(key + "2", new ValkeyValue[] { "member2", "member3" }, CommandFlags.FireAndForget));
 
         // Check leftover members are expected
         var vals = await client.SetMembers(key);
@@ -116,7 +116,7 @@ public class SharedCommandTests(TestConfiguration config)
     public async Task TestSetLength(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        RedisValue[] members = { "member1", "member2", "member3" };
+        ValkeyValue[] members = { "member1", "member2", "member3" };
 
         // Test on non-existent key
         Assert.Equal(0, await client.SetLength(key));
@@ -130,7 +130,7 @@ public class SharedCommandTests(TestConfiguration config)
         Assert.Equal(2, await client.SetLength(key));
 
         // Remove all members
-        Assert.Equal(2, await client.SetRemove(key, new RedisValue[] { "member2", "member3" }));
+        Assert.Equal(2, await client.SetRemove(key, new ValkeyValue[] { "member2", "member3" }));
         Assert.Equal(0, await client.SetLength(key));
     }
 
@@ -144,12 +144,12 @@ public class SharedCommandTests(TestConfiguration config)
         string nonExistentKey = "{prefix}-" + Guid.NewGuid().ToString();
 
         // Test with non-existent keys
-        Assert.Equal(0, await client.SetIntersectionLength(new RedisKey[] { key1, key2 }));
+        Assert.Equal(0, await client.SetIntersectionLength(new ValkeyKey[] { key1, key2 }));
 
         // Set up test data
-        await client.SetAdd(key1, new RedisValue[] { "a", "b", "c", "d" });
-        await client.SetAdd(key2, new RedisValue[] { "b", "c", "e", "f" });
-        await client.SetAdd(key3, new RedisValue[] { "c", "d", "g", "h" });
+        await client.SetAdd(key1, new ValkeyValue[] { "a", "b", "c", "d" });
+        await client.SetAdd(key2, new ValkeyValue[] { "b", "c", "e", "f" });
+        await client.SetAdd(key3, new ValkeyValue[] { "c", "d", "g", "h" });
 
         // Test intersection of two sets
         Assert.Equal(2, await client.SetIntersectionLength([key1, key2])); // "b", "c"
@@ -172,7 +172,7 @@ public class SharedCommandTests(TestConfiguration config)
     public async Task TestSetPop(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        RedisValue[] members = { "member1", "member2", "member3", "member4", "member5" };
+        ValkeyValue[] members = { "member1", "member2", "member3", "member4", "member5" };
 
         // Test on non-existent key
         Assert.True((await client.SetPop(key)).IsNull);
@@ -209,7 +209,7 @@ public class SharedCommandTests(TestConfiguration config)
         Assert.Equal(0, await client.SetLength(key));
 
         // Test pop from empty set
-        Assert.Equal(RedisValue.Null, await client.SetPop(key));
+        Assert.Equal(ValkeyValue.Null, await client.SetPop(key));
         var emptyPop = await client.SetPop(key, 3);
         Assert.Empty(emptyPop);
     }
@@ -223,9 +223,9 @@ public class SharedCommandTests(TestConfiguration config)
         string key3 = "{prefix}-" + Guid.NewGuid().ToString();
 
         // Set up test data
-        await client.SetAdd(key1, new RedisValue[] { "a", "b", "c" });
-        await client.SetAdd(key2, new RedisValue[] { "b", "c", "d" });
-        await client.SetAdd(key3, new RedisValue[] { "c", "d", "e" });
+        await client.SetAdd(key1, new ValkeyValue[] { "a", "b", "c" });
+        await client.SetAdd(key2, new ValkeyValue[] { "b", "c", "d" });
+        await client.SetAdd(key3, new ValkeyValue[] { "c", "d", "e" });
 
         // Test Union
         var unionResult = await client.SetCombine(SetOperation.Union, key1, key2);
@@ -279,9 +279,9 @@ public class SharedCommandTests(TestConfiguration config)
         string destKey = "{prefix}-" + Guid.NewGuid().ToString();
 
         // Set up test data
-        await client.SetAdd(key1, new RedisValue[] { "a", "b", "c" });
-        await client.SetAdd(key2, new RedisValue[] { "b", "c", "d" });
-        await client.SetAdd(key3, new RedisValue[] { "c", "d", "e" });
+        await client.SetAdd(key1, new ValkeyValue[] { "a", "b", "c" });
+        await client.SetAdd(key2, new ValkeyValue[] { "b", "c", "d" });
+        await client.SetAdd(key3, new ValkeyValue[] { "c", "d", "e" });
 
         // Test Union and Store
         var unionCount = await client.SetCombineAndStore(SetOperation.Union, destKey, key1, key2);
