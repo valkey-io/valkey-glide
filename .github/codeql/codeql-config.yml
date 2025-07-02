@@ -1,2 +1,2 @@
 paths-ignore:
-    - "examples/kotlin/*"
+    - "examples/**"
