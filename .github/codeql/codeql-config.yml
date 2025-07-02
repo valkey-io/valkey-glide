@@ -1,5 +1,2 @@
 paths-ignore:
     - "examples/**"
-
-paths:
-    - ".github/workflows/**"
