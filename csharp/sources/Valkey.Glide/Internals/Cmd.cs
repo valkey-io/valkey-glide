@@ -98,6 +98,98 @@ internal class Request // TODO naming
     public static Cmd<string, string> Set(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
 
+    /**
+    =================================
+    SET COMMANDS
+    =================================
+    */
+    public static Cmd<long, bool> SetAdd(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), value.ToString()];
+        return new(RequestType.SAdd, args, false, response => response == 1);
+    }
+
+    public static Cmd<long, long> SetAdd(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
+        return Simple<long>(RequestType.SAdd, args);
+    }
+
+    public static Cmd<long, bool> SetRemove(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), value.ToString()];
+        return new(RequestType.SRem, args, false, response => response == 1);
+    }
+
+    public static Cmd<long, long> SetRemove(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), .. values.Select((v) => v.ToString())];
+        return Simple<long>(RequestType.SRem, args);
+    }
+
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembers(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString()];
+        return new(RequestType.SMembers, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
+    }
+
+    public static Cmd<long, long> SetLength(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString()];
+        return Simple<long>(RequestType.SCard, args);
+    }
+
+    public static Cmd<long, long> SetIntersectionLength(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
+    {
+        List<GlideString> args = [keys.Length.ToString(), .. keys.Select(k => k.ToString())];
+        if (limit > 0)
+        {
+            args.Add("LIMIT");
+            args.Add(limit.ToString());
+        }
+        return Simple<long>(RequestType.SInterCard, args.ToArray());
+    }
+
+    public static Cmd<GlideString, ValkeyValue> SetPop(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString()];
+        return new(RequestType.SPop, args, true, result => result is not null ? (ValkeyValue)result.ToString() : ValkeyValue.Null);
+    }
+
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetPop(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] args = [key.ToString(), count.ToString()];
+        return new(RequestType.SPop, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
+    }
+
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetCombine(SetOperation operation, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
+    {
+        RequestType requestType = operation switch
+        {
+            SetOperation.Union => RequestType.SUnion,
+            SetOperation.Intersect => RequestType.SInter,
+            SetOperation.Difference => RequestType.SDiff,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        GlideString[] args = keys.Select(k => (GlideString)k.ToString()).ToArray();
+        return new(requestType, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
+    }
+
+    public static Cmd<long, long> SetCombineAndStore(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
+    {
+        RequestType requestType = operation switch
+        {
+            SetOperation.Union => RequestType.SUnionStore,
+            SetOperation.Intersect => RequestType.SInterStore,
+            SetOperation.Difference => RequestType.SDiffStore,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        List<GlideString> args = [destination.ToString(), .. keys.Select(k => (GlideString)k.ToString())];
+        return Simple<long>(requestType, args.ToArray());
+    }
+
     /// <summary>
     /// Create a Cmd which returns OK
     /// </summary>
