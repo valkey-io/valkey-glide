@@ -34,6 +34,7 @@ dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0301.severity = none
 dotnet_diagnostic.IDE1006.severity = none
 
+
 # Organize usings
 dotnet_separate_import_directive_groups = true
 dotnet_sort_system_directives_first = true
