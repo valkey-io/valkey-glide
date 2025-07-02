@@ -570,12 +570,12 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
         except Exception as e:
             if attempt == max_retries - 1:
                 # Last attempt failed, log the error but don't fail the test
-                print(f"Warning: Test teardown failed after {max_retries} attempts: {e}")
+                Logger.warning(f"Test teardown failed after {max_retries} attempts: {e}")
                 return
             else:
                 # Wait before retrying with exponential backoff
                 delay = base_delay * (2 ** attempt)
-                print(f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                Logger.warning(f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}")
                 await asyncio.sleep(delay)
 
 
