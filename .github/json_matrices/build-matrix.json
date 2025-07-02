@@ -5,9 +5,9 @@
         "RUNNER": "ubuntu-24.04",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "run": "always",
-        "languages": ["python", "node", "java", "go", "dotnet", "rust"]
+        "languages": ["python", "node", "java", "go", "csharp", "rust"]
     },
     {
         "OS": "ubuntu",
@@ -17,7 +17,7 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
-        "languages": ["python", "node", "java", "go", "dotnet"]
+        "languages": ["python", "node", "java", "go"]
     },
     {
         "OS": "macos",
@@ -25,8 +25,8 @@
         "RUNNER": "macos-15",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
-        "languages": ["python", "node", "java", "go", "dotnet"]
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
+        "languages": ["python", "node", "java", "go", "csharp"]
     },
     {
         "OS": "macos",
@@ -35,7 +35,7 @@
         "CD_RUNNER": "macos-15",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "languages": [],
         "comment": "Tests for all clients (CI) are skipped for that platform due to instability, but CD pipelines still run on it. See PR #3482 for details."
     },
@@ -70,6 +70,15 @@
         "TARGET": "x86_64-unknown-linux-gnu",
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
-        "languages": ["python", "node", "java", "go", "dotnet"]
+        "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "RUNNER": "windows-latest",
+        "PACKAGE_MANAGERS": ["nuget"],
+        "languages": ["csharp"]
     }
 ]

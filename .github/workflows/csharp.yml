@@ -120,14 +120,28 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Build (/sources)
+              working-directory: csharp/sources
+              run: |
+                  dotnet build Valkey.Glide --framework net${{ matrix.dotnet }} --nologo
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
               run: dotnet test --configuration Debug --framework net${{ matrix.dotnet }} --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --results-directory .
+
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` to true
+              # We temporarily do this to prevent benchmark from rebuilding cargo,
+              # both fixing a parallel-only cargo clean problem and speeding up the benchmark
+              run: echo "VALKEY_SKIP_BUILD_ASSETS=TRUE" >> $GITHUB_ENV
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ contains(matrix.host.RUNNER, 'ubuntu') }}
               with:
                   language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
+
+            - name: Set `VALKEY_SKIP_BUILD_ASSETS` to false
+              # Clear variable again, after the test-benchmark step is done
+              run: echo '"'VALKEY_SKIP_BUILD_ASSETS=""' >> $GITHUB_ENV
 
             - name: Upload test reports
               if: always()
@@ -203,6 +217,11 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-csharp
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Build (/sources)
+              working-directory: csharp/sources
+              run: |
+                  dotnet build Valkey.Glide --framework ${{ matrix.dotnet }} --nologo
+
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: csharp
               run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
@@ -241,5 +260,15 @@ jobs:
             - name: Format
               working-directory: csharp
               run: |
-                  dotnet format --verify-no-changes --verbosity diagnostic
-                  dotnet build --configuration Lint --framework net6.0
+                  dotnet format --verify-no-changes --verbosity diagnostic --exclude assets
+
+            - name: Build Lint (/sources)
+              working-directory: csharp/sources
+              run: |
+                  dotnet build Valkey.Glide --configuration Lint --framework net6.0 --nologo
+
+            - name: Build Lint (/tests)
+              working-directory: csharp/tests
+              run: |
+                  dotnet build Valkey.Glide.IntegrationTests --configuration Lint --framework net6.0 --nologo
+                  dotnet build Valkey.Glide.UnitTests --configuration Lint --framework net6.0 --nologo
