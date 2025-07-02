@@ -302,6 +302,8 @@ internal class FFI
         InvalidRequest = 0,
         CustomCommand = 1,
         Info = 1130,
+        ZAdd = 1304,
+        ZRem = 1324,
         Get = 1504,
         Set = 1517,
     }
