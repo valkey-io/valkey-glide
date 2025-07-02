@@ -552,17 +552,17 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     If authentication is required, attempt to connect with the known password,
     reset it back to empty, and proceed with teardown.
-    
+
     This function is made robust to handle connection timeouts and other transient
     errors that can occur after password changes and connection kills.
     """
     # Add a small delay to allow server to stabilize after password/connection changes
     await asyncio.sleep(0.5)
-    
+
     # Retry connection attempts with exponential backoff
     max_retries = TEST_TEARDOWN_MAX_RETRIES
     base_delay = TEST_TEARDOWN_BASE_DELAY
-    
+
     for attempt in range(max_retries):
         try:
             await _attempt_teardown(request, cluster_mode, protocol)
@@ -570,12 +570,16 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
         except (ClosingError, TimeoutError) as e:
             if attempt == max_retries - 1:
                 # Last attempt failed, log the error but don't fail the test
-                Logger.warning(f"Test teardown failed after {max_retries} attempts: {e}")
+                Logger.warning(
+                    f"Test teardown failed after {max_retries} attempts: {e}"
+                )
                 return
             else:
                 # Wait before retrying with exponential backoff
-                delay = min(base_delay * (2 ** attempt), MAX_BACKOFF_TIME)
-                Logger.warning(f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                delay = min(base_delay * (2**attempt), MAX_BACKOFF_TIME)
+                Logger.warning(
+                    f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}"
+                )
                 await asyncio.sleep(delay)
 
 
@@ -588,11 +592,11 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
     try:
         # Try connecting without credentials with increased timeouts
         client = await create_client(
-            request, 
-            cluster_mode, 
-            protocol=protocol, 
+            request,
+            cluster_mode,
+            protocol=protocol,
             request_timeout=5000,  # Increased from 2000ms
-            connection_timeout=5000  # Increased from default 1000ms
+            connection_timeout=5000,  # Increased from default 1000ms
         )
         await client.custom_command(["FLUSHALL"])
         await client.close()
