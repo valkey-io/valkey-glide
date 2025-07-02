@@ -44,7 +44,7 @@ jobs:
                     - language: python
                       build-mode: none
                     - language: rust
-                      build-mode: manual
+                      build-mode: none
                     - language: c-cpp
                       build-mode: manual
                     - language: actions
@@ -143,30 +143,6 @@ jobs:
                   # Try to build but don't fail if it can't link with Rust library
                   echo "Attempting Go build for CodeQL analysis..."
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
-
-            # Rust Build
-            - name: Build Rust components
-              if: matrix.language == 'rust'
-              shell: bash
-              run: |
-                  # Build main Rust projects for CodeQL analysis
-                  # Build glide-core (main Rust library)
-                  echo "Building glide-core..."
-                  cd glide-core
-                  cargo build --release
-                  cd ..
-
-                  # Build FFI crate
-                  echo "Building ffi..."
-                  cd ffi
-                  cargo build --release
-                  cd ..
-
-                  # Build logger core
-                  echo "Building logger_core..."
-                  cd logger_core
-                  cargo build --release
-                  cd ..
 
             # C# Build
             - name: Setup .NET
