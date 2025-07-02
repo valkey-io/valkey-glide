@@ -104,7 +104,7 @@ fn receive_and_respond_to_next_message(
         return true;
     }
     let Ok(request) = receiver.try_recv() else {
-        panic!("Received unexpected message: {}", message);
+        panic!("Received unexpected message: {message}");
     };
     received_commands.fetch_add(1, Ordering::AcqRel);
     assert_eq!(message, request.expected_message);
@@ -143,7 +143,7 @@ impl ServerMock {
         let closing_completed_signal_clone = closing_completed_signal.clone();
         let address_clone = address.clone();
         std::thread::spawn(move || {
-            logger_core::log_info("Test", format!("ServerMock started on: {}", address_clone));
+            logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
             let mut socket: StdTcpStream = listener.accept().unwrap().0;
             let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
