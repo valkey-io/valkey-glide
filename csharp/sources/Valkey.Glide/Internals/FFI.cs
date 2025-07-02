@@ -301,6 +301,25 @@ internal class FFI
     {
         InvalidRequest = 0,
         CustomCommand = 1,
+
+        //// Hash commands
+        HDel = 601,
+        HExists = 602,
+        HGet = 603,
+        HGetAll = 604,
+        HIncrBy = 605,
+        HIncrByFloat = 606,
+        HKeys = 607,
+        HLen = 608,
+        HMGet = 609,
+        HMSet = 610,
+        HRandField = 611,
+        HScan = 612,
+        HSet = 613,
+        HSetNX = 614,
+        HStrlen = 615,
+        HVals = 616,
+
         Info = 1130,
         Get = 1504,
         Set = 1517,
