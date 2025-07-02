@@ -15,6 +15,7 @@ module glide.api {
     exports glide.api.models.configuration;
     exports glide.api.models.exceptions;
     exports glide.api.commands.servermodules;
+    exports redis.clients.jedis; // Export Jedis compatibility layer
 
     requires java.logging; // required by shadowed protobuf
     requires static lombok;
