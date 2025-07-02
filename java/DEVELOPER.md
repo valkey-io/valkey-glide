@@ -59,7 +59,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf cmake
+brew install openjdk@11 git gcc pkgconfig protobuf openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
