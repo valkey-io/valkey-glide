@@ -2,6 +2,7 @@
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
+using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Internals.FFI;
@@ -23,8 +24,7 @@ internal class DatabaseImpl : GlideClient, IDatabase
 
     public new async Task<string> Info(InfoOptions.Section[] sections)
         => _isCluster
-            ? await Command(RequestType.Info, sections.ToGlideStrings(),
-                resp => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()), Route.Random)
+            ? await Command(Request.Info(sections), Route.Random)
             : await base.Info(sections);
 
     private readonly bool _isCluster;
