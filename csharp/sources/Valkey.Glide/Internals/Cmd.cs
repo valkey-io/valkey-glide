@@ -10,7 +10,7 @@ using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide.Internals;
 
-internal class Request // TODO naming
+internal partial class Request // TODO naming
 {
     internal interface ICmd
     {
@@ -98,107 +98,6 @@ internal class Request // TODO naming
 
     public static Cmd<string, string> Set(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
-
-    /**
-    =================================
-    SET COMMANDS
-    =================================
-    */
-    public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value)
-    {
-        GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return new(RequestType.SAdd, args, false, response => response == 1);
-    }
-
-    public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values)
-    {
-        GlideString[] args = [key.ToGlideString(), .. values.ToGlideStrings()];
-        return Simple<long>(RequestType.SAdd, args);
-    }
-
-    public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value)
-    {
-        GlideString[] args = [key.ToGlideString(), value.ToString()];
-        return new(RequestType.SRem, args, false, response => response == 1);
-    }
-
-    public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values)
-    {
-        GlideString[] args = [key.ToGlideString(), .. values.Select((v) => v.ToString())];
-        return Simple<long>(RequestType.SRem, args);
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key)
-    {
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.SMembers, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
-    }
-
-    public static Cmd<long, long> SetLengthAsync(ValkeyKey key)
-    {
-        GlideString[] args = [key.ToGlideString()];
-        return Simple<long>(RequestType.SCard, args);
-    }
-
-    public static Cmd<long, long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0)
-    {
-        List<GlideString> args = [keys.Length.ToGlideString(), .. keys.ToGlideStrings()];
-        if (limit > 0)
-        {
-            args.AddRange([Constants.LimitKeyword, limit.ToGlideString()]);
-        }
-        return Simple<long>(RequestType.SInterCard, [.. args]);
-    }
-
-    public static Cmd<GlideString, ValkeyValue> SetPopAsync(ValkeyKey key)
-    {
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.SPop, args, true, result => result is not null ? (ValkeyValue)result.ToString() : ValkeyValue.Null);
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count)
-    {
-        GlideString[] args = [key.ToGlideString(), count.ToGlideString()];
-        return new(RequestType.SPop, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys)
-    {
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SUnion, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys)
-    {
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SInter, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys)
-    {
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SDiff, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
-    }
-
-    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
-    {
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SUnionStore, args);
-    }
-
-    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
-    {
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SInterStore, args);
-    }
-
-    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
-    {
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SDiffStore, args);
-    }
-
-
 
     /// <summary>
     /// Create a Cmd which returns OK
