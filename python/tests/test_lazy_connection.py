@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Any, AsyncGenerator, Optional, Union, cast
+from typing import Any, AsyncGenerator, Union, cast
 
 import pytest
 
@@ -119,24 +119,8 @@ class TestLazyConnection:
         request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
+        function_scoped_standalone_cluster: ValkeyCluster = None,
     ):
-        """
-        Test that lazy connections are only established when the first command is executed.
-
-        This test verifies that when a client is created with lazy_connect=True:
-        1. No connections are established during client initialization
-        2. Connections are established only when the first command is executed
-
-        The test uses a dedicated Valkey instance for standalone mode to ensure accurate connection
-        counting. This isolation is critical because the test relies on counting the exact number
-        of connections before and after client operations, which can be affected by other tests
-        running in parallel against the same Valkey instance.
-
-        Without this isolation, the test can be flaky as other tests might establish or close
-        connections to the same Valkey instance during test execution, causing the connection
-        count assertions to fail unpredictably.
-        """
         monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
         lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
         mode_str = "Cluster" if cluster_mode else "Standalone"
