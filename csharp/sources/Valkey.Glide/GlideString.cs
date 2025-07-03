@@ -63,6 +63,14 @@ public static class GlideStringExtensions
     /// <param name="strings">An array of <see cref="GlideString" />s to convert.</param>
     /// <returns>An array of <see langword="byte[]" />.</returns>
     public static byte[][] ToByteArrays(this GlideString[] strings) => [.. strings.Select(s => s.Bytes)];
+
+    /// <summary>
+    /// Convert an <see langword="ValkeyValue[]" /> to an <see langword="GlideString[]" />.
+    /// </summary>
+    /// <param name="values">An array of <see langword="string" />s to convert.</param>
+    /// <returns>An array of <see cref="GlideString" />s.</returns>
+    public static GlideString[] ToGlideStrings(this ValkeyValue[] values) => [.. values.Select(v => (GlideString)v)];
+
 }
 
 /// <summary>
@@ -202,6 +210,15 @@ public sealed class GlideString : IComparable<GlideString>
     public static implicit operator GlideString(string @string) => new(@string);
     /// <inheritdoc cref="GlideString(byte[])" />
     public static implicit operator GlideString(byte[] bytes) => new(bytes);
+
+#pragma warning disable IDE0072 // Add missing cases
+    public static implicit operator GlideString(ValkeyValue value) => value.Type switch
+    {
+        ValkeyValue.StorageType.Null => new GlideString([]),
+        ValkeyValue.StorageType.Raw => new GlideString(((ReadOnlyMemory<byte>)value).ToArray()),
+        _ => new GlideString((string)value!),
+    };
+#pragma warning restore IDE0072 // Add missing cases
 
     public int CompareTo(GlideString? other)
     {
