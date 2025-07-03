@@ -252,13 +252,13 @@ public sealed class GlideString : IComparable<GlideString>
         ValkeyValue.StorageType.Raw => new GlideString(((ReadOnlyMemory<byte>)value).ToArray()),
         _ => new GlideString((string)value!),
     };
+#pragma warning restore IDE0072 // Add missing cases
 
     public static implicit operator GlideString(ValkeyKey key)
     {
         byte[]? keyBytes = key;
         return keyBytes == null ? new GlideString([]) : new GlideString(keyBytes);
     }
-#pragma warning restore IDE0072 // Add missing cases
 
     public int CompareTo(GlideString? other)
     {
