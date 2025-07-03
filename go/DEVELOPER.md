@@ -20,6 +20,7 @@ Software Dependencies
 - git
 - GCC
 - pkg-config
+- cmake
 - protoc (protobuf compiler) >= v3.20.0
 - openssl
 - openssl-dev
@@ -35,7 +36,7 @@ See the [Valkey installation guide](https://valkey.io/topics/installation/) to i
 
 ```bash
 sudo apt update -y
-sudo apt install -y git gcc pkg-config openssl libssl-dev unzip make
+sudo apt install -y git gcc pkg-config openssl libssl-dev unzip make cmake
 # Install Go
 sudo snap install go --classic
 export PATH="$PATH:$HOME/go/bin"
@@ -52,7 +53,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 sudo yum update -y
-sudo yum install -y git gcc pkgconfig openssl openssl-devel unzip wget tar
+sudo yum install -y git gcc pkgconfig openssl openssl-devel unzip wget tar cmake
 # Install Go
 wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
@@ -71,7 +72,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install go make git gcc pkgconfig protobuf@3 openssl
+brew install go make git gcc pkgconfig protobuf@3 openssl cmake
 export PATH="$PATH:$HOME/go/bin"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"

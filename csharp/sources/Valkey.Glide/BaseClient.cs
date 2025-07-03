@@ -32,7 +32,7 @@ public abstract partial class BaseClient : IDisposable
         }
     }
 
-    public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} }}";
+    public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} {_clientInfo} }}";
 
     public override int GetHashCode() => (int)_clientPointer;
 
@@ -137,6 +137,8 @@ public abstract partial class BaseClient : IDisposable
     }
 
     ~BaseClient() => Dispose();
+
+    internal void SetInfo(string info) => _clientInfo = info;
     #endregion private methods
 
     #region private fields
@@ -153,6 +155,7 @@ public abstract partial class BaseClient : IDisposable
     private IntPtr _clientPointer;
     private readonly MessageContainer _messageContainer;
     private readonly object _lock = new();
+    private string _clientInfo = ""; // used to distinguish and identify clients during tests
 
     #endregion private fields
 
