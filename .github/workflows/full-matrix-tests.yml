@@ -1,5 +1,8 @@
 name: Full Matrix tests
 
+permissions:
+    contents: read
+
 on:
     workflow_dispatch: # note: if started manually, it won't run all matrix
         inputs:
