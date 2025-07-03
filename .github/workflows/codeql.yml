@@ -66,6 +66,7 @@ jobs:
                   cd csharp
                   dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
                   dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Lint --framework net8.0
+                  dotnet build tests/Valkey.Glide.IntegrationTests/Valkey.Glide.IntegrationTests.csproj --configuration Lint --framework net8.0
 
             - name: Perform CodeQL Analysis
               if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
@@ -206,7 +207,6 @@ jobs:
                           - 'java/**'
                           - 'glide-core/src/**'
                           - 'glide-core/redis-rs/redis/src/**'
-                          - 'utils/cluster_manager.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
@@ -271,7 +271,6 @@ jobs:
                           - 'node/**'
                           - 'glide-core/src/**'
                           - 'glide-core/redis-rs/redis/src/**'
-                          - 'utils/cluster_manager.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
@@ -309,7 +308,7 @@ jobs:
                           - 'python/**'
                           - 'glide-core/src/**'
                           - 'glide-core/redis-rs/redis/src/**'
-                          - 'utils/cluster_manager.py'
+                          - 'utils/**/*.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
@@ -348,7 +347,6 @@ jobs:
                           - 'glide-core/**'
                           - 'ffi/**'
                           - 'deny.toml'
-                          - 'utils/cluster_manager.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
@@ -385,7 +383,6 @@ jobs:
                       cpp:
                           - 'cpp/**'
                           - 'glide-core/src/**'
-                          - 'utils/cluster_manager.py'
                           - '.github/workflows/codeql.yml'
 
             - name: Initialize CodeQL
