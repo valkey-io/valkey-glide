@@ -22,92 +22,56 @@ on:
     workflow_dispatch:
 
 jobs:
-    # C# CodeQL Analysis
-    analyze-csharp:
-        name: Analyze (csharp)
-        runs-on: ubuntu-latest
+    # Run CodeQL analysis for each language
+    analyze:
+        name: Analyze (${{ matrix.language }})
+        runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
         permissions:
             security-events: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - language: csharp
+                      build-mode: manual
+                    - language: go
+                      build-mode: manual
+                    - language: java-kotlin
+                      build-mode: manual
+                    - language: javascript-typescript
+                      build-mode: none
+                    - language: python
+                      build-mode: none
+                    - language: rust
+                      build-mode: none
+                    - language: c-cpp
+                      build-mode: manual
+                    - language: actions
+                      build-mode: none
 
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Check for C# file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      csharp:
-                          - 'csharp/**'
-                          - 'glide-core/src/**'
-                          - 'glide-core/redis-rs/redis/src/**'
-                          - '.github/workflows/codeql.yml'
-
             - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
               uses: github/codeql-action/init@v3
               with:
-                  languages: csharp
-                  build-mode: manual
+                  languages: ${{ matrix.language }}
+                  build-mode: ${{ matrix.build-mode }}
                   config-file: .github/codeql/codeql-config.yml
 
-            - name: Setup .NET
-              if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
-              uses: actions/setup-dotnet@v4
-              with:
-                  dotnet-version: "8.0.x"
-
-            - name: Build C# components
-              if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
+            # C++ Build
+            - name: Build C++ components
+              if: matrix.language == 'c-cpp'
               shell: bash
               run: |
-                  cd csharp
-                  dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
-                  dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Lint --framework net8.0
-                  dotnet build tests/Valkey.Glide.IntegrationTests/Valkey.Glide.IntegrationTests.csproj --configuration Lint --framework net8.0
+                  cd glide-core
+                  cargo build --release
 
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:csharp"
-
-    # Go CodeQL Analysis
-    analyze-go:
-        name: Analyze (go)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for Go file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      go:
-                          - 'go/**'
-                          - 'glide-core/src/**'
-                          - 'glide-core/redis-rs/redis/src/**'
-                          - 'ffi/src/**'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: go
-                  build-mode: manual
-                  config-file: .github/codeql/codeql-config.yml
-
+            # Go Build
             - name: Set up Go cache
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
+              if: matrix.language == 'go'
               uses: actions/cache@v4
               with:
                   path: |
@@ -119,7 +83,7 @@ jobs:
                       ${{ runner.os }}-go-
 
             - name: Cache protoc binary
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
+              if: matrix.language == 'go'
               uses: actions/cache@v4
               with:
                   path: /usr/local/bin/protoc
@@ -128,7 +92,7 @@ jobs:
                       ${{ runner.os }}-protoc-
 
             - name: Install protoc-gen-go
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
+              if: matrix.language == 'go'
               shell: bash
               run: |
                   # Ensure Go bin directory is in PATH
@@ -142,7 +106,7 @@ jobs:
                   fi
 
             - name: Install protoc compiler
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
+              if: matrix.language == 'go'
               shell: bash
               run: |
                   # Check if protoc is already installed with correct version
@@ -157,7 +121,7 @@ jobs:
                   fi
 
             - name: Build Go components
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
+              if: matrix.language == 'go'
               shell: bash
               run: |
                   # Ensure Go bin directory is in PATH
@@ -180,45 +144,24 @@ jobs:
                   echo "Attempting Go build for CodeQL analysis..."
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
 
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.go == 'true'
-              uses: github/codeql-action/analyze@v3
+            # C# Build
+            - name: Setup .NET
+              if: matrix.language == 'csharp'
+              uses: actions/setup-dotnet@v4
               with:
-                  category: "/language:go"
+                  dotnet-version: "8.0.x"
 
-    # Java/Kotlin CodeQL Analysis
-    analyze-java-kotlin:
-        name: Analyze (java-kotlin)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
+            - name: Build C# components
+              if: matrix.language == 'csharp'
+              shell: bash
+              run: |
+                  cd csharp
+                  dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
+                  dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Debug --framework net8.0
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for Java file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      java:
-                          - 'java/**'
-                          - 'glide-core/src/**'
-                          - 'glide-core/redis-rs/redis/src/**'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.java == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: java-kotlin
-                  build-mode: manual
-                  config-file: .github/codeql/codeql-config.yml
-
+            # Java/Kotlin Build
             - name: Cache protoc binary for Java
-              if: github.event_name != 'pull_request' || steps.changes.outputs.java == 'true'
+              if: matrix.language == 'java-kotlin'
               uses: actions/cache@v4
               with:
                   path: /usr/local/bin/protoc
@@ -227,7 +170,7 @@ jobs:
                       ${{ runner.os }}-protoc-
 
             - name: Build Java/Kotlin components
-              if: github.event_name != 'pull_request' || steps.changes.outputs.java == 'true'
+              if: matrix.language == 'java-kotlin'
               shell: bash
               run: |
                   # Check if protoc is already installed with correct version
@@ -245,197 +188,6 @@ jobs:
                   ./gradlew :client:processResources :client:compileJava --exclude-task :client:buildRust
 
             - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.java == 'true'
               uses: github/codeql-action/analyze@v3
               with:
-                  category: "/language:java-kotlin"
-
-    # JavaScript/TypeScript CodeQL Analysis
-    analyze-javascript-typescript:
-        name: Analyze (javascript-typescript)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for JavaScript/TypeScript file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      js:
-                          - 'node/**'
-                          - 'glide-core/src/**'
-                          - 'glide-core/redis-rs/redis/src/**'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.js == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: javascript-typescript
-                  build-mode: none
-                  config-file: .github/codeql/codeql-config.yml
-
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.js == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:javascript-typescript"
-
-    # Python CodeQL Analysis
-    analyze-python:
-        name: Analyze (python)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for Python file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      python:
-                          - 'python/**'
-                          - 'glide-core/src/**'
-                          - 'glide-core/redis-rs/redis/src/**'
-                          - 'utils/**/*.py'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.python == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: python
-                  build-mode: none
-                  config-file: .github/codeql/codeql-config.yml
-
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.python == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:python"
-
-    # Rust CodeQL Analysis
-    analyze-rust:
-        name: Analyze (rust)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for Rust file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      rust:
-                          - 'logger_core/**'
-                          - 'glide-core/**'
-                          - 'ffi/**'
-                          - 'deny.toml'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.rust == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: rust
-                  build-mode: none
-                  config-file: .github/codeql/codeql-config.yml
-
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.rust == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:rust"
-
-    # C/C++ CodeQL Analysis
-    analyze-c-cpp:
-        name: Analyze (c-cpp)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for C/C++ file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      cpp:
-                          - 'cpp/**'
-                          - 'glide-core/src/**'
-                          - '.github/workflows/codeql.yml'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.cpp == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: c-cpp
-                  build-mode: manual
-                  config-file: .github/codeql/codeql-config.yml
-
-            - name: Build C++ components
-              if: github.event_name != 'pull_request' || steps.changes.outputs.cpp == 'true'
-              shell: bash
-              run: |
-                  cd glide-core
-                  cargo build --release
-
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.cpp == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:c-cpp"
-
-    # GitHub Actions CodeQL Analysis
-    analyze-actions:
-        name: Analyze (actions)
-        runs-on: ubuntu-latest
-        permissions:
-            security-events: write
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Check for GitHub Actions file changes
-              if: github.event_name == 'pull_request'
-              uses: dorny/paths-filter@v3
-              id: changes
-              with:
-                  filters: |
-                      actions:
-                          - '.github/**'
-
-            - name: Initialize CodeQL
-              if: github.event_name != 'pull_request' || steps.changes.outputs.actions == 'true'
-              uses: github/codeql-action/init@v3
-              with:
-                  languages: actions
-                  build-mode: none
-                  config-file: .github/codeql/codeql-config.yml
-
-            - name: Perform CodeQL Analysis
-              if: github.event_name != 'pull_request' || steps.changes.outputs.actions == 'true'
-              uses: github/codeql-action/analyze@v3
-              with:
-                  category: "/language:actions"
+                  category: "/language:${{matrix.language}}"
