@@ -5,5 +5,5 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["redis", "redis-test", "afl/parser"]
+members = ["redis"]
 resolver = "2"
