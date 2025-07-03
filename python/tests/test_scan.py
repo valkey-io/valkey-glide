@@ -339,8 +339,7 @@ class TestScan:
         glide_client_scoped: GlideClusterClient,
     ):
         key = get_random_string(10)
-        for i in range(1000):
-            await glide_client_scoped.set(f"{key}{i}", "value")
+        await glide_client_scoped.mset({f"{key}{i}": "value" for i in range(1000)})
         cursor = ClusterScanCursor()
         result = await glide_client_scoped.scan(cursor)
         cursor = cast(ClusterScanCursor, result[0])
