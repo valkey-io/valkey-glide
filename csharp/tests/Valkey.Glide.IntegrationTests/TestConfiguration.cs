@@ -36,21 +36,19 @@ public class TestConfiguration : IDisposable
     public static GlideClusterClient DefaultClusterClient()
         => GlideClusterClient.CreateClient(DefaultClusterClientConfig().Build()).GetAwaiter().GetResult();
 
-    private static TheoryData<BaseClient> s_field = [];
-
     public static TheoryData<BaseClient> TestClients
     {
         get
         {
-            if (s_field.Count == 0)
+            if (field.Count == 0)
             {
-                s_field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
+                field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
             }
-            return s_field;
+            return field;
         }
 
-        private set => s_field = value;
-    }
+        private set;
+    } = [];
 
     public static void ResetTestClients()
     {
