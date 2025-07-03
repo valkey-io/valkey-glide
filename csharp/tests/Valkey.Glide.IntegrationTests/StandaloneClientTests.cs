@@ -1,26 +1,28 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
-public class StandaloneClientTests
+public class StandaloneClientTests(TestConfiguration config)
 {
-    [Fact]
-    public void CustomCommand()
-    {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+    public TestConfiguration Config { get; } = config;
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public void CustomCommand(GlideClient client) =>
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
             () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
             () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result!.ToString()),
             () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result!.ToString())
         );
-    }
 
-    [Fact]
-    public async Task CustomCommandWithBinary()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommandWithBinary(GlideClient client)
     {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
@@ -68,13 +70,12 @@ public class StandaloneClientTests
             .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
     }
 
-    [Fact]
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
     // Verify that client can handle complex return types, not just strings
     // TODO: remove this test once we add tests with these commands
-    public async Task CustomCommandWithDifferentReturnTypes()
+    public async Task CustomCommandWithDifferentReturnTypes(GlideClient client)
     {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
-
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);
         Assert.Equal(
@@ -102,5 +103,25 @@ public class StandaloneClientTests
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
+    }
+
+    [Fact]
+    public async Task Info()
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+
+        string info = await client.Info();
+        Assert.Multiple([
+            () => Assert.Contains("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
+
+        info = await client.Info([Section.REPLICATION]);
+        Assert.Multiple([
+            () => Assert.DoesNotContain("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
     }
 }
