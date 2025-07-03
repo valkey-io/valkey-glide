@@ -8,10 +8,10 @@ using CommandLine;
 
 using LinqStatistics;
 
+using static Valkey.Glide.ConnectionConfiguration;
+
 using SER_Connection = StackExchange.Redis.ConnectionMultiplexer;
 using SER_Db = StackExchange.Redis.IDatabase;
-
-using static Valkey.Glide.ConnectionConfiguration;
 
 namespace Valkey.Glide.CustomBenchmark;
 
