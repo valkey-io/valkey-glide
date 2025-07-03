@@ -91,12 +91,12 @@ public class SharedBatchTests
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
 
         _ = batch.SetAdd(key1, "member1");
-        _ = batch.SetAdd(key1, new ValkeyValue[] { "member2", "member3" });
+        _ = batch.SetAdd(key1, ["member2", "member3"]);
         _ = batch.SetLength(key1);
         _ = batch.SetMembers(key1);
         _ = batch.SetRemove(key1, "member1");
         _ = batch.SetPop(key1);
-        _ = batch.SetAdd(key2, new ValkeyValue[] { "member2", "member4" });
+        _ = batch.SetAdd(key2, ["member2", "member4"]);
         _ = batch.SetUnion(key1, key2);
         _ = batch.SetIntersect(key1, key2);
         _ = batch.SetDifference(key1, key2);
@@ -137,17 +137,17 @@ public class SharedBatchTests
         string key1 = "{BatchSetCommands}" + Guid.NewGuid();
         string key2 = "{BatchSetCommands}" + Guid.NewGuid();
 
-        await client.SetAddAsync(key1, new ValkeyValue[] { "a", "b" });
-        await client.SetAddAsync(key2, new ValkeyValue[] { "b", "c" });
+        _ = await client.SetAddAsync(key1, ["a", "b"]);
+        _ = await client.SetAddAsync(key2, ["b", "c"]);
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        _ = batch.SetIntersectionLength(new ValkeyKey[] { key1, key2 });
+        _ = batch.SetIntersectionLength([key1, key2]);
 
         object?[] res = isCluster
             ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, true))!
             : (await ((GlideClient)client).Exec((Batch)batch, true))!;
 
-        Assert.Equal(1, res.Length);
+        Assert.Single(res);
         Assert.Equal(1L, (long)res[0]!); // Intersection length
     }
 }
