@@ -91,7 +91,7 @@ public class SetCommandTests(TestConfiguration config)
     public async Task TestSetPopAsync(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        ValkeyValue[] members = { "member1", "member2", "member3", "member4", "member5" };
+        ValkeyValue[] members = ["member1", "member2", "member3", "member4", "member5"];
 
         // Test on non-existent key
         Assert.True((await client.SetPopAsync(key)).IsNull);
@@ -153,8 +153,8 @@ public class SetCommandTests(TestConfiguration config)
         await client.SetAddAsync(key2, ["b", "c", "d"]);
 
         var result = await client.SetDifferenceAsync(key1, key2);
-        Assert.Equal(1, result.Length); // a
-        Assert.Equal("a", result[0].ToString());
+        var singleResult = Assert.Single(result); // a
+        Assert.Equal("a", singleResult.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]

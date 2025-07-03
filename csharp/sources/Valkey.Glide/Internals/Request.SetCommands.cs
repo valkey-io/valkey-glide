@@ -35,7 +35,7 @@ internal partial class Request
     public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.SMembers, args, false, set => set.Cast<GlideString>().Select(gs => (ValkeyValue)gs).ToArray());
+        return new(RequestType.SMembers, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
     public static Cmd<long, long> SetLengthAsync(ValkeyKey key)
@@ -63,25 +63,25 @@ internal partial class Request
     public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count)
     {
         GlideString[] args = [key.ToGlideString(), count.ToGlideString()];
-        return new(RequestType.SPop, args, false, set => set.Cast<GlideString>().Select(gs => (ValkeyValue)gs).ToArray());
+        return new(RequestType.SPop, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
     public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys)
     {
         GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SUnion, args, false, set => set.Cast<GlideString>().Select(gs => (ValkeyValue)gs).ToArray());
+        return new(RequestType.SUnion, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
     public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys)
     {
         GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SInter, args, false, set => set.Cast<GlideString>().Select(gs => (ValkeyValue)gs).ToArray());
+        return new(RequestType.SInter, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
     public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys)
     {
         GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SDiff, args, false, set => set.Cast<GlideString>().Select(gs => (ValkeyValue)gs).ToArray());
+        return new(RequestType.SDiff, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
     public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
