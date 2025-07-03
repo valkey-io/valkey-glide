@@ -17,6 +17,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - git
 - GCC
 - pkg-config
+- cmake
 - protoc (protobuf compiler) >= 29.1
 - openssl
 - openssl-dev
@@ -33,7 +34,7 @@ See the [Valkey installation guide](https://valkey.io/topics/installation/) to i
 
 ```bash
 sudo apt update -y
-sudo apt install -y openjdk-11-jdk git gcc pkg-config openssl libssl-dev unzip
+sudo apt install -y openjdk-11-jdk git gcc pkg-config openssl libssl-dev unzip cmake
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
@@ -47,7 +48,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 sudo yum update -y
-sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
+sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip cmake
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
@@ -58,7 +59,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf
+brew install openjdk@11 git gcc pkgconfig protobuf openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
