@@ -102,8 +102,8 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
 
     // note: it is *really important* that this s_EmptyString assignment happens *after* the EmptyString initializer above!
     private static readonly object s_DoubleNAN = double.NaN, s_DoublePosInf = double.PositiveInfinity, s_DoubleNegInf = double.NegativeInfinity,
-        s_EmptyString = ValkeyValue.EmptyString;
-    private static readonly object[] s_CommonInt32 = Enumerable.Range(-1, 22).Select(i => (object)i).ToArray(); // [-1,20] = 22 values
+        s_EmptyString = EmptyString;
+    private static readonly object[] s_CommonInt32 = [.. Enumerable.Range(-1, 22).Select(i => (object)i)]; // [-1,20] = 22 values
 
     /// <summary>
     /// A null value.
