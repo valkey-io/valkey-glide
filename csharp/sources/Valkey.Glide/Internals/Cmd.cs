@@ -3,7 +3,6 @@
 using System.Diagnostics;
 
 using Valkey.Glide.Commands.Options;
-using Valkey.Glide.Commands.Constants;
 
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
