@@ -416,43 +416,12 @@ class TestFt:
 
         assert len(knn_result) == 2
         assert knn_result[0] == 1  # first index is number of results
-
-        # Debug: Print what we actually got
-        print(f"DEBUG: Search query vector: {vector1.tolist()}")
-        print(f"DEBUG: vector_key1: {vector_key1}")
-        print(f"DEBUG: vector_key2: {vector_key2}")
-        print(f"DEBUG: vector_value1 bytes: {vector_value1.hex()}")
-        print(f"DEBUG: vector_value2 bytes: {vector_value2.hex()}")
-        print(f"DEBUG: Actual knn_result: {knn_result}")
-
-        # Check which key was returned
-        result_dict = cast(
-            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], knn_result[1]
-        )
-        actual_key = list(result_dict.keys())[0]
-        actual_score = result_dict[actual_key][f"__{vector_field_name}_score".encode()]
-        actual_vector_bytes = result_dict[actual_key][vector_field_name.encode()]
-
-        print(
-            f"DEBUG: Returned key: {actual_key.decode() if isinstance(actual_key, bytes) else actual_key}"
-        )
-        print(
-            f"DEBUG: Returned score: {actual_score.decode() if isinstance(actual_score, bytes) else actual_score}"
-        )
-        if isinstance(actual_vector_bytes, bytes):
-            print(f"DEBUG: Returned vector bytes: {actual_vector_bytes.hex()}")
-
-            # Decode the returned vector
-            import struct
-
-            returned_vector = struct.unpack("<ff", actual_vector_bytes)
-            print(f"DEBUG: Returned vector: {list(returned_vector)}")
-
-        # For now, let's be flexible and accept whatever we get
         expected_result = {
-            actual_key: {
-                vector_field_name.encode(): actual_vector_bytes,
-                f"__{vector_field_name}_score".encode(): actual_score,
+            vector_key1.encode(): {
+                vector_field_name.encode(): vector_value1,
+                f"__{vector_field_name}_score".encode(): str(
+                    0  # cosine distance of 0 means identical vectors
+                ).encode(),
             }
         }
         assert knn_result[1] == expected_result
