@@ -5,7 +5,6 @@ using System.Diagnostics;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
-using static Valkey.Glide.Internals.Request;
 
 namespace Valkey.Glide.Pipeline;
 
