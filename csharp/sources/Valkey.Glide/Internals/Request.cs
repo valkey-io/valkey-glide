@@ -4,7 +4,7 @@ using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide.Internals;
 
-internal partial class Request // TODO naming
+internal partial class Request
 {
     public static Cmd<object?, object?> CustomCommand(GlideString[] args)
         => new(RequestType.CustomCommand, args, true, o => o);
