@@ -10,18 +10,16 @@ namespace Valkey.Glide;
 
 internal class DatabaseImpl : GlideClient, IDatabase
 {
-    public new async Task<string> Info() => await Info(new InfoOptions.Section[] { });
+    public new async Task<string> Info() => await Info([]);
 
     public new async Task<string> Info(InfoOptions.Section[] sections)
-        => _isCluster
+        => IsCluster
             ? await Command(Request.Info(sections), Route.Random)
             : await base.Info(sections);
 
-    async Task<string> IDatabase.Info(ValkeyValue[] sections) => await Command(Request.Info(sections));
+    internal readonly bool IsCluster;
 
-    private readonly bool _isCluster;
-
-    private DatabaseImpl(bool isCluster) { _isCluster = isCluster; }
+    private DatabaseImpl(bool isCluster) { IsCluster = isCluster; }
 
     internal static async Task<DatabaseImpl> Create(string host, ushort port, bool isCluster)
     {
