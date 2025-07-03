@@ -72,26 +72,26 @@ public abstract partial class BaseBatch<T>
     /// <inheritdoc cref="IBatch.SetDifferenceStore(ValkeyKey, ValkeyKey[])" />
     public T SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys) => AddCmd(SetDifferenceStoreAsync(destination, keys));
 
-    // Explicit interface implementations for IBatch
-    IBatch IBatch.SetAdd(ValkeyKey key, ValkeyValue value) => SetAdd(key, value);
-    IBatch IBatch.SetAdd(ValkeyKey key, ValkeyValue[] values) => SetAdd(key, values);
-    IBatch IBatch.SetRemove(ValkeyKey key, ValkeyValue value) => SetRemove(key, value);
-    IBatch IBatch.SetRemove(ValkeyKey key, ValkeyValue[] values) => SetRemove(key, values);
-    IBatch IBatch.SetMembers(ValkeyKey key) => SetMembers(key);
-    IBatch IBatch.SetLength(ValkeyKey key) => SetLength(key);
-    IBatch IBatch.SetIntersectionLength(ValkeyKey[] keys, long limit) => SetIntersectionLength(keys, limit);
-    IBatch IBatch.SetPop(ValkeyKey key) => SetPop(key);
-    IBatch IBatch.SetPop(ValkeyKey key, long count) => SetPop(key, count);
-    IBatch IBatch.SetUnion(ValkeyKey first, ValkeyKey second) => SetUnion(first, second);
-    IBatch IBatch.SetUnion(ValkeyKey[] keys) => SetUnion(keys);
-    IBatch IBatch.SetIntersect(ValkeyKey first, ValkeyKey second) => SetIntersect(first, second);
-    IBatch IBatch.SetIntersect(ValkeyKey[] keys) => SetIntersect(keys);
-    IBatch IBatch.SetDifference(ValkeyKey first, ValkeyKey second) => SetDifference(first, second);
-    IBatch IBatch.SetDifference(ValkeyKey[] keys) => SetDifference(keys);
-    IBatch IBatch.SetUnionStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetUnionStore(destination, first, second);
-    IBatch IBatch.SetUnionStore(ValkeyKey destination, ValkeyKey[] keys) => SetUnionStore(destination, keys);
-    IBatch IBatch.SetIntersectStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetIntersectStore(destination, first, second);
-    IBatch IBatch.SetIntersectStore(ValkeyKey destination, ValkeyKey[] keys) => SetIntersectStore(destination, keys);
-    IBatch IBatch.SetDifferenceStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetDifferenceStore(destination, first, second);
-    IBatch IBatch.SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys) => SetDifferenceStore(destination, keys);
+    // Explicit interface implementations for IBatchSetCommands
+    IBatch IBatchSetCommands.SetAdd(ValkeyKey key, ValkeyValue value) => SetAdd(key, value);
+    IBatch IBatchSetCommands.SetAdd(ValkeyKey key, ValkeyValue[] values) => SetAdd(key, values);
+    IBatch IBatchSetCommands.SetRemove(ValkeyKey key, ValkeyValue value) => SetRemove(key, value);
+    IBatch IBatchSetCommands.SetRemove(ValkeyKey key, ValkeyValue[] values) => SetRemove(key, values);
+    IBatch IBatchSetCommands.SetMembers(ValkeyKey key) => SetMembers(key);
+    IBatch IBatchSetCommands.SetLength(ValkeyKey key) => SetLength(key);
+    IBatch IBatchSetCommands.SetIntersectionLength(ValkeyKey[] keys, long limit) => SetIntersectionLength(keys, limit);
+    IBatch IBatchSetCommands.SetPop(ValkeyKey key) => SetPop(key);
+    IBatch IBatchSetCommands.SetPop(ValkeyKey key, long count) => SetPop(key, count);
+    IBatch IBatchSetCommands.SetUnion(ValkeyKey first, ValkeyKey second) => SetUnion(first, second);
+    IBatch IBatchSetCommands.SetUnion(ValkeyKey[] keys) => SetUnion(keys);
+    IBatch IBatchSetCommands.SetIntersect(ValkeyKey first, ValkeyKey second) => SetIntersect(first, second);
+    IBatch IBatchSetCommands.SetIntersect(ValkeyKey[] keys) => SetIntersect(keys);
+    IBatch IBatchSetCommands.SetDifference(ValkeyKey first, ValkeyKey second) => SetDifference(first, second);
+    IBatch IBatchSetCommands.SetDifference(ValkeyKey[] keys) => SetDifference(keys);
+    IBatch IBatchSetCommands.SetUnionStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetUnionStore(destination, first, second);
+    IBatch IBatchSetCommands.SetUnionStore(ValkeyKey destination, ValkeyKey[] keys) => SetUnionStore(destination, keys);
+    IBatch IBatchSetCommands.SetIntersectStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetIntersectStore(destination, first, second);
+    IBatch IBatchSetCommands.SetIntersectStore(ValkeyKey destination, ValkeyKey[] keys) => SetIntersectStore(destination, keys);
+    IBatch IBatchSetCommands.SetDifferenceStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetDifferenceStore(destination, first, second);
+    IBatch IBatchSetCommands.SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys) => SetDifferenceStore(destination, keys);
 }
