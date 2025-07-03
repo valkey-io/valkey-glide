@@ -71,7 +71,7 @@ impl<C> NodePipelineContext<C> {
 }
 
 /// `NodeResponse` represents a response from a node along with its source node address.
-type NodeResponse = (Value, String);
+type NodeResponse = (Option<String>, Value);
 /// `PipelineResponses` represents the responses for each pipeline command.
 /// The outer `Vec` represents the pipeline commands, and each inner `Vec` contains (response, address) pairs.
 /// Since some commands can be executed across multiple nodes (e.g., multi-node commands), a single command
@@ -116,7 +116,7 @@ fn add_command_to_node_pipeline_map<C>(
         if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
             log_error(
                 "OpenTelemetry:retry_error",
-                format!("Failed to record retry attempt: {}", e),
+                format!("Failed to record retry attempt: {e}"),
             );
         }
     }
@@ -493,24 +493,24 @@ fn add_pipeline_result(
                     responses.resize(
                         inner_index + 1,
                         (
+                            None,
                             Value::ServerError(ServerError::ExtensionError {
                                 code: "PipelineNoResponse".to_string(),
                                 detail: (Some("no response from node".to_string())), // we initialize it with an error, but it should be overwritten
                             }),
-                            "".to_string(),
                         ),
                     );
                 }
-                responses[inner_index] = (value, address);
+                responses[inner_index] = (Some(address), value);
             }
             None => {
                 // If we have no `inner_index`, we expect this command to be a single node command, and therefore, have a single response
                 // If the vector responses is empty, we add the value and address
                 // If the vector is not empty, we check if it's only response is a ServerError, if so, we override it with the new value and address, since that means we have retried the command (e.g. on `MOVED` or `ASK` errors)
                 if responses.is_empty() {
-                    responses.push((value, address));
-                } else if let Value::ServerError(_) = responses[0].0 {
-                    responses[0] = (value, address);
+                    responses.push((Some(address), value));
+                } else if let Value::ServerError(_) = responses[0].1 {
+                    responses[0] = (Some(address), value);
                 } else {
                     return Err((
                         OperationTarget::FatalError,
@@ -1243,7 +1243,7 @@ fn get_original_cmd(
         .get_command(index)
         .ok_or_else(|| ServerError::ExtensionError {
             code: "IndexNotFoundInPipelineResponses".to_string(),
-            detail: Some(format!("Index {} was not found in pipeline", index)),
+            detail: Some(format!("Index {index} was not found in pipeline")),
         })?;
 
     // If the command requires multi-slot handling, the `inner_index` helps identify the corresponding sub-command.
@@ -1261,8 +1261,7 @@ fn get_original_cmd(
             let inner_index = inner_index.ok_or_else(|| ServerError::ExtensionError {
                 code: "IndexNotFoundInPipelineResponses".to_string(),
                 detail: Some(format!(
-                    "Inner index is required for a multi-slot command: {:?}",
-                    cmd
+                    "Inner index is required for a multi-slot command: {cmd:?}"
                 )),
             })?;
 
@@ -1271,8 +1270,7 @@ fn get_original_cmd(
                 .ok_or_else(|| ServerError::ExtensionError {
                     code: "IndexNotFoundInPipelineResponses".to_string(),
                     detail: Some(format!(
-                "Inner index {} for multi-slot command {:?} was not found in command slots {:?}",
-                inner_index, cmd, slots
+                "Inner index {inner_index} for multi-slot command {cmd:?} was not found in command slots {slots:?}"
             )),
                 })?;
 

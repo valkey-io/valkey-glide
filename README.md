@@ -19,6 +19,9 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 - **[Cluster-Aware MGET/MSET/DEL/FLUSHALL](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling:~:text=Multi%2DSlot%20Command%20Execution,JSON.MGET)** – Execute multi-key commands across cluster slots without manual key grouping.
 - **[Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)** – Unified key iteration across shards using a consistent, high-level API for cluster environments.
 - **Support for TS / CJS / MJS** – Fully compatible with modern and legacy JavaScript/TypeScript runtimes.
+- **Support for asyncio / anyio / trio** – Native compatibility with modern Python async frameworks, enabling efficient and seamless integration into asynchronous workflows.
+- **[Batching (Pipeline and Transaction)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#batching-pipeline-and-transaction)** – Efficiently execute multiple commands in a single network roundtrip, significantly reducing latency and improving throughput.
+- **[OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)** – Integrated tracing support for enhanced observability and easier debugging in distributed environments.
 
 ## Supported Engine Versions
 
@@ -31,14 +34,23 @@ Valkey GLIDE is API-compatible with the following engine versions:
 
 ## Current Status and Upcoming Releases
 
-In the current release, Valkey GLIDE is available for Python, Java, and Node.js. Support for Go is currently in **public preview** and support for C# is **under active development**, with plans to include more programming languages in the future. Additionally, Python sync and C++ are under active development, and a Ruby client is starting to take off.
+The client currently supports Python, Java, Node.js, and Go. Active development continues for C#, C++, and Ruby clients, with Python synchronous operations targeted for the next release.
 
-#### v1.2 (Dec. 2024)
-- Vector Similarity Search and JSON modules support
-- Availability zone routing for Read from Replica
+#### v2.0 (June 2025)
+
+- Go GA – Official stable release for production environments
+- OpenTelemetry Integration – Enhanced observability and tracing
+- Batching Support – Improved performance through batch operations
+- Lazy Connection – Allows client creation even when the server is not active, deferring connection establishment.
+
+### Previous Releases
 
 #### v1.3 (Feb. 2025)
-- Public preview for GO support
+- Public preview release of Go client support
+
+#### v1.2 (Dec. 2024)
+- Vector Similarity Search and JSON module support
+- Availability zone-aware routing for read-from-replica operations
 
 ## Getting Started
 
@@ -60,14 +72,27 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan)
 - [Dynamic Password Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#dynamic-password-management)
 - [Modules API](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#modules-api)
+- [Batching (Pipeline and Transaction)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#batching-pipeline-and-transaction)
+- [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
+- [ioredis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-ioredis)
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
 
 **Community**
 - [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)
 
 Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io/valkey-glide/wiki).
+
+## Ecosystem
+
+Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance its functionality across different frameworks and use cases:
+
+- **[node-flexible-rate-limiter](https://www.npmjs.com/package/node-flexible-rate-limiter)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
+- **[fastify-valkey-glide](https://www.npmjs.com/package/fastify-valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
+- **[aiocache](https://pypi.org/project/aiocache/)** - Python async caching framework with Valkey GLIDE backend support for high-performance distributed caching
+- **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
+- **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)
 
 ## Getting Help
 

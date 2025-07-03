@@ -11,8 +11,8 @@ import (
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.
 // Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`, `HSCAN`).
 type BaseScanOptions struct {
-	match string
-	count int64
+	Match string
+	Count int64
 }
 
 func NewBaseScanOptions() *BaseScanOptions {
@@ -27,7 +27,7 @@ items that match the pattern specified. This is due to the default `COUNT` being
 that it will only fetch and match `10` items from the list.
 */
 func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
-	scanOptions.match = m
+	scanOptions.Match = m
 	return scanOptions
 }
 
@@ -37,19 +37,19 @@ sorted set. `COUNT` could be ignored until the sorted set is large enough for th
 represent the results as compact single-allocation packed encoding.
 */
 func (scanOptions *BaseScanOptions) SetCount(c int64) *BaseScanOptions {
-	scanOptions.count = c
+	scanOptions.Count = c
 	return scanOptions
 }
 
 func (opts *BaseScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.match != "" {
-		args = append(args, constants.MatchKeyword, opts.match)
+	if opts.Match != "" {
+		args = append(args, constants.MatchKeyword, opts.Match)
 	}
 
-	if opts.count != 0 {
-		args = append(args, constants.CountKeyword, strconv.FormatInt(opts.count, 10))
+	if opts.Count != 0 {
+		args = append(args, constants.CountKeyword, strconv.FormatInt(opts.Count, 10))
 	}
 
 	return args, err

@@ -105,19 +105,19 @@ public class ClusterClientTests(TestConfiguration config)
         ClusterBatch batch = new ClusterBatch(isAtomic).Info([Section.REPLICATION]);
 
         object?[]? res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Primary)));
-        Assert.Contains("role:master", res![0] as gs);
+        Assert.Contains("role:master", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Replica)));
-        Assert.Contains("role:slave", res![0] as gs);
+        Assert.Contains("role:slave", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Primary)));
-        Assert.Contains("role:master", res![0] as gs);
+        Assert.Contains("role:master", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Replica)));
-        Assert.Contains("role:slave", res![0] as gs);
+        Assert.Contains("role:slave", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)));
-        Assert.Contains("# Replication", res![0] as gs);
+        Assert.Contains("# Replication", res![0] as string);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]

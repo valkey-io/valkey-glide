@@ -183,7 +183,7 @@ pub(crate) fn parse_and_count_slots(
         return Err(RedisError::from((
             ErrorKind::ResponseError,
             "Error parsing slots: No healthy node found",
-            format!("Raw slot map response: {:?}", raw_slot_resp),
+            format!("Raw slot map response: {raw_slot_resp:?}"),
         )));
     }
 

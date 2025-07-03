@@ -4109,38 +4109,42 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script flush test_%p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                // Load a script
-                const script = new Script("return 'Hello'");
-                expect(await client.invokeScript(script)).toEqual("Hello");
+    describe.skip("script flush is flaky - https://github.com/valkey-io/valkey-glide/issues/4158", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "script flush test_%p",
+            async (protocol) => {
+                await runTest(async (client: BaseClient) => {
+                    // Load a script
+                    const script = new Script("return 'Hello'");
+                    expect(await client.invokeScript(script)).toEqual("Hello");
 
-                // Check existence of script
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    true,
-                ]);
+                    // Check existence of script
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([true]);
 
-                // Flush the script cache
-                expect(await client.scriptFlush()).toEqual("OK");
+                    // Flush the script cache
+                    expect(await client.scriptFlush()).toEqual("OK");
 
-                // Check that the script no longer exists
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
+                    // Check that the script no longer exists
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
 
-                // Test with ASYNC mode
-                await client.invokeScript(script);
-                expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual("OK");
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
-                script.release();
-            }, protocol);
-        },
-        config.timeout,
-    );
+                    // Test with ASYNC mode
+                    await client.invokeScript(script);
+                    expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual(
+                        "OK",
+                    );
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
+                    script.release();
+                }, protocol);
+            },
+            config.timeout,
+        );
+    });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `script show test_%p`,

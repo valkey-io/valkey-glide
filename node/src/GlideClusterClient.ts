@@ -1820,9 +1820,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * let response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
-     * response = await client.unwatch();
+     * let response = await client.unwatch();
      * console.log(response); // Output: "OK"
      * ```
      */
