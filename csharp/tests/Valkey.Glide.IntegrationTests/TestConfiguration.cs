@@ -128,15 +128,14 @@ public class TestConfiguration : IDisposable
         if (Environment.GetEnvironmentVariable("cluster-endpoints") is not null || Environment.GetEnvironmentVariable("standalone-endpoints") is not null)
         {
             string? clusterEndpoints = Environment.GetEnvironmentVariable("cluster-endpoints");
-            CLUSTER_HOSTS = clusterEndpoints is null ? [] :
-                [.. clusterEndpoints.Split(',').Select(s => s.Split(':')).Select(s => (s[0], ushort.Parse(s[1])))];
+            CLUSTER_HOSTS = clusterEndpoints is null ? [] : ParseHostsString(clusterEndpoints);
             string? standaloneEndpoints = Environment.GetEnvironmentVariable("standalone-endpoints");
-            STANDALONE_HOSTS = standaloneEndpoints is null ? [] :
-                [.. standaloneEndpoints.Split(',').Select(s => s.Split(':')).Select(s => (s[0], ushort.Parse(s[1])))];
+            STANDALONE_HOSTS = standaloneEndpoints is null ? [] : ParseHostsString(standaloneEndpoints);
             _startedServer = false;
         }
         else
         {
+            _startedServer = true;
             // Stop all if weren't stopped on previous test run
             StopServer(false);
 
@@ -153,7 +152,6 @@ public class TestConfiguration : IDisposable
             CLUSTER_HOSTS = StartServer(true, TLS);
             // Start standalone
             STANDALONE_HOSTS = StartServer(false, TLS);
-            _startedServer = true;
         }
         // Get redis version
         SERVER_VERSION = GetServerVersion();
@@ -284,4 +282,7 @@ public class TestConfiguration : IDisposable
         string line = lines.FirstOrDefault(l => l.Contains("valkey_version")) ?? lines.First(l => l.Contains("redis_version"));
         return new(line.Split(':')[1]);
     }
+
+    private static List<(string host, ushort port)> ParseHostsString(string @string)
+        => [.. @string.Split(',').Select(s => s.Split(':')).Select(s => (host: s[0], port: ushort.Parse(s[1])))];
 }
