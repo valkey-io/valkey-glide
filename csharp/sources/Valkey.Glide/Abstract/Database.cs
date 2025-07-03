@@ -6,16 +6,7 @@ using Valkey.Glide.Internals;
 
 using static Valkey.Glide.ConnectionConfiguration;
 
-#pragma warning disable IDE0130 // Namespace does not match folder structure
 namespace Valkey.Glide;
-#pragma warning restore IDE0130 // Namespace does not match folder structure
-
-/// <summary>
-/// Describes functionality that is common to both standalone and cluster servers.<br />
-/// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
-/// </summary>
-public interface IDatabase : IStringBaseCommands, IGenericCommands, IServerManagementCommands
-{ }
 
 internal class DatabaseImpl : GlideClient, IDatabase
 {
