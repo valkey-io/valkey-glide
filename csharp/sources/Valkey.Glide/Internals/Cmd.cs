@@ -76,6 +76,13 @@ internal partial class Request // TODO naming
         /// <param name="isSingleValue">Whether current command call returns a single value.</param>
         public Cmd<object, ClusterValue<T>> ToClusterValue(bool isSingleValue)
             => new(Request, ArgsArray.Args, IsNullable, ResponseConverters.MakeClusterValueHandler(Converter, isSingleValue));
+
+        /// <summary>
+        /// Get full command line including command name.
+        /// </summary>
+        public string[] GetArgs() => Request == RequestType.CustomCommand
+            ? ArgsArray.Args.ToStrings()
+            : [.. ArgsArray.Args.ToStrings().Prepend(Request.ToString().ToUpper())];
     }
 
     internal record ArgsArray

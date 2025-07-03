@@ -28,6 +28,7 @@ Please also install the following packages to build [GLIDE core rust library](..
 - rustup
 - GCC
 - pkg-config
+- cmake
 - openssl
 - openssl-dev
 - ziglang and zigbuild (for GNU Linux only)
@@ -73,7 +74,7 @@ See the [Valkey installation guide](https://valkey.io/topics/installation/) to i
 
 ```bash
 sudo apt-get update -y
-sudo apt-get install -y openssl openssl-dev gcc
+sudo apt-get install -y openssl openssl-dev gcc cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -82,7 +83,7 @@ source "$HOME/.cargo/env"
 
 ```bash
 brew update
-brew install git gcc pkgconfig openssl
+brew install git gcc pkgconfig openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
