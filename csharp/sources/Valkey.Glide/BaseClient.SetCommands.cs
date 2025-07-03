@@ -34,15 +34,39 @@ public abstract partial class BaseClient : ISetCommands
     public async Task<ValkeyValue[]> SetPopAsync(ValkeyKey key, long count, CommandFlags ignored = CommandFlags.None)
         => await Command(Request.SetPopAsync(key, count));
 
-    public async Task<ValkeyValue[]> SetCombineAsync(SetOperation operation, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
-        => await SetCombineAsync(operation, [first, second], ignored);
+    public async Task<ValkeyValue[]> SetUnionAsync(ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetUnionAsync([first, second], ignored);
 
-    public async Task<ValkeyValue[]> SetCombineAsync(SetOperation operation, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
-        => await Command(Request.SetCombineAsync(operation, keys));
+    public async Task<ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetUnionAsync(keys));
 
-    public async Task<long> SetCombineAndStoreAsync(SetOperation operation, ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
-        => await SetCombineAndStoreAsync(operation, destination, [first, second], ignored);
+    public async Task<ValkeyValue[]> SetIntersectAsync(ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetIntersectAsync([first, second], ignored);
 
-    public async Task<long> SetCombineAndStoreAsync(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
-        => await Command(Request.SetCombineAndStoreAsync(operation, destination, keys));
+    public async Task<ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetIntersectAsync(keys));
+
+    public async Task<ValkeyValue[]> SetDifferenceAsync(ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetDifferenceAsync([first, second], ignored);
+
+    public async Task<ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetDifferenceAsync(keys));
+
+    public async Task<long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetUnionStoreAsync(destination, [first, second], ignored);
+
+    public async Task<long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetUnionStoreAsync(destination, keys));
+
+    public async Task<long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetIntersectStoreAsync(destination, [first, second], ignored);
+
+    public async Task<long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetIntersectStoreAsync(destination, keys));
+
+    public async Task<long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey first, ValkeyKey second, CommandFlags ignored = CommandFlags.None)
+        => await SetDifferenceStoreAsync(destination, [first, second], ignored);
+
+    public async Task<long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+        => await Command(Request.SetDifferenceStoreAsync(destination, keys));
 }

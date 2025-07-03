@@ -162,33 +162,43 @@ internal class Request // TODO naming
         return new(RequestType.SPop, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetCombineAsync(SetOperation operation, ValkeyKey[] keys)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys)
     {
-        RequestType requestType = operation switch
-        {
-            SetOperation.Union => RequestType.SUnion,
-            SetOperation.Intersect => RequestType.SInter,
-            SetOperation.Difference => RequestType.SDiff,
-            _ => throw new ArgumentOutOfRangeException(nameof(operation))
-        };
-
         GlideString[] args = keys.ToGlideStrings();
-        return new(requestType, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
+        return new(RequestType.SUnion, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
 
-    public static Cmd<long, long> SetCombineAndStoreAsync(SetOperation operation, ValkeyKey destination, ValkeyKey[] keys)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys)
     {
-        RequestType requestType = operation switch
-        {
-            SetOperation.Union => RequestType.SUnionStore,
-            SetOperation.Intersect => RequestType.SInterStore,
-            SetOperation.Difference => RequestType.SDiffStore,
-            _ => throw new ArgumentOutOfRangeException(nameof(operation))
-        };
-
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(requestType, args);
+        GlideString[] args = keys.ToGlideStrings();
+        return new(RequestType.SInter, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
     }
+
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys)
+    {
+        GlideString[] args = keys.ToGlideStrings();
+        return new(RequestType.SDiff, args, false, set => set.Select(obj => (ValkeyValue)obj.ToString()).ToArray());
+    }
+
+    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+    {
+        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
+        return Simple<long>(RequestType.SUnionStore, args);
+    }
+
+    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+    {
+        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
+        return Simple<long>(RequestType.SInterStore, args);
+    }
+
+    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+    {
+        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
+        return Simple<long>(RequestType.SDiffStore, args);
+    }
+
+
 
     /// <summary>
     /// Create a Cmd which returns OK
