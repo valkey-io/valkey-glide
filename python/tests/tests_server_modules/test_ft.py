@@ -355,8 +355,8 @@ class TestFt:
         vector_prefix = "vector-search:"
         vector_key1 = vector_prefix + str(uuid.uuid4())
         vector_key2 = vector_prefix + str(uuid.uuid4())
-        vector1 = array.array("f", [0.0, 0.0])
-        vector2 = array.array("f", [1.0, 1.0])
+        vector1 = array.array("f", [1.0, 0.0])
+        vector2 = array.array("f", [0.0, 1.0])
         vector_value1 = vector1.tobytes()
         vector_value2 = vector2.tobytes()
         vector_index = vector_prefix + str(uuid.uuid4())
