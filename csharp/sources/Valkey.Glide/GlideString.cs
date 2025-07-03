@@ -253,8 +253,11 @@ public sealed class GlideString : IComparable<GlideString>
         _ => new GlideString((string)value!),
     };
 
-    // TODO: we may have to account for more cases (prefix, value)?
-    public static implicit operator GlideString(ValkeyKey key) => key.IsNull ? new GlideString([]) : new GlideString((string)key!);
+    public static implicit operator GlideString(ValkeyKey key)
+    {
+        byte[]? keyBytes = key;
+        return keyBytes == null ? new GlideString([]) : new GlideString(keyBytes);
+    }
 #pragma warning restore IDE0072 // Add missing cases
 
     public int CompareTo(GlideString? other)

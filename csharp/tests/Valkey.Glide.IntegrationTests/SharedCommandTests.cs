@@ -53,10 +53,10 @@ public class SharedCommandTests(TestConfiguration config)
     {
         string key = Guid.NewGuid().ToString();
 
-        Assert.Equal(2, await client.SetAddAsync(key, new ValkeyValue[] { "test1", "test2" }));
+        Assert.Equal(2, await client.SetAddAsync(key, ["test1", "test2"]));
         Assert.True(await client.SetAddAsync(key, "test3"));
 
-        var vals = await client.SetMembersAsync(key);
+        ValkeyValue[] vals = await client.SetMembersAsync(key);
         Assert.Equal(3, vals.Length);
     }
 
@@ -67,9 +67,9 @@ public class SharedCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         Assert.True(await client.SetAddAsync(key, "1"));
-        Assert.Equal(2, await client.SetAddAsync(key, new ValkeyValue[] { "2", "3" }));
+        Assert.Equal(2, await client.SetAddAsync(key, ["2", "3"]));
 
-        var vals = await client.SetMembersAsync(key);
+        ValkeyValue[] vals = await client.SetMembersAsync(key);
         Assert.Equal(3, vals.Length);
     }
 
@@ -78,10 +78,10 @@ public class SharedCommandTests(TestConfiguration config)
     public async Task TestSRem(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        ValkeyValue[] members = { "member1", "member2", "member3" };
+        ValkeyValue[] members = ["member1", "member2", "member3"];
 
         Assert.Equal(3, await client.SetAddAsync(key, members));
-        Assert.Equal(2, await client.SetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" }));
+        Assert.Equal(2, await client.SetRemoveAsync(key, ["member1", "member2"]));
         Assert.True(await client.SetRemoveAsync(key, "member3"));
 
         Assert.Equal(0, await client.SetLengthAsync(key));
@@ -92,7 +92,7 @@ public class SharedCommandTests(TestConfiguration config)
     public async Task TestSetLengthAsync(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        ValkeyValue[] members = { "member1", "member2", "member3" };
+        ValkeyValue[] members = ["member1", "member2", "member3"];
 
         // Test on non-existent key
         Assert.Equal(0, await client.SetLengthAsync(key));
@@ -114,11 +114,11 @@ public class SharedCommandTests(TestConfiguration config)
         string key2 = "{prefix}-" + Guid.NewGuid().ToString();
 
         // Test with non-existent keys
-        Assert.Equal(0, await client.SetIntersectionLengthAsync(new ValkeyKey[] { key1, key2 }));
+        Assert.Equal(0, await client.SetIntersectionLengthAsync([key1, key2]));
 
         // Set up test data
-        await client.SetAddAsync(key1, new ValkeyValue[] { "a", "b", "c", "d" });
-        await client.SetAddAsync(key2, new ValkeyValue[] { "b", "c", "e", "f" });
+        await client.SetAddAsync(key1, ["a", "b", "c", "d"]);
+        await client.SetAddAsync(key2, ["b", "c", "e", "f"]);
 
         // Test intersection of two sets
         Assert.Equal(2, await client.SetIntersectionLengthAsync([key1, key2])); // "b", "c"
