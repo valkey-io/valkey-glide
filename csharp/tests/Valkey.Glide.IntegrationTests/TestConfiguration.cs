@@ -42,7 +42,51 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
+                field = [.. TestStandaloneClients.Select(d => (BaseClient)d.Data), .. TestClusterClients.Select(d => (BaseClient)d.Data)];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static TheoryData<GlideClient> TestStandaloneClients
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                GlideClient resp2client = GlideClient.CreateClient(
+                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP2).Build()
+                ).GetAwaiter().GetResult();
+                resp2client.SetInfo("RESP2");
+                GlideClient resp3client = GlideClient.CreateClient(
+                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP3).Build()
+                ).GetAwaiter().GetResult();
+                resp3client.SetInfo("RESP3");
+                field = [resp2client, resp3client];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static TheoryData<GlideClusterClient> TestClusterClients
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                GlideClusterClient resp2client = GlideClusterClient.CreateClient(
+                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP2).Build()
+                ).GetAwaiter().GetResult();
+                resp2client.SetInfo("RESP2");
+                GlideClusterClient resp3client = GlideClusterClient.CreateClient(
+                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP3).Build()
+                ).GetAwaiter().GetResult();
+                resp3client.SetInfo("RESP3");
+                field = [resp2client, resp3client];
             }
             return field;
         }
@@ -57,6 +101,8 @@ public class TestConfiguration : IDisposable
             data.Data.Dispose();
         }
         TestClients = [];
+        TestClusterClients = [];
+        TestStandaloneClients = [];
     }
 
     public TestConfiguration()
