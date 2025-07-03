@@ -8,9 +8,10 @@ using CommandLine;
 
 using LinqStatistics;
 
-using StackExchange.Redis;
-
 using static Valkey.Glide.ConnectionConfiguration;
+
+using SER_Connection = StackExchange.Redis.ConnectionMultiplexer;
+using SER_Db = StackExchange.Redis.IDatabase;
 
 namespace Valkey.Glide.CustomBenchmark;
 
@@ -305,8 +306,8 @@ public static class MainClass
         {
             ClientWrapper[] clients = await CreateClients(clientCount, () =>
                 {
-                    ConnectionMultiplexer connection = ConnectionMultiplexer.Connect(GetAddressForStackExchangeRedis(host, port, useTLS));
-                    IDatabase db = connection.GetDatabase();
+                    SER_Connection connection = SER_Connection.Connect(GetAddressForStackExchangeRedis(host, port, useTLS));
+                    SER_Db db = connection.GetDatabase();
                     return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                         (async (key) => await db.StringGetAsync(key),
                          async (key, value) => await db.StringSetAsync(key, value),

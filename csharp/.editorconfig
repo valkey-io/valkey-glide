@@ -538,3 +538,8 @@ dotnet_diagnostic.xUnit3000.severity = error
 dotnet_diagnostic.xUnit3001.severity = error
 # Classes which are JSON serializable should not be tested for their concrete type
 dotnet_diagnostic.xUnit3002.severity = error
+
+[**/Abstract/*.cs]
+dotnet_style_namespace_match_folder = false
+# IDE0130: Namespace does not match folder structure
+dotnet_diagnostic.IDE0130.severity = none

@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=string">valkey.io</see>.
 /// </summary>
-internal interface IStringBaseCommands
+public interface IStringBaseCommands
 {
     /// <summary>
     /// Sets the given <paramref name="key" /> with the given <paramref name="value" />.
