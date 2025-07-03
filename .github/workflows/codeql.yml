@@ -65,7 +65,7 @@ jobs:
               run: |
                   cd csharp
                   dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
-                  dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Debug --framework net8.0
+                  dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Lint --framework net8.0
 
             - name: Perform CodeQL Analysis
               if: github.event_name != 'pull_request' || steps.changes.outputs.csharp == 'true'
