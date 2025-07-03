@@ -14,6 +14,7 @@ Before building the package from source, make sure that you have installed the l
 - git
 - GCC
 - pkg-config
+- cmake
 - protoc (protobuf compiler) >= v3.20.0
 - openssl
 - openssl-dev
@@ -32,7 +33,7 @@ For your convenience, we wrapped the steps in a "copy-paste" code blocks for com
 
 ```bash
 sudo apt update -y
-sudo apt install -y python3 python3-venv git gcc pkg-config openssl libssl-dev unzip
+sudo apt install -y python3 python3-venv git gcc pkg-config openssl libssl-dev unzip cmake
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
@@ -48,7 +49,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 sudo yum update -y
-sudo yum install -y python3 git gcc pkgconfig openssl openssl-devel unzip
+sudo yum install -y python3 git gcc pkgconfig openssl openssl-devel unzip cmake
 pip3 install virtualenv
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -65,7 +66,7 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install python3 git gcc pkgconfig protobuf@3 openssl virtualenv
+brew install python3 git gcc pkgconfig protobuf@3 openssl virtualenv cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
