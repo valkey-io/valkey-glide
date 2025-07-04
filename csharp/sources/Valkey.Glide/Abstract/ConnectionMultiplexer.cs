@@ -77,7 +77,9 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
     public static async Task<ConnectionMultiplexer> ConnectAsync(string host, ushort port)
     {
         GlideClient standalone = await GlideClient.CreateClient(new StandaloneClientConfigurationBuilder()
-            .WithAddress(host, port).Build());
+            .WithAddress(host, port)
+            .WithProtocolVersion(Protocol.RESP3)
+            .Build());
         string info = await standalone.Info([Section.CLUSTER]);
         bool isCluster = info.Contains("cluster_enabled:1");
         return new(await DatabaseImpl.Create(host, port, isCluster));
