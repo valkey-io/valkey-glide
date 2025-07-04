@@ -304,6 +304,18 @@ internal class FFI
         Info = 1130,
         Get = 1504,
         Set = 1517,
+        SAdd = 1201,
+        SRem = 1214,
+        SMembers = 1209,
+        SCard = 1202,
+        SInterCard = 1206,
+        SPop = 1212,
+        SDiff = 1203,
+        SDiffStore = 1204,
+        SInter = 1205,
+        SInterStore = 1207,
+        SUnion = 1216,
+        SUnionStore = 1217,
     }
 
     internal enum RouteType : uint

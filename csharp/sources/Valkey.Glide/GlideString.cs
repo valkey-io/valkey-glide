@@ -9,7 +9,7 @@ using static Valkey.Glide.Commands.Options.InfoOptions;
 namespace Valkey.Glide;
 
 /// <summary>
-/// Fancy extensions for <see langword="string" /> and <see langword="byte[]" />, which help working with <see cref="GlideString" />.
+/// Fancy extensions for different types, which help working with <see cref="GlideString" />.
 /// </summary>
 public static class GlideStringExtensions
 {
@@ -21,11 +21,39 @@ public static class GlideStringExtensions
     public static GlideString ToGlideString(this string @string) => new(@string);
 
     /// <summary>
+    /// Convert a <paramref name="int"/> to a <see cref="GlideString" />.
+    /// </summary>
+    /// <param name="int">A <see langword="int" /> to convert.</param>
+    /// <returns>A <see cref="GlideString" />.</returns>
+    public static GlideString ToGlideString(this int @int) => new(@int.ToString());
+
+    /// <summary>
+    /// Convert a <paramref name="long"/> to a <see cref="GlideString" />.
+    /// </summary>
+    /// <param name="long">A <see langword="long" /> to convert.</param>
+    /// <returns>A <see cref="GlideString" />.</returns>
+    public static GlideString ToGlideString(this long @long) => new(@long.ToString());
+
+    /// <summary>
     /// Convert a <paramref name="bytes"/> to a <see cref="GlideString" />.
     /// </summary>
     /// <param name="bytes">A <see langword="byte[]" /> to convert.</param>
     /// <returns>A <see cref="GlideString" />.</returns>
     public static GlideString ToGlideString(this byte[] bytes) => new(bytes);
+
+    /// <summary>
+    /// Convert a <paramref name="key"/> to a <see cref="GlideString" />.
+    /// </summary>
+    /// <param name="key">A <see langword="ValkeyKey" /> to convert.</param>
+    /// <returns>A <see cref="GlideString" />.</returns>
+    public static GlideString ToGlideString(this ValkeyKey key) => (GlideString)key;
+
+    /// <summary>
+    /// Convert a <paramref name="value"/> to a <see cref="GlideString" />.
+    /// </summary>
+    /// <param name="value">A <see langword="ValkeyValue" /> to convert.</param>
+    /// <returns>A <see cref="GlideString" />.</returns>
+    public static GlideString ToGlideString(this ValkeyValue value) => (GlideString)value;
 
     /// <summary>
     /// Convert an <see langword="string[]" /> to an <see langword="GlideString[]" />.
@@ -47,6 +75,20 @@ public static class GlideStringExtensions
     /// <param name="strings">An array of <see langword="string" />s to convert.</param>
     /// <returns>An array of <see cref="GlideString" />s.</returns>
     public static GlideString[] ToGlideStrings(this Section[] strings) => [.. strings.Select(s => new GlideString(s.ToString()))];
+
+    /// <summary>
+    /// Convert an <see langword="ValkeyKey[]" /> to an <see langword="GlideString[]" />.
+    /// </summary>
+    /// <param name="keys">An array of <see langword="ValkeyKey" />s to convert.</param>
+    /// <returns>An array of <see cref="GlideString" />s.</returns>
+    public static GlideString[] ToGlideStrings(this ValkeyKey[] keys) => [.. keys.Select(k => (GlideString)k)];
+
+    /// <summary>
+    /// Convert an <see langword="ValkeyValue[]" /> to an <see langword="GlideString[]" />.
+    /// </summary>
+    /// <param name="values">An array of <see langword="ValkeyValue" />s to convert.</param>
+    /// <returns>An array of <see cref="GlideString" />s.</returns>
+    public static GlideString[] ToGlideStrings(this ValkeyValue[] values) => [.. values.Select(v => (GlideString)v)];
 
     /// <summary>
     /// Convert an <see langword="GlideString[]" /> to an <see langword="string[]" />.<br />
@@ -202,6 +244,21 @@ public sealed class GlideString : IComparable<GlideString>
     public static implicit operator GlideString(string @string) => new(@string);
     /// <inheritdoc cref="GlideString(byte[])" />
     public static implicit operator GlideString(byte[] bytes) => new(bytes);
+
+#pragma warning disable IDE0072 // Add missing cases
+    public static implicit operator GlideString(ValkeyValue value) => value.Type switch
+    {
+        ValkeyValue.StorageType.Null => new GlideString([]),
+        ValkeyValue.StorageType.Raw => new GlideString(((ReadOnlyMemory<byte>)value).ToArray()),
+        _ => new GlideString((string)value!),
+    };
+#pragma warning restore IDE0072 // Add missing cases
+
+    public static implicit operator GlideString(ValkeyKey key)
+    {
+        byte[]? keyBytes = key;
+        return keyBytes == null ? new GlideString([]) : new GlideString(keyBytes);
+    }
 
     public int CompareTo(GlideString? other)
     {
