@@ -55,7 +55,16 @@ public class SharedBatchTests
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         // TODO replace custom command
-        _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
+        if (isCluster)
+        {
+            ClusterBatch clusterBatch = (ClusterBatch)batch;
+            _ = clusterBatch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
+        }
+        else
+        {
+            Batch standaloneBatch = (Batch)batch;
+            _ = standaloneBatch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
+        }
 
         object?[] res = isCluster
             ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
@@ -98,7 +107,16 @@ public class SharedBatchTests
 
         // Create batch with strlen operations
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        _ = batch.Strlen(key1).Strlen(key2).Strlen(key3);
+        if (isCluster)
+        {
+            ClusterBatch clusterBatch = (ClusterBatch)batch;
+            _ = clusterBatch.Strlen(key1).Strlen(key2).Strlen(key3);
+        }
+        else
+        {
+            Batch standaloneBatch = (Batch)batch;
+            _ = standaloneBatch.Strlen(key1).Strlen(key2).Strlen(key3);
+        }
 
         object?[]? results = isCluster
             ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false)

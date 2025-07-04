@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
 namespace Valkey.Glide.Commands;
 
 /// <summary>
@@ -7,20 +9,18 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=string">valkey.io</see>.
 /// </summary>
-public interface IBatchStringCommands
+internal interface IBatchStringCommands
 {
+    /// <inheritdoc cref="IStringBaseCommands.Get(GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="IStringBaseCommands.Get(GlideString)" /></returns>
+    IBatch Get(GlideString key);
+
     /// <inheritdoc cref="IStringBaseCommands.Set(GlideString, GlideString)" path="/summary" />
     /// <inheritdoc cref="IStringBaseCommands.Set(GlideString, GlideString)" path="/param" />
     /// <returns>Command Response - <inheritdoc cref="IStringBaseCommands.Set(GlideString, GlideString)" /></returns>
-    IBatchStringCommands Set(GlideString key, GlideString value);
+    IBatch Set(GlideString key, GlideString value);
 
-    /// <inheritdoc cref="IStringBaseCommands.Get(GlideString)" path="/summary" />
-    /// <inheritdoc cref="IStringBaseCommands.Get(GlideString)" path="/param" />
-    /// <returns>Command Response - <inheritdoc cref="IStringBaseCommands.Get(GlideString)" /></returns>
-    IBatchStringCommands Get(GlideString key);
-
-    /// <inheritdoc cref="IStringBaseCommands.Strlen(GlideString)" path="/summary" />
-    /// <inheritdoc cref="IStringBaseCommands.Strlen(GlideString)" path="/param" />
+    /// <inheritdoc cref="IStringBaseCommands.Strlen(GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="IStringBaseCommands.Strlen(GlideString)" /></returns>
-    IBatchStringCommands Strlen(GlideString key);
+    IBatch Strlen(GlideString key);
 }

@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 
+using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
@@ -22,7 +23,7 @@ namespace Valkey.Glide.Pipeline;
 /// Determines whether the batch is atomic or non-atomic. If <see langword="true" />, the batch will be executed as
 /// an atomic transaction. If <see langword="false" />, the batch will be executed as a non-atomic pipeline.
 /// </param>
-public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
+public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch, IBatchStringCommands where T : BaseBatch<T>
 {
     private readonly List<ICmd> _commands = [];
 
@@ -66,9 +67,6 @@ public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : Bas
     public T Info(Section[] sections) => AddCmd(Request.Info(sections));
 
     IBatch IBatch.CustomCommand(GlideString[] args) => CustomCommand(args);
-    IBatch IBatch.Get(GlideString key) => Get(key);
-    IBatch IBatch.Set(GlideString key, GlideString value) => Set(key, value);
-    IBatch IBatch.Strlen(GlideString key) => Strlen(key);
     IBatch IBatch.Info() => Info();
     IBatch IBatch.Info(Section[] sections) => Info(sections);
 }

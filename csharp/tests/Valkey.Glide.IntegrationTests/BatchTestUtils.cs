@@ -16,10 +16,21 @@ internal class BatchTestUtils
 
         string value1 = $"value-1-{Guid.NewGuid()}";
 
-        _ = batch.Set(key1, value1);
-        testData.Add(new("OK", "Set(key1, value1)"));
-        _ = batch.Get(key1);
-        testData.Add(new(new gs(value1), "Get(key1)"));
+        // Cast to concrete batch type to access string commands
+        if (batch is ClusterBatch clusterBatch)
+        {
+            _ = clusterBatch.Set(key1, value1);
+            testData.Add(new("OK", "Set(key1, value1)"));
+            _ = clusterBatch.Get(key1);
+            testData.Add(new(new gs(value1), "Get(key1)"));
+        }
+        else if (batch is Batch standaloneBatch)
+        {
+            _ = standaloneBatch.Set(key1, value1);
+            testData.Add(new("OK", "Set(key1, value1)"));
+            _ = standaloneBatch.Get(key1);
+            testData.Add(new(new gs(value1), "Get(key1)"));
+        }
 
         return testData;
     }
