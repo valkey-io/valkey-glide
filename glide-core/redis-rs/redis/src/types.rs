@@ -2373,8 +2373,8 @@ pub fn from_owned_redis_value<T: FromRedisValue>(v: Value) -> RedisResult<T> {
 #[repr(C)]
 pub enum ProtocolVersion {
     /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP2.md>
-    #[default]
     RESP2,
     /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md>
+    #[default]
     RESP3,
 }
