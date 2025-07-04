@@ -81,15 +81,15 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="host">The host to get a server for.</param>
     /// <param name="port">The specific port for <paramref name="host"/> to get a server for.</param>
-    /// <param name="asyncState">The async state to pass to the created <see cref="IServer"/>.</param>
-    IServer GetServer(string host, int port, object? asyncState = null);
+    /// <param name="ignored">The async state is not supported by GLIDE.</param>
+    IServer GetServer(string host, int port, object? ignored = null);
 
     /// <summary>
     /// Obtain a configuration API for an individual server.
     /// </summary>
     /// <param name="hostAndPort">The "host:port" string to get a server for.</param>
-    /// <param name="asyncState">The async state to pass to the created <see cref="IServer"/>.</param>
-    IServer GetServer(string hostAndPort, object? asyncState = null);
+    /// <param name="ignored">The async state is not supported by GLIDE.</param>
+    IServer GetServer(string hostAndPort, object? ignored = null);
 
     /// <summary>
     /// Obtain a configuration API for an individual server.
@@ -102,18 +102,13 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// Obtain a configuration API for an individual server.
     /// </summary>
     /// <param name="endpoint">The endpoint to get a server for.</param>
-    /// <param name="asyncState">The async state to pass to the created <see cref="IServer"/>.</param>
-    IServer GetServer(EndPoint endpoint, object? asyncState = null);
+    /// <param name="ignored">The async state is not supported by GLIDE.</param>
+    IServer GetServer(EndPoint endpoint, object? ignored = null);
 
     /// <summary>
     /// Obtain configuration APIs for all servers in this multiplexer.
     /// </summary>
     IServer[] GetServers();
-
-    /// <summary>
-    /// Provides a text overview of the status of all connections.
-    /// </summary>
-    string GetStatus();
 
     /// <summary>
     /// Indicates whether any servers are connected.
@@ -125,11 +120,11 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// </summary>
     bool IsConnecting { get; }
 
-    // TODO args
+    // TODO add link to `SELECT` once implemented
     /// <summary>
-    /// Obtain an interactive connection to a database inside redis.
+    /// Obtain an interactive connection to a database inside server.
     /// </summary>
-    /// <param name="db">The database ID to get.</param>
-    /// <param name="asyncState">The async state to pass to the created <see cref="IDatabase"/>.</param>
-    IDatabase GetDatabase(int db = -1, object? asyncState = null);
+    /// <param name="db">Not supported. To switch the database, please use `SELECT` command.</param>
+    /// <param name="ignored">The async state is not supported by GLIDE.</param>
+    IDatabase GetDatabase(int db = -1, object? ignored = null);
 }

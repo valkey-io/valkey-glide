@@ -26,8 +26,13 @@ public interface IServer
     /// </summary>
     Version Version { get; }
 
+    /// <summary>
+    /// Gets the operating mode of the connected server.
+    /// </summary>
+    ServerType ServerType { get; }
+
     /*
-    TODO aka custom command
+    TODO Execute aka custom command
 
     /// <summary>
     /// Execute an arbitrary command against the server; this is primarily intended for
@@ -44,17 +49,27 @@ public interface IServer
     Task<RedisResult> ExecuteAsync(string command, params object[] args);
     */
 
-    /*
-    /// <inheritdoc cref="InfoRawAsync(ValkeyValue, CommandFlags)"/>
-    string? InfoRaw(ValkeyValue section = default, CommandFlags flags = CommandFlags.None);
-    */
+    /// <summary>
+    /// The INFO command returns information and statistics about the server in a format that is simple to parse by computers and easy to read by humans.
+    /// </summary>
+    /// <param name="section">The info section to get, if getting a specific one.</param>
+    /// <param name="ignored">"Command flags are not supported by GLIDE.</param>
+    /// <returns>The entire raw <c>INFO</c> string.</returns>
+    /// <remarks><seealso href="https://valkey.io/commands/info/"/></remarks>
+    Task<string?> InfoRawAsync(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None);
 
     /// <summary>
     /// The INFO command returns information and statistics about the server in a format that is simple to parse by computers and easy to read by humans.
     /// </summary>
     /// <param name="section">The info section to get, if getting a specific one.</param>
-    /// <param name="flags">The command flags to use.</param>
-    /// <returns>The entire raw <c>INFO</c> string.</returns>
+    /// <param name="ignored">"Command flags are not supported by GLIDE.</param>
+    /// <returns>A grouping of key/value pairs, grouped by their section header.</returns>
     /// <remarks><seealso href="https://valkey.io/commands/info/"/></remarks>
-    Task<string?> InfoRawAsync(ValkeyValue section = default, CommandFlags flags = CommandFlags.None);
+    Task<IGrouping<string, KeyValuePair<string, string>>[]> InfoAsync(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None);
+
+    /// <inheritdoc cref="InfoRawAsync(ValkeyValue, CommandFlags)"/>
+    string? InfoRaw(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None);
+
+    /// <inheritdoc cref="InfoAsync(ValkeyValue, CommandFlags)"/>
+    IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None);
 }
