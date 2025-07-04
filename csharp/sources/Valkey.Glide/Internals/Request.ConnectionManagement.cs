@@ -14,7 +14,7 @@ internal partial class Request
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
-        var stopwatch = Stopwatch.StartNew();
+        Stopwatch stopwatch = Stopwatch.StartNew();
         return new(RequestType.Ping, [], false, _ =>
         {
             stopwatch.Stop();
@@ -28,7 +28,7 @@ internal partial class Request
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
-        var stopwatch = Stopwatch.StartNew();
+        Stopwatch stopwatch = Stopwatch.StartNew();
         GlideString[] args = [message.ToGlideString()];
         return new(RequestType.Ping, args, false, _ =>
         {
