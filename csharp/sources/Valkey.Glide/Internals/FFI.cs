@@ -323,6 +323,8 @@ internal class FFI
         Strlen = 1521,
         LPop = 811,
         LPush = 813,
+        Echo = 320,
+        Ping = 322,
     }
 
     internal enum RouteType : uint
