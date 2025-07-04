@@ -1,6 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 using Valkey.Glide.Commands;
@@ -23,7 +22,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
         => GetServer(Utils.ParseEndPoint(host, port), ignored);
 
     public IServer GetServer(string hostAndPort, object? ignored = null)
-        => Utils.TryParseEndPoint(hostAndPort, out var ep)
+        => Utils.TryParseEndPoint(hostAndPort, out IPEndPoint? ep)
             ? GetServer(ep, ignored)
             : throw new ArgumentException($"The specified host and port could not be parsed: {hostAndPort}", nameof(hostAndPort));
 
@@ -33,7 +32,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
     public IServer GetServer(EndPoint endpoint, object? ignored = null)
     {
         Utils.Requires<NotImplementedException>(ignored is null, "Async state is not supported by GLIDE");
-        foreach (var server in GetServers())
+        foreach (IServer server in GetServers())
         {
             if (server.EndPoint.Equals(endpoint))
             {
@@ -50,13 +49,13 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
         // run INFO on all nodes, but disregard the node responses, we need node addresses only
         if (_db.IsCluster)
         {
-            var info = _db.Command(Request.Info([]).ToMultiNodeValue(), Route.AllNodes).GetAwaiter().GetResult();
-            return [.. info.Keys.Select(addr => new ValkeyServer(this, IPEndPoint.Parse(addr)))];
+            Dictionary<string, string> info = _db.Command(Request.Info([]).ToMultiNodeValue(), Route.AllNodes).GetAwaiter().GetResult();
+            return [.. info.Keys.Select(addr => new ValkeyServer(_db, IPEndPoint.Parse(addr)))];
         }
         else
         {
             // due to #4293, core ignores route on standalone and always return a single node response
-            var info = _db.Command(Request.Info([]), Route.AllNodes).GetAwaiter().GetResult();
+            string info = _db.Command(Request.Info([]), Route.AllNodes).GetAwaiter().GetResult();
             // and there is no way to get IP address from server, assuming localhost (127.0.0.1)
             // we can try to get port only (in some deployments, this info is also missing)
             int port = 6379;
@@ -67,7 +66,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
                     port = int.Parse(line.Split(':')[1]);
                 }
             }
-            return [new ValkeyServer(this, new IPEndPoint(0x100007F, port))];
+            return [new ValkeyServer(_db, new IPEndPoint(0x100007F, port))];
         }
     }
 

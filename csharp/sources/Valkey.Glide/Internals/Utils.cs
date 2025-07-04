@@ -6,18 +6,17 @@ using System.Net;
 internal class Utils
 {
     public static EndPoint ParseEndPoint(string host, int port)
-    {
-        if (IPAddress.TryParse(host, out IPAddress? ip)) return new IPEndPoint(ip, port);
-        return new DnsEndPoint(host, port);
-    }
+        => IPAddress.TryParse(host, out IPAddress? ip)
+            ? new IPEndPoint(ip, port)
+            : new DnsEndPoint(host, port);
 
     public static bool TryParseEndPoint(string hostAndPort, out IPEndPoint result)
     {
-        if (!Uri.TryCreate($"tcp://{hostAndPort}", UriKind.Absolute, out Uri uri) ||
-            !IPAddress.TryParse(uri.Host, out IPAddress ipAddress) ||
+        if (!Uri.TryCreate($"tcp://{hostAndPort}", UriKind.Absolute, out Uri? uri) ||
+            !IPAddress.TryParse(uri.Host, out IPAddress? ipAddress) ||
             uri.Port < 0 || uri.Port > 65535)
         {
-            result = default(IPEndPoint);
+            result = new(0, 0);
             return false;
         }
 
@@ -33,5 +32,34 @@ internal class Utils
             Debug.WriteLine(message);
             throw new TException();
         }
+    }
+
+    public static List<Tuple<string, KeyValuePair<string, string>>> ParseInfoResponse(string data)
+    {
+        string category = "miscellaneous";
+        List<Tuple<string, KeyValuePair<string, string>>> list = [];
+        using StringReader reader = new(data);
+        while (reader.ReadLine() is string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+            if (line.StartsWith("# "))
+            {
+                category = line[2..].Trim();
+                continue;
+            }
+            int idx = line.IndexOf(':');
+            if (idx < 0)
+            {
+                continue;
+            }
+            KeyValuePair<string, string> pair = new(
+                line[..idx].Trim(),
+                line[(idx + 1)..].Trim());
+            list.Add(Tuple.Create(category, pair));
+        }
+        return list;
     }
 }

@@ -1,7 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 
 using Valkey.Glide.Commands.Options;
@@ -11,9 +9,9 @@ using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
-internal class ValkeyServer(ConnectionMultiplexer conn, EndPoint endpoint) : IServer
+internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
 {
-    private readonly ConnectionMultiplexer _conn = conn;
+    private readonly DatabaseImpl _conn = conn;
 
     // TODO use sync `Execute` instead of `CustomCommand`
 
@@ -21,7 +19,7 @@ internal class ValkeyServer(ConnectionMultiplexer conn, EndPoint endpoint) : ISe
     /// Run <c>HELLO</c> command.
     /// </summary>
     private Dictionary<GlideString, object> Hello()
-        => (Dictionary<GlideString, object>)_conn.GetDatabase().CustomCommand(["hello"]).GetAwaiter().GetResult()!;
+        => (Dictionary<GlideString, object>)_conn.CustomCommand(["hello"]).GetAwaiter().GetResult()!;
 
     public EndPoint EndPoint { get; } = endpoint;
 
@@ -39,36 +37,14 @@ internal class ValkeyServer(ConnectionMultiplexer conn, EndPoint endpoint) : ISe
         InfoOptions.Section[] sections = section.Type == ValkeyValue.StorageType.Null ? [] :
             [Enum.Parse<InfoOptions.Section>(section.ToString(), true)];
 
-        return (_conn.GetDatabase() as DatabaseImpl)
-            .Command(Request.Info(sections), new ByAddressRoute(endpoint.ToString()))
+        return _conn
+            .Command(Request.Info(sections), new ByAddressRoute(EndPoint.ToString()!))
             .ContinueWith(task => (string?)task.Result);
     }
 
     public Task<IGrouping<string, KeyValuePair<string, string>>[]> InfoAsync(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
-    {
-        return InfoRawAsync(section, ignored).ContinueWith(t =>
-        {
-            string category = "miscellaneous";
-            var list = new List<Tuple<string, KeyValuePair<string, string>>>();
-            using var reader = new StringReader(t.Result);
-            while (reader.ReadLine() is string line)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                if (line.StartsWith("# "))
-                {
-                    category = line.Substring(2).Trim();
-                    continue;
-                }
-                int idx = line.IndexOf(':');
-                if (idx < 0) continue;
-                var pair = new KeyValuePair<string, string>(
-                    line.Substring(0, idx).Trim(),
-                    line.Substring(idx + 1).Trim());
-                list.Add(Tuple.Create(category, pair));
-            }
-            return list.GroupBy(x => x.Item1, x => x.Item2).ToArray();
-        });
-    }
+        => InfoRawAsync(section, ignored).ContinueWith(t
+            => Utils.ParseInfoResponse(t.Result!).GroupBy(x => x.Item1, x => x.Item2).ToArray());
 
     public string? InfoRaw(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
         => InfoRawAsync(section, ignored).GetAwaiter().GetResult();

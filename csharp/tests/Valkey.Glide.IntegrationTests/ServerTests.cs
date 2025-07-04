@@ -37,34 +37,34 @@ public class ServerTests
 
         ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
 
-        foreach (var server in conn.GetServers())
+        foreach (IServer server in conn.GetServers())
         {
             // TODO protocol isn't yet configurable
             Assert.Equal(RedisProtocol.Resp3, server.Protocol);
             // standalone ignores protocol? doesn't send hello?
             Assert.Equal(TestConfiguration.SERVER_VERSION, server.Version);
             Assert.Equal(isCluster ? ServerType.Cluster : ServerType.Standalone, server.ServerType);
-            string info = await server.InfoRawAsync("server")!;
-            foreach (var line in info.Split("\r\n"))
+            string info = (await server.InfoRawAsync("server"))!;
+            foreach (string line in info.Split("\r\n"))
             {
                 if (line.Contains("tcp_port:"))
                 {
-                    Assert.Contains(server.EndPoint.ToString().Split(':')[1], line);
+                    Assert.Contains(server.EndPoint.ToString()!.Split(':')[1], line);
                     break;
                 }
             }
 
-            var infoParsed = server.Info();
-            foreach (var data in infoParsed)
+            IGrouping<string, KeyValuePair<string, string>>[] infoParsed = server.Info();
+            foreach (IGrouping<string, KeyValuePair<string, string>> data in infoParsed)
             {
                 if (data.Key == "Server")
                 {
                     bool portFound = false;
-                    foreach (var pair in data)
+                    foreach (KeyValuePair<string, string> pair in data)
                     {
                         if (pair.Key == "tcp_port")
                         {
-                            Assert.Equal(pair.Value, server.EndPoint.ToString().Split(':')[1]);
+                            Assert.Equal(pair.Value, server.EndPoint.ToString()!.Split(':')[1]);
                             portFound = true;
                             break;
                         }
