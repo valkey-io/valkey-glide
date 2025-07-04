@@ -11,4 +11,7 @@ internal partial class Request
 
     public static Cmd<string, string> Set(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
+
+    public static Cmd<long, long> Strlen(GlideString key)
+        => Simple<long>(RequestType.Strlen, [key]);
 }

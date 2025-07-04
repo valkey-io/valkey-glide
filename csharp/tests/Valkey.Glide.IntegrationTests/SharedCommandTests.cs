@@ -50,6 +50,40 @@ public class SharedCommandTests(TestConfiguration config)
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StrlenExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = Guid.NewGuid().ToString();
+        Assert.Equal("OK", await client.Set(key, value));
+
+        long result = await client.Strlen(key);
+        Assert.Equal(value.Length, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StrlenNonExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        long result = await client.Strlen(key);
+        Assert.Equal(0, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StrlenWithUnicodeValue(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = "שלום hello 汉字";
+        Assert.Equal("OK", await client.Set(key, value));
+
+        long result = await client.Strlen(key);
+        // Note: Strlen returns byte length, not character length
+        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(value), result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(BatchTestUtils.GetTestClientWithAtomic), MemberType = typeof(BatchTestUtils))]
     internal async Task BatchTest(BatchTestData testData)
     {

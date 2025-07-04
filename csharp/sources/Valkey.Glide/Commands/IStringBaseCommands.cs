@@ -40,4 +40,27 @@ public interface IStringBaseCommands
     /// Otherwise, returns <see langword="null" />.
     /// </returns>
     Task<GlideString?> Get(GlideString key);
+
+    /// <summary>
+    /// Returns the length of the string value stored at <paramref name="key" />.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.Set("key", "GLIDE");
+    /// long len = await client.Strlen("key");
+    /// Console.WriteLine(len); // Output: 5
+    /// 
+    /// long len2 = await client.Strlen("non_existing_key");
+    /// Console.WriteLine(len2); // Output: 0
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The <paramref name="key" /> to check its length.</param>
+    /// <returns>
+    /// The length of the string value stored at <paramref name="key" />.<br/>
+    /// If <paramref name="key" /> does not exist, it is treated as an empty string, and the command returns <c>0</c>.
+    /// </returns>
+    /// <seealso href="https://valkey.io/commands/strlen/">valkey.io</seealso>
+    Task<long> Strlen(GlideString key);
 }
