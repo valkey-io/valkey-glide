@@ -13,6 +13,9 @@ public abstract partial class BaseClient : IStringBaseCommands
     public async Task<GlideString?> Get(GlideString key)
         => await Command(Request.Get(key));
 
+    public async Task<GlideString> GetRange(GlideString key, long start, long end)
+        => await Command(Request.GetRange(key, start, end));
+
     public async Task<long> SetRange(GlideString key, long offset, GlideString value)
         => await Command(Request.SetRange(key, offset, value));
 

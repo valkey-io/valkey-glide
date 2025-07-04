@@ -65,6 +65,37 @@ public interface IStringBaseCommands
     Task<long> Strlen(GlideString key);
 
     /// <summary>
+    /// Returns the substring of the string value stored at <paramref name="key" />, determined by the offsets 
+    /// <paramref name="start" /> and <paramref name="end" /> (both are inclusive).
+    /// Negative offsets can be used in order to provide an offset starting from the end of the string. 
+    /// So -1 means the last character, -2 the penultimate and so forth.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.Set("key", "This is a string");
+    /// string result = await client.GetRange("key", 0, 3);
+    /// Console.WriteLine(result); // Output: "This"
+    /// 
+    /// string result2 = await client.GetRange("key", -3, -1);
+    /// Console.WriteLine(result2); // Output: "ing"
+    /// 
+    /// string result3 = await client.GetRange("non_existing_key", 0, 5);
+    /// Console.WriteLine(result3); // Output: ""
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="key">The <paramref name="key" /> of the string.</param>
+    /// <param name="start">The starting offset.</param>
+    /// <param name="end">The ending offset.</param>
+    /// <returns>
+    /// A substring extracted from the value stored at <paramref name="key" />.<br/>
+    /// An empty string is returned if the <paramref name="key" /> does not exist or if the start and end offsets are out of range.
+    /// </returns>
+    /// <seealso href="https://valkey.io/commands/getrange/">valkey.io</seealso>
+    Task<GlideString> GetRange(GlideString key, long start, long end);
+
+    /// <summary>
     /// Overwrites part of the string stored at <paramref name="key" />, starting at the specified <paramref name="offset" />, 
     /// for the entire length of <paramref name="value" />.
     /// If the <paramref name="offset" /> is larger than the current length of the string at <paramref name="key" />, 
