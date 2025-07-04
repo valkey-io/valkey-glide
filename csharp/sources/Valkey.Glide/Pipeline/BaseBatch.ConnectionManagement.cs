@@ -6,10 +6,10 @@ namespace Valkey.Glide.Pipeline;
 
 public abstract partial class BaseBatch<T> : IBatchConnectionManagementCommands where T : BaseBatch<T>
 {
-    /// <inheritdoc cref="IBatchConnectionManagementCommands.PingAsync()" />
+    /// <inheritdoc cref="IBatchConnectionManagementCommands.Ping()" />
     public T Ping() => AddCmd(Request.PingAsync());
 
-    /// <inheritdoc cref="IBatchConnectionManagementCommands.PingAsync(ValkeyValue)" />
+    /// <inheritdoc cref="IBatchConnectionManagementCommands.Ping(ValkeyValue)" />
     public T Ping(ValkeyValue message) => AddCmd(Request.PingAsync(message));
 
     /// <inheritdoc cref="IBatchConnectionManagementCommands.Echo(ValkeyValue)" />
