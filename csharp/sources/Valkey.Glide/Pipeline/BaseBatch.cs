@@ -2,7 +2,6 @@
 
 using System.Diagnostics;
 
-using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
