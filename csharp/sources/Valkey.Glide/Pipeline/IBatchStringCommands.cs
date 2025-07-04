@@ -18,6 +18,10 @@ internal interface IBatchStringCommands
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.Set(GlideString, GlideString)" /></returns>
     IBatch Set(GlideString key, GlideString value);
 
+    /// <inheritdoc cref="Commands.IStringBaseCommands.SetRange(GlideString, long, GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.SetRange(GlideString, long, GlideString)" /></returns>
+    IBatch SetRange(GlideString key, long offset, GlideString value);
+
     /// <inheritdoc cref="Commands.IStringBaseCommands.Strlen(GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.Strlen(GlideString)" /></returns>
     IBatch Strlen(GlideString key);

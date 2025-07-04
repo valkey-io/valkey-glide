@@ -316,6 +316,7 @@ internal class FFI
         SInterStore = 1207,
         SUnion = 1216,
         SUnionStore = 1217,
+        SetRange = 1520,
         Strlen = 1521,
     }
 

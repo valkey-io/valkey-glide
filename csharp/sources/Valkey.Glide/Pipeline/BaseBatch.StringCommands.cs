@@ -12,10 +12,14 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     /// <inheritdoc cref="IBatchStringCommands.Set(GlideString, GlideString)" />
     public T Set(GlideString key, GlideString value) => AddCmd(Request.Set(key, value));
 
+    /// <inheritdoc cref="IBatchStringCommands.SetRange(GlideString, long, GlideString)" />
+    public T SetRange(GlideString key, long offset, GlideString value) => AddCmd(Request.SetRange(key, offset, value));
+
     /// <inheritdoc cref="IBatchStringCommands.Strlen(GlideString)" />
     public T Strlen(GlideString key) => AddCmd(Request.Strlen(key));
 
     IBatch IBatchStringCommands.Get(GlideString key) => Get(key);
     IBatch IBatchStringCommands.Set(GlideString key, GlideString value) => Set(key, value);
+    IBatch IBatchStringCommands.SetRange(GlideString key, long offset, GlideString value) => SetRange(key, offset, value);
     IBatch IBatchStringCommands.Strlen(GlideString key) => Strlen(key);
 }
