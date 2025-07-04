@@ -20,7 +20,7 @@ public class SharedClientTests(TestConfiguration config)
         {
             value += value;
         }
-        await SharedCommandTests.GetAndSetValues(client, key, value);
+        await StringCommandTests.GetAndSetValues(client, key, value);
     }
 
     // This test is slow, but it caught timing and releasing issues in the past,
@@ -41,7 +41,7 @@ public class SharedClientTests(TestConfiguration config)
                 {
                     if ((i + index) % 2 == 0)
                     {
-                        await SharedCommandTests.GetAndSetRandomValues(client);
+                        await StringCommandTests.GetAndSetRandomValues(client);
                     }
                     else
                     {

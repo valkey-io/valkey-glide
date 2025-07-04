@@ -87,45 +87,4 @@ public class SharedBatchTests
                 : await ((GlideClient)client).Exec((Batch)batch, true));
         Assert.Contains("wrong kind of value", err.Message);
     }
-
-    [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData(nameof(GetTestClientWithAtomic))]
-    public async Task StrlenBatchTest(BaseClient client, bool isAtomic)
-    {
-        bool isCluster = client is GlideClusterClient;
-        // Use hash tags to ensure all keys are on the same slot for cluster mode
-        string baseKey = "{StrlenBatch}" + Guid.NewGuid();
-        string key1 = baseKey + ":key1";
-        string key2 = baseKey + ":key2";
-        string key3 = baseKey + ":nonexisting";
-        string value1 = "GLIDE";
-        string value2 = "test value";
-
-        // Set up test data
-        Assert.Equal("OK", await client.Set(key1, value1));
-        Assert.Equal("OK", await client.Set(key2, value2));
-
-        // Create batch with strlen operations
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        if (isCluster)
-        {
-            ClusterBatch clusterBatch = (ClusterBatch)batch;
-            _ = clusterBatch.Strlen(key1).Strlen(key2).Strlen(key3);
-        }
-        else
-        {
-            Batch standaloneBatch = (Batch)batch;
-            _ = standaloneBatch.Strlen(key1).Strlen(key2).Strlen(key3);
-        }
-
-        object?[]? results = isCluster
-            ? await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false)
-            : await ((GlideClient)client).Exec((Batch)batch, false);
-
-        Assert.NotNull(results);
-        Assert.Equal(3, results.Length);
-        Assert.Equal((long)value1.Length, results[0]);
-        Assert.Equal((long)value2.Length, results[1]);
-        Assert.Equal(0L, results[2]);
-    }
 }

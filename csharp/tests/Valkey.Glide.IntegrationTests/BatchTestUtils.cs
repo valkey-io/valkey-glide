@@ -13,23 +13,46 @@ internal class BatchTestUtils
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{stringKey}-" : "";
         string key1 = $"{prefix}1-{Guid.NewGuid()}";
+        string key2 = $"{prefix}2-{Guid.NewGuid()}";
+        string nonExistingKey = $"{prefix}nonexisting-{Guid.NewGuid()}";
 
         string value1 = $"value-1-{Guid.NewGuid()}";
+        string value2 = "test-value";
 
         // Cast to concrete batch type to access string commands
         if (batch is ClusterBatch clusterBatch)
         {
             _ = clusterBatch.Set(key1, value1);
             testData.Add(new("OK", "Set(key1, value1)"));
+            _ = clusterBatch.Set(key2, value2);
+            testData.Add(new("OK", "Set(key2, value2)"));
             _ = clusterBatch.Get(key1);
             testData.Add(new(new gs(value1), "Get(key1)"));
+            _ = clusterBatch.Get(key2);
+            testData.Add(new(new gs(value2), "Get(key2)"));
+            _ = clusterBatch.Strlen(key1);
+            testData.Add(new((long)value1.Length, "Strlen(key1)"));
+            _ = clusterBatch.Strlen(key2);
+            testData.Add(new((long)value2.Length, "Strlen(key2)"));
+            _ = clusterBatch.Strlen(nonExistingKey);
+            testData.Add(new(0L, "Strlen(nonExistingKey)"));
         }
         else if (batch is Batch standaloneBatch)
         {
             _ = standaloneBatch.Set(key1, value1);
             testData.Add(new("OK", "Set(key1, value1)"));
+            _ = standaloneBatch.Set(key2, value2);
+            testData.Add(new("OK", "Set(key2, value2)"));
             _ = standaloneBatch.Get(key1);
             testData.Add(new(new gs(value1), "Get(key1)"));
+            _ = standaloneBatch.Get(key2);
+            testData.Add(new(new gs(value2), "Get(key2)"));
+            _ = standaloneBatch.Strlen(key1);
+            testData.Add(new((long)value1.Length, "Strlen(key1)"));
+            _ = standaloneBatch.Strlen(key2);
+            testData.Add(new((long)value2.Length, "Strlen(key2)"));
+            _ = standaloneBatch.Strlen(nonExistingKey);
+            testData.Add(new(0L, "Strlen(nonExistingKey)"));
         }
 
         return testData;
