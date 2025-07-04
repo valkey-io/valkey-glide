@@ -15,7 +15,7 @@ public class TestConfiguration : IDisposable
     public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
-    public static bool TLS = false;
+    public static bool TLS { get; internal set; } = false;
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
@@ -125,7 +125,7 @@ public class TestConfiguration : IDisposable
 
         TLS = Environment.GetEnvironmentVariable("tls") == "true";
 
-        if (Environment.GetEnvironmentVariable("cluster-endpoints") is not null || Environment.GetEnvironmentVariable("standalone-endpoints") is not null)
+        if (Environment.GetEnvironmentVariable("cluster-endpoints") is { } || Environment.GetEnvironmentVariable("standalone-endpoints") is { })
         {
             string? clusterEndpoints = Environment.GetEnvironmentVariable("cluster-endpoints");
             CLUSTER_HOSTS = clusterEndpoints is null ? [] : ParseHostsString(clusterEndpoints);
