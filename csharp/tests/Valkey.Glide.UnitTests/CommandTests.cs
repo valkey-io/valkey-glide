@@ -77,10 +77,10 @@ public class CommandTests
     [Fact]
     public void ValidateSetCommandHashSetConverters()
     {
-        var testHashSet = new HashSet<object> { 
-            (GlideString)"member1", 
-            (GlideString)"member2", 
-            (GlideString)"member3" 
+        var testHashSet = new HashSet<object> {
+            (gs)"member1",
+            (gs)"member2",
+            (gs)"member3"
         };
 
         Assert.Multiple([

@@ -66,7 +66,7 @@ public class SetCommandTests(TestConfiguration config)
     public async Task TestSetIntersectionLengthAsync(BaseClient client)
     {
         Assert.SkipWhen(
-            TestConfiguration.SERVER_VERSION.CompareTo(new Version("7.0.0")) < 0,
+            TestConfiguration.SERVER_VERSION < new Version("7.0.0"),
             "SetIntersectionLength is supported since 7.0.0"
         );
         string key1 = "{prefix}-" + Guid.NewGuid().ToString();

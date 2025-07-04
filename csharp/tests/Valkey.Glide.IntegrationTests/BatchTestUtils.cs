@@ -104,7 +104,7 @@ internal class BatchTestUtils
         _ = batch.SetDifference([prefix + key1, prefix + key2]);
         testData.Add(new(Array.Empty<ValkeyValue>(), "SetDifference([prefix+key1, prefix+key2])", true));
 
-        if (TestConfiguration.SERVER_VERSION.CompareTo(new Version("7.0.0")) >= 0)
+        if (TestConfiguration.SERVER_VERSION >= new Version("7.0.0"))
         {
             _ = batch.SetIntersectionLength([prefix + key1, prefix + key2]);
             testData.Add(new(1L, "SetIntersectionLength([prefix+key1, prefix+key2])"));
