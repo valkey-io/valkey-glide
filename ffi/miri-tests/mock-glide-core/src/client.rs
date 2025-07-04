@@ -13,14 +13,18 @@ impl fmt::Display for ConnectionError {
 }
 
 #[derive(Clone)]
-pub struct Client;
+pub struct Client {
+    push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>
+}
 
 impl Client {
-    pub async fn new(           
+    pub async fn new(
         request: ConnectionRequest,
         push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        todo!()
+        Ok(Client {
+            push_sender
+        })
     }
 
     pub fn send_pipeline<'a>(
