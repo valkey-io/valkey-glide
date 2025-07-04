@@ -77,7 +77,7 @@ public class CommandTests
     [Fact]
     public void ValidateSetCommandHashSetConverters()
     {
-        var testHashSet = new HashSet<object> {
+        HashSet<object> testHashSet = new HashSet<object> {
             (gs)"member1",
             (gs)"member2",
             (gs)"member3"
