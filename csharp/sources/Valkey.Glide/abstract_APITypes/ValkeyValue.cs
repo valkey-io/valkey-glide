@@ -572,6 +572,17 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     public static implicit operator ValkeyValue(bool? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
 
     /// <summary>
+    /// Converts a <see cref="GlideString"/> to a <see cref="ValkeyValue"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="GlideString"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(GlideString? value)
+    {
+        if (value is null) return Null;
+        if (value.Bytes.Length == 0) return EmptyString;
+        return new ValkeyValue(0, value.Bytes, Sentinel_Raw);
+    }
+
+    /// <summary>
     /// Converts a <see cref="ValkeyValue"/> to a <see cref="bool"/>.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to convert.</param>
