@@ -398,12 +398,6 @@ mod pipeline;
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
 pub mod aio;
 
-#[cfg(feature = "json")]
-pub use crate::commands::JsonCommands;
-
-#[cfg(all(feature = "json", feature = "aio"))]
-pub use crate::commands::JsonAsyncCommands;
-
 #[cfg(feature = "cluster")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
 pub mod cluster;
@@ -441,14 +435,6 @@ pub mod cluster_routing;
 #[cfg(feature = "cluster")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
 pub mod cluster_topology;
-
-#[cfg(feature = "r2d2")]
-#[cfg_attr(docsrs, doc(cfg(feature = "r2d2")))]
-mod r2d2;
-
-#[cfg(feature = "streams")]
-#[cfg_attr(docsrs, doc(cfg(feature = "streams")))]
-pub mod streams;
 
 #[cfg(feature = "cluster-async")]
 pub mod cluster_async;

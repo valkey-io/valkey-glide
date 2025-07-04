@@ -146,10 +146,6 @@ pub enum ErrorKind {
     /// Used when a connection is not found for the specified route.
     ConnectionNotFoundForRoute,
 
-    #[cfg(feature = "json")]
-    /// Error Serializing a struct to JSON form
-    Serialize,
-
     /// Redis Servers prior to v6.0.0 doesn't support RESP3.
     /// Try disabling resp3 option
     RESP3NotSupported,
@@ -701,17 +697,6 @@ pub struct RedisError {
     repr: ErrorRepr,
 }
 
-#[cfg(feature = "json")]
-impl From<serde_json::Error> for RedisError {
-    fn from(serde_err: serde_json::Error) -> RedisError {
-        RedisError::from((
-            ErrorKind::Serialize,
-            "Serialization Error",
-            format!("{serde_err}"),
-        ))
-    }
-}
-
 #[derive(Debug)]
 enum ErrorRepr {
     WithDescription(ErrorKind, &'static str),
@@ -782,19 +767,6 @@ impl From<rustls_pki_types::InvalidDnsNameError> for RedisError {
             repr: ErrorRepr::WithDescriptionAndDetail(
                 ErrorKind::IoError,
                 "TLS Error",
-                err.to_string(),
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "uuid")]
-impl From<uuid::Error> for RedisError {
-    fn from(err: uuid::Error) -> RedisError {
-        RedisError {
-            repr: ErrorRepr::WithDescriptionAndDetail(
-                ErrorKind::TypeError,
-                "Value is not a valid UUID",
                 err.to_string(),
             ),
         }
@@ -971,8 +943,6 @@ impl RedisError {
             ErrorKind::NotBusy => "not busy",
             ErrorKind::AllConnectionsUnavailable => "no valid connections remain in the cluster",
             ErrorKind::ConnectionNotFoundForRoute => "No connection found for the requested route",
-            #[cfg(feature = "json")]
-            ErrorKind::Serialize => "serializing",
             ErrorKind::RESP3NotSupported => "resp3 is not supported by server",
             ErrorKind::ParseError => "parse error",
             ErrorKind::NotAllSlotsCovered => "not all slots are covered",
@@ -1152,8 +1122,6 @@ impl RedisError {
             ErrorKind::ClientError => RetryMethod::NoRetry,
             ErrorKind::EmptySentinelList => RetryMethod::NoRetry,
             ErrorKind::NotBusy => RetryMethod::NoRetry,
-            #[cfg(feature = "json")]
-            ErrorKind::Serialize => RetryMethod::NoRetry,
             ErrorKind::RESP3NotSupported => RetryMethod::NoRetry,
 
             ErrorKind::ParseError => RetryMethod::Reconnect,
@@ -1480,33 +1448,6 @@ non_zero_itoa_based_to_redis_impl!(core::num::NonZeroIsize, NumericBehavior::Num
 ryu_based_to_redis_impl!(f32, NumericBehavior::NumberIsFloat);
 ryu_based_to_redis_impl!(f64, NumericBehavior::NumberIsFloat);
 
-#[cfg(any(
-    feature = "rust_decimal",
-    feature = "bigdecimal",
-    feature = "num-bigint"
-))]
-macro_rules! big_num_to_redis_impl {
-    ($t:ty) => {
-        impl ToRedisArgs for $t {
-            fn write_redis_args<W>(&self, out: &mut W)
-            where
-                W: ?Sized + RedisWrite,
-            {
-                out.write_arg(&self.to_string().into_bytes())
-            }
-        }
-    };
-}
-
-#[cfg(feature = "rust_decimal")]
-big_num_to_redis_impl!(rust_decimal::Decimal);
-#[cfg(feature = "bigdecimal")]
-big_num_to_redis_impl!(bigdecimal::BigDecimal);
-#[cfg(feature = "num-bigint")]
-big_num_to_redis_impl!(num_bigint::BigInt);
-#[cfg(feature = "num-bigint")]
-big_num_to_redis_impl!(num_bigint::BigUint);
-
 impl ToRedisArgs for bool {
     fn write_redis_args<W>(&self, out: &mut W)
     where
@@ -1604,23 +1545,6 @@ impl<T: ToRedisArgs> ToRedisArgs for &T {
 impl<T: ToRedisArgs + Hash + Eq, S: BuildHasher + Default> ToRedisArgs
     for std::collections::HashSet<T, S>
 {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + RedisWrite,
-    {
-        ToRedisArgs::make_arg_iter_ref(self.iter(), out)
-    }
-
-    fn is_single_arg(&self) -> bool {
-        self.len() <= 1
-    }
-}
-
-/// @note: Redis cannot store empty sets so the application has to
-/// check whether the set is empty and if so, not attempt to use that
-/// result
-#[cfg(feature = "ahash")]
-impl<T: ToRedisArgs + Hash + Eq, S: BuildHasher + Default> ToRedisArgs for ahash::AHashSet<T, S> {
     fn write_redis_args<W>(&self, out: &mut W)
     where
         W: ?Sized + RedisWrite,
@@ -1919,54 +1843,6 @@ from_redis_value_for_num!(f64);
 from_redis_value_for_num!(isize);
 from_redis_value_for_num!(usize);
 
-#[cfg(any(
-    feature = "rust_decimal",
-    feature = "bigdecimal",
-    feature = "num-bigint"
-))]
-macro_rules! from_redis_value_for_bignum_internal {
-    ($t:ty, $v:expr) => {{
-        let v = $v;
-        match *v {
-            Value::Int(val) => <$t>::try_from(val)
-                .map_err(|_| invalid_type_error_inner!(v, "Could not convert from integer.")),
-            Value::SimpleString(ref s) => match s.parse::<$t>() {
-                Ok(rv) => Ok(rv),
-                Err(_) => invalid_type_error!(v, "Could not convert from string."),
-            },
-            Value::BulkString(ref bytes) => match from_utf8(bytes)?.parse::<$t>() {
-                Ok(rv) => Ok(rv),
-                Err(_) => invalid_type_error!(v, "Could not convert from string."),
-            },
-            _ => invalid_type_error!(v, "Response type not convertible to numeric."),
-        }
-    }};
-}
-
-#[cfg(any(
-    feature = "rust_decimal",
-    feature = "bigdecimal",
-    feature = "num-bigint"
-))]
-macro_rules! from_redis_value_for_bignum {
-    ($t:ty) => {
-        impl FromRedisValue for $t {
-            fn from_redis_value(v: &Value) -> RedisResult<$t> {
-                from_redis_value_for_bignum_internal!($t, v)
-            }
-        }
-    };
-}
-
-#[cfg(feature = "rust_decimal")]
-from_redis_value_for_bignum!(rust_decimal::Decimal);
-#[cfg(feature = "bigdecimal")]
-from_redis_value_for_bignum!(bigdecimal::BigDecimal);
-#[cfg(feature = "num-bigint")]
-from_redis_value_for_bignum!(num_bigint::BigInt);
-#[cfg(feature = "num-bigint")]
-from_redis_value_for_bignum!(num_bigint::BigUint);
-
 impl FromRedisValue for bool {
     fn from_redis_value(v: &Value) -> RedisResult<bool> {
         let v = get_inner_value(v);
@@ -2155,34 +2031,6 @@ impl<K: FromRedisValue + Eq + Hash, V: FromRedisValue, S: BuildHasher + Default>
     }
 }
 
-#[cfg(feature = "ahash")]
-impl<K: FromRedisValue + Eq + Hash, V: FromRedisValue> FromRedisValue for ahash::AHashMap<K, V> {
-    fn from_redis_value(v: &Value) -> RedisResult<ahash::AHashMap<K, V>> {
-        let v = get_inner_value(v);
-        match *v {
-            Value::Nil => Ok(ahash::AHashMap::with_hasher(Default::default())),
-            _ => v
-                .as_map_iter()
-                .ok_or_else(|| {
-                    invalid_type_error_inner!(v, "Response type not hashmap compatible")
-                })?
-                .map(|(k, v)| Ok((from_redis_value(k)?, from_redis_value(v)?)))
-                .collect(),
-        }
-    }
-    fn from_owned_redis_value(v: Value) -> RedisResult<ahash::AHashMap<K, V>> {
-        let v = get_owned_inner_value(v);
-        match v {
-            Value::Nil => Ok(ahash::AHashMap::with_hasher(Default::default())),
-            _ => v
-                .into_map_iter()
-                .map_err(|v| invalid_type_error_inner!(v, "Response type not hashmap compatible"))?
-                .map(|(k, v)| Ok((from_owned_redis_value(k)?, from_owned_redis_value(v)?)))
-                .collect(),
-        }
-    }
-}
-
 impl<K: FromRedisValue + Eq + Hash, V: FromRedisValue> FromRedisValue for BTreeMap<K, V>
 where
     K: Ord,
@@ -2214,28 +2062,6 @@ impl<T: FromRedisValue + Eq + Hash, S: BuildHasher + Default> FromRedisValue
         items.iter().map(|item| from_redis_value(item)).collect()
     }
     fn from_owned_redis_value(v: Value) -> RedisResult<std::collections::HashSet<T, S>> {
-        let v = get_owned_inner_value(v);
-        let items = v
-            .into_sequence()
-            .map_err(|v| invalid_type_error_inner!(v, "Response type not hashset compatible"))?;
-        items
-            .into_iter()
-            .map(|item| from_owned_redis_value(item))
-            .collect()
-    }
-}
-
-#[cfg(feature = "ahash")]
-impl<T: FromRedisValue + Eq + Hash> FromRedisValue for ahash::AHashSet<T> {
-    fn from_redis_value(v: &Value) -> RedisResult<ahash::AHashSet<T>> {
-        let v = get_inner_value(v);
-        let items = v
-            .as_sequence()
-            .ok_or_else(|| invalid_type_error_inner!(v, "Response type not hashset compatible"))?;
-        items.iter().map(|item| from_redis_value(item)).collect()
-    }
-
-    fn from_owned_redis_value(v: Value) -> RedisResult<ahash::AHashSet<T>> {
         let v = get_owned_inner_value(v);
         let items = v
             .into_sequence()
@@ -2526,26 +2352,6 @@ impl FromRedisValue for bytes::Bytes {
             Value::BulkString(bytes_vec) => Ok(bytes_vec.into()),
             _ => invalid_type_error!(v, "Not a bulk string"),
         }
-    }
-}
-
-#[cfg(feature = "uuid")]
-impl FromRedisValue for uuid::Uuid {
-    fn from_redis_value(v: &Value) -> RedisResult<Self> {
-        match *v {
-            Value::BulkString(ref bytes) => Ok(uuid::Uuid::from_slice(bytes)?),
-            _ => invalid_type_error!(v, "Response type not uuid compatible."),
-        }
-    }
-}
-
-#[cfg(feature = "uuid")]
-impl ToRedisArgs for uuid::Uuid {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + RedisWrite,
-    {
-        out.write_arg(self.as_bytes());
     }
 }
 
