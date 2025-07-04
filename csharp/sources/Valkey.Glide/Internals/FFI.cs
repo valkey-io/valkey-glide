@@ -317,6 +317,8 @@ internal class FFI
         SUnion = 1216,
         SUnionStore = 1217,
         GetRange = 1507,
+        MGet = 1513,
+        MSet = 1514,
         SetRange = 1520,
         Strlen = 1521,
     }

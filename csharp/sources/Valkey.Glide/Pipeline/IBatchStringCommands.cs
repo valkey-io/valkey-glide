@@ -13,10 +13,18 @@ internal interface IBatchStringCommands
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.Get(GlideString)" /></returns>
     IBatch Get(GlideString key);
 
+    /// <inheritdoc cref="Commands.IStringBaseCommands.MGet(GlideString[])" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.MGet(GlideString[])" /></returns>
+    IBatch MGet(GlideString[] keys);
+
     /// <inheritdoc cref="Commands.IStringBaseCommands.Set(GlideString, GlideString)" path="/summary" />
     /// <inheritdoc cref="Commands.IStringBaseCommands.Set(GlideString, GlideString)" path="/param" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.Set(GlideString, GlideString)" /></returns>
     IBatch Set(GlideString key, GlideString value);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.MSet(Dictionary{GlideString, GlideString})" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.MSet(Dictionary{GlideString, GlideString})" /></returns>
+    IBatch MSet(Dictionary<GlideString, GlideString> keyValueMap);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.GetRange(GlideString, long, long)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.GetRange(GlideString, long, long)" /></returns>

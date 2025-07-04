@@ -320,4 +320,245 @@ public class StringCommandTests(TestConfiguration config)
         string? value = await client.Get(key);
         Assert.Equal("Hello", value);
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSetAndMGet_ExistingAndNonExistingKeys(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+        string key3 = Guid.NewGuid().ToString();
+        string oldValue = Guid.NewGuid().ToString();
+        string value = Guid.NewGuid().ToString();
+
+        // Set initial value for key1
+        Assert.Equal("OK", await client.Set(key1, oldValue));
+
+        // Use MSet to set key1 and key2
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = value,
+            [key2] = value
+        };
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        // Use MGet to retrieve values
+        GlideString[] keys = [key1, key2, key3];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(3, values.Length);
+        Assert.Equal(value, values[0]?.ToString());
+        Assert.Equal(value, values[1]?.ToString());
+        Assert.Null(values[2]); // key3 doesn't exist
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MGet_NonExistingKeys(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+
+        GlideString[] keys = [key1, key2];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(2, values.Length);
+        Assert.Null(values[0]);
+        Assert.Null(values[1]);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MGet_SingleKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = Guid.NewGuid().ToString();
+
+        Assert.Equal("OK", await client.Set(key, value));
+
+        GlideString[] keys = [key];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Single(values);
+        Assert.Equal(value, values[0]?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSet_SingleKeyValue(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = Guid.NewGuid().ToString();
+
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key] = value
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        // Verify the value was set
+        GlideString? retrievedValue = await client.Get(key);
+        Assert.Equal(value, retrievedValue?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSet_MultipleKeyValues(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+        string key3 = Guid.NewGuid().ToString();
+        string value1 = Guid.NewGuid().ToString();
+        string value2 = Guid.NewGuid().ToString();
+        string value3 = Guid.NewGuid().ToString();
+
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = value1,
+            [key2] = value2,
+            [key3] = value3
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        // Verify all values were set
+        Assert.Equal(value1, (await client.Get(key1))?.ToString());
+        Assert.Equal(value2, (await client.Get(key2))?.ToString());
+        Assert.Equal(value3, (await client.Get(key3))?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSetAndMGet_WithUnicodeValues(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+        string unicodeValue1 = "שלום hello 汉字";
+        string unicodeValue2 = "مرحبا world 🌍";
+
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = unicodeValue1,
+            [key2] = unicodeValue2
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        GlideString[] keys = [key1, key2];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(2, values.Length);
+        Assert.Equal(unicodeValue1, values[0]?.ToString());
+        Assert.Equal(unicodeValue2, values[1]?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSetAndMGet_WithEmptyValues(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = "",
+            [key2] = "non-empty"
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        GlideString[] keys = [key1, key2];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(2, values.Length);
+        Assert.Equal("", values[0]?.ToString());
+        Assert.Equal("non-empty", values[1]?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MGet_EmptyKeyArray(BaseClient client)
+    {
+        GlideString[] keys = [];
+
+        // MGet with empty array should throw ArgumentException
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => client.MGet(keys));
+        Assert.Contains("Keys array cannot be empty", exception.Message);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSet_EmptyDictionary(BaseClient client)
+    {
+        var keyValueMap = new Dictionary<GlideString, GlideString>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => client.MSet(keyValueMap));
+        Assert.Contains("Key-value map cannot be empty", exception.Message);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSetAndMGet_OverwriteExistingKeys(BaseClient client)
+    {
+        string key1 = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+        string initialValue1 = "initial1";
+        string initialValue2 = "initial2";
+        string newValue1 = "new1";
+        string newValue2 = "new2";
+
+        // Set initial values
+        Assert.Equal("OK", await client.Set(key1, initialValue1));
+        Assert.Equal("OK", await client.Set(key2, initialValue2));
+
+        // Overwrite with MSet
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = newValue1,
+            [key2] = newValue2
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        // Verify values were overwritten
+        GlideString[] keys = [key1, key2];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(2, values.Length);
+        Assert.Equal(newValue1, values[0]?.ToString());
+        Assert.Equal(newValue2, values[1]?.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task MSetAndMGet_WithGlideStringKeys(BaseClient client)
+    {
+        GlideString key1 = new(Guid.NewGuid().ToString());
+        GlideString key2 = new(Guid.NewGuid().ToString());
+        GlideString value1 = new("value1");
+        GlideString value2 = new("value2");
+
+        var keyValueMap = new Dictionary<GlideString, GlideString>
+        {
+            [key1] = value1,
+            [key2] = value2
+        };
+
+        string result = await client.MSet(keyValueMap);
+        Assert.Equal("OK", result);
+
+        GlideString[] keys = [key1, key2];
+        GlideString?[] values = await client.MGet(keys);
+
+        Assert.Equal(2, values.Length);
+        Assert.Equal(value1, values[0]);
+        Assert.Equal(value2, values[1]);
+    }
 }

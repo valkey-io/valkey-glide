@@ -42,6 +42,47 @@ public interface IStringBaseCommands
     Task<GlideString?> Get(GlideString key);
 
     /// <summary>
+    /// Retrieves the values of multiple <paramref name="keys" />.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// GlideString[] keys = { "key1", "key2", "key3" };
+    /// GlideString?[] values = await client.MGet(keys);
+    /// Console.WriteLine(values[0]); // Output: value1 or null if key1 doesn't exist
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="keys">A list of keys to retrieve values for.</param>
+    /// <returns>
+    /// An array of values corresponding to the provided <paramref name="keys" />.<br/>
+    /// If a key is not found, its corresponding value in the list will be <see langword="null" />.
+    /// </returns>
+    /// <seealso href="https://valkey.io/commands/mget/">valkey.io</seealso>
+    Task<GlideString?[]> MGet(GlideString[] keys);
+
+    /// <summary>
+    /// Sets multiple keys to multiple values in a single operation.
+    /// </summary>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// var keyValueMap = new Dictionary&lt;GlideString, GlideString&gt;
+    /// {
+    ///     { "key1", "value1" },
+    ///     { "key2", "value2" }
+    /// };
+    /// string result = await client.MSet(keyValueMap);
+    /// Console.WriteLine(result); // Output: "OK"
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="keyValueMap">A key-value map consisting of keys and their respective values to set.</param>
+    /// <returns>A simple <c>"OK"</c> response.</returns>
+    /// <seealso href="https://valkey.io/commands/mset/">valkey.io</seealso>
+    Task<string> MSet(Dictionary<GlideString, GlideString> keyValueMap);
+
+    /// <summary>
     /// Returns the length of the string value stored at <paramref name="key" />.
     /// </summary>
     /// <remarks>

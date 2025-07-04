@@ -12,6 +12,13 @@ internal partial class Request
     public static Cmd<string, string> Set(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
 
+    public static Cmd<object[], GlideString?[]> MGet(GlideString[] keys)
+        => new(RequestType.MGet, keys, false, array =>
+            [.. array.Select(item => item as GlideString)]);
+
+    public static Cmd<string, string> MSet(GlideString[] keyValuePairs)
+        => OK(RequestType.MSet, keyValuePairs);
+
     public static Cmd<long, long> SetRange(GlideString key, long offset, GlideString value)
         => Simple<long>(RequestType.SetRange, [key, offset.ToGlideString(), value]);
 

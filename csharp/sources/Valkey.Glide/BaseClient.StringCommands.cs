@@ -13,6 +13,27 @@ public abstract partial class BaseClient : IStringBaseCommands
     public async Task<GlideString?> Get(GlideString key)
         => await Command(Request.Get(key));
 
+    public async Task<GlideString?[]> MGet(GlideString[] keys)
+    {
+        if (keys.Length == 0)
+        {
+            throw new ArgumentException("Keys array cannot be empty", nameof(keys));
+        }
+
+        return await Command(Request.MGet(keys));
+    }
+
+    public async Task<string> MSet(Dictionary<GlideString, GlideString> keyValueMap)
+    {
+        if (keyValueMap.Count == 0)
+        {
+            throw new ArgumentException("Key-value map cannot be empty", nameof(keyValueMap));
+        }
+
+        var keyValuePairs = ConvertDictionaryToKeyValueArray(keyValueMap);
+        return await Command(Request.MSet(keyValuePairs));
+    }
+
     public async Task<GlideString> GetRange(GlideString key, long start, long end)
         => await Command(Request.GetRange(key, start, end));
 
@@ -21,4 +42,21 @@ public abstract partial class BaseClient : IStringBaseCommands
 
     public async Task<long> Strlen(GlideString key)
         => await Command(Request.Strlen(key));
+
+    /// <summary>
+    /// Converts a Dictionary to an array of key-value pairs for use with MSet command.
+    /// </summary>
+    /// <param name="keyValueMap">The dictionary to convert.</param>
+    /// <returns>An array where keys and values are interleaved: [key1, value1, key2, value2, ...]</returns>
+    private static GlideString[] ConvertDictionaryToKeyValueArray(Dictionary<GlideString, GlideString> keyValueMap)
+    {
+        var result = new GlideString[keyValueMap.Count * 2];
+        int index = 0;
+        foreach (var kvp in keyValueMap)
+        {
+            result[index++] = kvp.Key;
+            result[index++] = kvp.Value;
+        }
+        return result;
+    }
 }
