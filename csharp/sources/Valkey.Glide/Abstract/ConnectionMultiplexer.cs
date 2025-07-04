@@ -84,7 +84,6 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
         return new(await DatabaseImpl.Create(host, port, isCluster));
     }
 
-    // TODO args
     public IDatabase GetDatabase(int db = -1, object? asyncState = null)
     {
         Utils.Requires<NotImplementedException>(db == -1, "To switch the database, please use `SELECT` command.");
