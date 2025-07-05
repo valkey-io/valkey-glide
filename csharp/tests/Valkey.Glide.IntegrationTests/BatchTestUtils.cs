@@ -19,41 +19,21 @@ internal class BatchTestUtils
         string value1 = $"value-1-{Guid.NewGuid()}";
         string value2 = "test-value";
 
-        // Cast to concrete batch type to access string commands
-        if (batch is ClusterBatch clusterBatch)
-        {
-            _ = clusterBatch.Set(key1, value1);
-            testData.Add(new("OK", "Set(key1, value1)"));
-            _ = clusterBatch.Set(key2, value2);
-            testData.Add(new("OK", "Set(key2, value2)"));
-            _ = clusterBatch.Get(key1);
-            testData.Add(new(new gs(value1), "Get(key1)"));
-            _ = clusterBatch.Get(key2);
-            testData.Add(new(new gs(value2), "Get(key2)"));
-            _ = clusterBatch.Strlen(key1);
-            testData.Add(new((long)value1.Length, "Strlen(key1)"));
-            _ = clusterBatch.Strlen(key2);
-            testData.Add(new((long)value2.Length, "Strlen(key2)"));
-            _ = clusterBatch.Strlen(nonExistingKey);
-            testData.Add(new(0L, "Strlen(nonExistingKey)"));
-        }
-        else if (batch is Batch standaloneBatch)
-        {
-            _ = standaloneBatch.Set(key1, value1);
-            testData.Add(new("OK", "Set(key1, value1)"));
-            _ = standaloneBatch.Set(key2, value2);
-            testData.Add(new("OK", "Set(key2, value2)"));
-            _ = standaloneBatch.Get(key1);
-            testData.Add(new(new gs(value1), "Get(key1)"));
-            _ = standaloneBatch.Get(key2);
-            testData.Add(new(new gs(value2), "Get(key2)"));
-            _ = standaloneBatch.Strlen(key1);
-            testData.Add(new((long)value1.Length, "Strlen(key1)"));
-            _ = standaloneBatch.Strlen(key2);
-            testData.Add(new((long)value2.Length, "Strlen(key2)"));
-            _ = standaloneBatch.Strlen(nonExistingKey);
-            testData.Add(new(0L, "Strlen(nonExistingKey)"));
-        }
+        // Use IBatch interface directly - no casting needed
+        _ = batch.StringSet(key1, value1);
+        testData.Add(new("OK", "StringSet(key1, value1)"));
+        _ = batch.StringSet(key2, value2);
+        testData.Add(new("OK", "StringSet(key2, value2)"));
+        _ = batch.StringGet(key1);
+        testData.Add(new(new gs(value1), "StringGet(key1)"));
+        _ = batch.StringGet(key2);
+        testData.Add(new(new gs(value2), "StringGet(key2)"));
+        _ = batch.StringLength(key1);
+        testData.Add(new((long)value1.Length, "StringLength(key1)"));
+        _ = batch.StringLength(key2);
+        testData.Add(new((long)value2.Length, "StringLength(key2)"));
+        _ = batch.StringLength(nonExistingKey);
+        testData.Add(new(0L, "StringLength(nonExistingKey)"));
 
         return testData;
     }
