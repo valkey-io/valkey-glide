@@ -41,7 +41,6 @@ public class ServerTests
         {
             // TODO protocol isn't yet configurable
             Assert.Equal(RedisProtocol.Resp3, server.Protocol);
-            // standalone ignores protocol? doesn't send hello?
             Assert.Equal(TestConfiguration.SERVER_VERSION, server.Version);
             Assert.Equal(isCluster ? ServerType.Cluster : ServerType.Standalone, server.ServerType);
             string info = (await server.InfoRawAsync("server"))!;
