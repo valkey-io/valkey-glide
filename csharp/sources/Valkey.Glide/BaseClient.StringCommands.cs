@@ -14,14 +14,9 @@ public abstract partial class BaseClient : IStringBaseCommands
         => await Command(Request.Get(key));
 
     public async Task<GlideString?[]> MGet(GlideString[] keys)
-    {
-        if (keys.Length == 0)
-        {
-            throw new ArgumentException("Keys array cannot be empty", nameof(keys));
-        }
-
-        return await Command(Request.MGet(keys));
-    }
+        => keys.Length == 0
+            ? throw new ArgumentException("Keys array cannot be empty", nameof(keys))
+            : await Command(Request.MGet(keys));
 
     public async Task<string> MSet(Dictionary<GlideString, GlideString> keyValueMap)
     {
@@ -30,7 +25,7 @@ public abstract partial class BaseClient : IStringBaseCommands
             throw new ArgumentException("Key-value map cannot be empty", nameof(keyValueMap));
         }
 
-        var keyValuePairs = ConvertDictionaryToKeyValueArray(keyValueMap);
+        GlideString[] keyValuePairs = ConvertDictionaryToKeyValueArray(keyValueMap);
         return await Command(Request.MSet(keyValuePairs));
     }
 
@@ -50,9 +45,9 @@ public abstract partial class BaseClient : IStringBaseCommands
     /// <returns>An array where keys and values are interleaved: [key1, value1, key2, value2, ...]</returns>
     private static GlideString[] ConvertDictionaryToKeyValueArray(Dictionary<GlideString, GlideString> keyValueMap)
     {
-        var result = new GlideString[keyValueMap.Count * 2];
+        GlideString[] result = new GlideString[keyValueMap.Count * 2];
         int index = 0;
-        foreach (var kvp in keyValueMap)
+        foreach (KeyValuePair<GlideString, GlideString> kvp in keyValueMap)
         {
             result[index++] = kvp.Key;
             result[index++] = kvp.Value;

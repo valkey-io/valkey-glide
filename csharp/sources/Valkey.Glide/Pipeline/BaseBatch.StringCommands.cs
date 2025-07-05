@@ -11,14 +11,9 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
 
     /// <inheritdoc cref="IBatchStringCommands.MGet(GlideString[])" />
     public T MGet(GlideString[] keys)
-    {
-        if (keys.Length == 0)
-        {
-            throw new ArgumentException("Keys array cannot be empty", nameof(keys));
-        }
-
-        return AddCmd(Request.MGet(keys));
-    }
+        => keys.Length == 0
+            ? throw new ArgumentException("Keys array cannot be empty", nameof(keys))
+            : AddCmd(Request.MGet(keys));
 
     /// <inheritdoc cref="IBatchStringCommands.Set(GlideString, GlideString)" />
     public T Set(GlideString key, GlideString value) => AddCmd(Request.Set(key, value));
@@ -31,7 +26,7 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
             throw new ArgumentException("Key-value map cannot be empty", nameof(keyValueMap));
         }
 
-        var keyValuePairs = ConvertDictionaryToKeyValueArray(keyValueMap);
+        GlideString[] keyValuePairs = ConvertDictionaryToKeyValueArray(keyValueMap);
         return AddCmd(Request.MSet(keyValuePairs));
     }
 
@@ -51,9 +46,9 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     /// <returns>An array where keys and values are interleaved: [key1, value1, key2, value2, ...]</returns>
     private static GlideString[] ConvertDictionaryToKeyValueArray(Dictionary<GlideString, GlideString> keyValueMap)
     {
-        var result = new GlideString[keyValueMap.Count * 2];
+        GlideString[] result = new GlideString[keyValueMap.Count * 2];
         int index = 0;
-        foreach (var kvp in keyValueMap)
+        foreach (KeyValuePair<GlideString, GlideString> kvp in keyValueMap)
         {
             result[index++] = kvp.Key;
             result[index++] = kvp.Value;
