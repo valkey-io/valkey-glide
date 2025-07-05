@@ -264,4 +264,22 @@ public class StringCommandTests(TestConfiguration config)
         GlideString? value = await client.StringGet(key);
         Assert.Equal("Hello", value?.ToString());
     }
+
+    // Utility methods for other tests
+    public static async Task GetAndSetValues(BaseClient client, string key, string value)
+    {
+        string result = await client.StringSet(key, value);
+        Assert.Equal("OK", result);
+
+        GlideString? retrievedValue = await client.StringGet(key);
+        Assert.Equal(value, retrievedValue?.ToString());
+    }
+
+    public static async Task GetAndSetRandomValues(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = Guid.NewGuid().ToString();
+
+        await GetAndSetValues(client, key, value);
+    }
 }

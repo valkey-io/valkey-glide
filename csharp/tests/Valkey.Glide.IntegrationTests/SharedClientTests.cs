@@ -45,7 +45,7 @@ public class SharedClientTests(TestConfiguration config)
                     }
                     else
                     {
-                        Assert.Null(await client.Get(Guid.NewGuid().ToString()));
+                        Assert.Null(await client.StringGet(Guid.NewGuid().ToString()));
                     }
                 }
             }));

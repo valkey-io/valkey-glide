@@ -19,9 +19,9 @@ public class DBTests
         IDatabase db = conn.GetDatabase();
         string key = Guid.NewGuid().ToString();
 
-        Assert.Null(await db.Get(key));
-        Assert.Equal("OK", await db.Set(key, "val"));
-        Assert.Equal("val", (await db.Get(key))!);
+        Assert.Null(await db.StringGet(key));
+        Assert.Equal("OK", await db.StringSet(key, "val"));
+        Assert.Equal("val", (await db.StringGet(key))?.ToString());
 
         string info = await db.Info([InfoOptions.Section.CLUSTER]);
         Assert.True(isCluster
