@@ -18,8 +18,15 @@ public class CommandTests
             () => Assert.Equal(["get"], Request.CustomCommand(["get"]).GetArgs()),
             () => Assert.Equal([], Request.CustomCommand([]).GetArgs()),
 
-            () => Assert.Equal(["SET", "a", "b"], Request.Set("a", "b").GetArgs()),
-            () => Assert.Equal(["GET", "a"], Request.Get("a").GetArgs()),
+            // String Commands
+            () => Assert.Equal(["SET", "key", "value"], Request.StringSet("key", "value").GetArgs()),
+            () => Assert.Equal(["GET", "key"], Request.StringGet("key").GetArgs()),
+            () => Assert.Equal(["MGET", "key1", "key2", "key3"], Request.StringGetAsync(["key1", "key2", "key3"]).GetArgs()),
+            () => Assert.Equal(["MSET", "key1", "value1", "key2", "value2"], Request.StringSetAsync(["key1", "value1", "key2", "value2"]).GetArgs()),
+            () => Assert.Equal(["STRLEN", "key"], Request.StringLength("key").GetArgs()),
+            () => Assert.Equal(["GETRANGE", "key", "0", "5"], Request.StringGetRange("key", 0, 5).GetArgs()),
+            () => Assert.Equal(["SETRANGE", "key", "10", "value"], Request.StringSetRange("key", 10, "value").GetArgs()),
+
             () => Assert.Equal(["INFO"], Request.Info([]).GetArgs()),
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
 
@@ -51,9 +58,17 @@ public class CommandTests
             () => Assert.Equal(.1, Request.CustomCommand([]).Converter(.1)),
             () => Assert.Null(Request.CustomCommand([]).Converter(null)),
 
-            () => Assert.Equal("OK", Request.Set("a", "b").Converter("OK")),
-            () => Assert.Equal<GlideString>("OK", Request.Get("a").Converter("OK")),
-            () => Assert.Null(Request.Get("a").Converter(null)),
+            // String Commands
+            () => Assert.Equal("OK", Request.StringSet("key", "value").Converter("OK")),
+            () => Assert.Equal<GlideString>("value", Request.StringGet("key").Converter("value")),
+            () => Assert.Null(Request.StringGet("key").Converter(null)),
+            () => Assert.Equal(5L, Request.StringLength("key").Converter(5L)),
+            () => Assert.Equal(0L, Request.StringLength("key").Converter(0L)),
+            () => Assert.Equal<GlideString>("hello", Request.StringGetRange("key", 0, 4).Converter("hello")),
+            () => Assert.Equal<GlideString>("", Request.StringGetRange("key", 0, 4).Converter("")),
+            () => Assert.Equal(10L, Request.StringSetRange("key", 5, "world").Converter(10L)),
+            () => Assert.Equal("OK", Request.StringSetAsync(["key1", "value1", "key2", "value2"]).Converter("OK")),
+
             () => Assert.Equal("info", Request.Info([]).Converter("info")),
 
             () => Assert.True(Request.SetAddAsync("key", "member").Converter(1L)),
@@ -71,6 +86,37 @@ public class CommandTests
 
             () => Assert.Equal<GlideString>("member", Request.SetPopAsync("key").Converter("member")),
             () => Assert.Null(Request.SetPopAsync("key").Converter(null)),
+        ]);
+    }
+
+    [Fact]
+    public void ValidateStringCommandArrayConverters()
+    {
+        Assert.Multiple([
+            () => {
+                // Test MGET with GlideString objects (what the server actually returns)
+                object[] mgetResponse = [new GlideString("value1"), null, new GlideString("value3")];
+                var result = Request.StringGetAsync(["key1", "key2", "key3"]).Converter(mgetResponse);
+                Assert.Equal(3, result.Length);
+                Assert.Equal<GlideString>("value1", result[0]);
+                Assert.Null(result[1]);
+                Assert.Equal<GlideString>("value3", result[2]);
+            },
+
+            () => {
+                // Test empty MGET response
+                var emptyResult = Request.StringGetAsync([]).Converter(Array.Empty<object>());
+                Assert.Empty(emptyResult);
+            },
+
+            () => {
+                // Test MGET with all null values
+                object[] allNullResponse = [null, null];
+                var result = Request.StringGetAsync(["key1", "key2"]).Converter(allNullResponse);
+                Assert.Equal(2, result.Length);
+                Assert.Null(result[0]);
+                Assert.Null(result[1]);
+            },
         ]);
     }
 

@@ -140,17 +140,6 @@ public class StringCommandTests(TestConfiguration config)
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGet_EmptyKeyArray(BaseClient client)
-    {
-        GlideString[] keys = [];
-
-        // StringGet with empty array should throw ArgumentException
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => client.StringGet(keys));
-        Assert.Contains("Keys array cannot be empty", exception.Message);
-    }
-
-    [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task StringSet_KeyValuePairs_OverwriteExistingKeys(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
