@@ -55,16 +55,7 @@ public class SharedBatchTests
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         // TODO replace custom command
-        if (isCluster)
-        {
-            ClusterBatch clusterBatch = (ClusterBatch)batch;
-            _ = clusterBatch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
-        }
-        else
-        {
-            Batch standaloneBatch = (Batch)batch;
-            _ = standaloneBatch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
-        }
+        _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 
         object?[] res = isCluster
             ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
