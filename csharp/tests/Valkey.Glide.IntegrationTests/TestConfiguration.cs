@@ -18,11 +18,13 @@ public class TestConfiguration : IDisposable
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
-            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
+            .WithProtocolVersion(Protocol.RESP3);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithProtocolVersion(Protocol.RESP3);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
     => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();

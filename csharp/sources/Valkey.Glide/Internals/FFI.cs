@@ -324,7 +324,7 @@ internal class FFI
         AllNodes,
         AllPrimaries,
         SlotId,
-        SlotType,
+        SlotKey,
         ByAddress,
     }
 
