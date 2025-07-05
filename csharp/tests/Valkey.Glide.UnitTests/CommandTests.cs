@@ -3,8 +3,6 @@
 using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 
-using static Valkey.Glide.ConnectionConfiguration;
-
 namespace Valkey.Glide.UnitTests;
 
 public class CommandTests
@@ -61,7 +59,7 @@ public class CommandTests
             // String Commands
             () => Assert.Equal("OK", Request.StringSet("key", "value").Converter("OK")),
             () => Assert.Equal<GlideString>("value", Request.StringGet("key").Converter("value")),
-            () => Assert.Null(Request.StringGet("key").Converter(null)),
+            () => Assert.Null(Request.StringGet("key").Converter(null!)),
             () => Assert.Equal(5L, Request.StringLength("key").Converter(5L)),
             () => Assert.Equal(0L, Request.StringLength("key").Converter(0L)),
             () => Assert.Equal<GlideString>("hello", Request.StringGetRange("key", 0, 4).Converter("hello")),
@@ -85,7 +83,7 @@ public class CommandTests
             () => Assert.Equal(1L, Request.SetDifferenceStoreAsync("dest", ["key1", "key2"]).Converter(1L)),
 
             () => Assert.Equal<GlideString>("member", Request.SetPopAsync("key").Converter("member")),
-            () => Assert.Null(Request.SetPopAsync("key").Converter(null)),
+            () => Assert.Null(Request.SetPopAsync("key").Converter(null!)),
         ]);
     }
 
@@ -95,7 +93,7 @@ public class CommandTests
         Assert.Multiple([
             () => {
                 // Test MGET with GlideString objects (what the server actually returns)
-                object[] mgetResponse = [new GlideString("value1"), null, new GlideString("value3")];
+                object[] mgetResponse = [new GlideString("value1"), null!, new GlideString("value3")];
                 var result = Request.StringGetAsync(["key1", "key2", "key3"]).Converter(mgetResponse);
                 Assert.Equal(3, result.Length);
                 Assert.Equal<GlideString>("value1", result[0]);
@@ -105,13 +103,13 @@ public class CommandTests
 
             () => {
                 // Test empty MGET response
-                var emptyResult = Request.StringGetAsync([]).Converter(Array.Empty<object>());
+                var emptyResult = Request.StringGetAsync([]).Converter([]);
                 Assert.Empty(emptyResult);
             },
 
             () => {
                 // Test MGET with all null values
-                object[] allNullResponse = [null, null];
+                object[] allNullResponse = [null!, null!];
                 var result = Request.StringGetAsync(["key1", "key2"]).Converter(allNullResponse);
                 Assert.Equal(2, result.Length);
                 Assert.Null(result[0]);

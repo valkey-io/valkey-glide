@@ -266,7 +266,7 @@ public class StringCommandTests(TestConfiguration config)
     }
 
     // Utility methods for other tests
-    public static async Task GetAndSetValues(BaseClient client, string key, string value)
+    internal static async Task GetAndSetValues(BaseClient client, string key, string value)
     {
         string result = await client.StringSet(key, value);
         Assert.Equal("OK", result);
@@ -275,7 +275,7 @@ public class StringCommandTests(TestConfiguration config)
         Assert.Equal(value, retrievedValue?.ToString());
     }
 
-    public static async Task GetAndSetRandomValues(BaseClient client)
+    internal static async Task GetAndSetRandomValues(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
