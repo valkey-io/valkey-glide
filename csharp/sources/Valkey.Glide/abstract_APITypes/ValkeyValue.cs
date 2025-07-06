@@ -102,8 +102,8 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
 
     // note: it is *really important* that this s_EmptyString assignment happens *after* the EmptyString initializer above!
     private static readonly object s_DoubleNAN = double.NaN, s_DoublePosInf = double.PositiveInfinity, s_DoubleNegInf = double.NegativeInfinity,
-        s_EmptyString = ValkeyValue.EmptyString;
-    private static readonly object[] s_CommonInt32 = Enumerable.Range(-1, 22).Select(i => (object)i).ToArray(); // [-1,20] = 22 values
+        s_EmptyString = EmptyString;
+    private static readonly object[] s_CommonInt32 = [.. Enumerable.Range(-1, 22).Select(i => (object)i)]; // [-1,20] = 22 values
 
     /// <summary>
     /// A null value.
@@ -570,6 +570,17 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
     /// </summary>
     /// <param name="value">The <see cref="T:Nullable{bool}"/> to convert to a <see cref="ValkeyValue"/>.</param>
     public static implicit operator ValkeyValue(bool? value) => value == null ? Null : (ValkeyValue)value.GetValueOrDefault();
+
+    /// <summary>
+    /// Converts a <see cref="GlideString"/> to a <see cref="ValkeyValue"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="GlideString"/> to convert to a <see cref="ValkeyValue"/>.</param>
+    public static implicit operator ValkeyValue(GlideString? value)
+    {
+        if (value is null) return Null;
+        if (value.Bytes.Length == 0) return EmptyString;
+        return new ValkeyValue(0, value.Bytes, Sentinel_Raw);
+    }
 
     /// <summary>
     /// Converts a <see cref="ValkeyValue"/> to a <see cref="bool"/>.

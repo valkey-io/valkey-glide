@@ -5,7 +5,6 @@ using System.Diagnostics;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
-using static Valkey.Glide.Internals.Request;
 
 namespace Valkey.Glide.Pipeline;
 
@@ -23,7 +22,7 @@ namespace Valkey.Glide.Pipeline;
 /// Determines whether the batch is atomic or non-atomic. If <see langword="true" />, the batch will be executed as
 /// an atomic transaction. If <see langword="false" />, the batch will be executed as a non-atomic pipeline.
 /// </param>
-public abstract class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
+public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
 {
     private readonly List<ICmd> _commands = [];
 

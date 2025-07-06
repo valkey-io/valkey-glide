@@ -219,9 +219,6 @@ jobs:
                       utils/clusters/**
 
     lint:
-        if: ${{ false }}
-        # TODO: re-enable after fixed
-        # Temporarily disable lint job, until the SER types can be fixed to resolve the lint errors
         timeout-minutes: 10
         runs-on: ubuntu-latest
         steps:
@@ -234,6 +231,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
+              if: always()
               uses: actions/setup-dotnet@v4
               with:
                   # install latest dotnet too to use language features
@@ -242,6 +240,7 @@ jobs:
                       ${{ matrix.dotnet }}
 
             - name: Format
+              if: always()
               working-directory: csharp
               run: |
                   dotnet format --verify-no-changes --verbosity diagnostic

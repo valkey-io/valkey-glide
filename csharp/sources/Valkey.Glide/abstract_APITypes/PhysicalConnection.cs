@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 
 namespace Valkey.Glide;
 
-internal sealed partial class PhysicalConnection 
+internal sealed partial class PhysicalConnection
 {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
