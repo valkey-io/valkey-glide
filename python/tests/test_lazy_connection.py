@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Any, AsyncGenerator, Union, cast
+from typing import Any, AsyncGenerator, Optional, Union, cast
 
 import pytest
 
@@ -119,7 +119,7 @@ class TestLazyConnection:
         request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        function_scoped_standalone_cluster: ValkeyCluster = None,
+        function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
     ):
         monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
         lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
