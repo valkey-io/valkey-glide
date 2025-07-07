@@ -212,7 +212,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-dotnet-${{ matrix.dotnet }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
+                  name: test-reports-dotnet-${{ matrix.dotnet }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
                       csharp/TestReport.html
                       benchmarks/results/*
@@ -220,6 +220,11 @@ jobs:
 
     lint:
         timeout-minutes: 10
+        needs: get-matrices
+        strategy:
+            fail-fast: false
+            matrix:
+                dotnet: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -244,4 +249,4 @@ jobs:
               working-directory: csharp
               run: |
                   dotnet format --verify-no-changes --verbosity diagnostic
-                  dotnet build --configuration Lint --framework net6.0
+                  dotnet build --configuration Lint --framework net${{ matrix.dotnet }}
