@@ -4,16 +4,14 @@ package compatibility.clients.jedis;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import java.io.Closeable;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 /**
- * JedisCluster compatibility wrapper for Valkey GLIDE cluster client. 
- * This class provides a Jedis-like cluster API while using Valkey GLIDE underneath.
+ * JedisCluster compatibility wrapper for Valkey GLIDE cluster client. This class provides a
+ * Jedis-like cluster API while using Valkey GLIDE underneath.
  */
 public class JedisCluster implements Closeable {
 
@@ -53,8 +51,8 @@ public class JedisCluster implements Closeable {
         ClusterConfigurationMapper.validateClusterConfiguration(config);
 
         // Map Jedis cluster config to GLIDE cluster config
-        GlideClusterClientConfiguration glideConfig = 
-            ClusterConfigurationMapper.mapToGlideClusterConfig(nodes, config);
+        GlideClusterClientConfiguration glideConfig =
+                ClusterConfigurationMapper.mapToGlideClusterConfig(nodes, config);
 
         try {
             this.glideClusterClient = GlideClusterClient.createClient(glideConfig).get();
@@ -161,13 +159,13 @@ public class JedisCluster implements Closeable {
     public Object executeOnNode(String host, int port, String command, String... args) {
         checkNotClosed();
         try {
-            RequestRoutingConfiguration.ByAddressRoute route = 
-                new RequestRoutingConfiguration.ByAddressRoute(host, port);
-            
+            RequestRoutingConfiguration.ByAddressRoute route =
+                    new RequestRoutingConfiguration.ByAddressRoute(host, port);
+
             String[] fullArgs = new String[args.length + 1];
             fullArgs[0] = command;
             System.arraycopy(args, 0, fullArgs, 1, args.length);
-            
+
             ClusterValue<Object> result = glideClusterClient.customCommand(fullArgs, route).get();
             return result.getSingleValue();
         } catch (InterruptedException | ExecutionException e) {
@@ -185,13 +183,13 @@ public class JedisCluster implements Closeable {
     public Object executeOnAllPrimaries(String command, String... args) {
         checkNotClosed();
         try {
-            RequestRoutingConfiguration.SimpleMultiNodeRoute route = 
-                RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-            
+            RequestRoutingConfiguration.SimpleMultiNodeRoute route =
+                    RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
+
             String[] fullArgs = new String[args.length + 1];
             fullArgs[0] = command;
             System.arraycopy(args, 0, fullArgs, 1, args.length);
-            
+
             ClusterValue<Object> result = glideClusterClient.customCommand(fullArgs, route).get();
             return result.getMultiValue();
         } catch (InterruptedException | ExecutionException e) {
@@ -224,10 +222,12 @@ public class JedisCluster implements Closeable {
         checkNotClosed();
         try {
             // Execute CLUSTER NODES on a random node
-            ClusterValue<Object> result = glideClusterClient.customCommand(
-                new String[]{"CLUSTER", "NODES"}, 
-                RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM
-            ).get();
+            ClusterValue<Object> result =
+                    glideClusterClient
+                            .customCommand(
+                                    new String[] {"CLUSTER", "NODES"},
+                                    RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM)
+                            .get();
             return (String) result.getSingleValue();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("CLUSTER NODES failed", e);
@@ -254,9 +254,7 @@ public class JedisCluster implements Closeable {
         return config;
     }
 
-    /**
-     * Close the cluster client.
-     */
+    /** Close the cluster client. */
     @Override
     public void close() {
         if (closed) {

@@ -31,7 +31,7 @@ public class ConfigurationMapper {
                         .address(NodeAddress.builder().host(host).port(port).build())
                         .requestTimeout(jedisConfig.getSocketTimeoutMillis());
 
-        //TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
+        // TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
         if (jedisConfig.isSsl()) {
             builder.useTLS(true);
 
@@ -45,14 +45,13 @@ public class ConfigurationMapper {
 
         // Authentication
         if (jedisConfig.getUser() != null && jedisConfig.getPassword() != null) {
-            builder.credentials(ServerCredentials.builder()
-                .username(jedisConfig.getUser())
-                .password(jedisConfig.getPassword())
-                .build());
+            builder.credentials(
+                    ServerCredentials.builder()
+                            .username(jedisConfig.getUser())
+                            .password(jedisConfig.getPassword())
+                            .build());
         } else if (jedisConfig.getPassword() != null) {
-            builder.credentials(ServerCredentials.builder()
-                .password(jedisConfig.getPassword())
-                .build());
+            builder.credentials(ServerCredentials.builder().password(jedisConfig.getPassword()).build());
         }
 
         // Protocol version
@@ -69,17 +68,17 @@ public class ConfigurationMapper {
         }
 
         // Advanced configuration (connection timeout and other advanced settings)
-        AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder = 
-            AdvancedGlideClientConfiguration.builder();
-        
+        AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder =
+                AdvancedGlideClientConfiguration.builder();
+
         boolean hasAdvancedConfig = false;
-        
+
         // Connection timeout
         if (jedisConfig.getConnectionTimeoutMillis() != jedisConfig.getSocketTimeoutMillis()) {
             advancedBuilder.connectionTimeout(jedisConfig.getConnectionTimeoutMillis());
             hasAdvancedConfig = true;
         }
-        
+
         // Add advanced configuration if any advanced settings were configured
         if (hasAdvancedConfig) {
             builder.advancedConfiguration(advancedBuilder.build());
@@ -116,14 +115,12 @@ public class ConfigurationMapper {
         if (jedisConfig.getDatabase() != 0) {
             // GLIDE may not support database selection in the same way
             // This is a warning or could be handled differently
-            logger.warning(
-                    "Database selection may not be fully supported in GLIDE compatibility mode");
+            logger.warning("Database selection may not be fully supported in GLIDE compatibility mode");
         }
 
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
             // Check if GLIDE supports blocking socket timeouts
-            logger.warning(
-                    "Blocking socket timeout configuration may not be fully supported");
+            logger.warning("Blocking socket timeout configuration may not be fully supported");
         }
     }
 }

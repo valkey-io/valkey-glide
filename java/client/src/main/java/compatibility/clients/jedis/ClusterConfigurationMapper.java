@@ -10,8 +10,8 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
- * Utility class to map Jedis cluster configurations to Valkey GLIDE cluster configurations.
- * This handles the translation between the two configuration systems for cluster operations.
+ * Utility class to map Jedis cluster configurations to Valkey GLIDE cluster configurations. This
+ * handles the translation between the two configuration systems for cluster operations.
  */
 public class ClusterConfigurationMapper {
 
@@ -29,15 +29,15 @@ public class ClusterConfigurationMapper {
 
         GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder builder =
                 GlideClusterClientConfiguration.builder()
-                        .addresses(nodes.stream()
-                                .map(node -> NodeAddress.builder()
-                                        .host(node.getHost())
-                                        .port(node.getPort())
-                                        .build())
-                                .collect(Collectors.toList()))
+                        .addresses(
+                                nodes.stream()
+                                        .map(
+                                                node ->
+                                                        NodeAddress.builder().host(node.getHost()).port(node.getPort()).build())
+                                        .collect(Collectors.toList()))
                         .requestTimeout(jedisConfig.getSocketTimeoutMillis());
 
-        //TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
+        // TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
         // SSL/TLS configuration.
         if (jedisConfig.isSsl()) {
             builder.useTLS(true);
@@ -45,14 +45,13 @@ public class ClusterConfigurationMapper {
 
         // Authentication
         if (jedisConfig.getUser() != null && jedisConfig.getPassword() != null) {
-            builder.credentials(ServerCredentials.builder()
-                .username(jedisConfig.getUser())
-                .password(jedisConfig.getPassword())
-                .build());
+            builder.credentials(
+                    ServerCredentials.builder()
+                            .username(jedisConfig.getUser())
+                            .password(jedisConfig.getPassword())
+                            .build());
         } else if (jedisConfig.getPassword() != null) {
-            builder.credentials(ServerCredentials.builder()
-                .password(jedisConfig.getPassword())
-                .build());
+            builder.credentials(ServerCredentials.builder().password(jedisConfig.getPassword()).build());
         }
 
         // Client name
@@ -85,12 +84,11 @@ public class ClusterConfigurationMapper {
     public static GlideClusterClientConfiguration createDefaultClusterConfig(
             Set<HostAndPort> nodes, boolean useSsl) {
         return GlideClusterClientConfiguration.builder()
-                .addresses(nodes.stream()
-                        .map(node -> NodeAddress.builder()
-                                .host(node.getHost())
-                                .port(node.getPort())
-                                .build())
-                        .collect(Collectors.toList()))
+                .addresses(
+                        nodes.stream()
+                                .map(
+                                        node -> NodeAddress.builder().host(node.getHost()).port(node.getPort()).build())
+                                .collect(Collectors.toList()))
                 .useTLS(useSsl)
                 .requestTimeout(DefaultJedisClientConfig.DEFAULT_TIMEOUT_MILLIS)
                 .build();
@@ -105,8 +103,7 @@ public class ClusterConfigurationMapper {
     public static void validateClusterConfiguration(JedisClientConfig jedisConfig) {
         // Check for unsupported cluster features
         if (jedisConfig.getDatabase() != 0) {
-            logger.warning(
-                    "Database selection is not supported in cluster mode");
+            logger.warning("Database selection is not supported in cluster mode");
         }
 
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {

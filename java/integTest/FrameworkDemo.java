@@ -1,30 +1,30 @@
-import java.io.File;
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Set;
 import java.util.HashSet;
+import java.util.Set;
 
 public class FrameworkDemo {
     public static void main(String[] args) {
         System.out.println("=== GLIDE Jedis Compatibility Testing Framework Demo ===");
         System.out.println("Demonstrating the comprehensive testing framework capabilities...\n");
-        
+
         // 1. Show framework structure
         showFrameworkStructure();
-        
+
         // 2. Show compatibility layer classes
         showCompatibilityClasses();
-        
+
         // 3. Show test capabilities
         showTestCapabilities();
-        
+
         // 4. Show configuration options
         showConfigurationOptions();
-        
+
         // 5. Show expected results format
         showExpectedResults();
     }
-    
+
     static void showFrameworkStructure() {
         System.out.println("1. 📁 TESTING FRAMEWORK STRUCTURE:");
         System.out.println("   ├── JedisCompatibilityTests.java      - Main compatibility test suite");
@@ -35,29 +35,30 @@ public class FrameworkDemo {
         System.out.println("   └── COMPATIBILITY_TESTING.md          - Complete documentation");
         System.out.println();
     }
-    
+
     static void showCompatibilityClasses() {
         System.out.println("2. 🔧 COMPATIBILITY LAYER CLASSES:");
-        
+
         // Define allowed classes for security - whitelist approach
-        Set<String> allowedClasses = new HashSet<>(Arrays.asList(
-            "redis.clients.jedis.Jedis",
-            "redis.clients.jedis.JedisCluster", 
-            "redis.clients.jedis.JedisPool",
-            "redis.clients.jedis.JedisClientConfig",
-            "redis.clients.jedis.DefaultJedisClientConfig",
-            "redis.clients.jedis.JedisException",
-            "redis.clients.jedis.JedisConnectionException",
-            "redis.clients.jedis.HostAndPort",
-            "redis.clients.jedis.RedisProtocol",
-            "redis.clients.jedis.ResourceLifecycleManager",
-            "redis.clients.jedis.ConfigurationMapper",
-            "redis.clients.jedis.ClusterConfigurationMapper"
-        ));
-        
+        Set<String> allowedClasses =
+                new HashSet<>(
+                        Arrays.asList(
+                                "redis.clients.jedis.Jedis",
+                                "redis.clients.jedis.JedisCluster",
+                                "redis.clients.jedis.JedisPool",
+                                "redis.clients.jedis.JedisClientConfig",
+                                "redis.clients.jedis.DefaultJedisClientConfig",
+                                "redis.clients.jedis.JedisException",
+                                "redis.clients.jedis.JedisConnectionException",
+                                "redis.clients.jedis.HostAndPort",
+                                "redis.clients.jedis.RedisProtocol",
+                                "redis.clients.jedis.ResourceLifecycleManager",
+                                "redis.clients.jedis.ConfigurationMapper",
+                                "redis.clients.jedis.ClusterConfigurationMapper"));
+
         String[] compatibilityClasses = {
             "redis.clients.jedis.Jedis",
-            "redis.clients.jedis.JedisCluster", 
+            "redis.clients.jedis.JedisCluster",
             "redis.clients.jedis.JedisPool",
             "redis.clients.jedis.JedisClientConfig",
             "redis.clients.jedis.DefaultJedisClientConfig",
@@ -69,7 +70,7 @@ public class FrameworkDemo {
             "redis.clients.jedis.ConfigurationMapper",
             "redis.clients.jedis.ClusterConfigurationMapper"
         };
-        
+
         for (String className : compatibilityClasses) {
             try {
                 // Security: Validate class name against whitelist before loading
@@ -77,18 +78,21 @@ public class FrameworkDemo {
                     System.out.println("   ⚠️  " + className + " - Not in allowed classes list");
                     continue;
                 }
-                
+
                 Class<?> clazz = loadSecureClass(className);
                 System.out.println("   ✅ " + className + " - Available");
-                
+
                 // Show key methods for main classes
                 if (className.equals("redis.clients.jedis.Jedis")) {
                     Method[] methods = clazz.getDeclaredMethods();
-                    System.out.println("      Methods: " + Arrays.stream(methods)
-                        .filter(m -> m.getName().matches("(get|set|ping|close|isClosed)"))
-                        .map(Method::getName)
-                        .distinct()
-                        .reduce((a, b) -> a + ", " + b).orElse("none"));
+                    System.out.println(
+                            "      Methods: "
+                                    + Arrays.stream(methods)
+                                            .filter(m -> m.getName().matches("(get|set|ping|close|isClosed)"))
+                                            .map(Method::getName)
+                                            .distinct()
+                                            .reduce((a, b) -> a + ", " + b)
+                                            .orElse("none"));
                 }
             } catch (ClassNotFoundException e) {
                 System.out.println("   ❌ " + className + " - Not found");
@@ -98,37 +102,37 @@ public class FrameworkDemo {
         }
         System.out.println();
     }
-    
+
     /**
-     * Securely load a class with additional validation.
-     * This method provides an extra layer of security by validating the class name
-     * and ensuring it matches expected patterns.
-     * 
+     * Securely load a class with additional validation. This method provides an extra layer of
+     * security by validating the class name and ensuring it matches expected patterns.
+     *
      * @param className the fully qualified class name to load
      * @return the loaded Class object
      * @throws ClassNotFoundException if the class cannot be found
      * @throws SecurityException if the class name doesn't meet security requirements
      */
-    private static Class<?> loadSecureClass(String className) throws ClassNotFoundException, SecurityException {
+    private static Class<?> loadSecureClass(String className)
+            throws ClassNotFoundException, SecurityException {
         // Additional security validation
         if (className == null || className.trim().isEmpty()) {
             throw new SecurityException("Class name cannot be null or empty");
         }
-        
+
         // Ensure class name follows expected pattern for our compatibility layer
         if (!className.startsWith("redis.clients.jedis.")) {
             throw new SecurityException("Class name must be from redis.clients.jedis package");
         }
-        
+
         // Prevent path traversal or malicious class names
         if (className.contains("..") || className.contains("/") || className.contains("\\")) {
             throw new SecurityException("Invalid characters in class name");
         }
-        
+
         // Load the class using the current class loader
         return Class.forName(className);
     }
-    
+
     static void showTestCapabilities() {
         System.out.println("3. 🧪 TEST CAPABILITIES:");
         System.out.println("   ┌─ Functional Compatibility Tests");
@@ -153,7 +157,7 @@ public class FrameworkDemo {
         System.out.println("      └── Error Recovery Testing");
         System.out.println();
     }
-    
+
     static void showConfigurationOptions() {
         System.out.println("4. ⚙️  CONFIGURATION OPTIONS:");
         System.out.println("   Environment Variables:");
@@ -167,12 +171,13 @@ public class FrameworkDemo {
         System.out.println("   Execution Commands:");
         System.out.println("   ├── ./run-compatibility-tests.sh                    - Run all tests");
         System.out.println("   ├── ./run-compatibility-tests.sh compatibility      - Basic tests only");
-        System.out.println("   ├── ./run-compatibility-tests.sh performance        - Performance tests");
+        System.out.println(
+                "   ├── ./run-compatibility-tests.sh performance        - Performance tests");
         System.out.println("   ├── ./run-compatibility-tests.sh stress             - Stress tests");
         System.out.println("   └── ./gradlew fullCompatibilityTest                 - Complete suite");
         System.out.println();
     }
-    
+
     static void showExpectedResults() {
         System.out.println("5. 📊 EXPECTED TEST RESULTS FORMAT:");
         System.out.println();

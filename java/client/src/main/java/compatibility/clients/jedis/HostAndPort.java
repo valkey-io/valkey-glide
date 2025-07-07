@@ -4,11 +4,11 @@ package compatibility.clients.jedis;
 import java.util.Objects;
 
 /**
- * HostAndPort compatibility class for Valkey GLIDE wrapper.
- * Represents a host and port combination for cluster node addressing.
+ * HostAndPort compatibility class for Valkey GLIDE wrapper. Represents a host and port combination
+ * for cluster node addressing.
  */
 public class HostAndPort {
-    
+
     private final String host;
     private final int port;
 
@@ -71,7 +71,7 @@ public class HostAndPort {
         if (parts.length != 2) {
             throw new IllegalArgumentException("Invalid host:port format: " + hostPort);
         }
-        
+
         try {
             return new HostAndPort(parts[0], Integer.parseInt(parts[1]));
         } catch (NumberFormatException e) {

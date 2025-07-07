@@ -206,8 +206,7 @@ public class Jedis implements Closeable {
     public String select(int index) {
         checkNotClosed();
         if (config.getDatabase() != index) {
-            logger.warning(
-                    "Database selection may behave differently in GLIDE compatibility mode");
+            logger.warning("Database selection may behave differently in GLIDE compatibility mode");
         }
         // TO DO: GLIDE handles database selection differently. This is a placeholder implementation
         // In case of Glide, the databaseId is set in  GlideClientConfiguration. Will need to re call
