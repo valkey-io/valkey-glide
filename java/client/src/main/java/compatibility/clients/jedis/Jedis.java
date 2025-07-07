@@ -206,8 +206,10 @@ public class Jedis implements Closeable {
             System.out.println(
                     "Warning: Database selection may behave differently in GLIDE compatibility mode");
         }
-        // GLIDE may handle database selection differently
-        // This is a placeholder implementation
+        // TO DO: GLIDE handles database selection differently. This is a placeholder implementation
+        // In case of Glide, the databaseId is set in  GlideClientConfiguration. Will need to re call
+        // the constructor for this to work.
+
         return "OK";
     }
 
@@ -219,8 +221,10 @@ public class Jedis implements Closeable {
      */
     public String auth(String password) {
         checkNotClosed();
-        // GLIDE handles authentication during connection setup
-        // This is a placeholder for runtime authentication
+        // TO DO: GLIDE handles auth differently. This is a placeholder for runtime authentication.
+        // In case of Glide, the auth is set in  ServerCredentials.
+        // Will need to call the constructor again for this to work.
+
         return "OK";
     }
 
@@ -233,8 +237,9 @@ public class Jedis implements Closeable {
      */
     public String auth(String user, String password) {
         checkNotClosed();
-        // GLIDE handles authentication during connection setup
-        // This is a placeholder for runtime authentication
+        // TO DO: GLIDE handles auth differently. This is a placeholder for runtime authentication.
+        // In case of Glide, the auth is set in  ServerCredentials.
+        // Will need to call the constructor again for this to work.
         return "OK";
     }
 
