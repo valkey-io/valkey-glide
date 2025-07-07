@@ -22,7 +22,7 @@ public class ClusterConfigurationMapper {
      */
     public static GlideClusterClientConfiguration mapToGlideClusterConfig(
             Set<HostAndPort> nodes, JedisClientConfig jedisConfig) {
-        
+
         GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder builder =
                 GlideClusterClientConfiguration.builder()
                         .addresses(nodes.stream()
@@ -33,7 +33,8 @@ public class ClusterConfigurationMapper {
                                 .collect(Collectors.toList()))
                         .requestTimeout(jedisConfig.getSocketTimeoutMillis());
 
-        // SSL/TLS Configuration
+        //TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
+        // SSL/TLS configuration.
         if (jedisConfig.isSsl()) {
             builder.useTLS(true);
         }

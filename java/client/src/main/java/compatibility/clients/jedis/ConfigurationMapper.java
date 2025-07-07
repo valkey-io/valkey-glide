@@ -26,7 +26,7 @@ public class ConfigurationMapper {
                         .address(NodeAddress.builder().host(host).port(port).build())
                         .requestTimeout(jedisConfig.getSocketTimeoutMillis());
 
-        // SSL/TLS Configuration
+        //TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
         if (jedisConfig.isSsl()) {
             builder.useTLS(true);
 
