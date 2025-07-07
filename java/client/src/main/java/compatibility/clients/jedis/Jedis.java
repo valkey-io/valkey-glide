@@ -5,6 +5,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
@@ -14,6 +15,8 @@ import javax.net.ssl.SSLSocketFactory;
  * using Valkey GLIDE underneath.
  */
 public class Jedis implements Closeable {
+
+    private static final Logger logger = Logger.getLogger(Jedis.class.getName());
 
     private final GlideClient glideClient;
     private final boolean isPooled;
@@ -203,8 +206,8 @@ public class Jedis implements Closeable {
     public String select(int index) {
         checkNotClosed();
         if (config.getDatabase() != index) {
-            System.out.println(
-                    "Warning: Database selection may behave differently in GLIDE compatibility mode");
+            logger.warning(
+                    "Database selection may behave differently in GLIDE compatibility mode");
         }
         // TO DO: GLIDE handles database selection differently. This is a placeholder implementation
         // In case of Glide, the databaseId is set in  GlideClientConfiguration. Will need to re call

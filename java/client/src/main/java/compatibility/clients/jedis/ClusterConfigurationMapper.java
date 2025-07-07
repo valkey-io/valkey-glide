@@ -3,8 +3,10 @@ package compatibility.clients.jedis;
 
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ServerCredentials;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
@@ -12,6 +14,8 @@ import java.util.stream.Collectors;
  * This handles the translation between the two configuration systems for cluster operations.
  */
 public class ClusterConfigurationMapper {
+
+    private static final Logger logger = Logger.getLogger(ClusterConfigurationMapper.class.getName());
 
     /**
      * Convert Jedis cluster configuration to GLIDE cluster configuration.
@@ -56,6 +60,14 @@ public class ClusterConfigurationMapper {
             builder.clientName(jedisConfig.getClientName());
         }
 
+        // Protocol version
+        if (jedisConfig.getRedisProtocol() != null) {
+            builder.protocol(jedisConfig.getRedisProtocol().toGlideProtocol());
+        } else {
+            // Ensure Jedis default behavior (RESP2) is maintained
+            builder.protocol(ProtocolVersion.RESP2);
+        }
+
         // Cluster-specific configurations
         // Note: GLIDE may have different cluster configuration options
         // This is a simplified mapping
@@ -93,13 +105,13 @@ public class ClusterConfigurationMapper {
     public static void validateClusterConfiguration(JedisClientConfig jedisConfig) {
         // Check for unsupported cluster features
         if (jedisConfig.getDatabase() != 0) {
-            System.out.println(
-                    "Warning: Database selection is not supported in cluster mode");
+            logger.warning(
+                    "Database selection is not supported in cluster mode");
         }
 
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
-            System.out.println(
-                    "Warning: Blocking socket timeout configuration may not be fully supported in cluster mode");
+            logger.warning(
+                    "Blocking socket timeout configuration may not be fully supported in cluster mode");
         }
 
         // Add more cluster-specific validations as needed

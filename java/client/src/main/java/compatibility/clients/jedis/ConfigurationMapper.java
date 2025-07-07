@@ -1,15 +1,20 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.clients.jedis;
 
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ServerCredentials;
+import java.util.logging.Logger;
 
 /**
  * Utility class to map Jedis configurations to Valkey GLIDE configurations. This handles the
  * translation between the two configuration systems.
  */
 public class ConfigurationMapper {
+
+    private static final Logger logger = Logger.getLogger(ConfigurationMapper.class.getName());
 
     /**
      * Convert Jedis client configuration to GLIDE client configuration.
@@ -51,11 +56,11 @@ public class ConfigurationMapper {
         }
 
         // Protocol version
-        // Note: GLIDE may not support runtime protocol configuration
-        // Protocol is typically set at the connection level
         if (jedisConfig.getRedisProtocol() != null) {
-            System.out.println(
-                    "Warning: Protocol configuration may not be fully supported in GLIDE compatibility mode");
+            builder.protocol(jedisConfig.getRedisProtocol().toGlideProtocol());
+        } else {
+            // Ensure Jedis default behavior (RESP2) is maintained
+            builder.protocol(ProtocolVersion.RESP2);
         }
 
         // Client name
@@ -63,10 +68,21 @@ public class ConfigurationMapper {
             builder.clientName(jedisConfig.getClientName());
         }
 
+        // Advanced configuration (connection timeout and other advanced settings)
+        AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder = 
+            AdvancedGlideClientConfiguration.builder();
+        
+        boolean hasAdvancedConfig = false;
+        
         // Connection timeout
         if (jedisConfig.getConnectionTimeoutMillis() != jedisConfig.getSocketTimeoutMillis()) {
-            // GLIDE may have separate connection timeout configuration
-            // Adapt based on GLIDE's API
+            advancedBuilder.connectionTimeout(jedisConfig.getConnectionTimeoutMillis());
+            hasAdvancedConfig = true;
+        }
+        
+        // Add advanced configuration if any advanced settings were configured
+        if (hasAdvancedConfig) {
+            builder.advancedConfiguration(advancedBuilder.build());
         }
 
         return builder.build();
@@ -100,14 +116,14 @@ public class ConfigurationMapper {
         if (jedisConfig.getDatabase() != 0) {
             // GLIDE may not support database selection in the same way
             // This is a warning or could be handled differently
-            System.out.println(
-                    "Warning: Database selection may not be fully supported in GLIDE compatibility mode");
+            logger.warning(
+                    "Database selection may not be fully supported in GLIDE compatibility mode");
         }
 
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
             // Check if GLIDE supports blocking socket timeouts
-            System.out.println(
-                    "Warning: Blocking socket timeout configuration may not be fully supported");
+            logger.warning(
+                    "Blocking socket timeout configuration may not be fully supported");
         }
     }
 }
