@@ -213,7 +213,7 @@ async fn run_with_timeout<T>(
                 if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
                     log_error(
                         "OpenTelemetry:timeout_error",
-                        format!("Failed to record timeout error: {}", e),
+                        format!("Failed to record timeout error: {e}"),
                     );
                 }
                 Err(io::Error::from(io::ErrorKind::TimedOut).into())
@@ -281,7 +281,7 @@ fn get_timeout_from_cmd_arg(
         Err(RedisError::from((
             ErrorKind::ResponseError,
             "Timeout cannot be negative",
-            format!("Received timeout = {:?}.", timeout_secs),
+            format!("Received timeout = {timeout_secs:?}."),
         )))
     } else if timeout_secs == 0.0 {
         // `0` means we should set no timeout
@@ -292,7 +292,7 @@ fn get_timeout_from_cmd_arg(
             Err(RedisError::from((
                 ErrorKind::ResponseError,
                 "Timeout is out of range, max timeout is 2^32 - 1 (u32::MAX)",
-                format!("Received timeout = {:?}.", timeout_secs),
+                format!("Received timeout = {timeout_secs:?}."),
             )))
         } else {
             // Extend the request timeout to ensure we don't timeout before receiving a response from the server.
@@ -834,7 +834,7 @@ impl Client {
                 Err(e) => Err(RedisError::from((
                     ErrorKind::ResponseError,
                     "Error getting username",
-                    format!("Received error - {:?}.", e),
+                    format!("Received error - {e:?}."),
                 ))),
             },
             ClientWrapper::Standalone(client) => Ok(client.get_username()),
@@ -1085,8 +1085,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         match request.periodic_checks {
             Some(PeriodicCheck::Disabled) => "\nPeriodic Checks: Disabled".to_string(),
             Some(PeriodicCheck::Enabled) => format!(
-                "\nPeriodic Checks: Enabled with default interval of {:?}",
-                DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL
+                "\nPeriodic Checks: Enabled with default interval of {DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL:?}"
             ),
             Some(PeriodicCheck::ManualInterval(interval)) => format!(
                 "\nPeriodic Checks: Enabled with manual interval of {:?}s",
@@ -1252,7 +1251,7 @@ mod tests {
         let result = get_timeout_from_cmd_arg(&cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        println!("{:?}", err);
+        println!("{err:?}");
         assert!(err.to_string().to_lowercase().contains("index"), "{err}");
     }
 
@@ -1266,7 +1265,7 @@ mod tests {
         let result = get_timeout_from_cmd_arg(&cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        println!("{:?}", err);
+        println!("{err:?}");
         assert!(err.to_string().to_lowercase().contains("u32"), "{err}");
     }
 
