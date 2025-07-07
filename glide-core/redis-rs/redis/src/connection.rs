@@ -38,8 +38,6 @@ static DEFAULT_PORT: u16 = 6379;
 #[inline(always)]
 fn connect_tcp(addr: (&str, u16)) -> io::Result<TcpStream> {
     let socket = TcpStream::connect(addr)?;
-    #[cfg(feature = "tcp_nodelay")]
-    socket.set_nodelay(true)?;
     #[cfg(feature = "keep-alive")]
     {
         //For now rely on system defaults
@@ -58,8 +56,6 @@ fn connect_tcp(addr: (&str, u16)) -> io::Result<TcpStream> {
 #[inline(always)]
 fn connect_tcp_timeout(addr: &SocketAddr, timeout: Duration) -> io::Result<TcpStream> {
     let socket = TcpStream::connect_timeout(addr, timeout)?;
-    #[cfg(feature = "tcp_nodelay")]
-    socket.set_nodelay(true)?;
     #[cfg(feature = "keep-alive")]
     {
         //For now rely on system defaults
@@ -612,7 +608,7 @@ impl ActualConnection {
                         RedisError::from((
                             ErrorKind::InvalidClientConfig,
                             "Invalid hostname for TLS",
-                            format!("{}", e),
+                            format!("{e}"),
                         ))
                     })?
                     .to_owned();
@@ -621,7 +617,7 @@ impl ActualConnection {
                         RedisError::from((
                             ErrorKind::InvalidClientConfig,
                             "Failed to create TLS connection",
-                            format!("{}", e),
+                            format!("{e}"),
                         ))
                     })?;
                 let reader = match timeout {
@@ -929,7 +925,6 @@ pub fn connect(
     setup_connection(con, &connection_info.redis)
 }
 
-#[cfg(not(feature = "disable-client-setinfo"))]
 pub(crate) fn client_set_info_pipeline() -> Pipeline {
     let mut pipeline = crate::pipe();
     pipeline
@@ -998,7 +993,6 @@ fn setup_connection(
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    #[cfg(not(feature = "disable-client-setinfo"))]
     let _: RedisResult<()> = client_set_info_pipeline().query(&mut rv);
 
     Ok(rv)

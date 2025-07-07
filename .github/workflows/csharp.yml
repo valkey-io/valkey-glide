@@ -231,6 +231,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
+              if: always()
               uses: actions/setup-dotnet@v4
               with:
                   # install latest dotnet too to use language features
@@ -239,6 +240,7 @@ jobs:
                       ${{ matrix.dotnet }}
 
             - name: Format
+              if: always()
               working-directory: csharp
               run: |
                   dotnet format --verify-no-changes --verbosity diagnostic

@@ -104,7 +104,7 @@ fn spawn_sentinel_server(
     let mut file = File::create(&config_file_path).unwrap();
     for (i, master_port) in master_ports.iter().enumerate() {
         file.write_all(
-            format!("sentinel monitor master{} 127.0.0.1 {} 1\n", i, master_port).as_bytes(),
+            format!("sentinel monitor master{i} 127.0.0.1 {master_port} 1\n").as_bytes(),
         )
         .unwrap();
     }
@@ -146,11 +146,11 @@ fn wait_for_master_server(
                     }
                 }
                 Err(err) => {
-                    println!("failed to get master connection: {:?}", err)
+                    println!("failed to get master connection: {err:?}")
                 }
             },
             Err(err) => {
-                println!("failed to get master client: {:?}", err)
+                println!("failed to get master client: {err:?}")
             }
         }
 
@@ -173,15 +173,15 @@ fn wait_for_replica(mut get_client_fn: impl FnMut() -> RedisResult<Client>) -> R
                     if role.starts_with("slave") && state == "connected" {
                         return Ok(());
                     } else {
-                        println!("failed check for replica role - current role: {:?}", r)
+                        println!("failed check for replica role - current role: {r:?}")
                     }
                 }
                 Err(err) => {
-                    println!("failed to get replica connection: {:?}", err)
+                    println!("failed to get replica connection: {err:?}")
                 }
             },
             Err(err) => {
-                println!("failed to get replica client: {:?}", err)
+                println!("failed to get replica client: {err:?}")
             }
         }
 

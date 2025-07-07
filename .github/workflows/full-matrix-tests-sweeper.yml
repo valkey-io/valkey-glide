@@ -6,6 +6,10 @@ on:
     schedule:
         - cron: "0 3 * * *"
 
+permissions:
+    contents: read
+    actions: write
+
 jobs:
     trigger-full-matrix-tests:
         runs-on: ubuntu-latest

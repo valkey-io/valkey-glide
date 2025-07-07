@@ -7,7 +7,7 @@ using static Valkey.Glide.Commands.Options.InfoOptions;
 namespace Valkey.Glide.Pipeline;
 
 // BaseBatch was split into two types, one for docs, another for the impl. This also ease the testing.
-internal interface IBatch
+internal interface IBatch : IBatchSetCommands
 {
     // inherit all docs except `remarks` section which stores en example (not relevant for batch)
     // and returns section, because we customize it.
@@ -31,6 +31,6 @@ internal interface IBatch
 
     /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/summary" />
     /// <inheritdoc cref="IServerManagementCommands.Info(Section[])" path="/param" />
-    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info()" /></returns>
+    /// <returns>Command Response - <inheritdoc cref="IServerManagementCommands.Info(Section[])" /></returns>
     IBatch Info(Section[] sections);
 }

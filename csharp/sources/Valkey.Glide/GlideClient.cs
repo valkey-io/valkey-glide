@@ -2,12 +2,11 @@
 
 using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
+using Valkey.Glide.Internals;
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Pipeline.Options;
-
-using RequestType = Valkey.Glide.Internals.FFI.RequestType;
 
 namespace Valkey.Glide;
 
@@ -15,9 +14,9 @@ namespace Valkey.Glide;
 /// <summary>
 /// Client used for connection to standalone servers. Use <see cref="CreateClient"/> to request a client.
 /// </summary>
-public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGenericCommands, IServerManagementCommands
+public class GlideClient : BaseClient, IDatabase
 {
-    private GlideClient() { }
+    internal GlideClient() { }
 
     // TODO add pubsub and other params to example and remarks
     /// <summary>
@@ -67,12 +66,10 @@ public sealed class GlideClient : BaseClient, IConnectionManagementCommands, IGe
         => await Batch(batch, raiseOnError, options);
 
     public async Task<object?> CustomCommand(GlideString[] args)
-        => await Command(RequestType.CustomCommand, args, resp
-            => HandleServerResponse<object?>(resp, true));
+        => await Command(Request.CustomCommand(args));
 
     public async Task<string> Info() => await Info([]);
 
     public async Task<string> Info(InfoOptions.Section[] sections)
-        => await Command(RequestType.Info, sections.ToGlideStrings(), resp
-            => HandleServerResponse<GlideString, string>(resp, false, gs => gs.ToString()));
+        => await Command(Request.Info(sections));
 }

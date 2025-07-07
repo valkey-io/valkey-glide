@@ -2,41 +2,21 @@
 
 using System.Runtime.InteropServices;
 
-using Valkey.Glide.Commands;
-using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.ConnectionConfiguration;
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Internals.FFI;
+using static Valkey.Glide.Internals.ResponseConverters;
 using static Valkey.Glide.Internals.ResponseHandler;
 using static Valkey.Glide.Pipeline.Options;
-using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
-public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetBaseCommands
+public abstract partial class BaseClient : IDisposable
 {
     #region public methods
-    public async Task<string> Set(GlideString key, GlideString value)
-        => await Command(RequestType.Set, [key, value], HandleOk);
-
-    public async Task<GlideString?> Get(GlideString key)
-        => await Command(RequestType.Get, [key], response => HandleServerResponse<GlideString>(response, true));
-
-    public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap)
-    {
-        GlideString[] args = [key, .. ConvertMembersScoreMapToArgs(membersScoreMap)];
-        return await ExecuteLongCommand(RequestType.ZAdd, args);
-    }
-
-    public async Task<long> ZAdd(GlideString key, Dictionary<GlideString, double> membersScoreMap, ZAddOptions options)
-    {
-        GlideString[] args = [key, .. options.ToArgs(), .. ConvertMembersScoreMapToArgs(membersScoreMap)];
-        return await ExecuteLongCommand(RequestType.ZAdd, args);
-    }
-
     public void Dispose()
     {
         GC.SuppressFinalize(this);
@@ -52,7 +32,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         }
     }
 
-    public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} }}";
+    public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} {_clientInfo} }}";
 
     public override int GetHashCode() => (int)_clientPointer;
 
@@ -84,10 +64,17 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
 
     protected internal delegate T ResponseHandler<T>(IntPtr response);
 
-    internal async Task<T> Command<T>(RequestType requestType, GlideString[] arguments, ResponseHandler<T> responseHandler, Route? route = null) where T : class?
+    /// <summary>
+    /// </summary>
+    /// <typeparam name="R">Type received from server.</typeparam>
+    /// <typeparam name="T">Type we return to the user.</typeparam>
+    /// <param name="command"></param>
+    /// <param name="route"></param>
+    /// <returns></returns>
+    internal async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        using Cmd cmd = new(requestType, arguments);
+        using Cmd cmd = command.ToFfi();
 
         // 2. Allocate memory for route
         using FFI.Route? ffiRoute = route?.ToFfi();
@@ -97,7 +84,15 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
 
         // 4. Get a response and Handle it
-        return responseHandler(await message);
+        IntPtr response = await message;
+        try
+        {
+            return HandleServerValue(HandleResponse(response), command.IsNullable, command.Converter);
+        }
+        finally
+        {
+            FreeResponse(response);
+        }
 
         // All memory allocated is auto-freed by `using` operator
     }
@@ -133,89 +128,17 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
         BatchFfi(_clientPointer, (ulong)message.Index, ffiBatch.ToPtr(), raiseOnError, ffiOptions?.ToPtr() ?? IntPtr.Zero);
 
         // 4. Get a response and Handle it
-        return HandleServerResponse<object?[]?>(await message, true);
-
-        // All memory allocated is auto-freed by `using` operator
-    }
-
-    protected internal static string HandleOk(IntPtr response)
-        => HandleServerResponse<string>(response, false);
-
-    private static long HandleLongResponse(IntPtr response)
-    {
-        object? result = HandleResponse(response);
-        FreeResponse(response);
-        return result is long longValue ? longValue : throw new RequestException($"Unexpected return type from Glide: got {result?.GetType().GetRealTypeName()} expected long");
-    }
-
-    private static GlideString[] ConvertMembersScoreMapToArgs(Dictionary<GlideString, double> membersScoreMap)
-        => [.. membersScoreMap.SelectMany(kvp => (GlideString[])[kvp.Value.ToString(), kvp.Key])];
-
-    protected internal static T HandleServerResponse<T>(IntPtr response, bool isNullable) where T : class?
-        => HandleServerResponse<T, T>(response, isNullable, o => o);
-
-    protected static ClusterValue<object?> HandleCustomCommandClusterResponse(IntPtr response, Route? route = null)
-        => HandleServerResponse<object, ClusterValue<object?>>(response, true, data
-            => (data is string str && str == "OK") || route is SingleNodeRoute || data is not Dictionary<GlideString, object?>
-                ? ClusterValue<object?>.OfSingleValue(data)
-                : ClusterValue<object?>.OfMultiValue((Dictionary<GlideString, object?>)data));
-
-    /// <summary>
-    /// Process and convert a server response that may be a multi-node response.
-    /// </summary>
-    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
-    /// <typeparam name="T">Command's return type.</typeparam>
-    /// <param name="response"></param>
-    /// <param name="isNullable"></param>
-    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
-    protected static ClusterValue<T> HandleClusterValueResponse<R, T>(IntPtr response, bool isNullable, Route route, Func<R, T> converter) where T : class?
-        => HandleServerResponse<object, ClusterValue<T>>(response, isNullable, data => route is SingleNodeRoute
-            ? ClusterValue<T>.OfSingleValue(converter((R)data))
-            : ClusterValue<T>.OfMultiValue(((Dictionary<GlideString, object>)data).ConvertValues(converter)));
-
-    /// <summary>
-    /// Process and convert a cluster multi-node response.
-    /// </summary>
-    /// <typeparam name="R">GLIDE's return type per node.</typeparam>
-    /// <typeparam name="T">Command's return type.</typeparam>
-    /// <param name="response"></param>
-    /// <param name="converter">Function to convert <typeparamref name="R"/> to <typeparamref name="T"/>.</param>
-    protected static Dictionary<string, T> HandleMultiNodeResponse<R, T>(IntPtr response, Func<R, T> converter) where T : class?
-        => HandleServerResponse<Dictionary<GlideString, object>, Dictionary<string, T>>(response, false, dict => dict.DownCastKeys().ConvertValues(converter));
-
-    /// <summary>
-    /// Process and convert a server response.
-    /// </summary>
-    /// <typeparam name="R">GLIDE's return type.</typeparam>
-    /// <typeparam name="T">Command's return type.</typeparam>
-    /// <param name="response"></param>
-    /// <param name="isNullable"></param>
-    /// <param name="converter">Optional function to convert <typeparamref name="R" /> to <typeparamref name="T" />.</param>
-    /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    protected internal static T HandleServerResponse<R, T>(IntPtr response, bool isNullable, Func<R, T> converter) where T : class? where R : class?
-    {
+        IntPtr response = await message;
         try
         {
-            object? value = HandleResponse(response);
-            if (value is null)
-            {
-                if (isNullable)
-                {
-#pragma warning disable CS8603 // Possible null reference return.
-                    return null;
-#pragma warning restore CS8603 // Possible null reference return.
-                }
-                throw new Exception($"Unexpected return type from Glide: got null expected {typeof(T).GetRealTypeName()}");
-            }
-            return value is R
-                ? converter((value as R)!)
-                : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
+            return batch.ConvertResponse(HandleServerValue(HandleResponse(response), true, (object?[]? o) => o));
         }
         finally
         {
             FreeResponse(response);
         }
+
+        // All memory allocated is auto-freed by `using` operator
     }
     #endregion protected methods
 
@@ -232,6 +155,8 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
     }
 
     ~BaseClient() => Dispose();
+
+    internal void SetInfo(string info) => _clientInfo = info;
     #endregion private methods
 
     #region private fields
@@ -248,6 +173,7 @@ public abstract class BaseClient : IDisposable, IStringBaseCommands, ISortedSetB
     private IntPtr _clientPointer;
     private readonly MessageContainer _messageContainer;
     private readonly object _lock = new();
+    private string _clientInfo = ""; // used to distinguish and identify clients during tests
 
     #endregion private fields
 

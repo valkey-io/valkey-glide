@@ -34,6 +34,9 @@ public class SharedBatchTests
                 ? ((GlideClusterClient)client).Exec((ClusterBatch)batch, true, (ClusterBatchOptions)options)
                 : ((GlideClient)client).Exec((Batch)batch, true, (BatchOptions)options));
 
+        // Wait for server to wake up
+        Thread.Sleep(TimeSpan.FromSeconds(1));
+
         // Retry with a longer timeout and expect [OK]
         options = isCluster ? new ClusterBatchOptions(timeout: 1000, route: Route.Random) : new BatchOptions(timeout: 1000);
         object?[]? res = isCluster
@@ -51,6 +54,7 @@ public class SharedBatchTests
         string key2 = "{BatchRaiseOnError}" + Guid.NewGuid();
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        // TODO replace custom command
         _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 
         object?[] res = isCluster
