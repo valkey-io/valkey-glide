@@ -106,6 +106,14 @@ async def glide_standalone_client_scoped(
 @pytest.mark.parametrize("cluster_mode", [False, True])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 class TestLazyConnection:
+    """
+    Tests for lazy connection functionality in both standalone and cluster modes.
+
+    These tests verify that lazy clients only establish connections when the first command is executed,
+    not during client initialization. This behavior is important for applications that need to minimize
+    connection overhead until actual Valkey operations are needed.
+    """
+
     async def test_lazy_connection_establishes_on_first_command(
         self,
         request: Any,
@@ -113,6 +121,22 @@ class TestLazyConnection:
         protocol: ProtocolVersion,
         function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
     ):
+        """
+        Test that lazy connections are only established when the first command is executed.
+
+        This test verifies that when a client is created with lazy_connect=True:
+        1. No connections are established during client initialization
+        2. Connections are established only when the first command is executed
+
+        The test uses a dedicated Valkey instance for standalone mode to ensure accurate connection
+        counting. This isolation is critical because the test relies on counting the exact number
+        of connections before and after client operations, which can be affected by other tests
+        running in parallel against the same Valkey instance.
+
+        Without this isolation, the test can be flaky as other tests might establish or close
+        connections to the same Valkey instance during test execution, causing the connection
+        count assertions to fail unpredictably.
+        """
         monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
         lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
         mode_str = "Cluster" if cluster_mode else "Standalone"
