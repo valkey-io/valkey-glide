@@ -1,6 +1,8 @@
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Set;
+import java.util.HashSet;
 
 public class FrameworkDemo {
     public static void main(String[] args) {
@@ -37,6 +39,22 @@ public class FrameworkDemo {
     static void showCompatibilityClasses() {
         System.out.println("2. 🔧 COMPATIBILITY LAYER CLASSES:");
         
+        // Define allowed classes for security - whitelist approach
+        Set<String> allowedClasses = new HashSet<>(Arrays.asList(
+            "redis.clients.jedis.Jedis",
+            "redis.clients.jedis.JedisCluster", 
+            "redis.clients.jedis.JedisPool",
+            "redis.clients.jedis.JedisClientConfig",
+            "redis.clients.jedis.DefaultJedisClientConfig",
+            "redis.clients.jedis.JedisException",
+            "redis.clients.jedis.JedisConnectionException",
+            "redis.clients.jedis.HostAndPort",
+            "redis.clients.jedis.RedisProtocol",
+            "redis.clients.jedis.ResourceLifecycleManager",
+            "redis.clients.jedis.ConfigurationMapper",
+            "redis.clients.jedis.ClusterConfigurationMapper"
+        ));
+        
         String[] compatibilityClasses = {
             "redis.clients.jedis.Jedis",
             "redis.clients.jedis.JedisCluster", 
@@ -54,7 +72,13 @@ public class FrameworkDemo {
         
         for (String className : compatibilityClasses) {
             try {
-                Class<?> clazz = Class.forName(className);
+                // Security: Validate class name against whitelist before loading
+                if (!allowedClasses.contains(className)) {
+                    System.out.println("   ⚠️  " + className + " - Not in allowed classes list");
+                    continue;
+                }
+                
+                Class<?> clazz = loadSecureClass(className);
                 System.out.println("   ✅ " + className + " - Available");
                 
                 // Show key methods for main classes
@@ -68,9 +92,41 @@ public class FrameworkDemo {
                 }
             } catch (ClassNotFoundException e) {
                 System.out.println("   ❌ " + className + " - Not found");
+            } catch (SecurityException e) {
+                System.out.println("   🔒 " + className + " - Security restriction: " + e.getMessage());
             }
         }
         System.out.println();
+    }
+    
+    /**
+     * Securely load a class with additional validation.
+     * This method provides an extra layer of security by validating the class name
+     * and ensuring it matches expected patterns.
+     * 
+     * @param className the fully qualified class name to load
+     * @return the loaded Class object
+     * @throws ClassNotFoundException if the class cannot be found
+     * @throws SecurityException if the class name doesn't meet security requirements
+     */
+    private static Class<?> loadSecureClass(String className) throws ClassNotFoundException, SecurityException {
+        // Additional security validation
+        if (className == null || className.trim().isEmpty()) {
+            throw new SecurityException("Class name cannot be null or empty");
+        }
+        
+        // Ensure class name follows expected pattern for our compatibility layer
+        if (!className.startsWith("redis.clients.jedis.")) {
+            throw new SecurityException("Class name must be from redis.clients.jedis package");
+        }
+        
+        // Prevent path traversal or malicious class names
+        if (className.contains("..") || className.contains("/") || className.contains("\\")) {
+            throw new SecurityException("Invalid characters in class name");
+        }
+        
+        // Load the class using the current class loader
+        return Class.forName(className);
     }
     
     static void showTestCapabilities() {
