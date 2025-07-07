@@ -163,11 +163,56 @@ internal class BatchTestUtils
         return testData;
     }
 
+    public static List<TestInfo> CreateListTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+        string prefix = isAtomic ? "{listKey}-" : "";
+        string key1 = $"{prefix}1-{Guid.NewGuid()}";
+        string key2 = $"{prefix}2-{Guid.NewGuid()}";
+        string key3 = $"{prefix}3-{Guid.NewGuid()}";
+
+        string value1 = $"value-1-{Guid.NewGuid()}";
+        string value2 = $"value-2-{Guid.NewGuid()}";
+        string value3 = $"value-3-{Guid.NewGuid()}";
+        string value4 = $"value-4-{Guid.NewGuid()}";
+
+        _ = batch.ListLeftPush(key1, [value1, value2]);
+        testData.Add(new(2L, "ListLeftPush(key1, [value1, value2])"));
+
+        _ = batch.ListLeftPush(key1, [value3]);
+        testData.Add(new(3L, "ListLeftPush(key1, [value3])"));
+
+        _ = batch.ListLeftPop(key1);
+        testData.Add(new(new ValkeyValue(value3), "ListLeftPop(key1)"));
+
+        _ = batch.ListLeftPop(key1);
+        testData.Add(new(new ValkeyValue(value2), "ListLeftPop(key1) second"));
+
+        _ = batch.ListLeftPush(key2, [value1, value2, value3, value4]);
+        testData.Add(new(4L, "ListLeftPush(key2, [value1, value2, value3, value4])"));
+
+        _ = batch.ListLeftPop(key2, 2);
+        testData.Add(new(ValkeyValue.EmptyArray, "ListLeftPop(key2, 2)", true));
+
+        _ = batch.ListLeftPop(key2, 10);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "ListLeftPop(key2, 10)", true));
+
+        _ = batch.ListLeftPop(key3);
+        // TODO: switch expected back to `ValkeyValue.Null` after converter fix
+        testData.Add(new(null, "ListLeftPop(key3) non-existent"));
+
+        _ = batch.ListLeftPop(key3, 5);
+        testData.Add(new(null, "ListLeftPop(key3, 5) non-existent"));
+
+        return testData;
+    }
+
     public static TheoryData<BatchTestData> GetTestClientWithAtomic =>
         [.. TestConfiguration.TestClients.SelectMany(r => new[] { true, false }.SelectMany(isAtomic =>
             new BatchTestData[] {
                 new("String commands", r.Data, CreateStringTest, isAtomic),
                 new("Set commands", r.Data, CreateSetTest, isAtomic),
+                new("List commands", r.Data, CreateListTest, isAtomic),
             }))];
 }
 
