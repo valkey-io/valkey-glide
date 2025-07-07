@@ -3,6 +3,7 @@ package compatibility.clients.jedis;
 
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ServerCredentials;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,10 +40,14 @@ public class ClusterConfigurationMapper {
 
         // Authentication
         if (jedisConfig.getUser() != null && jedisConfig.getPassword() != null) {
-            // GLIDE cluster authentication
-            // Note: Adapt based on GLIDE's actual authentication API
+            builder.credentials(ServerCredentials.builder()
+                .username(jedisConfig.getUser())
+                .password(jedisConfig.getPassword())
+                .build());
         } else if (jedisConfig.getPassword() != null) {
-            // Password-only authentication
+            builder.credentials(ServerCredentials.builder()
+                .password(jedisConfig.getPassword())
+                .build());
         }
 
         // Client name

@@ -53,7 +53,7 @@ public class Jedis implements Closeable {
      *
      * @param host the Redis/Valkey server host
      * @param port the Redis/Valkey server port
-     * @param config the client configuration
+     * @param config the jedis client configuration
      */
     public Jedis(String host, int port, JedisClientConfig config) {
         this.isPooled = false;

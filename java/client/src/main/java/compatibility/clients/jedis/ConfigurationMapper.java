@@ -3,6 +3,7 @@ package compatibility.clients.jedis;
 
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ServerCredentials;
 
 /**
  * Utility class to map Jedis configurations to Valkey GLIDE configurations. This handles the
@@ -39,12 +40,14 @@ public class ConfigurationMapper {
 
         // Authentication
         if (jedisConfig.getUser() != null && jedisConfig.getPassword() != null) {
-            // GLIDE may handle authentication differently
-            // This is a placeholder for authentication mapping
-            // You'll need to adapt this based on GLIDE's authentication API
+            builder.credentials(ServerCredentials.builder()
+                .username(jedisConfig.getUser())
+                .password(jedisConfig.getPassword())
+                .build());
         } else if (jedisConfig.getPassword() != null) {
-            // Password-only authentication
-            // Adapt based on GLIDE's API
+            builder.credentials(ServerCredentials.builder()
+                .password(jedisConfig.getPassword())
+                .build());
         }
 
         // Protocol version
