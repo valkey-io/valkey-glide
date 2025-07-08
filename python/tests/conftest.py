@@ -1,10 +1,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 import random
 import sys
 from typing import AsyncGenerator, List, Optional, Union
 
+import anyio
 import pytest
 
 from glide.config import (
@@ -562,7 +562,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     errors that can occur after password changes and connection kills.
     """
     # Add a small delay to allow server to stabilize after password/connection changes
-    await asyncio.sleep(0.5)
+    await anyio.sleep(0.5)
 
     # Retry connection attempts with exponential backoff
     max_retries = TEST_TEARDOWN_MAX_RETRIES
@@ -589,7 +589,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                     "test_teardown",
                     f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}",
                 )
-                await asyncio.sleep(delay)
+                await anyio.sleep(delay)
 
 
 async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
