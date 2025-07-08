@@ -220,11 +220,6 @@ jobs:
 
     lint:
         timeout-minutes: 10
-        needs: get-matrices
-        strategy:
-            fail-fast: false
-            matrix:
-                dotnet: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -235,18 +230,18 @@ jobs:
                   cargo-toml-folder: csharp/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Set up dotnet ${{ matrix.dotnet }}
+            - name: Set up dotnet
               if: always()
               uses: actions/setup-dotnet@v4
               with:
                   # install latest dotnet too to use language features
                   dotnet-version: |
                       9
-                      ${{ matrix.dotnet }}
+                      8.0
 
             - name: Format
               if: always()
               working-directory: csharp
               run: |
                   dotnet format --verify-no-changes --verbosity diagnostic
-                  dotnet build --configuration Lint --framework net${{ matrix.dotnet }}
+                  dotnet build --configuration Lint --framework net8.0
