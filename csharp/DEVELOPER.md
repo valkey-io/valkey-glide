@@ -135,6 +135,39 @@ A command line may contain all listed above parameters, for example:
 dotnet test --framework net8.0 --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --filter "FullyQualifiedName~GetReturnsNull" --results-directory .
 ```
 
+To run IT tests against an existing cluster and/or standalone endpoint, set `cluster-endpoints` and/or `standalone-endpoints` environment variables.
+In bash:
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 dotnet test
+```
+
+In Windows CMD:
+
+```cmd
+set cluster-endpoints=localhost:7000 && set standalone-endpoints=localhost:6379 && dotnet test
+```
+
+In Powershell:
+
+```powershell
+[Environment]::SetEnvironmentVariable('cluster-endpoints', 'localhost:7000')
+[Environment]::SetEnvironmentVariable('standalone-endpoints', 'localhost:6379')
+dotnet test
+```
+
+If those endpoints use TLS, add `tls` variable to `true` (applied to both endpoints):
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 tls=true dotnet test
+```
+
+You can combine this with test filter as well:
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 tls=true dotnet test --logger "console;verbosity=detailed" --filter "FullyQualifiedName~GetReturnsNull"
+```
+
 4. Run benchmark
 
     1. Ensure that you have installed `valkey-server` and `valkey-cli` on your host. You can find the valkey installation guide above.
