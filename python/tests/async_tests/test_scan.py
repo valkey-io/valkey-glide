@@ -4,7 +4,7 @@ import anyio
 import pytest
 
 from glide.glide import ClusterScanCursor
-from glide.async_.glide_client import GlideClient, GlideClusterClient
+from glide.aio.glide_client import GlideClient, GlideClusterClient
 from glide.shared.commands.command_args import ObjectType
 from glide.shared.config import ProtocolVersion
 from glide.shared.exceptions import RequestError

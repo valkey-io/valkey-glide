@@ -26,14 +26,9 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
-[tool.setuptools]
-package-dir = {"" = "../.."}
-include-package-data = true
-packages = ["glide.glide_async", "glide", "glide.commands", "glide.commands.async_commands", "glide.protobuf"]
-
-[tool.setuptools.package-data]
-"glide.glide_async" = ["*.so", "*.pyd", "*.dll", "*.pyi", "py.typed"]
-
 [tool.maturin]
 python-source = "../.."
-exclude = ["glide/sync/*", "glide/commands/sync_commands/*"]
+include = ["glide/shared/**/*.py"]
+exclude = [
+    "glide/shared/commands/sync_commands/**/*",
+]

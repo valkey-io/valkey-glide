@@ -1,13 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.async_ import (
-    TGlideClient,
-    GlideClient,
-    GlideClusterClient,
-    ClusterScanCursor,
-    Script,
-    glide_json,
-    ft,
+from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide import ClusterScanCursor, Script
+from glide.shared.commands.async_commands import glide_json, ft
+from glide.shared import (
     Logger,
     LogLevel,
     Batch,
@@ -154,13 +150,6 @@ from glide.async_ import (
 )
 
 __all__ = [
-    "TGlideClient",
-    "GlideClient",
-    "GlideClusterClient",
-    "ClusterScanCursor",
-    "Script",
-    "glide_json",
-    "ft",
     "Logger",
     "LogLevel",
     "Batch",
@@ -304,4 +293,11 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    "TGlideClient",
+    "GlideClient",
+    "GlideClusterClient",
+    "ClusterScanCursor",
+    "Script",
+    "glide_json",
+    "ft",
 ]

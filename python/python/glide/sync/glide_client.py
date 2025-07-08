@@ -25,7 +25,7 @@ ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURR_DIR.parent.parent.parent.parent
 FFI_DIR = ROOT_DIR / "ffi"
-LIB_FILE = FFI_DIR / "target" / "debug" / "libglide_ffi.so"
+LIB_FILE = CURR_DIR / "libglide_ffi.so"
 
 
 # Enum values must match the Rust definition
