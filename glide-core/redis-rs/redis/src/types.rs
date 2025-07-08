@@ -2372,9 +2372,9 @@ pub fn from_owned_redis_value<T: FromRedisValue>(v: Value) -> RedisResult<T> {
 #[derive(Clone, Eq, PartialEq, Default, Debug, Copy)]
 #[repr(C)]
 pub enum ProtocolVersion {
-    /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP2.md>
-    RESP2,
     /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md>
     #[default]
     RESP3,
+    /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP2.md>
+    RESP2,
 }
