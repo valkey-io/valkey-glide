@@ -4115,11 +4115,10 @@ export function runBaseTests(config: {
             async (protocol) => {
                 await runTest(async (client: BaseClient) => {
                     // Load a script - create a unique script for each test iteration
-                    const script = new Script(
-                        `return 'Hello from ${protocol}'`,
-                    );
+                    const randomString = getRandomKey();
+                    const script = new Script(`return '${randomString}'`);
                     expect(await client.invokeScript(script)).toEqual(
-                        `Hello from ${protocol}`,
+                        randomString,
                     );
 
                     // Check existence of script
