@@ -5,7 +5,7 @@ from typing import Mapping, cast
 
 import pytest
 
-from glide.async_.glide_client import GlideClusterClient
+from glide.aio.glide_client import GlideClusterClient
 from glide.shared.commands.core_options import InfoSection
 from glide.shared.config import ProtocolVersion, ReadFrom
 from glide.shared.constants import OK

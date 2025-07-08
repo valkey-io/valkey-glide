@@ -3,12 +3,11 @@ import json
 import uuid
 from typing import List, Optional, Tuple
 
-from glide.shared import AllNodes, ClosingError
-from glide.shared import ConnectionError as GlideConnectionError
-from glide.shared import (
+from glide import ClosingError
+from glide import ConnectionError as GlideConnectionError
+from glide import (
     GlideClusterClient,
     GlideClusterClientConfiguration,
-    InfoSection,
     Logger,
     LogLevel,
     NodeAddress,
@@ -25,7 +24,7 @@ from glide import (
     FtSearchOptions,
     ReturnField,
 )
-from glide.shared.constants import OK, FtSearchResponse, TEncodable
+from glide import OK
 
 
 async def create_client(

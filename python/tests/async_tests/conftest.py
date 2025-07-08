@@ -4,7 +4,7 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 
-from glide.async_.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.aio.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.shared.logger import Logger
 from glide.shared.config import (
     BackoffStrategy,

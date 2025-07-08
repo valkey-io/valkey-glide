@@ -21,9 +21,4 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["../../"]
-include = [
-    "glide.sync*",
-    "glide.shared*",
-    "glide.protobuf*"
-]
-exclude = ["glide", "glide/__init__.py", "glide.shared.commands.async_*", "glide.async_*"]  # <– exclude top-level glide, async, etc.
+exclude = ["glide", "glide/__init__.py", "glide/sync/build/**", "glide.shared.commands.aio*", "glide.aio*"]  # <– exclude top-level glide, async, etc.

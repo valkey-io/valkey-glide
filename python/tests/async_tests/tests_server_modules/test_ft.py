@@ -8,7 +8,7 @@ from typing import List, Mapping, Union, cast
 
 import pytest
 
-from glide.async_.glide_client import GlideClusterClient
+from glide.aio.glide_client import GlideClusterClient
 from glide.shared.commands.command_args import OrderBy
 from glide.shared.commands.async_commands import glide_json as GlideJson, ft
 from glide.shared.commands.server_modules.ft_options.ft_aggregate_options import (

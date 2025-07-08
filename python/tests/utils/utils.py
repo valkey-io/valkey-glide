@@ -18,7 +18,7 @@ from typing import (
 import pytest
 from packaging import version
 
-from glide.async_.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.aio.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.shared.logger import Level as logLevel
 from glide.shared.commands.core_options import InfoSection
 from glide.shared.config import (

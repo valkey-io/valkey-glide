@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
 
-from glide.glide import ClusterScanCursor
 from glide.shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -86,15 +85,6 @@ class CoreCommands(Protocol):
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
-    ) -> TResult: ...
-
-    def _cluster_scan(
-        self,
-        cursor: ClusterScanCursor,
-        match: Optional[TEncodable] = ...,
-        count: Optional[int] = ...,
-        type: Optional[ObjectType] = ...,
-        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     def _update_connection_password(
