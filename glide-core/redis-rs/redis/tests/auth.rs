@@ -62,6 +62,7 @@ mod auth {
             addr,
             redis: RedisConnectionInfo {
                 password,
+                protocol: redis::ProtocolVersion::RESP2,
                 ..Default::default()
             },
         }
@@ -72,7 +73,7 @@ mod auth {
         if let Some(password) = password {
             builder = builder.password(password);
         }
-        builder
+        builder.use_protocol(redis::ProtocolVersion::RESP2)
     }
 
     async fn set_password(password: &str, conn: &mut Connection) -> RedisResult<()> {
