@@ -138,7 +138,7 @@ Development instructions for local building & testing the package are in the [DE
 
 ### Cross-Compiling with Docker
 
-Valkey GLIDE uses CGO to interface with its Rust-based core, which can make cross-compilation challenging. Docker provides a convenient solution for cross-compiling applications that use Valkey GLIDE.
+Valkey GLIDE uses CGO to interface with its Rust-based core, shipped as pre-built static libraries for each target platform, which can make cross-compilation challenging. Docker provides a convenient solution for cross-compiling applications that use Valkey GLIDE.
 
 #### Prerequisites
 
