@@ -1,4 +1,4 @@
-﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 namespace Valkey.Glide.Commands;
 
@@ -6,5 +6,5 @@ namespace Valkey.Glide.Commands;
 /// Describes functionality that is common to both standalone and cluster servers.<br />
 /// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-public interface IDatabase : IStringBaseCommands, IGenericCommands, IServerManagementCommands
+public interface IDatabase : IStringBaseCommands, IGenericCommands, IServerManagementCommands, IHashCommands
 { }
