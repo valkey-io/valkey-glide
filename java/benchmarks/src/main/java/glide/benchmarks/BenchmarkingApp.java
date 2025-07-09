@@ -5,6 +5,7 @@ import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 
 import glide.benchmarks.clients.glide.GlideAsyncClient;
 import glide.benchmarks.clients.jedis.JedisClient;
+import glide.benchmarks.clients.jni.GlideJniAsyncClient;
 import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 import java.util.Arrays;
 import java.util.Optional;
@@ -58,6 +59,13 @@ public class BenchmarkingApp {
                     System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
+                case GLIDE_JNI:
+                    System.out.println("Valkey-GLIDE JNI async client");
+                    testClientSetGet(GlideJniAsyncClient::new, runConfiguration, true);
+                    break;
+                case ALL:
+                    // ALL is handled in the client parsing logic, should not reach here
+                    throw new IllegalStateException("ALL client type should be resolved before execution");
             }
         }
     }
@@ -95,7 +103,7 @@ public class BenchmarkingApp {
                 Option.builder()
                         .longOpt("clients")
                         .hasArg(true)
-                        .desc("one of: all|jedis|lettuce|glide")
+                        .desc("one of: all|jedis|lettuce|glide|glide_jni")
                         .build());
         options.addOption(
                 Option.builder().longOpt("host").hasArg(true).desc("Hostname [localhost]").build());
@@ -164,7 +172,7 @@ public class BenchmarkingApp {
                                     e -> {
                                         switch (e) {
                                             case ALL:
-                                                return Stream.of(ClientName.JEDIS, ClientName.GLIDE, ClientName.LETTUCE);
+                                                return Stream.of(ClientName.JEDIS, ClientName.GLIDE, ClientName.GLIDE_JNI, ClientName.LETTUCE);
                                             default:
                                                 return Stream.of(e);
                                         }
@@ -219,6 +227,7 @@ public class BenchmarkingApp {
         JEDIS("Jedis"), // sync
         LETTUCE("Lettuce"), // async
         GLIDE("Glide"), // async
+        GLIDE_JNI("Glide-JNI"), // async JNI
         ALL("All");
 
         private String name;

@@ -21,7 +21,7 @@ pub mod jni_exports {
 
     /// Create a client connection to Valkey with actual glide-core integration.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_connect<'local>(
+    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_connect<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
         host: JString<'local>,
@@ -38,7 +38,7 @@ pub mod jni_exports {
 
     /// Disconnect and release client resources.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_disconnect<'local>(
+    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_disconnect<'local>(
         env: JNIEnv<'local>,
         _class: JClass<'local>,
         client_ptr: jlong,
@@ -53,7 +53,7 @@ pub mod jni_exports {
     /// Takes command type (GET=1, SET=2, PING=3) and payload bytes.
     /// Returns response as byte array from actual Redis operations.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCommand<'local>(
+    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_executeCommand<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
         client_ptr: jlong,

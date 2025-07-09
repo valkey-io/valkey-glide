@@ -77,3 +77,4 @@ copilot-instructions.md
 **/.yarn
 **/.gradle/
 MANIFEST.MF
+*.so
