@@ -54,7 +54,7 @@ internal partial class Request
         }
         else
         {
-            args.Add((-1).ToGlideString()); // Remove expiry
+            args.Add((-1).ToGlideString()); // Instant expiry
         }
 
         if (when != ExpireWhen.Always)
@@ -76,7 +76,7 @@ internal partial class Request
         }
         else
         {
-            args.Add((-1).ToGlideString());
+            args.Add((-1).ToGlideString()); // Instant expiry
         }
 
         if (when != ExpireWhen.Always)
