@@ -11,7 +11,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyDeleteAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Del, args, false, response => response == 1);
+        return Boolean<long>(RequestType.Del, args, false);
     }
 
     public static Cmd<long, long> KeyDeleteAsync(ValkeyKey[] keys)
@@ -23,7 +23,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyUnlinkAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Unlink, args, false, response => response == 1);
+        return Boolean<long>(RequestType.Unlink, args, false);
     }
 
     public static Cmd<long, long> KeyUnlinkAsync(ValkeyKey[] keys)
@@ -35,7 +35,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyExistsAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Exists, args, false, response => response == 1);
+        return Boolean<long>(RequestType.Exists, args, false);
     }
 
     public static Cmd<long, long> KeyExistsAsync(ValkeyKey[] keys)
@@ -116,7 +116,7 @@ internal partial class Request
     public static Cmd<string, bool> KeyRenameAsync(ValkeyKey key, ValkeyKey newKey)
     {
         GlideString[] args = [key.ToGlideString(), newKey.ToGlideString()];
-        return new(RequestType.Rename, args, false, response => response == "OK");
+        return OKToBool(RequestType.Rename, args);
     }
 
     public static Cmd<bool, bool> KeyRenameNXAsync(ValkeyKey key, ValkeyKey newKey)
@@ -158,7 +158,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyTouchAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Touch, args, false, response => response == 1);
+        return Boolean<long>(RequestType.Touch, args, false);
     }
 
     public static Cmd<long, long> KeyTouchAsync(ValkeyKey[] keys)
