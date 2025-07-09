@@ -129,13 +129,13 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test with pytest (asyncio only)
+            - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html
 
-            - name: Test with pytest (full matrix)
+            - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
@@ -230,7 +230,7 @@ jobs:
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: python
+                  cargo-toml-folder: python/glide-async
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install dependencies
@@ -260,7 +260,9 @@ jobs:
             - name: Build docs
               working-directory: ./python/docs
               run: |
-                  sphinx-apidoc -o . ../python/glide
+                  sphinx-apidoc -o glide_async ../glide-async/python
+                  sphinx-apidoc -o glide_sync ../glide-sync/glide_sync
+                  sphinx-apidoc -o glide_shared ../glide-shared/glide_shared
                   make clean
                   make html SPHINXOPTS="-W --keep-going"
 

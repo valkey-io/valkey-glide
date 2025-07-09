@@ -16,12 +16,10 @@ from typing import (
 )
 
 import pytest
-from packaging import version
-
-from glide.aio.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.shared.logger import Level as logLevel
-from glide.shared.commands.core_options import InfoSection
-from glide.shared.config import (
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.logger import Level as logLevel
+from glide_shared.commands.core_options import InfoSection
+from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -32,16 +30,18 @@ from glide.shared.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.shared.constants import (
+from glide_shared.constants import (
     TClusterResponse,
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide.shared.routes import AllNodes
-from glide.sync import GlideClient as SyncGlideClient
-from glide.sync import GlideClusterClient as SyncGlideClusterClient
-from glide.sync import TGlideClient as TSyncGlideClient
+from glide_shared.routes import AllNodes
+from glide_sync import GlideClient as SyncGlideClient
+from glide_sync import GlideClusterClient as SyncGlideClusterClient
+from glide_sync import TGlideClient as TSyncGlideClient
+from packaging import version
+
 from tests.utils.cluster import ValkeyCluster
 
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]

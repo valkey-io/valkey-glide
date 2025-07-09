@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from shutil import which
+from shutil import copy2, rmtree, which
 from typing import Any, Dict, List, Optional
 
 
@@ -18,14 +18,19 @@ def find_project_root() -> Path:
 
 # Constants
 PROTO_REL_PATH = "glide-core/src/protobuf"
-PYTHON_CLIENT_PATH = "python/python/glide"
 VENV_NAME = ".env"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
+GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
+GLIDE_SYNC_DIR = PYTHON_DIR / "glide-sync"
+GLIDE_ASYNC_DIR = PYTHON_DIR / "glide-async"
 VENV_DIR = PYTHON_DIR / VENV_NAME
 VENV_BIN_DIR = VENV_DIR / "bin"
 PYTHON_EXE = VENV_BIN_DIR / "python"
 FFI_DIR = GLIDE_ROOT / "ffi"
+FFI_OUTPUT_DIR_DEBUG = FFI_DIR / "target" / "debug"
+FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
+FFI_TARGET_LIB_NAME = "libglide_ffi.so"
 GLIDE_SYNC_NAME = "GlidePySync"
 GLIDE_ASYNC_NAME = "GlidePy"
 
@@ -98,7 +103,7 @@ def get_venv_env() -> Dict[str, str]:
 
 def generate_protobuf_files() -> None:
     proto_src = GLIDE_ROOT / PROTO_REL_PATH
-    proto_dst = GLIDE_ROOT / PYTHON_CLIENT_PATH / "shared"
+    proto_dst = GLIDE_ROOT / GLIDE_SHARED_DIR / "glide_shared"
     proto_files = list(proto_src.glob("*.proto"))
 
     if not proto_files:
@@ -131,6 +136,17 @@ def generate_protobuf_files() -> None:
     print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}/protobuf")
 
 
+def install_glide_shared(env: Dict[str, str]) -> None:
+    shared_dir = PYTHON_DIR / "glide-shared"
+    print(f"[INFO] Installing glide-shared from: {shared_dir}")
+    run_command(
+        [str(PYTHON_EXE), "-m", "pip", "install", "."],
+        cwd=shared_dir,
+        env=env,
+        label="install glide-shared",
+    )
+
+
 def build_async_client(
     glide_version: str, release: bool, no_cache: bool = False
 ) -> None:
@@ -144,6 +160,7 @@ def build_async_client(
             "GLIDE_VERSION": glide_version,
         }
     )
+    install_glide_shared(env)
     generate_protobuf_files()
 
     cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
@@ -152,19 +169,34 @@ def build_async_client(
 
     run_command(
         cmd,
-        cwd=PYTHON_DIR,
+        cwd=GLIDE_ASYNC_DIR,
         env=env,
         label="maturin develop",
     )
     print("[OK] Async client build completed")
 
 
-def build_sync_client(glide_version: str) -> None:
-    print(f"[INFO] Building sync client with version={glide_version}...")
+def build_sync_client(glide_version: str, release: bool, no_cache: bool) -> None:
+    print(
+        f"[INFO] Building sync client with version={glide_version} in {'release' if release else 'debug'} mode..."
+    )
     generate_protobuf_files()
+    env = activate_venv(no_cache)
+    install_glide_shared(env)
 
+    # Optionally clean build artifacts
+    if no_cache:
+        for path in [GLIDE_SYNC_DIR / "build", GLIDE_SYNC_DIR / "dist"]:
+            if path.exists():
+                print(f"[INFO] Removing cache directory: {path}")
+                rmtree(path)
+
+    # Build the FFI library
+    cargo_args = ["cargo", "build"]
+    if release:
+        cargo_args.append("--release")
     run_command(
-        ["cargo", "build"],
+        cargo_args,
         cwd=FFI_DIR,
         label="cargo build ffi",
         env={
@@ -174,6 +206,27 @@ def build_sync_client(glide_version: str) -> None:
         },
     )
 
+    # Locate the output .so file
+    so_path = (
+        FFI_OUTPUT_DIR_RELEASE / FFI_TARGET_LIB_NAME
+        if release
+        else FFI_OUTPUT_DIR_DEBUG / FFI_TARGET_LIB_NAME
+    )
+    if not so_path.exists():
+        raise FileNotFoundError(f"Expected shared object not found at {so_path}")
+
+    # Copy to glide_sync package dir
+    dest_path = GLIDE_SYNC_DIR / "glide_sync" / FFI_TARGET_LIB_NAME
+    print(f"[INFO] Copying: {so_path} to: {dest_path}")
+    copy2(so_path, dest_path)
+
+    print(f"[INFO] Installing glide-sync: {GLIDE_SYNC_DIR}")
+    run_command(
+        [str(PYTHON_EXE), "-m", "pip", "install", "."],
+        cwd=GLIDE_SYNC_DIR,
+        env=env,
+        label="install glide-sync",
+    )
     print("[OK] Sync client build completed")
 
 
@@ -327,8 +380,8 @@ Examples:
             print(f"🛠 Building async client ({args.mode} mode)...")
             build_async_client(args.glide_version, release, no_cache)
         if args.client in ["sync", "all"]:
-            print("🛠 Building sync client...")
-            build_sync_client(glide_version=args.glide_version)
+            print("🛠 Building sync client ({args.mode} mode)...")
+            build_sync_client(args.glide_version, release, no_cache)
 
     print("[✅ DONE] Task completed successfully.")
 

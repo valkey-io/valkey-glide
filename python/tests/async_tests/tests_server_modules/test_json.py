@@ -7,20 +7,20 @@ import typing
 from typing import List, Optional
 
 import pytest
-
-from glide.aio.glide_client import GlideClusterClient, TGlideClient
-from glide.shared.commands.batch import ClusterBatch
-from glide.shared.commands.core_options import ConditionalChange
-from glide.shared.commands.async_commands import glide_json as json
-from glide.shared.commands.server_modules import json_batch
-from glide.shared.commands.server_modules.json_options import (
+from glide.glide_client import GlideClusterClient, TGlideClient
+from glide_shared.commands.async_commands import glide_json as json
+from glide_shared.commands.batch import ClusterBatch
+from glide_shared.commands.core_options import ConditionalChange
+from glide_shared.commands.server_modules import json_batch
+from glide_shared.commands.server_modules.json_options import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.shared.config import ProtocolVersion
-from glide.shared.constants import OK
-from glide.shared.exceptions import RequestError
+from glide_shared.config import ProtocolVersion
+from glide_shared.constants import OK
+from glide_shared.exceptions import RequestError
+
 from tests.async_tests.test_async_client import get_random_string
 
 

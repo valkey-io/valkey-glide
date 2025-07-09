@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../cluster_manager.py")
 
-from glide.shared import (
+from glide import (
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
