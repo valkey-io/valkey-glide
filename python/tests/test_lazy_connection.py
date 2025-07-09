@@ -103,7 +103,6 @@ async def glide_standalone_client_scoped(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("cluster_mode", [False, True])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 class TestLazyConnection:
     """
@@ -112,30 +111,32 @@ class TestLazyConnection:
     These tests verify that lazy clients only establish connections when the first command is executed,
     not during client initialization. This behavior is important for applications that need to minimize
     connection overhead until actual Valkey operations are needed.
+
+    Note:
+        The standalone mode tests use a dedicated Valkey instance (function_scoped_standalone_cluster)
+        to ensure accurate connection counting. This isolation is necessary because the tests rely on
+        precise connection counts, which can be affected by other tests running in parallel against
+        the same Valkey instance.
     """
 
-    async def test_lazy_connection_establishes_on_first_command(
+    async def _run_lazy_connection_test(
         self,
         request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
+        valkey_cluster: Optional[ValkeyCluster] = None,
     ):
         """
-        Test that lazy connections are only established when the first command is executed.
+        Shared test implementation for both cluster and standalone modes.
 
-        This test verifies that when a client is created with lazy_connect=True:
-        1. No connections are established during client initialization
-        2. Connections are established only when the first command is executed
+        This function contains the core test logic for verifying that lazy connections
+        are only established when the first command is executed.
 
-        The test uses a dedicated Valkey instance for standalone mode to ensure accurate connection
-        counting. This isolation is critical because the test relies on counting the exact number
-        of connections before and after client operations, which can be affected by other tests
-        running in parallel against the same Valkey instance.
-
-        Without this isolation, the test can be flaky as other tests might establish or close
-        connections to the same Valkey instance during test execution, causing the connection
-        count assertions to fail unpredictably.
+        Args:
+            request: The pytest request object
+            cluster_mode: Whether to test in cluster mode (True) or standalone mode (False)
+            protocol: The protocol version to use (RESP2 or RESP3)
+            valkey_cluster: Optional dedicated Valkey cluster for standalone mode tests
         """
         monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
         lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
@@ -146,26 +147,15 @@ class TestLazyConnection:
 
         try:
             # 1. Create a monitoring client (eagerly connected)
-            # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
-                monitoring_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=False,
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                    valkey_cluster=function_scoped_standalone_cluster,
-                )
-            else:
-                monitoring_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=False,
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                )
+            monitoring_client = await create_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                lazy_connect=False,
+                request_timeout=3000,
+                connection_timeout=3000,
+                valkey_cluster=valkey_cluster,
+            )
 
             if cluster_mode:
                 assert isinstance(monitoring_client, GlideClusterClient)
@@ -177,26 +167,15 @@ class TestLazyConnection:
             clients_before_lazy_init = await get_client_count(monitoring_client)
 
             # 3. Create the "lazy" client
-            # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
-                lazy_glide_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=True,  # Lazy
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                    valkey_cluster=function_scoped_standalone_cluster,
-                )
-            else:
-                lazy_glide_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=True,  # Lazy
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                )
+            lazy_glide_client = await create_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                lazy_connect=True,  # Lazy
+                request_timeout=3000,
+                connection_timeout=3000,
+                valkey_cluster=valkey_cluster,
+            )
 
             # 4. Check count (should not change)
             clients_after_lazy_init = await get_client_count(monitoring_client)
@@ -241,6 +220,10 @@ class TestLazyConnection:
                 ), f"PING response was not 'PONG': {decoded_ping_response}"
 
             # 6. Check client count after the first command
+            # Connection counting is sensitive to test isolation. For standalone mode, we use a dedicated
+            # Valkey instance to ensure accurate counts. Without this isolation, parallel test
+            # execution can cause this test to fail intermittently as other tests establish or close
+            # connections to the same Valkey instance.
             clients_after_first_command = await get_client_count(monitoring_client)
             expected_new_connections = await get_expected_new_connections(
                 monitoring_client
@@ -261,6 +244,51 @@ class TestLazyConnection:
             if lazy_glide_client:
                 await lazy_glide_client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_lazy_connection_establishes_on_first_command_cluster(
+        self,
+        request: Any,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """
+        Test that lazy connections are only established when the first command is executed in cluster mode.
+
+        This test verifies that when a client is created with lazy_connect=True:
+        1. No connections are established during client initialization
+        2. Connections are established only when the first command is executed
+        """
+        # Use the shared test implementation for cluster mode
+        await self._run_lazy_connection_test(request, cluster_mode, protocol)
+
+    async def test_lazy_connection_establishes_on_first_command_standalone(
+        self,
+        request: Any,
+        protocol: ProtocolVersion,
+        function_scoped_standalone_cluster: ValkeyCluster,
+    ):
+        """
+        Test that lazy connections are only established when the first command is executed in standalone mode.
+
+        This test verifies that when a client is created with lazy_connect=True:
+        1. No connections are established during client initialization
+        2. Connections are established only when the first command is executed
+
+        The test uses a dedicated Valkey instance for standalone mode to ensure accurate connection
+        counting. This isolation is critical because the test relies on counting the exact number
+        of connections before and after client operations, which can be affected by other tests
+        running in parallel against the same Valkey instance.
+
+        Without this isolation, the test can be flaky as other tests might establish or close
+        connections to the same Valkey instance during test execution, causing the connection
+        count assertions to fail unpredictably.
+        """
+        # Use the shared test implementation for standalone mode with the dedicated cluster
+        await self._run_lazy_connection_test(
+            request, False, protocol, function_scoped_standalone_cluster
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [False, True])
     async def test_lazy_connection_with_non_existent_host(
         self,
         request: Any,
