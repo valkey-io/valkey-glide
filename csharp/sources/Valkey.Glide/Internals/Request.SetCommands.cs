@@ -8,9 +8,9 @@ namespace Valkey.Glide.Internals;
 
 internal partial class Request
 {
-    public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -18,9 +18,9 @@ internal partial class Request
         return new(RequestType.SAdd, args, false, response => response == 1);
     }
 
-    public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -28,9 +28,9 @@ internal partial class Request
         return Simple<long>(RequestType.SAdd, args);
     }
 
-    public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -38,9 +38,9 @@ internal partial class Request
         return new(RequestType.SRem, args, false, response => response == 1);
     }
 
-    public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -48,9 +48,9 @@ internal partial class Request
         return Simple<long>(RequestType.SRem, args);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -58,9 +58,9 @@ internal partial class Request
         return new(RequestType.SMembers, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<long, long> SetLengthAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -68,9 +68,9 @@ internal partial class Request
         return Simple<long>(RequestType.SCard, args);
     }
 
-    public static Cmd<long, long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -82,9 +82,9 @@ internal partial class Request
         return Simple<long>(RequestType.SInterCard, [.. args]);
     }
 
-    public static Cmd<GlideString, GlideString> SetPopAsync(ValkeyKey key, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<GlideString, GlideString> SetPopAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -92,9 +92,9 @@ internal partial class Request
         return Simple<GlideString>(RequestType.SPop, args, true);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -102,9 +102,9 @@ internal partial class Request
         return new(RequestType.SPop, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -112,9 +112,9 @@ internal partial class Request
         return new(RequestType.SUnion, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -122,9 +122,9 @@ internal partial class Request
         return new(RequestType.SInter, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -132,9 +132,9 @@ internal partial class Request
         return new(RequestType.SDiff, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -142,9 +142,9 @@ internal partial class Request
         return Simple<long>(RequestType.SUnionStore, args);
     }
 
-    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
@@ -152,9 +152,9 @@ internal partial class Request
         return Simple<long>(RequestType.SInterStore, args);
     }
 
-    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags ignored = CommandFlags.None)
+    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
-        if (ignored != CommandFlags.None)
+        if (flags != CommandFlags.None)
         {
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
