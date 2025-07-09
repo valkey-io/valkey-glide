@@ -11,7 +11,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyDeleteAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Del, args, false);
+        return Boolean<long>(RequestType.Del, args);
     }
 
     public static Cmd<long, long> KeyDeleteAsync(ValkeyKey[] keys)
@@ -23,7 +23,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyUnlinkAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Unlink, args, false);
+        return Boolean<long>(RequestType.Unlink, args);
     }
 
     public static Cmd<long, long> KeyUnlinkAsync(ValkeyKey[] keys)
@@ -35,7 +35,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyExistsAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Exists, args, false);
+        return Boolean<long>(RequestType.Exists, args);
     }
 
     public static Cmd<long, long> KeyExistsAsync(ValkeyKey[] keys)
@@ -158,7 +158,7 @@ internal partial class Request
     public static Cmd<long, bool> KeyTouchAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Touch, args, false);
+        return Boolean<long>(RequestType.Touch, args);
     }
 
     public static Cmd<long, long> KeyTouchAsync(ValkeyKey[] keys)
