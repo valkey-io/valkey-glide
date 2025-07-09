@@ -233,9 +233,14 @@ macro_rules! create_log {
             log_identifier: Identifier,
             message: Message,
         ) {
-            if INITIATE_ONCE.init_once.get().is_none() {
-                init(Some(Level::Warn), None);
-            };
+            // Users can still call init if they don't want to setup logging themselves.
+            #[cfg(not(feature="rust_client"))]
+            {
+                if INITIATE_ONCE.init_once.get().is_none() {
+                    init(Some(Level::Warn), None);
+                };
+            }
+
             let message_ref = message.as_ref();
             let identifier_ref = log_identifier.as_ref();
             event!(
