@@ -316,6 +316,21 @@ internal class FFI
         SInterStore = 1207,
         SUnion = 1216,
         SUnionStore = 1217,
+        Del = 402,
+        Unlink = 430,
+        Exists = 404,
+        Expire = 405,
+        ExpireAt = 406,
+        TTL = 428,
+        Type = 429,
+        Rename = 421,
+        RenameNX = 422,
+        Persist = 415,
+        Dump = 403,
+        Restore = 423,
+        Touch = 427,
+        Copy = 401,
+        Move = 410,
     }
 
     internal enum RouteType : uint

@@ -78,4 +78,39 @@ public class SharedBatchTests
                 : await ((GlideClient)client).Exec((Batch)batch, true));
         Assert.Contains("wrong kind of value", err.Message);
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(GetTestClientWithAtomic))]
+    public async Task BatchDumpAndRestore(BaseClient client, bool isAtomic)
+    {
+        bool isCluster = client is GlideClusterClient;
+        string key1 = "{DumpRestore}" + Guid.NewGuid();
+        string key2 = "{DumpRestore}" + Guid.NewGuid();
+
+        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        _ = batch.Set(key1, "hello").KeyDump(key1);
+
+        object?[] res = isCluster
+            ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
+            : (await ((GlideClient)client).Exec((Batch)batch, false))!;
+
+        Assert.Multiple(
+            () => Assert.Equal(2, res.Length),
+            () => Assert.Equal("OK", res[0]),
+            () => Assert.IsType<byte[]?>(res[1])
+        );
+
+        IBatch batch2 = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        _ = batch2.KeyDelete(key1).KeyRestore(key1, (byte[])res[1]!);
+
+        res = isCluster
+            ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch2, false))!
+            : (await ((GlideClient)client).Exec((Batch)batch2, false))!;
+
+        Assert.Multiple(
+            () => Assert.True((bool)res[0]!),
+            () => Assert.Equal("OK", res[1])
+        );
+
+    }
 }

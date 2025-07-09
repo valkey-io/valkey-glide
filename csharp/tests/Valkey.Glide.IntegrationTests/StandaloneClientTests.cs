@@ -124,4 +124,49 @@ public class StandaloneClientTests(TestConfiguration config)
             () => Assert.DoesNotContain("# Latencystats", info),
         ]);
     }
+
+    [Fact]
+    public async Task KeyCopy_Move()
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        string key = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+
+        await client.Set(key, "val");
+        Assert.True(await client.KeyCopyAsync(key, key2, 1));
+        Assert.True(await client.KeyMoveAsync(key, 2));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        string sourceKey = Guid.NewGuid().ToString();
+        string destKey = Guid.NewGuid().ToString();
+        string moveKey = Guid.NewGuid().ToString();
+        string value = "test-value";
+
+        var batch = new Valkey.Glide.Pipeline.Batch(isAtomic);
+
+        // Set up keys
+        _ = batch.Set(sourceKey, value);
+        _ = batch.Set(moveKey, value);
+
+        // Test KeyCopy with database parameter
+        _ = batch.KeyCopy(sourceKey, destKey, 1, false);
+
+        // Test KeyMove
+        _ = batch.KeyMove(moveKey, 2);
+
+        object?[] results = (await client.Exec(batch, false))!;
+
+        Assert.Multiple(
+            () => Assert.Equal("OK", results[0]), // Set sourceKey
+            () => Assert.Equal("OK", results[1]), // Set moveKey
+            () => Assert.True((bool)results[2]!), // KeyCopy result
+            () => Assert.True((bool)results[3]!)  // KeyMove result
+        );
+    }
 }

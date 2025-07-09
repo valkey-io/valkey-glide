@@ -8,4 +8,6 @@ namespace Valkey.Glide.Commands.Constants;
 public static class Constants
 {
     public const string LimitKeyword = "LIMIT";
+    public const string ReplaceKeyword = "REPLACE";
+    public const string DbKeyword = "DB";
 }

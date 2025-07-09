@@ -3430,7 +3430,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, expireTime tim
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
