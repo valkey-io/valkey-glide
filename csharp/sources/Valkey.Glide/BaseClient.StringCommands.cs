@@ -7,27 +7,41 @@ namespace Valkey.Glide;
 
 public abstract partial class BaseClient : IStringBaseCommands
 {
-    public async Task<string> StringSet(GlideString key, GlideString value)
-        => await Command(Request.StringSet(key, value));
-
-    public async Task<GlideString?> StringGet(GlideString key)
-        => await Command(Request.StringGet(key));
-
-    public async Task<GlideString?[]> StringGet(GlideString[] keys)
-        => await Command(Request.StringGetAsync(keys));
-
-    public async Task<string> StringSet(KeyValuePair<GlideString, GlideString>[] values)
+    public async Task<bool> StringSetAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
     {
-        GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(values);
-        return await Command(Request.StringSetAsync(keyValuePairs));
+        await Command(Request.StringSet(key, value));
+        return true;
     }
 
-    public async Task<GlideString> StringGetRange(GlideString key, long start, long end)
+    public async Task<ValkeyValue> StringGetAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringGet(key));
+
+    public async Task<ValkeyValue[]> StringGetAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
+    {
+        GlideString[] glideKeys = [.. keys.Select(k => (GlideString)k)];
+        GlideString?[] result = await Command(Request.StringGetAsync(glideKeys));
+        return [.. result.Select(r => r is null ? ValkeyValue.Null : (ValkeyValue)r)];
+    }
+
+    public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, CommandFlags flags = CommandFlags.None)
+    {
+        KeyValuePair<GlideString, GlideString>[] glideValues = [..
+            values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
+        ];
+        GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
+        await Command(Request.StringSetAsync(keyValuePairs));
+        return true;
+    }
+
+    public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringGetRange(key, start, end));
 
-    public async Task<long> StringSetRange(GlideString key, long offset, GlideString value)
-        => await Command(Request.StringSetRange(key, offset, value));
+    public async Task<ValkeyValue> StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    {
+        long result = await Command(Request.StringSetRange(key, offset, value));
+        return result;
+    }
 
-    public async Task<long> StringLength(GlideString key)
+    public async Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringLength(key));
 }

@@ -9,30 +9,30 @@ public class StringCommandTests(TestConfiguration config)
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_StringGet_SingleKey(BaseClient client)
+    public async Task StringSetAsync_StringGetAsync_SingleKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
 
-        string result = await client.StringSet(key, value);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(key, value);
+        Assert.True(result);
 
-        GlideString? retrievedValue = await client.StringGet(key);
-        Assert.Equal(value, retrievedValue?.ToString());
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value, retrievedValue.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGet_NonExistentKey(BaseClient client)
+    public async Task StringGetAsync_NonExistentKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        GlideString? value = await client.StringGet(key);
-        Assert.Null(value);
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.True(value.IsNull);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGet_MultipleKeys(BaseClient client)
+    public async Task StringGetAsync_MultipleKeys(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
@@ -41,106 +41,108 @@ public class StringCommandTests(TestConfiguration config)
         string value2 = Guid.NewGuid().ToString();
 
         // Set key1 and key2, leave key3 unset
-        await client.StringSet(key1, value1);
-        await client.StringSet(key2, value2);
+        await client.StringSetAsync(key1, value1);
+        await client.StringSetAsync(key2, value2);
 
-        GlideString[] keys = [key1, key2, key3];
-        GlideString?[] values = await client.StringGet(keys);
+        ValkeyKey[] keys = [key1, key2, key3];
+        ValkeyValue[] values = await client.StringGetAsync(keys);
 
         Assert.Equal(3, values.Length);
-        Assert.Equal(value1, values[0]?.ToString());
-        Assert.Equal(value2, values[1]?.ToString());
-        Assert.Null(values[2]);
+        Assert.Equal(value1, values[0].ToString());
+        Assert.Equal(value2, values[1].ToString());
+        Assert.True(values[2].IsNull);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGet_NonExistentKeys(BaseClient client)
+    public async Task StringGetAsync_NonExistentKeys(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
 
-        GlideString[] keys = [key1, key2];
-        GlideString?[] values = await client.StringGet(keys);
+        ValkeyKey[] keys = [key1, key2];
+        ValkeyValue[] values = await client.StringGetAsync(keys);
 
         Assert.Equal(2, values.Length);
-        Assert.Null(values[0]);
-        Assert.Null(values[1]);
+        Assert.True(values[0].IsNull);
+        Assert.True(values[1].IsNull);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_KeyValuePairs(BaseClient client)
+    public async Task StringSetAsync_MultipleKeyValuePairs(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string value1 = Guid.NewGuid().ToString();
         string value2 = Guid.NewGuid().ToString();
 
-        KeyValuePair<GlideString, GlideString>[] values = [
+        KeyValuePair<ValkeyKey, ValkeyValue>[] keyValuePairs = [
             new(key1, value1),
             new(key2, value2)
         ];
 
-        string result = await client.StringSet(values);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(keyValuePairs);
+        Assert.True(result);
 
-        // Verify values were set
-        Assert.Equal(value1, (await client.StringGet(key1))?.ToString());
-        Assert.Equal(value2, (await client.StringGet(key2))?.ToString());
+        ValkeyValue retrievedValue1 = await client.StringGetAsync(key1);
+        ValkeyValue retrievedValue2 = await client.StringGetAsync(key2);
+
+        Assert.Equal(value1, retrievedValue1.ToString());
+        Assert.Equal(value2, retrievedValue2.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_KeyValuePairs_WithUnicodeValues(BaseClient client)
+    public async Task StringSetAsync_KeyValuePairs_WithUnicodeValues(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string unicodeValue1 = "שלום hello 汉字";
         string unicodeValue2 = "مرحبا world 🌍";
 
-        KeyValuePair<GlideString, GlideString>[] values = [
+        KeyValuePair<ValkeyKey, ValkeyValue>[] values = [
             new(key1, unicodeValue1),
             new(key2, unicodeValue2)
         ];
 
-        string result = await client.StringSet(values);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(values);
+        Assert.True(result);
 
-        GlideString[] keys = [key1, key2];
-        GlideString?[] retrievedValues = await client.StringGet(keys);
+        ValkeyKey[] keys = [key1, key2];
+        ValkeyValue[] retrievedValues = await client.StringGetAsync(keys);
 
         Assert.Equal(2, retrievedValues.Length);
-        Assert.Equal(unicodeValue1, retrievedValues[0]?.ToString());
-        Assert.Equal(unicodeValue2, retrievedValues[1]?.ToString());
+        Assert.Equal(unicodeValue1, retrievedValues[0].ToString());
+        Assert.Equal(unicodeValue2, retrievedValues[1].ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_KeyValuePairs_WithEmptyValues(BaseClient client)
+    public async Task StringSetAsync_KeyValuePairs_WithEmptyValues(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
 
-        KeyValuePair<GlideString, GlideString>[] values = [
+        KeyValuePair<ValkeyKey, ValkeyValue>[] values = [
             new(key1, ""),
             new(key2, "non-empty")
         ];
 
-        string result = await client.StringSet(values);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(values);
+        Assert.True(result);
 
-        GlideString[] keys = [key1, key2];
-        GlideString?[] retrievedValues = await client.StringGet(keys);
+        ValkeyKey[] keys = [key1, key2];
+        ValkeyValue[] retrievedValues = await client.StringGetAsync(keys);
 
         Assert.Equal(2, retrievedValues.Length);
-        Assert.Equal("", retrievedValues[0]?.ToString());
-        Assert.Equal("non-empty", retrievedValues[1]?.ToString());
+        Assert.Equal("", retrievedValues[0].ToString());
+        Assert.Equal("non-empty", retrievedValues[1].ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_KeyValuePairs_OverwriteExistingKeys(BaseClient client)
+    public async Task StringSetAsync_KeyValuePairs_OverwriteExistingKeys(BaseClient client)
     {
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
@@ -150,136 +152,111 @@ public class StringCommandTests(TestConfiguration config)
         string newValue2 = "new2";
 
         // Set initial values
-        await client.StringSet(key1, initialValue1);
-        await client.StringSet(key2, initialValue2);
+        await client.StringSetAsync(key1, initialValue1);
+        await client.StringSetAsync(key2, initialValue2);
 
-        // Overwrite with StringSet
-        KeyValuePair<GlideString, GlideString>[] values = [
+        // Overwrite with StringSetAsync
+        KeyValuePair<ValkeyKey, ValkeyValue>[] values = [
             new(key1, newValue1),
             new(key2, newValue2)
         ];
 
-        string result = await client.StringSet(values);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(values);
+        Assert.True(result);
 
         // Verify values were overwritten
-        GlideString[] keys = [key1, key2];
-        GlideString?[] retrievedValues = await client.StringGet(keys);
+        ValkeyKey[] keys = [key1, key2];
+        ValkeyValue[] retrievedValues = await client.StringGetAsync(keys);
 
         Assert.Equal(2, retrievedValues.Length);
-        Assert.Equal(newValue1, retrievedValues[0]?.ToString());
-        Assert.Equal(newValue2, retrievedValues[1]?.ToString());
+        Assert.Equal(newValue1, retrievedValues[0].ToString());
+        Assert.Equal(newValue2, retrievedValues[1].ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSet_KeyValuePairs_WithGlideStringKeys(BaseClient client)
-    {
-        GlideString key1 = new("key1");
-        GlideString key2 = new("key2");
-        GlideString value1 = new("value1");
-        GlideString value2 = new("value2");
-
-        KeyValuePair<GlideString, GlideString>[] values = [
-            new(key1, value1),
-            new(key2, value2)
-        ];
-
-        string result = await client.StringSet(values);
-        Assert.Equal("OK", result);
-
-        GlideString[] keys = [key1, key2];
-        GlideString?[] retrievedValues = await client.StringGet(keys);
-
-        Assert.Equal(2, retrievedValues.Length);
-        Assert.Equal(value1, retrievedValues[0]);
-        Assert.Equal(value2, retrievedValues[1]);
-    }
-
-    [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringLength_ExistingKey(BaseClient client)
+    public async Task StringLengthAsync_ExistingKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = "Hello World";
 
-        await client.StringSet(key, value);
-        long length = await client.StringLength(key);
+        await client.StringSetAsync(key, value);
+        long length = await client.StringLengthAsync(key);
         Assert.Equal(value.Length, length);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringLength_NonExistentKey(BaseClient client)
+    public async Task StringLengthAsync_NonExistentKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        long length = await client.StringLength(key);
+        long length = await client.StringLengthAsync(key);
         Assert.Equal(0, length);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGetRange_ExistingKey(BaseClient client)
+    public async Task StringGetRangeAsync_ExistingKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = "Hello World";
 
-        await client.StringSet(key, value);
-        GlideString result = await client.StringGetRange(key, 0, 4);
+        await client.StringSetAsync(key, value);
+        ValkeyValue result = await client.StringGetRangeAsync(key, 0, 4);
         Assert.Equal("Hello", result.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringGetRange_NonExistentKey(BaseClient client)
+    public async Task StringGetRangeAsync_NonExistentKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        GlideString result = await client.StringGetRange(key, 0, 4);
+        ValkeyValue result = await client.StringGetRangeAsync(key, 0, 4);
         Assert.Equal("", result.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSetRange_ExistingKey(BaseClient client)
+    public async Task StringSetRangeAsync_ExistingKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string initialValue = "Hello World";
 
-        await client.StringSet(key, initialValue);
-        long newLength = await client.StringSetRange(key, 6, "Valkey");
-        Assert.Equal(12, newLength);
+        await client.StringSetAsync(key, initialValue);
+        ValkeyValue newLength = await client.StringSetRangeAsync(key, 6, "Valkey");
+        Assert.Equal(12, (long)newLength);
 
-        GlideString? value = await client.StringGet(key);
-        Assert.Equal("Hello Valkey", value?.ToString());
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("Hello Valkey", value.ToString());
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
-    public async Task StringSetRange_NonExistentKey(BaseClient client)
+    public async Task StringSetRangeAsync_NonExistentKey(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        long newLength = await client.StringSetRange(key, 0, "Hello");
-        Assert.Equal(5, newLength);
+        ValkeyValue newLength = await client.StringSetRangeAsync(key, 0, "Hello");
+        Assert.Equal(5, (long)newLength);
 
-        GlideString? value = await client.StringGet(key);
-        Assert.Equal("Hello", value?.ToString());
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("Hello", value.ToString());
     }
 
     // Utility methods for other tests
-    internal static async Task GetAndSetValues(BaseClient client, string key, string value)
+    internal static async Task GetAndSetValuesAsync(BaseClient client, string key, string value)
     {
-        string result = await client.StringSet(key, value);
-        Assert.Equal("OK", result);
+        bool result = await client.StringSetAsync(key, value);
+        Assert.True(result);
 
-        GlideString? retrievedValue = await client.StringGet(key);
-        Assert.Equal(value, retrievedValue?.ToString());
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value, retrievedValue.ToString());
     }
 
-    internal static async Task GetAndSetRandomValues(BaseClient client)
+    internal static async Task GetAndSetRandomValuesAsync(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
 
-        await GetAndSetValues(client, key, value);
+        await GetAndSetValuesAsync(client, key, value);
     }
 }

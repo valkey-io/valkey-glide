@@ -7,31 +7,31 @@ namespace Valkey.Glide.Pipeline;
 /// </summary>
 internal interface IBatchStringCommands
 {
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGet(GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGet(GlideString)" /></returns>
-    IBatch StringGet(GlideString key);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringGetAsync(ValkeyKey key);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGet(GlideString[])" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGet(GlideString[])" /></returns>
-    IBatch StringGet(GlideString[] keys);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey[], CommandFlags)" /></returns>
+    IBatch StringGetAsync(ValkeyKey[] keys);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSet(GlideString, GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSet(GlideString, GlideString)" /></returns>
-    IBatch StringSet(GlideString key, GlideString value);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
+    IBatch StringSetAsync(ValkeyKey key, ValkeyValue value);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSet(KeyValuePair{GlideString, GlideString}[])" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSet(KeyValuePair{GlideString, GlideString}[])" /></returns>
-    IBatch StringSet(KeyValuePair<GlideString, GlideString>[] values);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" /></returns>
+    IBatch StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetRange(GlideString, long, long)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetRange(GlideString, long, long)" /></returns>
-    IBatch StringGetRange(GlideString key, long start, long end);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" /></returns>
+    IBatch StringGetRangeAsync(ValkeyKey key, long start, long end);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetRange(GlideString, long, GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetRange(GlideString, long, GlideString)" /></returns>
-    IBatch StringSetRange(GlideString key, long offset, GlideString value);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetRangeAsync(ValkeyKey, long, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetRangeAsync(ValkeyKey, long, ValkeyValue, CommandFlags)" /></returns>
+    IBatch StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value);
 
-    /// <inheritdoc cref="Commands.IStringBaseCommands.StringLength(GlideString)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringLength(GlideString)" /></returns>
-    IBatch StringLength(GlideString key);
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringLengthAsync(ValkeyKey key);
 }

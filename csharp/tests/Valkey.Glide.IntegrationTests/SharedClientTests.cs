@@ -20,7 +20,7 @@ public class SharedClientTests(TestConfiguration config)
         {
             value += value;
         }
-        await StringCommandTests.GetAndSetValues(client, key, value);
+        await StringCommandTests.GetAndSetValuesAsync(client, key, value);
     }
 
     // This test is slow, but it caught timing and releasing issues in the past,
@@ -41,11 +41,12 @@ public class SharedClientTests(TestConfiguration config)
                 {
                     if ((i + index) % 2 == 0)
                     {
-                        await StringCommandTests.GetAndSetRandomValues(client);
+                        await StringCommandTests.GetAndSetRandomValuesAsync(client);
                     }
                     else
                     {
-                        Assert.Null(await client.StringGet(Guid.NewGuid().ToString()));
+                        ValkeyValue result = await client.StringGetAsync(Guid.NewGuid().ToString());
+                        Assert.True(result.IsNull);
                     }
                 }
             }));
