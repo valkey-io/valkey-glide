@@ -382,6 +382,7 @@ mod socket_listener {
                 use_tls: use_tls.to_bool(),
                 cluster_mode,
                 request_timeout: Some(REQUEST_TIMEOUT_MS),
+                protocol: connection_request::ProtocolVersion::RESP2,
                 ..Default::default()
             },
         );
