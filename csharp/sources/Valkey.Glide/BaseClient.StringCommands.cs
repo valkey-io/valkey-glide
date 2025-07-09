@@ -9,7 +9,7 @@ public abstract partial class BaseClient : IStringBaseCommands
 {
     public async Task<bool> StringSetAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
     {
-        await Command(Request.StringSet(key, value));
+        _ = await Command(Request.StringSet(key, value));
         return true;
     }
 
@@ -29,7 +29,7 @@ public abstract partial class BaseClient : IStringBaseCommands
             values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
         ];
         GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
-        await Command(Request.StringSetMultiple(keyValuePairs));
+        _ = await Command(Request.StringSetMultiple(keyValuePairs));
         return true;
     }
 
