@@ -14,58 +14,52 @@ mod client;
 
 use error::Result;
 
-/// Simplified JNI exports for realistic POC.
-#[allow(non_snake_case)]
-pub mod jni_exports {
-    use super::*;
-
-    /// Create a client connection to Valkey with actual glide-core integration.
-    #[no_mangle]
-    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_connect<'local>(
-        mut env: JNIEnv<'local>,
-        _class: JClass<'local>,
-        host: JString<'local>,
-        port: jint,
-    ) -> jlong {
-        match client::create_client(&mut env, host, port) {
-            Ok(client_ptr) => client_ptr,
-            Err(err) => {
-                let _ = err.throw(env);
-                0
-            }
-        }
-    }
-
-    /// Disconnect and release client resources.
-    #[no_mangle]
-    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_disconnect<'local>(
-        env: JNIEnv<'local>,
-        _class: JClass<'local>,
-        client_ptr: jlong,
-    ) {
-        if let Err(err) = client::close_client(&env, client_ptr) {
+/// Create a client connection to Valkey with actual glide-core integration.
+#[no_mangle]
+pub extern "C" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_connect<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    host: JString<'local>,
+    port: jint,
+) -> jlong {
+    match client::create_client(&mut env, host, port) {
+        Ok(client_ptr) => client_ptr,
+        Err(err) => {
             let _ = err.throw(env);
+            0
         }
     }
+}
 
-    /// Execute a command through actual glide-core client - core function for realistic benchmarking.
-    ///
-    /// Takes command type (GET=1, SET=2, PING=3) and payload bytes.
-    /// Returns response as byte array from actual Redis operations.
-    #[no_mangle]
-    pub unsafe extern "system" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_executeCommand<'local>(
-        mut env: JNIEnv<'local>,
-        _class: JClass<'local>,
-        client_ptr: jlong,
-        command_type: jint,
-        payload: JByteArray<'local>,
-    ) -> jbyteArray {
-        match execute_command_impl(&mut env, client_ptr, command_type, payload) {
-            Ok(response) => response.into_raw(),
-            Err(err) => {
-                let _ = err.throw(env);
-                std::ptr::null_mut()
-            }
+/// Disconnect and release client resources.
+#[no_mangle]
+pub extern "C" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_disconnect<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    client_ptr: jlong,
+) {
+    if let Err(err) = client::close_client(&env, client_ptr) {
+        let _ = err.throw(env);
+    }
+}
+
+/// Execute a command through actual glide-core client - core function for realistic benchmarking.
+///
+/// Takes command type (GET=1, SET=2, PING=3) and payload bytes.
+/// Returns response as byte array from actual Redis operations.
+#[no_mangle]
+pub extern "C" fn Java_glide_benchmarks_clients_jni_GlideJniAsyncClient_executeCommand<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    client_ptr: jlong,
+    command_type: jint,
+    payload: JByteArray<'local>,
+) -> jbyteArray {
+    match execute_command_impl(&mut env, client_ptr, command_type, payload) {
+        Ok(response) => response.into_raw(),
+        Err(err) => {
+            let _ = err.throw(env);
+            std::ptr::null_mut()
         }
     }
 }

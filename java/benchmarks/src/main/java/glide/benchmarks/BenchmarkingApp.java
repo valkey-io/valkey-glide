@@ -3,10 +3,13 @@ package glide.benchmarks;
 
 import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 
+import glide.benchmarks.clients.glide.GlideAsyncClient;
+import glide.benchmarks.clients.jedis.JedisClient;
+import glide.benchmarks.clients.jni.GlideJniAsyncClient;
+import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -14,11 +17,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-
-import glide.benchmarks.clients.glide.GlideAsyncClient;
-import glide.benchmarks.clients.jedis.JedisClient;
-import glide.benchmarks.clients.jni.GlideJniAsyncClient;
-import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 
 /** Benchmarking app for reporting performance of various Valkey Java-clients */
 public class BenchmarkingApp {
@@ -174,7 +172,11 @@ public class BenchmarkingApp {
                                     e -> {
                                         switch (e) {
                                             case ALL:
-                                                return Stream.of(ClientName.JEDIS, ClientName.GLIDE, ClientName.GLIDE_JNI, ClientName.LETTUCE);
+                                                return Stream.of(
+                                                        ClientName.JEDIS,
+                                                        ClientName.GLIDE,
+                                                        ClientName.GLIDE_JNI,
+                                                        ClientName.LETTUCE);
                                             default:
                                                 return Stream.of(e);
                                         }

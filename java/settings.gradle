@@ -8,3 +8,5 @@ rootProject.name = 'glide'
 include 'client'
 include 'integTest'
 include 'benchmarks'
+include ':java-jni'
+project(':java-jni').projectDir = new File(rootDir, '../java-jni')

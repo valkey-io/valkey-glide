@@ -19,6 +19,7 @@ dependencies {
     version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 
     implementation "io.valkey:valkey-glide:${version}:${osdetector.classifier}"
+    implementation project(':java-jni')
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'
@@ -45,32 +46,49 @@ application {
 }
 
 // JNI Library Build Tasks
+// Define target arch for consistency
+ext {
+    rustTarget = osdetector.os == 'linux' && osdetector.release.id != 'alpine' ?
+        "${arch}-unknown-linux-gnu.2.17" : null
+    rustTargetDir = rustTarget ? "target/${arch}-unknown-linux-gnu/release/" : "target/release/"
+}
+
 tasks.register('buildJniRust', Exec) {
     description = 'Build the JNI Rust library'
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    if (rustTarget) {
+        commandLine 'cargo', 'zigbuild', '--target', rustTarget, '--release'
     } else {
         commandLine 'cargo', 'build', '--release'
     }
 
     workingDir "${project.rootDir}/../rust-jni"
     environment CARGO_TERM_COLOR: 'always'
+
+    doLast {
+        println "Built JNI library for target: ${rustTarget ?: 'default'}"
+        println "Library location: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+    }
 }
 
 tasks.register('copyJniLib', Copy) {
     description = 'Copy JNI native library to resources'
     dependsOn 'buildJniRust'
 
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${project.rootDir}/../rust-jni/target/${arch}-unknown-linux-gnu/release/"
-    } else {
-        from "${project.rootDir}/../rust-jni/target/release"
-    }
+    from "${project.rootDir}/../rust-jni/${rustTargetDir}"
     include "libglidejni.so", "libglidejni.dylib", "glidejni.dll"
     into sourceSets.main.output.resourcesDir
 
     doLast {
-        println "JNI library copied to ${sourceSets.main.output.resourcesDir}"
+        println "JNI library copied from: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+        println "JNI library copied to: ${sourceSets.main.output.resourcesDir}"
+
+        // Verify the library exists
+        def libFile = new File(sourceSets.main.output.resourcesDir, "libglidejni.so")
+        if (libFile.exists()) {
+            println "✅ Library copied successfully: ${libFile.absolutePath}"
+        } else {
+            println "❌ Library not found after copy!"
+        }
     }
 }
 
