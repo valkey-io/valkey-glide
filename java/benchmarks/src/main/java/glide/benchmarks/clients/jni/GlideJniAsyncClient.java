@@ -1,10 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.jni;
 
+import java.util.concurrent.CompletableFuture;
+
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
 import io.valkey.glide.jni.client.GlideJniClient;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * JNI-based Glide client for benchmarking against UDS implementation.
@@ -68,16 +69,12 @@ public class GlideJniAsyncClient implements AsyncClient<String> {
     /** Check if the client is closed */
     public boolean isClosed() {
         return jniClient == null || jniClient.isClosed();
-    }
-
-    // Test method for JNI loading
+    } // Test method for JNI loading
     public static void main(String[] args) {
         System.out.println("Testing JNI loading...");
         try {
             GlideJniAsyncClient client = new GlideJniAsyncClient();
-            ConnectionSettings settings = new ConnectionSettings();
-            settings.host = "127.0.0.1";
-            settings.port = 6379;
+            ConnectionSettings settings = new ConnectionSettings("127.0.0.1", 6379, false, false);
 
             client.connectToValkey(settings);
             System.out.println("JNI connect successful!");
