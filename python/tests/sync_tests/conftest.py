@@ -3,8 +3,7 @@
 from typing import Generator, List, Optional
 
 import pytest
-
-from glide.shared.config import (
+from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -13,10 +12,11 @@ from glide.shared.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.shared.exceptions import ClosingError
-from glide.sync import GlideClient as SyncGlideClient
-from glide.sync import GlideClusterClient as SyncGlideClusterClient
-from glide.sync import TGlideClient as TSyncGlideClient
+from glide_shared.exceptions import ClosingError
+from glide_sync import GlideClient as SyncGlideClient
+from glide_sync import GlideClusterClient as SyncGlideClusterClient
+from glide_sync import TGlideClient as TSyncGlideClient
+
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     NEW_PASSWORD,

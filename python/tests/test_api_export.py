@@ -2,14 +2,20 @@
 import ast
 from pathlib import Path
 
-import glide.shared as shared
+import glide as shared
 
 exported_symbol_list = shared.__all__
 
 
 def _get_export_rename_map():
     shared.__all__
-    root_init_file = Path(__file__).parent.parent / "python" / "glide" / "__init__.py"
+    root_init_file = (
+        Path(__file__).parent.parent
+        / "glide-async"
+        / "python"
+        / "glide"
+        / "__init__.py"
+    )
     source_code = root_init_file.read_text()
     tree = ast.parse(source_code)
     rename_map = {}

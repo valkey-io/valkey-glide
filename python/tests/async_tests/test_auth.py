@@ -3,11 +3,11 @@
 
 import anyio
 import pytest
+from glide.glide_client import TGlideClient
+from glide_shared.config import ProtocolVersion
+from glide_shared.constants import OK
+from glide_shared.exceptions import RequestError
 
-from glide.aio.glide_client import TGlideClient
-from glide.shared.config import ProtocolVersion
-from glide.shared.constants import OK
-from glide.shared.exceptions import RequestError
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
