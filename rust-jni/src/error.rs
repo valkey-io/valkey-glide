@@ -49,7 +49,7 @@ pub enum Error {
 
 impl Error {
     /// Throw this error as a Java exception
-    pub fn throw<'local>(&self, env: &mut JNIEnv<'local>) -> Result<JThrowable<'local>> {
+    pub fn throw<'local>(&self, env: JNIEnv<'local>) -> Result<JThrowable<'local>> {
         match self {
             Error::Jni(err) => {
                 let msg = format!("JNI error: {}", err);
@@ -82,7 +82,7 @@ impl Error {
 
 /// Throw a Java exception with the given class name and message
 fn throw_exception<'local>(
-    env: &mut JNIEnv<'local>,
+    mut env: JNIEnv<'local>,
     class_name: &str,
     message: &str,
 ) -> Result<JThrowable<'local>> {
@@ -90,11 +90,11 @@ fn throw_exception<'local>(
     let exception = env.new_object(
         exception_class,
         "(Ljava/lang/String;)V",
-        &[env.new_string(message)?.into()],
+        &[(&env.new_string(message)?).into()],
     )?;
 
     let throwable = exception.into();
-    env.throw(throwable)?;
+    env.throw(&throwable)?;
 
     Ok(throwable)
 }

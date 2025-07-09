@@ -5,20 +5,16 @@
 //! maintaining similar async patterns and processing overhead.
 
 use std::sync::Arc;
-use std::collections::HashMap;
-use std::time::Instant;
 use jni::JNIEnv;
-use jni::objects::{JObject, JByteArray};
+use jni::objects::JByteArray;
 use jni::sys::jlong;
 use tokio::sync::RwLock;
-use url::Url;
 
 use crate::error::{Result, Error};
 use crate::metadata::{CommandMetadata, command_type};
 
 // Import glide-core types
-use glide_core::client::Client as GlideClient;
-use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::client::{Client as GlideClient, ConnectionRequest, NodeAddress, TlsMode};
 use redis::{Cmd, RedisResult, Value};
 
 /// JNI client for realistic performance benchmarking.
@@ -26,8 +22,9 @@ use redis::{Cmd, RedisResult, Value};
 /// This client provides similar operational complexity to the UDS client
 /// but uses direct glide-core integration instead of socket communication + protobuf.
 pub struct JniClient {
-    /// Connection string for debugging/logging
-    connection_string: String,
+    /// Host and port for debugging/logging
+    host: String,
+    port: u32,
 
     /// Actual glide-core client for Redis operations
     glide_client: Arc<RwLock<GlideClient>>,
@@ -38,41 +35,31 @@ pub struct JniClient {
 
 impl JniClient {
     /// Create a new JNI client with actual glide-core integration.
-    pub async fn new(connection_string: String) -> Result<Self> {
-        // Parse the connection string (e.g., "redis://localhost:6379")
-        let url = Url::parse(&connection_string)
-            .map_err(|e| Error::InvalidArgument(format!("Invalid connection string: {}", e)))?;
-
-        let host = url.host_str().unwrap_or("localhost").to_string();
-        let port = url.port().unwrap_or(6379) as u32;
-
+    pub async fn new(host: String, port: u32) -> Result<Self> {
         // Create connection request
-        let mut connection_request = ConnectionRequest::new();
+        let mut connection_request = ConnectionRequest::default();
 
         // Set up address
-        let mut address = NodeAddress::new();
-        address.host = host.into();
-        address.port = port;
+        let address = NodeAddress {
+            host: host.clone(),
+            port: port as u16,
+        };
         connection_request.addresses = vec![address];
 
         // Configure connection settings
-        connection_request.tls_mode = if url.scheme() == "rediss" {
-            TlsMode::InsecureTls
-        } else {
-            TlsMode::NoTls
-        }.into();
-
+        connection_request.tls_mode = Some(TlsMode::NoTls); // POC uses non-TLS connections
         connection_request.cluster_mode_enabled = false; // POC uses standalone mode
-        connection_request.request_timeout = 5000; // 5 second timeout
+        connection_request.request_timeout = Some(5000); // 5 second timeout
         connection_request.database_id = 0; // Default database
 
         // Create the actual glide-core client
         let glide_client = GlideClient::new(connection_request, None)
             .await
-            .map_err(|e| Error::Connection(format!("Failed to connect to Redis: {:?}", e)))?;
+            .map_err(|e| Error::Connection(format!("Failed to connect to Valkey: {:?}", e)))?;
 
         Ok(Self {
-            connection_string,
+            host,
+            port,
             glide_client: Arc::new(RwLock::new(glide_client)),
             request_counter: std::sync::atomic::AtomicU32::new(0),
         })
@@ -213,8 +200,8 @@ impl JniClient {
     }
 
     /// Get connection info for debugging.
-    pub fn connection_info(&self) -> &str {
-        &self.connection_string
+    pub fn connection_info(&self) -> String {
+        format!("{}:{}", self.host, self.port)
     }
 
     /// Get count of requests processed (for monitoring).
@@ -225,14 +212,21 @@ impl JniClient {
 
 // JNI interface functions
 
-/// Create a new client with the given connection string.
+/// Create a new client with the given host and port.
 pub fn create_client<'local>(
     env: &mut JNIEnv<'local>,
-    connection_string: JObject<'local>,
+    host: jni::objects::JString<'local>,
+    port: jni::sys::jint,
 ) -> Result<jlong> {
-    // Get connection string from Java
-    let conn_str = env.get_string(&connection_string.into())?;
-    let conn_str: String = conn_str.into();
+    // Get host string from Java
+    let host_binding = host.into();
+    let host_str = env.get_string(&host_binding)?;
+    let host_str: String = host_str.into();
+
+    // Validate port
+    if port <= 0 || port > 65535 {
+        return Err(Error::InvalidArgument(format!("Invalid port: {}", port)));
+    }
 
     // Create async runtime for client creation
     let rt = tokio::runtime::Runtime::new()
@@ -240,7 +234,7 @@ pub fn create_client<'local>(
 
     // Create client with actual glide-core integration
     let client = rt.block_on(async {
-        JniClient::new(conn_str).await
+        JniClient::new(host_str, port as u32).await
     })?;
 
     // Store in Box and return pointer
@@ -250,7 +244,7 @@ pub fn create_client<'local>(
 
 /// Close a client and release its resources.
 pub fn close_client<'local>(
-    _env: &mut JNIEnv<'local>,
+    _env: &JNIEnv<'local>,
     client_ptr: jlong,
 ) -> Result<()> {
     if client_ptr == 0 {

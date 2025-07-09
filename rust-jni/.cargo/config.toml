@@ -1,0 +1,3 @@
+[env]
+GLIDE_NAME = { value = "GlideJNI", force = true }
+GLIDE_VERSION = { value = "1.0.0", force = true }

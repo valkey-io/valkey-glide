@@ -12,26 +12,25 @@ mod metadata;
 mod error;
 mod client;
 
-use error::{Result, Error, ExceptionGuard};
+use error::Result;
 
 /// Simplified JNI exports for realistic POC.
 #[allow(non_snake_case)]
 pub mod jni_exports {
     use super::*;
 
-    /// Create a client connection to Redis with actual glide-core integration.
+    /// Create a client connection to Valkey with actual glide-core integration.
     #[no_mangle]
     pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_connect<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
-        connection_string: JString<'local>,
+        host: JString<'local>,
+        port: jint,
     ) -> jlong {
-        let _guard = ExceptionGuard::new(&mut env);
-
-        match client::create_client(&mut env, connection_string.into()) {
+        match client::create_client(&mut env, host, port) {
             Ok(client_ptr) => client_ptr,
             Err(err) => {
-                let _ = err.throw(&mut env);
+                let _ = err.throw(env);
                 0
             }
         }
@@ -40,14 +39,12 @@ pub mod jni_exports {
     /// Disconnect and release client resources.
     #[no_mangle]
     pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_disconnect<'local>(
-        mut env: JNIEnv<'local>,
+        env: JNIEnv<'local>,
         _class: JClass<'local>,
         client_ptr: jlong,
     ) {
-        let _guard = ExceptionGuard::new(&mut env);
-
-        if let Err(err) = client::close_client(&mut env, client_ptr) {
-            let _ = err.throw(&mut env);
+        if let Err(err) = client::close_client(&env, client_ptr) {
+            let _ = err.throw(env);
         }
     }
 
@@ -63,12 +60,10 @@ pub mod jni_exports {
         command_type: jint,
         payload: JByteArray<'local>,
     ) -> jbyteArray {
-        let _guard = ExceptionGuard::new(&mut env);
-
         match execute_command_impl(&mut env, client_ptr, command_type, payload) {
             Ok(response) => response.into_raw(),
             Err(err) => {
-                let _ = err.throw(&mut env);
+                let _ = err.throw(env);
                 std::ptr::null_mut()
             }
         }

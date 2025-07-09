@@ -1,5 +1,6 @@
 package io.valkey.glide.jni.client;
 
+import java.lang.ref.Cleaner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
 
@@ -12,6 +13,8 @@ import java.util.concurrent.ForkJoinPool;
  * while maintaining identical async semantics.
  */
 public class GlideJniClient implements AutoCloseable {
+    private static final Cleaner CLEANER = Cleaner.create();
+
     static {
         // Load the native library
         try {
@@ -20,12 +23,20 @@ public class GlideJniClient implements AutoCloseable {
             System.err.println("Failed to load native library: " + e.getMessage());
             throw e;
         }
-    }
-
-    /**
+    }    /**
      * Native pointer to the client instance in Rust
      */
     private volatile long nativeClientPtr;
+
+    /**
+     * Cleaner resource to ensure native cleanup
+     */
+    private final Cleaner.Cleanable cleanable;
+
+    /**
+     * Shared state for cleanup coordination
+     */
+    private final NativeState nativeState;
 
     /**
      * Command type constants for the POC
@@ -37,19 +48,27 @@ public class GlideJniClient implements AutoCloseable {
     }
 
     /**
-     * Create a new GlideJniClient connected to Redis
+     * Create a new GlideJniClient connected to Valkey
      *
-     * @param connectionString Redis connection string (e.g., "redis://localhost:6379")
+     * @param host Valkey server hostname or IP address
+     * @param port Valkey server port
      */
-    public GlideJniClient(String connectionString) {
-        if (connectionString == null) {
-            throw new IllegalArgumentException("Connection string cannot be null");
+    public GlideJniClient(String host, int port) {
+        if (host == null) {
+            throw new IllegalArgumentException("Host cannot be null");
+        }
+        if (port <= 0 || port > 65535) {
+            throw new IllegalArgumentException("Port must be between 1 and 65535");
+        }        this.nativeClientPtr = connect(host, port);
+        if (this.nativeClientPtr == 0) {
+            throw new RuntimeException("Failed to connect to Valkey: " + host + ":" + port);
         }
 
-        this.nativeClientPtr = connect(connectionString);
-        if (this.nativeClientPtr == 0) {
-            throw new RuntimeException("Failed to connect to Redis: " + connectionString);
-        }
+        // Create shared state for proper cleanup coordination
+        this.nativeState = new NativeState(this.nativeClientPtr);
+
+        // Register cleanup action with Cleaner - modern replacement for finalize()
+        this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
     }
 
     /**
@@ -132,9 +151,7 @@ public class GlideJniClient implements AutoCloseable {
      */
     public boolean isClosed() {
         return nativeClientPtr == 0;
-    }
-
-    /**
+    }    /**
      * Close the client and release native resources
      */
     @Override
@@ -142,7 +159,49 @@ public class GlideJniClient implements AutoCloseable {
         long ptr = nativeClientPtr;
         if (ptr != 0) {
             nativeClientPtr = 0;
-            disconnect(ptr);
+            // Safely cleanup using shared state
+            nativeState.cleanup();
+            cleanable.clean(); // This will be a no-op since state is already cleaned
+        }
+    }
+
+    /**
+     * Shared state for coordinating cleanup between explicit close() and Cleaner
+     */
+    private static class NativeState {
+        private volatile long nativePtr;
+
+        NativeState(long nativePtr) {
+            this.nativePtr = nativePtr;
+        }
+
+        /**
+         * Safely cleanup the native resource, ensuring it's only done once
+         */
+        synchronized void cleanup() {
+            long ptr = nativePtr;
+            if (ptr != 0) {
+                nativePtr = 0;
+                disconnect(ptr);
+            }
+        }
+    }
+
+    /**
+     * Cleanup action for Cleaner - modern replacement for finalize()
+     * Only runs if close() was not called explicitly
+     */
+    private static class CleanupAction implements Runnable {
+        private final NativeState nativeState;
+
+        CleanupAction(NativeState nativeState) {
+            this.nativeState = nativeState;
+        }
+
+        @Override
+        public void run() {
+            // This will be a no-op if close() was already called
+            nativeState.cleanup();
         }
     }
 
@@ -155,24 +214,16 @@ public class GlideJniClient implements AutoCloseable {
         }
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        try {
-            close();
-        } finally {
-            super.finalize();
-        }
-    }
-
     // Native method declarations - match the Rust function signatures
 
     /**
-     * Connect to Redis and create a native client
+     * Connect to Valkey and create a native client
      *
-     * @param connectionString Redis connection string
+     * @param host Valkey server hostname or IP address
+     * @param port Valkey server port
      * @return native pointer to client instance
      */
-    private static native long connect(String connectionString);
+    private static native long connect(String host, int port);
 
     /**
      * Disconnect and release a native client
