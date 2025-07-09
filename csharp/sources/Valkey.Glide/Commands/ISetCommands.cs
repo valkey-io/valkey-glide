@@ -134,7 +134,7 @@ internal interface ISetCommands
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags ignored = CommandFlags.None);
+    Task<long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// SetPop removes and returns one random member from the set stored at key.
