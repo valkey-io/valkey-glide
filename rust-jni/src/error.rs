@@ -17,23 +17,31 @@ pub enum Error {
     /// JNI error
     #[error("JNI error: {0}")]
     Jni(#[from] JniError),
-    
+
+    /// Connection error
+    #[error("Connection error: {0}")]
+    Connection(String),
+
+    /// Redis error
+    #[error("Redis error: {0}")]
+    Redis(String),
+
     /// Command error
     #[error("Command error: {0}")]
     Command(String),
-    
+
     /// Configuration error
     #[error("Configuration error: {0}")]
     Config(String),
-    
+
     /// Invalid argument error
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
-    
+
     /// Internal error
     #[error("Internal error: {0}")]
     Internal(String),
-    
+
     /// Not implemented error
     #[error("Not implemented: {0}")]
     NotImplemented(String),
@@ -46,6 +54,12 @@ impl Error {
             Error::Jni(err) => {
                 let msg = format!("JNI error: {}", err);
                 throw_exception(env, "java/lang/RuntimeException", &msg)
+            }
+            Error::Connection(msg) => {
+                throw_exception(env, "io/valkey/glide/jni/exceptions/ConnectionException", msg)
+            }
+            Error::Redis(msg) => {
+                throw_exception(env, "io/valkey/glide/jni/exceptions/RedisException", msg)
             }
             Error::Command(msg) => {
                 throw_exception(env, "io/valkey/glide/jni/exceptions/CommandException", msg)
@@ -78,10 +92,10 @@ fn throw_exception<'local>(
         "(Ljava/lang/String;)V",
         &[env.new_string(message)?.into()],
     )?;
-    
+
     let throwable = exception.into();
     env.throw(throwable)?;
-    
+
     Ok(throwable)
 }
 

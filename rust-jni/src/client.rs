@@ -10,65 +10,88 @@ use std::time::Instant;
 use jni::JNIEnv;
 use jni::objects::{JObject, JByteArray};
 use jni::sys::jlong;
+use tokio::sync::RwLock;
+use url::Url;
 
 use crate::error::{Result, Error};
 use crate::metadata::{CommandMetadata, command_type};
 
+// Import glide-core types
+use glide_core::client::Client as GlideClient;
+use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
+use redis::{Cmd, RedisResult, Value};
+
 /// JNI client for realistic performance benchmarking.
 ///
 /// This client provides similar operational complexity to the UDS client
-/// but uses direct JNI calls instead of socket communication + protobuf.
+/// but uses direct glide-core integration instead of socket communication + protobuf.
 pub struct JniClient {
     /// Connection string for debugging/logging
     connection_string: String,
 
-    /// Simulated connection state
-    connected: bool,
+    /// Actual glide-core client for Redis operations
+    glide_client: Arc<RwLock<GlideClient>>,
 
     /// Command execution tracking for realistic overhead
-    request_counter: u32,
-
-    /// TODO: Replace with actual glide_core::Client integration
-    /// This will be the real Redis client that does the actual work
-    glide_client: Option<()>, // Placeholder for glide_core::Client
+    request_counter: std::sync::atomic::AtomicU32,
 }
 
 impl JniClient {
-    /// Create a new JNI client.
-    ///
-    /// TODO: Replace with actual glide_core::Client initialization
-    pub fn new(connection_string: String) -> Result<Self> {
-        // TODO: Initialize real glide_core client here
-        // let glide_client = glide_core::ClientBuilder::new()
-        //     .connection_string(&connection_string)
-        //     .build()
-        //     .map_err(|e| Error::Connection(format!("Failed to connect: {}", e)))?;
+    /// Create a new JNI client with actual glide-core integration.
+    pub async fn new(connection_string: String) -> Result<Self> {
+        // Parse the connection string (e.g., "redis://localhost:6379")
+        let url = Url::parse(&connection_string)
+            .map_err(|e| Error::InvalidArgument(format!("Invalid connection string: {}", e)))?;
+
+        let host = url.host_str().unwrap_or("localhost").to_string();
+        let port = url.port().unwrap_or(6379) as u32;
+
+        // Create connection request
+        let mut connection_request = ConnectionRequest::new();
+
+        // Set up address
+        let mut address = NodeAddress::new();
+        address.host = host.into();
+        address.port = port;
+        connection_request.addresses = vec![address];
+
+        // Configure connection settings
+        connection_request.tls_mode = if url.scheme() == "rediss" {
+            TlsMode::InsecureTls
+        } else {
+            TlsMode::NoTls
+        }.into();
+
+        connection_request.cluster_mode_enabled = false; // POC uses standalone mode
+        connection_request.request_timeout = 5000; // 5 second timeout
+        connection_request.database_id = 0; // Default database
+
+        // Create the actual glide-core client
+        let glide_client = GlideClient::new(connection_request, None)
+            .await
+            .map_err(|e| Error::Connection(format!("Failed to connect to Redis: {:?}", e)))?;
 
         Ok(Self {
             connection_string,
-            connected: true,
-            request_counter: 0,
-            glide_client: None, // TODO: Some(glide_client)
+            glide_client: Arc::new(RwLock::new(glide_client)),
+            request_counter: std::sync::atomic::AtomicU32::new(0),
         })
     }
 
     /// Execute a command with realistic processing overhead.
     ///
-    /// This method simulates the same processing steps as the UDS implementation:
+    /// This method performs actual Redis operations through glide-core while
+    /// maintaining similar processing steps as the UDS implementation:
     /// 1. Command metadata validation and processing
     /// 2. Payload parsing and validation
     /// 3. Command execution through glide-core
     /// 4. Response serialization and return
-    pub fn execute_command(&mut self, command_type: u32, payload: &[u8]) -> Result<Vec<u8>> {
-        if !self.connected {
-            return Err(Error::Connection("Client is not connected".to_string()));
-        }
-
+    pub async fn execute_command(&self, command_type: u32, payload: &[u8]) -> Result<Vec<u8>> {
         // Increment request counter for realistic overhead
-        self.request_counter = self.request_counter.wrapping_add(1);
+        self.request_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // Create metadata with realistic processing
-        let metadata = CommandMetadata::new(command_type, payload.len() as u32);
+        let _metadata = CommandMetadata::new(command_type, payload.len() as u32);
 
         // Validate command type
         match command_type {
@@ -78,17 +101,17 @@ impl JniClient {
             _ => return Err(Error::InvalidArgument(format!("Unknown command type: {}", command_type))),
         }
 
-        // Execute the command based on type with realistic parsing
+        // Execute the command based on type with actual Redis operations
         match command_type {
-            command_type::GET => self.execute_get(payload),
-            command_type::SET => self.execute_set(payload),
-            command_type::PING => self.execute_ping(),
+            command_type::GET => self.execute_get(payload).await,
+            command_type::SET => self.execute_set(payload).await,
+            command_type::PING => self.execute_ping().await,
             _ => unreachable!(), // Already validated above
         }
     }
 
-    /// Execute GET command with realistic payload parsing.
-    fn execute_get(&self, payload: &[u8]) -> Result<Vec<u8>> {
+    /// Execute GET command with actual Redis operation.
+    async fn execute_get(&self, payload: &[u8]) -> Result<Vec<u8>> {
         // Parse key from payload with validation
         let key = String::from_utf8(payload.to_vec())
             .map_err(|_| Error::InvalidArgument("Invalid UTF-8 in key".to_string()))?;
@@ -97,20 +120,27 @@ impl JniClient {
             return Err(Error::InvalidArgument("Key cannot be empty".to_string()));
         }
 
-        // TODO: Replace with actual glide-core GET operation
-        // let result = self.glide_client.get(&key).await
-        //     .map_err(|e| Error::Redis(format!("GET failed: {}", e)))?;
+        // Execute GET command through glide-core
+        let mut client = self.glide_client.write().await;
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg(&key);
 
-        // Mock response for POC - return realistic value or null
-        if key == "nonexistent" {
-            Ok(Vec::new()) // Null response for missing key
-        } else {
-            Ok(format!("value_for_{}", key).into_bytes())
+        let result: RedisResult<Value> = client.send_command(&cmd, None).await;
+
+        match result {
+            Ok(Value::BulkString(bytes)) => Ok(bytes),
+            Ok(Value::Nil) => Ok(Vec::new()), // Null response for missing key
+            Ok(value) => {
+                // Convert other value types to string representation
+                let string_value = format!("{:?}", value);
+                Ok(string_value.into_bytes())
+            }
+            Err(e) => Err(Error::Redis(format!("GET failed: {}", e))),
         }
     }
 
-    /// Execute SET command with realistic payload parsing.
-    fn execute_set(&self, payload: &[u8]) -> Result<Vec<u8>> {
+    /// Execute SET command with actual Redis operation.
+    async fn execute_set(&self, payload: &[u8]) -> Result<Vec<u8>> {
         if payload.len() < 4 {
             return Err(Error::InvalidArgument("SET payload too short".to_string()));
         }
@@ -137,44 +167,59 @@ impl JniClient {
             return Err(Error::InvalidArgument("Key cannot be empty".to_string()));
         }
 
-        // TODO: Replace with actual glide-core SET operation
-        // self.glide_client.set(&key, &value).await
-        //     .map_err(|e| Error::Redis(format!("SET failed: {}", e)))?;
+        // Execute SET command through glide-core
+        let mut client = self.glide_client.write().await;
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg(&key).arg(&value);
 
-        // Mock successful SET response
-        Ok(b"OK".to_vec())
+        let result: RedisResult<Value> = client.send_command(&cmd, None).await;
+
+        match result {
+            Ok(Value::SimpleString(response)) => Ok(response.into_bytes()),
+            Ok(Value::BulkString(bytes)) => Ok(bytes),
+            Ok(_) => Ok(b"OK".to_vec()), // Default success response
+            Err(e) => Err(Error::Redis(format!("SET failed: {}", e))),
+        }
     }
 
-    /// Execute PING command.
-    fn execute_ping(&self) -> Result<Vec<u8>> {
-        // TODO: Replace with actual glide-core PING operation
-        // self.glide_client.ping().await
-        //     .map_err(|e| Error::Redis(format!("PING failed: {}", e)))?;
+    /// Execute PING command with actual Redis operation.
+    async fn execute_ping(&self) -> Result<Vec<u8>> {
+        // Execute PING command through glide-core
+        let mut client = self.glide_client.write().await;
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
 
-        // Mock PING response
-        Ok(b"PONG".to_vec())
+        let result: RedisResult<Value> = client.send_command(&cmd, None).await;
+
+        match result {
+            Ok(Value::SimpleString(response)) => Ok(response.into_bytes()),
+            Ok(Value::BulkString(bytes)) => Ok(bytes),
+            Ok(_) => Ok(b"PONG".to_vec()), // Default PING response
+            Err(e) => Err(Error::Redis(format!("PING failed: {}", e))),
+        }
     }
 
     /// Check if the client is connected.
     pub fn is_connected(&self) -> bool {
-        self.connected
+        // For simplicity in POC, assume we're always connected once created
+        // In production, this would check the actual connection state
+        true
     }
 
     /// Close the client connection.
-    pub fn close(&mut self) {
-        self.connected = false;
-        // TODO: Close actual glide_core client
-        // if let Some(client) = self.glide_client.take() {
-        //     client.close();
-        // }
+    pub async fn close(&self) {
+        // glide-core client will be dropped automatically when the RwLock is dropped
+        // The Drop trait on GlideClient handles cleanup
     }
-}
 
-impl Drop for JniClient {
-    fn drop(&mut self) {
-        if self.connected {
-            self.close();
-        }
+    /// Get connection info for debugging.
+    pub fn connection_info(&self) -> &str {
+        &self.connection_string
+    }
+
+    /// Get count of requests processed (for monitoring).
+    pub fn request_count(&self) -> u32 {
+        self.request_counter.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -189,11 +234,17 @@ pub fn create_client<'local>(
     let conn_str = env.get_string(&connection_string.into())?;
     let conn_str: String = conn_str.into();
 
-    // Create client with realistic initialization
-    let client = JniClient::new(conn_str)?;
+    // Create async runtime for client creation
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| Error::Connection(format!("Failed to create async runtime: {}", e)))?;
+
+    // Create client with actual glide-core integration
+    let client = rt.block_on(async {
+        JniClient::new(conn_str).await
+    })?;
 
     // Store in Box and return pointer
-    let client_ptr = Box::into_raw(Box::new(client)) as jlong;
+    let client_ptr = Box::into_raw(Box::new((client, rt))) as jlong;
     Ok(client_ptr)
 }
 
@@ -208,14 +259,20 @@ pub fn close_client<'local>(
 
     // Convert pointer back to Box for automatic cleanup
     unsafe {
-        let _client = Box::from_raw(client_ptr as *mut JniClient);
-        // Box drops automatically, cleaning up resources
+        let (client, rt) = *Box::from_raw(client_ptr as *mut (JniClient, tokio::runtime::Runtime));
+
+        // Close the client asynchronously
+        rt.block_on(async {
+            client.close().await;
+        });
+
+        // Both client and runtime are dropped automatically
     }
 
     Ok(())
 }
 
-/// Execute a command with realistic processing overhead.
+/// Execute a command with actual Redis operations through glide-core.
 /// This is the core function for POC benchmarking against UDS implementation.
 pub fn execute_command<'local>(
     env: &mut JNIEnv<'local>,
@@ -227,11 +284,13 @@ pub fn execute_command<'local>(
         return Err(Error::InvalidArgument("Client pointer is null".to_string()));
     }
 
-    // Get mutable client reference
-    let client = unsafe { &mut *(client_ptr as *mut JniClient) };
+    // Get client and runtime references
+    let (client, rt) = unsafe { &*(client_ptr as *const (JniClient, tokio::runtime::Runtime)) };
 
-    // Execute command with realistic processing
-    let response_data = client.execute_command(command_type, payload)?;
+    // Execute command asynchronously through glide-core
+    let response_data = rt.block_on(async {
+        client.execute_command(command_type, payload).await
+    })?;
 
     // Convert response to Java byte array
     let response_array = env.byte_array_from_slice(&response_data)?;

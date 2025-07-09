@@ -1,7 +1,8 @@
-//! Simple JNI bridge for POC benchmarking.
+//! JNI bridge for realistic performance benchmarking.
 //!
-//! This module provides a minimal JNI interface for testing GET/SET/PING commands
-//! against the existing UDS implementation. Focus is on simplicity and performance measurement.
+//! This module provides a JNI interface for testing GET/SET/PING commands
+//! with actual glide-core integration against the existing UDS implementation.
+//! Focus is on realistic performance comparison and fair benchmarking.
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JByteArray};
@@ -13,15 +14,14 @@ mod client;
 
 use error::{Result, Error, ExceptionGuard};
 
-/// Simplified JNI exports for POC.
+/// Simplified JNI exports for realistic POC.
 #[allow(non_snake_case)]
 pub mod jni_exports {
     use super::*;
 
-    /// Create a client connection to Redis.
-    /// TODO: Update signature to match simplified approach
+    /// Create a client connection to Redis with actual glide-core integration.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_connect<'local>(
+    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_connect<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
         connection_string: JString<'local>,
@@ -39,7 +39,7 @@ pub mod jni_exports {
 
     /// Disconnect and release client resources.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_disconnect<'local>(
+    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_disconnect<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
         client_ptr: jlong,
@@ -51,12 +51,12 @@ pub mod jni_exports {
         }
     }
 
-    /// Execute a command - core function for POC benchmarking.
+    /// Execute a command through actual glide-core client - core function for realistic benchmarking.
     ///
     /// Takes command type (GET=1, SET=2, PING=3) and payload bytes.
-    /// Returns response as byte array.
+    /// Returns response as byte array from actual Redis operations.
     #[no_mangle]
-    pub unsafe extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_executeCommand<'local>(
+    pub unsafe extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCommand<'local>(
         mut env: JNIEnv<'local>,
         _class: JClass<'local>,
         client_ptr: jlong,
