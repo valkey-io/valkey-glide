@@ -91,7 +91,7 @@ internal partial class Request
     {
         GlideString[] args = [key.ToGlideString()];
         return new(RequestType.TTL, args, true, response =>
-            response == -1 || response == -2 ? null : TimeSpan.FromSeconds(response));
+            response is -1 or -2 ? null : TimeSpan.FromSeconds(response));
     }
 
     public static Cmd<GlideString, ValkeyType> KeyTypeAsync(ValkeyKey key)
