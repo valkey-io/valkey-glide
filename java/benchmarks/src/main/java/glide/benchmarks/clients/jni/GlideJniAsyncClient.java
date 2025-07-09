@@ -1,16 +1,17 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.jni;
 
-import glide.benchmarks.clients.AsyncClient;
-import glide.benchmarks.utils.ConnectionSettings;
 import java.io.InputStream;
 import java.lang.ref.Cleaner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
 
+import glide.benchmarks.clients.AsyncClient;
+import glide.benchmarks.utils.ConnectionSettings;
+
 /**
  * JNI-based Glide client for benchmarking against UDS implementation.
- * 
+ *
  * This client provides identical API as GlideAsyncClient but uses direct JNI calls
  * instead of UDS+Protobuf communication for performance comparison.
  */
@@ -81,7 +82,7 @@ public class GlideJniAsyncClient implements AsyncClient<String> {
 
         this.nativeClientPtr = connect(connectionSettings.host, connectionSettings.port);
         if (this.nativeClientPtr == 0) {
-            throw new RuntimeException("Failed to connect to Valkey: " + 
+            throw new RuntimeException("Failed to connect to Valkey: " +
                 connectionSettings.host + ":" + connectionSettings.port);
         }
 

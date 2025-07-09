@@ -4,6 +4,11 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
@@ -38,3 +43,37 @@ application {
         applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
     }
 }
+
+// JNI Library Build Tasks
+tasks.register('buildJniRust', Exec) {
+    description = 'Build the JNI Rust library'
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
+    workingDir "${project.rootDir}/../rust-jni"
+    environment CARGO_TERM_COLOR: 'always'
+}
+
+tasks.register('copyJniLib', Copy) {
+    description = 'Copy JNI native library to resources'
+    dependsOn 'buildJniRust'
+
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${project.rootDir}/../rust-jni/target/${arch}-unknown-linux-gnu/release/"
+    } else {
+        from "${project.rootDir}/../rust-jni/target/release"
+    }
+    include "libglidejni.so", "libglidejni.dylib", "glidejni.dll"
+    into sourceSets.main.output.resourcesDir
+
+    doLast {
+        println "JNI library copied to ${sourceSets.main.output.resourcesDir}"
+    }
+}
+
+// Make sure JNI library is built before compiling and running
+compileJava.dependsOn('copyJniLib')
+run.dependsOn('copyJniLib')
