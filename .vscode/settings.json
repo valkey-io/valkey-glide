@@ -13,14 +13,11 @@
     "python.formatting.provider": "black",
     "rust-analyzer.linkedProjects": [
         "glide-core/Cargo.toml",
-        "python/Cargo.toml",
-        "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",
-        "csharp/rust/Cargo.toml",
         "glide-core/redis-rs/Cargo.toml",
         "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml",
-        "ffi/Cargo.toml",
+        "ffi/Cargo.toml"
     ],
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"

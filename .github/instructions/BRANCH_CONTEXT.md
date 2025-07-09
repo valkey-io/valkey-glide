@@ -32,12 +32,6 @@ Test alternative approaches for the Java client in Valkey GLIDE:
 
 ### Progress Tracking
 
-#### Research & Design
-- [ ] Perform deep research about JNI, jni-rs, and shared memory in Java/Rust interop
-- [ ] Understand best practices and performance implications for each approach
-- [ ] Survey and analyze existing implementations and libraries
-- [ ] Design minimal, clear POCs for each approach (jni-rs, shared memory)
-
 #### Implementation
 - [ ] Implement minimal jni-rs FFI POC
 - [ ] Implement minimal shared memory POC
@@ -50,16 +44,6 @@ Test alternative approaches for the Java client in Valkey GLIDE:
 #### Documentation & Review
 - [ ] Document findings, results, and recommendations
 - [ ] Incorporate feedback and iterate on POCs
-
-### Next Steps
-- Perform deep research about JNI, jni-rs, and shared memory in Java/Rust interop
-- Understand the best practices and performance implications
-- Look into existing implementations and libraries
-- Design the POCs with a focus on simplicity and clarity
-- Implement the POCs iteratively, incorporating feedback and improvements
-- Set up minimal jni-rs FFI POC
-- Set up minimal shared memory POC
-- Begin comparative testing
 
 ---
 
