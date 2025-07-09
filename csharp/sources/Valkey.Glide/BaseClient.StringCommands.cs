@@ -19,7 +19,7 @@ public abstract partial class BaseClient : IStringBaseCommands
     public async Task<ValkeyValue[]> StringGetAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
     {
         GlideString[] glideKeys = [.. keys.Select(k => (GlideString)k)];
-        GlideString?[] result = await Command(Request.StringGetAsync(glideKeys));
+        GlideString?[] result = await Command(Request.StringGetMultiple(glideKeys));
         return [.. result.Select(r => r is null ? ValkeyValue.Null : (ValkeyValue)r)];
     }
 
@@ -29,7 +29,7 @@ public abstract partial class BaseClient : IStringBaseCommands
             values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
         ];
         GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
-        await Command(Request.StringSetAsync(keyValuePairs));
+        await Command(Request.StringSetMultiple(keyValuePairs));
         return true;
     }
 

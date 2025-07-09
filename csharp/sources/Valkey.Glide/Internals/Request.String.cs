@@ -12,11 +12,11 @@ internal partial class Request
     public static Cmd<string, string> StringSet(GlideString key, GlideString value)
         => OK(RequestType.Set, [key, value]);
 
-    public static Cmd<object[], GlideString?[]> StringGetAsync(GlideString[] keys)
+    public static Cmd<object[], GlideString?[]> StringGetMultiple(GlideString[] keys)
         => new(RequestType.MGet, keys, false, array =>
             [.. array.Select(item => item as GlideString)]);
 
-    public static Cmd<string, string> StringSetAsync(GlideString[] keyValuePairs)
+    public static Cmd<string, string> StringSetMultiple(GlideString[] keyValuePairs)
         => OK(RequestType.MSet, keyValuePairs);
 
     public static Cmd<long, long> StringSetRange(GlideString key, long offset, GlideString value)

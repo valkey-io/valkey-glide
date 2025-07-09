@@ -13,7 +13,7 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     public T StringGetAsync(ValkeyKey[] keys)
     {
         GlideString[] glideKeys = [.. keys.Select(k => (GlideString)k)];
-        return AddCmd(Request.StringGetAsync(glideKeys));
+        return AddCmd(Request.StringGetMultiple(glideKeys));
     }
 
     /// <inheritdoc cref="IBatchStringCommands.StringSetAsync(ValkeyKey, ValkeyValue)" />
@@ -26,7 +26,7 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
             values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
         ];
         GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
-        return AddCmd(Request.StringSetAsync(keyValuePairs));
+        return AddCmd(Request.StringSetMultiple(keyValuePairs));
     }
 
     /// <inheritdoc cref="IBatchStringCommands.StringGetRangeAsync(ValkeyKey, long, long)" />
