@@ -1,3 +1,0 @@
-[env]
-GLIDE_NAME = { value = "GlideJS", force = true }
-GLIDE_VERSION = "unknown"

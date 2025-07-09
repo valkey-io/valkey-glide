@@ -1,5 +1,0 @@
-# Note: The main location for tracking dependencies is pyproject.toml. This file is used only for the ORT process. When adding a dependency, make sure to add it both to this file and to pyproject.toml. 
-# Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, this file can be removed.
-anyio>=4.9.0
-typing-extensions>=4.8.0
-protobuf>=3.20
