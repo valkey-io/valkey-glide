@@ -1,0 +1,33 @@
+[project]
+name = "valkey-glide-sync"
+dynamic = ["version"]
+description = "Valkey GLIDE Sync client. Supports Valkey and Redis OSS "
+requires-python = ">=3.9"
+dependencies = [
+    # Note: If you add a dependency here, make sure to also add it to requirements.txt
+    # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, the requirements.txt file can be removed.
+    "cffi>=1.0.0",
+    "valkey-glide-shared"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "cffi>=1.0.0"]
+build-backend = "setuptools.build_meta"
+
+classifiers = [
+    "Topic :: Database",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+[tool.setuptools]
+package-dir = {"" = "./"}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"glide_sync" = ["*.so", "*.pyd", "*.dll", "*.pyi", "py.typed"]
