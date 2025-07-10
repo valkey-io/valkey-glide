@@ -50,30 +50,30 @@ impl GlideJniClient {
     ) -> JniResult<Self> {
         let mut connection_request = ConnectionRequest::default();
         connection_request.addresses = addresses;
-        
+
         if let Some(db_id) = database_id {
             connection_request.database_id = db_id;
         }
-        
+
         if username.is_some() || password.is_some() {
             connection_request.authentication_info = Some(glide_core::client::AuthenticationInfo {
                 username,
                 password,
             });
         }
-        
+
         if let Some(tls) = tls_mode {
             connection_request.tls_mode = Some(tls);
         }
-        
+
         connection_request.cluster_mode_enabled = cluster_mode;
-        
+
         if let Some(timeout) = request_timeout {
             connection_request.request_timeout = Some(timeout.as_millis() as u32);
         }
 
         let client = Client::new(connection_request, None).await?;
-        
+
         Ok(Self {
             inner: Arc::new(Mutex::new(client)),
         })
@@ -84,7 +84,7 @@ impl GlideJniClient {
         let mut cmd = cmd("GET");
         cmd.arg(key);
         let mut client = self.inner.lock().await;
-        
+
         let result = client.send_command(&cmd, None).await
             .map_err(|e| jni_error!(Command, "GET failed: {}", e))?;
 
@@ -100,13 +100,20 @@ impl GlideJniClient {
         let mut cmd = cmd("SET");
         cmd.arg(key).arg(value);
         let mut client = self.inner.lock().await;
-        
+
         let result = client.send_command(&cmd, None).await
             .map_err(|e| jni_error!(Command, "SET failed: {}", e))?;
 
         match result {
-            Value::SimpleString(response) if response == "OK" => Ok(()),
-            other => Err(jni_error!(UnexpectedResponse, "SET returned unexpected result: {:?}", other)),
+            Value::SimpleString(response) => {
+                if response.to_uppercase() == "OK" {
+                    Ok(())
+                } else {
+                    Err(jni_error!(UnexpectedResponse, "SET returned unexpected result: '{}' (expected 'OK')", response))
+                }
+            }
+            Value::Okay => Ok(()),
+            other => Err(jni_error!(UnexpectedResponse, "SET returned unexpected result type: {:?}", other)),
         }
     }
 
@@ -115,7 +122,7 @@ impl GlideJniClient {
         let mut cmd = cmd("DEL");
         cmd.arg(key);
         let mut client = self.inner.lock().await;
-        
+
         let result = client.send_command(&cmd, None).await
             .map_err(|e| jni_error!(Command, "DEL failed: {}", e))?;
 
@@ -129,7 +136,7 @@ impl GlideJniClient {
     pub async fn ping(&self) -> JniResult<String> {
         let cmd = cmd("PING");
         let mut client = self.inner.lock().await;
-        
+
         let result = client.send_command(&cmd, None).await
             .map_err(|e| jni_error!(Command, "PING failed: {}", e))?;
 
@@ -146,23 +153,23 @@ impl GlideJniClient {
 fn parse_addresses(env: &mut JNIEnv, addresses_array: &JObjectArray) -> JniResult<Vec<NodeAddress>> {
     let length = env.get_array_length(addresses_array)?;
     let mut parsed_addresses = Vec::with_capacity(length as usize);
-    
+
     for i in 0..length {
         let addr_obj = env.get_object_array_element(addresses_array, i)?;
         let addr_str: String = env.get_string(&JString::from(addr_obj))?.into();
-        
+
         let parts: Vec<&str> = addr_str.split(':').collect();
         if parts.len() != 2 {
             return Err(jni_error!(InvalidInput, "Address must be in format 'host:port'"));
         }
-        
+
         let host = parts[0].to_string();
         let port = parts[1].parse::<u16>()
             .map_err(|e| jni_error!(InvalidInput, "Invalid port: {}", e))?;
-            
+
         parsed_addresses.push(NodeAddress { host, port });
     }
-    
+
     Ok(parsed_addresses)
 }
 
@@ -206,13 +213,13 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_createClient(
         let db_id = if database_id >= 0 { Some(database_id as i64) } else { None };
         let username_opt = parse_optional_string(&mut env, username)?;
         let password_opt = parse_optional_string(&mut env, password)?;
-        
+
         let tls_mode = if use_tls == JNI_TRUE {
             Some(TlsMode::SecureTls)
         } else {
             Some(TlsMode::NoTls)
         };
-        
+
         let timeout = if request_timeout_ms > 0 {
             Some(Duration::from_millis(request_timeout_ms as u64))
         } else {

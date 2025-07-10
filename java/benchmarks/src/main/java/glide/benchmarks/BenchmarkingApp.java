@@ -61,6 +61,10 @@ public class BenchmarkingApp {
                     System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
+                case GLIDE_JNI:
+                    System.out.println("Valkey-GLIDE JNI async client (high-performance)");
+                    testClientSetGet(GlideJniAsyncClient::new, runConfiguration, true);
+                    break;
                 case ALL:
                     // ALL is handled in the client parsing logic, should not reach here
                     throw new IllegalStateException("ALL client type should be resolved before execution");
@@ -101,7 +105,7 @@ public class BenchmarkingApp {
                 Option.builder()
                         .longOpt("clients")
                         .hasArg(true)
-                        .desc("one of: all|jedis|lettuce|glide")
+                        .desc("one of: all|jedis|lettuce|glide|glide-jni")
                         .build());
         options.addOption(
                 Option.builder().longOpt("host").hasArg(true).desc("Hostname [localhost]").build());
@@ -165,7 +169,8 @@ public class BenchmarkingApp {
             String[] clients = line.getOptionValue("clients").split(",");
             runConfiguration.clients =
                     Arrays.stream(clients)
-                            .map(c -> Enum.valueOf(ClientName.class, c.toUpperCase()))
+                            .map(c -> c.toUpperCase().replace("-", "_"))
+                            .map(c -> Enum.valueOf(ClientName.class, c))
                             .flatMap(
                                     e -> {
                                         switch (e) {
@@ -173,6 +178,7 @@ public class BenchmarkingApp {
                                                 return Stream.of(
                                                         ClientName.JEDIS,
                                                         ClientName.GLIDE,
+                                                        ClientName.GLIDE_JNI,
                                                         ClientName.LETTUCE);
                                             default:
                                                 return Stream.of(e);
@@ -228,6 +234,7 @@ public class BenchmarkingApp {
         JEDIS("Jedis"), // sync
         LETTUCE("Lettuce"), // async
         GLIDE("Glide"), // async
+        GLIDE_JNI("Glide-JNI"), // async high-performance
         ALL("All");
 
         private String name;

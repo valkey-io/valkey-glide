@@ -41,7 +41,9 @@ application {
     // Runs for GITHUB_ACTIONS for testing release Maven deployment. Force benchmarks to use glide-rs from Maven Central
     // deployments.
     if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
-        applicationDefaultJvmArgs = ['-Djava.library.path=' + file('../../target/release').absolutePath]
+        def jniLibPath = file("../../rust-jni/target/release/").absolutePath
+        def glideLibPath = file('../../target/release').absolutePath
+        applicationDefaultJvmArgs = ["-Djava.library.path=${jniLibPath}${File.pathSeparator}${glideLibPath}"]
     }
 }
 
@@ -63,9 +65,28 @@ tasks.register('buildJniRust', Exec) {
 
     workingDir "${project.rootDir}/../rust-jni"
     environment CARGO_TERM_COLOR: 'always'
+    environment RUSTFLAGS: '-C target-cpu=native -C opt-level=3'
 
     doLast {
         println "Built JNI library for target: ${rustTarget ?: 'default'}"
+        println "Library location: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+    }
+}
+
+tasks.register('buildJniRustOptimized', Exec) {
+    description = 'Build the JNI Rust library with maximum optimization'
+    if (rustTarget) {
+        commandLine 'cargo', 'zigbuild', '--target', rustTarget, '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
+    workingDir "${project.rootDir}/../rust-jni"
+    environment CARGO_TERM_COLOR: 'always'
+    environment RUSTFLAGS: '-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1'
+
+    doLast {
+        println "Built optimized JNI library for target: ${rustTarget ?: 'default'}"
         println "Library location: ${project.rootDir}/../rust-jni/${rustTargetDir}"
     }
 }

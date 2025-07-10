@@ -1,7 +1,0 @@
-🚀 Valkey GLIDE JNI Performance Benchmark
-==========================================
-Operations: 5000, Concurrency: 20
-
-Exception in thread "main" java.lang.UnsatisfiedLinkError: 'long simple_benchmark.createClient(java.lang.String[], int, java.lang.String, java.lang.String, boolean, boolean, int)'
-	at simple_benchmark.createClient(Native Method)
-	at simple_benchmark.main(simple_benchmark.java:29)

@@ -49,6 +49,7 @@ task copyNativeLibs(type: Copy, dependsOn: buildNative) {
 
 // Make JAR building depend on copying native libs
 processResources.dependsOn copyNativeLibs
+sourcesJar.dependsOn copyNativeLibs
 
 test {
     useJUnitPlatform()
