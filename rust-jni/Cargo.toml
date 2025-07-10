@@ -13,12 +13,10 @@ crate-type = ["cdylib"]
 jni = "0.21.1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+redis = { version = "0.32", features = ["aio", "tokio-comp"] }
 
 [dependencies.glide-core]
 path = "../glide-core"
-
-[dependencies.redis]
-path = "../glide-core/redis-rs/redis"
 
 [profile.release]
 opt-level = 3         # Optimize for performance - same as Java client

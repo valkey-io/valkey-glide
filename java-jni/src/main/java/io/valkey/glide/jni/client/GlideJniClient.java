@@ -2,7 +2,6 @@ package io.valkey.glide.jni.client;
 
 import java.lang.ref.Cleaner;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * JNI client for POC benchmarking against UDS implementation.
@@ -84,11 +83,16 @@ public class GlideJniClient implements AutoCloseable {
 
         checkNotClosed();
 
-        // Execute asynchronously to match UDS BaseClient behavior
-        return CompletableFuture.supplyAsync(() -> {
+        // Execute synchronously and wrap in completed future for better performance
+        try {
             byte[] result = executeCommand(nativeClientPtr, CommandType.GET, key.getBytes());
-            return result != null ? new String(result) : null;
-        }, ForkJoinPool.commonPool());
+            String value = result != null && result.length > 0 ? new String(result) : null;
+            return CompletableFuture.completedFuture(value);
+        } catch (Exception e) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
     /**
@@ -105,8 +109,8 @@ public class GlideJniClient implements AutoCloseable {
 
         checkNotClosed();
 
-        // Execute asynchronously to match UDS BaseClient behavior
-        return CompletableFuture.supplyAsync(() -> {
+        // Execute synchronously and wrap in completed future for better performance
+        try {
             // Simple payload format: key_length(4 bytes) + key + value
             byte[] keyBytes = key.getBytes();
             byte[] valueBytes = value.getBytes();
@@ -125,8 +129,12 @@ public class GlideJniClient implements AutoCloseable {
             System.arraycopy(valueBytes, 0, payload, 4 + keyBytes.length, valueBytes.length);
 
             byte[] result = executeCommand(nativeClientPtr, CommandType.SET, payload);
-            return new String(result); // Should be "OK"
-        }, ForkJoinPool.commonPool());
+            return CompletableFuture.completedFuture(new String(result)); // Should be "OK"
+        } catch (Exception e) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
     /**
@@ -137,11 +145,15 @@ public class GlideJniClient implements AutoCloseable {
     public CompletableFuture<String> ping() {
         checkNotClosed();
 
-        // Execute asynchronously to match UDS BaseClient behavior
-        return CompletableFuture.supplyAsync(() -> {
+        // Execute synchronously and wrap in completed future for better performance
+        try {
             byte[] result = executeCommand(nativeClientPtr, CommandType.PING, new byte[0]);
-            return new String(result); // Should be "PONG"
-        }, ForkJoinPool.commonPool());
+            return CompletableFuture.completedFuture(new String(result)); // Should be "PONG"
+        } catch (Exception e) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
     /**
