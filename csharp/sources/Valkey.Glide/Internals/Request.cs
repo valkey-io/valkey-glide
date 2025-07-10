@@ -44,4 +44,26 @@ internal partial class Request
     /// <returns>A command that converts the response to a boolean value (true if response equals OK)</returns>
     private static Cmd<string, bool> OKToBool(RequestType request, GlideString[] args)
         => new(request, args, false, response => response == "OK");
+    /// <summary>
+    /// Create a Cmd which converts the response to a ValkeyValue.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <param name="isNullable">Whether the response can be null</param>
+    /// <returns>A command that converts the response to a ValkeyValue</returns>
+    private static Cmd<GlideString, ValkeyValue> ToValkeyValue(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, response => (ValkeyValue)response);
+
+    /// <summary>
+    /// Create a Cmd which converts a HashSet of objects to an array of ValkeyValues.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <returns>A command that converts a HashSet to a ValkeyValue array</returns>
+    private static Cmd<HashSet<object>, ValkeyValue[]> HashSetToValkeyValueArray(RequestType request, GlideString[] args)
+        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
+
+    private static Cmd<Dictionary<GlideString, GlideString>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, dict => [.. dict.Select(kv =>
+            new HashEntry((ValkeyValue)kv.Key, (ValkeyValue)kv.Value))]);
 }
