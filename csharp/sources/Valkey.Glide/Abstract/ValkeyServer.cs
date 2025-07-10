@@ -25,15 +25,15 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
 
     public bool IsConnected => true;
 
-    public RedisProtocol Protocol => (long)Hello()["proto"] == 2 ? RedisProtocol.Resp2 : RedisProtocol.Resp3;
+    public Protocol Protocol => (long)Hello()["proto"] == 2 ? Protocol.Resp2 : Protocol.Resp3;
 
     public Version Version => new(Hello()["version"].ToString()!);
 
     public ServerType ServerType => Enum.Parse<ServerType>(Hello()["mode"].ToString()!, true);
 
-    public Task<string?> InfoRawAsync(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
+    public Task<string?> InfoRawAsync(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
     {
-        Utils.Requires<NotImplementedException>(ignored == CommandFlags.None, "Command flags are not supported by GLIDE");
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
         InfoOptions.Section[] sections = section.Type == ValkeyValue.StorageType.Null ? [] :
             [Enum.Parse<InfoOptions.Section>(section.ToString(), true)];
 
@@ -42,13 +42,13 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
             .ContinueWith(task => (string?)task.Result);
     }
 
-    public Task<IGrouping<string, KeyValuePair<string, string>>[]> InfoAsync(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
-        => InfoRawAsync(section, ignored).ContinueWith(t
+    public Task<IGrouping<string, KeyValuePair<string, string>>[]> InfoAsync(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
+        => InfoRawAsync(section, flags).ContinueWith(t
             => Utils.ParseInfoResponse(t.Result!).GroupBy(x => x.Item1, x => x.Item2).ToArray());
 
-    public string? InfoRaw(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
-        => InfoRawAsync(section, ignored).GetAwaiter().GetResult();
+    public string? InfoRaw(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
+        => InfoRawAsync(section, flags).GetAwaiter().GetResult();
 
-    public IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags ignored = CommandFlags.None)
-        => InfoAsync(section, ignored).GetAwaiter().GetResult();
+    public IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
+        => InfoAsync(section, flags).GetAwaiter().GetResult();
 }

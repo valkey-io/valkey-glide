@@ -20,13 +20,13 @@ public class TestConfiguration : IDisposable
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
             .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
-            .WithProtocolVersion(Protocol.RESP3)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
             .WithTls(TLS);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
-            .WithProtocolVersion(Protocol.RESP3)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
             .WithTls(TLS);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
@@ -62,11 +62,11 @@ public class TestConfiguration : IDisposable
             if (field.Count == 0)
             {
                 GlideClient resp2client = GlideClient.CreateClient(
-                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP2).Build()
+                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build()
                 ).GetAwaiter().GetResult();
                 resp2client.SetInfo("RESP2");
                 GlideClient resp3client = GlideClient.CreateClient(
-                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP3).Build()
+                    DefaultClientConfig().WithRequestTimeout(1000).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3).Build()
                 ).GetAwaiter().GetResult();
                 resp3client.SetInfo("RESP3");
                 field = [resp2client, resp3client];
@@ -84,11 +84,11 @@ public class TestConfiguration : IDisposable
             if (field.Count == 0)
             {
                 GlideClusterClient resp2client = GlideClusterClient.CreateClient(
-                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP2).Build()
+                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build()
                 ).GetAwaiter().GetResult();
                 resp2client.SetInfo("RESP2");
                 GlideClusterClient resp3client = GlideClusterClient.CreateClient(
-                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(Protocol.RESP3).Build()
+                    DefaultClusterClientConfig().WithRequestTimeout(1000).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3).Build()
                 ).GetAwaiter().GetResult();
                 resp3client.SetInfo("RESP3");
                 field = [resp2client, resp3client];

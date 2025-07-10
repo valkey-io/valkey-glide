@@ -18,20 +18,20 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
 {
     public EndPoint[] GetEndPoints(bool configuredOnly) => throw new NotImplementedException();
 
-    public IServer GetServer(string host, int port, object? ignored = null)
-        => GetServer(Utils.ParseEndPoint(host, port), ignored);
+    public IServer GetServer(string host, int port, object? asyncState = null)
+        => GetServer(Utils.ParseEndPoint(host, port), asyncState);
 
-    public IServer GetServer(string hostAndPort, object? ignored = null)
+    public IServer GetServer(string hostAndPort, object? asyncState = null)
         => Utils.TryParseEndPoint(hostAndPort, out IPEndPoint? ep)
-            ? GetServer(ep, ignored)
+            ? GetServer(ep, asyncState)
             : throw new ArgumentException($"The specified host and port could not be parsed: {hostAndPort}", nameof(hostAndPort));
 
     public IServer GetServer(IPAddress host, int port)
         => GetServer(new IPEndPoint(host, port));
 
-    public IServer GetServer(EndPoint endpoint, object? ignored = null)
+    public IServer GetServer(EndPoint endpoint, object? asyncState = null)
     {
-        Utils.Requires<NotImplementedException>(ignored is null, "Async state is not supported by GLIDE");
+        Utils.Requires<NotImplementedException>(asyncState is null, "Async state is not supported by GLIDE");
         foreach (IServer server in GetServers())
         {
             if (server.EndPoint.Equals(endpoint))

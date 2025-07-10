@@ -81,15 +81,15 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="host">The host to get a server for.</param>
     /// <param name="port">The specific port for <paramref name="host"/> to get a server for.</param>
-    /// <param name="ignored">The async state is not supported by GLIDE.</param>
-    IServer GetServer(string host, int port, object? ignored = null);
+    /// <param name="asyncState">The async state is not supported by GLIDE.</param>
+    IServer GetServer(string host, int port, object? asyncState = null);
 
     /// <summary>
     /// Obtain a configuration API for an individual server.
     /// </summary>
     /// <param name="hostAndPort">The "host:port" string to get a server for.</param>
-    /// <param name="ignored">The async state is not supported by GLIDE.</param>
-    IServer GetServer(string hostAndPort, object? ignored = null);
+    /// <param name="asyncState">The async state is not supported by GLIDE.</param>
+    IServer GetServer(string hostAndPort, object? asyncState = null);
 
     /// <summary>
     /// Obtain a configuration API for an individual server.
@@ -102,8 +102,8 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// Obtain a configuration API for an individual server.
     /// </summary>
     /// <param name="endpoint">The endpoint to get a server for.</param>
-    /// <param name="ignored">The async state is not supported by GLIDE.</param>
-    IServer GetServer(EndPoint endpoint, object? ignored = null);
+    /// <param name="asyncState">The async state is not supported by GLIDE.</param>
+    IServer GetServer(EndPoint endpoint, object? asyncState = null);
 
     /// <summary>
     /// Obtain configuration APIs for all servers in this multiplexer.
@@ -125,6 +125,6 @@ public interface IConnectionMultiplexer // : IDisposable, IAsyncDisposable
     /// Obtain an interactive connection to a database inside server.
     /// </summary>
     /// <param name="db">Not supported. To switch the database, please use `SELECT` command.</param>
-    /// <param name="ignored">The async state is not supported by GLIDE.</param>
-    IDatabase GetDatabase(int db = -1, object? ignored = null);
+    /// <param name="asyncState">The async state is not supported by GLIDE.</param>
+    IDatabase GetDatabase(int db = -1, object? asyncState = null);
 }

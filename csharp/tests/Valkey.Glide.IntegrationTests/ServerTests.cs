@@ -40,7 +40,7 @@ public class ServerTests
         foreach (IServer server in conn.GetServers())
         {
             // TODO protocol isn't yet configurable
-            Assert.Equal(RedisProtocol.Resp3, server.Protocol);
+            Assert.Equal(Protocol.Resp3, server.Protocol);
             Assert.Equal(TestConfiguration.SERVER_VERSION, server.Version);
             Assert.Equal(isCluster ? ServerType.Cluster : ServerType.Standalone, server.ServerType);
             string info = (await server.InfoRawAsync("server"))!;
