@@ -9,11 +9,6 @@ dependencies = [
     "cffi>=1.0.0",
     "valkey-glide-shared"
 ]
-
-[build-system]
-requires = ["setuptools>=61.0", "wheel", "cffi>=1.0.0"]
-build-backend = "setuptools.build_meta"
-
 classifiers = [
     "Topic :: Database",
     "Topic :: Utilities",
@@ -24,6 +19,12 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "cffi>=1.0.0"]
+build-backend = "setuptools.build_meta"
+
+
 
 [tool.setuptools]
 package-dir = {"" = "./"}

@@ -9,11 +9,6 @@ dependencies = [
     "anyio>=4.9.0",
     "valkey-glide-shared"
 ]
-
-[build-system]
-requires = ["maturin==0.14.17"]
-build-backend = "maturin"
-
 classifiers = [
     "Topic :: Database",
     "Topic :: Utilities",
@@ -24,6 +19,10 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
+
+[build-system]
+requires = ["maturin==0.14.17"]
+build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python"
