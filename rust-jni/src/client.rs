@@ -127,7 +127,7 @@ impl GlideJniClient {
 
     /// Execute PING command
     pub async fn ping(&self) -> JniResult<String> {
-        let mut cmd = cmd("PING");
+        let cmd = cmd("PING");
         let mut client = self.inner.lock().await;
         
         let result = client.send_command(&cmd, None).await
@@ -345,7 +345,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_ping(
     _class: JClass,
     client_ptr: jlong,
 ) -> jstring {
-    let mut result = || -> JniResult<jstring> {
+    let result = || -> JniResult<jstring> {
         if client_ptr == 0 {
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }

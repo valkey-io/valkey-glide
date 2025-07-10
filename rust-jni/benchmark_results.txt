@@ -1,0 +1,20 @@
+🚀 Valkey GLIDE JNI Performance Benchmark
+==========================================
+Operations: 10000, Concurrency: 20
+
+✅ Connected to Valkey server
+📊 SET Benchmark
+-----------------
+Success: 0, Errors: 10000
+Duration: 1335 ms
+Throughput: 0 ops/sec
+Avg Latency: Infinity ms
+
+📊 GET Benchmark
+-----------------
+Pre-populating keys...
+Exception in thread "main" java.lang.IllegalStateException: Unexpected response: SET returned unexpected result: ok
+	at io.valkey.glide.jni.GlideJniClient.set(Native Method)
+	at io.valkey.glide.jni.GlideJniClient.set(GlideJniClient.java:126)
+	at JniBenchmark.runGetBenchmark(JniBenchmark.java:117)
+	at JniBenchmark.main(JniBenchmark.java:38)

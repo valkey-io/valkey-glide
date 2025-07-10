@@ -3,13 +3,10 @@ package glide.benchmarks;
 
 import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 
-import glide.benchmarks.clients.glide.GlideAsyncClient;
-import glide.benchmarks.clients.jedis.JedisClient;
-import glide.benchmarks.clients.jni.GlideJniAsyncClient;
-import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -17,6 +14,11 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+
+import glide.benchmarks.clients.glide.GlideAsyncClient;
+import glide.benchmarks.clients.glide.GlideJniAsyncClient;
+import glide.benchmarks.clients.jedis.JedisClient;
+import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 
 /** Benchmarking app for reporting performance of various Valkey Java-clients */
 public class BenchmarkingApp {
@@ -59,10 +61,6 @@ public class BenchmarkingApp {
                     System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
-                case GLIDE_JNI:
-                    System.out.println("Valkey-GLIDE JNI async client");
-                    testClientSetGet(GlideJniAsyncClient::new, runConfiguration, true);
-                    break;
                 case ALL:
                     // ALL is handled in the client parsing logic, should not reach here
                     throw new IllegalStateException("ALL client type should be resolved before execution");
@@ -103,7 +101,7 @@ public class BenchmarkingApp {
                 Option.builder()
                         .longOpt("clients")
                         .hasArg(true)
-                        .desc("one of: all|jedis|lettuce|glide|glide_jni")
+                        .desc("one of: all|jedis|lettuce|glide")
                         .build());
         options.addOption(
                 Option.builder().longOpt("host").hasArg(true).desc("Hostname [localhost]").build());
@@ -175,7 +173,6 @@ public class BenchmarkingApp {
                                                 return Stream.of(
                                                         ClientName.JEDIS,
                                                         ClientName.GLIDE,
-                                                        ClientName.GLIDE_JNI,
                                                         ClientName.LETTUCE);
                                             default:
                                                 return Stream.of(e);
@@ -231,7 +228,6 @@ public class BenchmarkingApp {
         JEDIS("Jedis"), // sync
         LETTUCE("Lettuce"), // async
         GLIDE("Glide"), // async
-        GLIDE_JNI("Glide-JNI"), // async JNI
         ALL("All");
 
         private String name;
