@@ -11,7 +11,7 @@ internal partial class Request
     public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value)
     {
         GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return new(RequestType.SAdd, args, false, response => response == 1);
+        return Boolean<long>(RequestType.SAdd, args);
     }
 
     public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values)
@@ -23,7 +23,7 @@ internal partial class Request
     public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value)
     {
         GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return new(RequestType.SRem, args, false, response => response == 1);
+        return Boolean<long>(RequestType.SRem, args);
     }
 
     public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values)
