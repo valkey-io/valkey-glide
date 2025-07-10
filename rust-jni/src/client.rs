@@ -4,7 +4,6 @@ use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
 use jni::objects::{JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jint, jobject, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
-use redis::{Cmd, Value};
 use std::ptr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -140,91 +139,92 @@ pub extern "system" fn Java_io_valkey_glide_client_GlideClient_createClient(
     cluster_mode: jboolean,
     request_timeout: jint,
 ) -> jobject {
-    let result = std::panic::catch_unwind(|| {
-        // Get Tokio runtime handle
-        let rt = glide_core::client::get_or_init_runtime()
-            .map_err(|e| GlideError::RuntimeError(e))?;
+    // Get Tokio runtime handle
+    let rt = match glide_core::client::get_or_init_runtime() {
+        Ok(rt) => rt,
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError(e));
+            return ptr::null_mut();
+        }
+    };
 
-        rt.runtime.block_on(async move {
-            // Parse addresses array
-            let addresses_array = env.get_list(&JObject::from_raw(addresses))
-                .map_err(|e| GlideError::JniError(format!("Failed to get addresses list: {}", e)))?;
+    let result = rt.runtime.block_on(async move {
+        // Parse addresses array
+        let addresses_array = unsafe {
+            env.get_list(&JObject::from_raw(addresses))
+                .map_err(|e| GlideError::JniError(format!("Failed to get addresses list: {}", e)))?
+        };
 
-            let mut parsed_addresses = Vec::new();
-            let mut iter = addresses_array.iter(&mut env)
-                .map_err(|e| GlideError::JniError(format!("Failed to iterate addresses: {}", e)))?;
+        let mut parsed_addresses = Vec::new();
+        let mut iter = addresses_array.iter(&mut env)
+            .map_err(|e| GlideError::JniError(format!("Failed to iterate addresses: {}", e)))?;
 
-            while let Some(addr_obj) = iter.next(&mut env)
-                .map_err(|e| GlideError::JniError(format!("Failed to get next address: {}", e)))? {
+        while let Some(addr_obj) = iter.next(&mut env)
+            .map_err(|e| GlideError::JniError(format!("Failed to get next address: {}", e)))? {
 
-                let addr_str: String = env.get_string(&JString::from(addr_obj))
-                    .map_err(|e| GlideError::JniError(format!("Failed to get address string: {}", e)))?
-                    .into();
+            let addr_str: String = env.get_string(&JString::from(addr_obj))
+                .map_err(|e| GlideError::JniError(format!("Failed to get address string: {}", e)))?
+                .into();
 
-                let parts: Vec<&str> = addr_str.split(':').collect();
-                if parts.len() != 2 {
-                    return Err(GlideError::InvalidInput("Address must be in format 'host:port'".to_string()));
-                }
-
-                let host = parts[0].to_string();
-                let port = parts[1].parse::<u16>()
-                    .map_err(|e| GlideError::InvalidInput(format!("Invalid port: {}", e)))?;
-
-                parsed_addresses.push(NodeAddress { host, port });
+            let parts: Vec<&str> = addr_str.split(':').collect();
+            if parts.len() != 2 {
+                return Err(GlideError::InvalidInput("Address must be in format 'host:port'".to_string()));
             }
 
-            // Parse optional parameters
-            let db_id = if database_id >= 0 { Some(database_id as i64) } else { None };
+            let host = parts[0].to_string();
+            let port = parts[1].parse::<u16>()
+                .map_err(|e| GlideError::InvalidInput(format!("Invalid port: {}", e)))?;
 
-            let username_opt = if username.is_null() {
-                None
-            } else {
-                Some(env.get_string(&JString::from_raw(username))
-                    .map_err(|e| GlideError::JniError(format!("Failed to get username: {}", e)))?
-                    .into())
-            };
+            parsed_addresses.push(NodeAddress { host, port });
+        }
 
-            let password_opt = if password.is_null() {
-                None
-            } else {
-                Some(env.get_string(&JString::from_raw(password))
-                    .map_err(|e| GlideError::JniError(format!("Failed to get password: {}", e)))?
-                    .into())
-            };
+        // Parse optional parameters
+        let db_id = if database_id >= 0 { Some(database_id as i64) } else { None };
 
-            let tls_mode = if use_tls == JNI_TRUE {
-                Some(TlsMode::SecureTls)
-            } else {
-                Some(TlsMode::NoTls)
-            };
+        let username_opt = if username.is_null() {
+            None
+        } else {
+            Some(env.get_string(&unsafe { JString::from_raw(username) })
+                .map_err(|e| GlideError::JniError(format!("Failed to get username: {}", e)))?
+                .into())
+        };
 
-            let timeout = if request_timeout > 0 { Some(request_timeout as u32) } else { None };
+        let password_opt = if password.is_null() {
+            None
+        } else {
+            Some(env.get_string(&unsafe { JString::from_raw(password) })
+                .map_err(|e| GlideError::JniError(format!("Failed to get password: {}", e)))?
+                .into())
+        };
 
-            // Create the client
-            let client = GlideJniClient::new(
-                parsed_addresses,
-                db_id,
-                username_opt,
-                password_opt,
-                tls_mode,
-                cluster_mode == JNI_TRUE,
-                timeout,
-            ).await?;
+        let tls_mode = if use_tls == JNI_TRUE {
+            Some(TlsMode::SecureTls)
+        } else {
+            Some(TlsMode::NoTls)
+        };
 
-            // Box the client and return as raw pointer
-            let boxed_client = Box::new(client);
-            Ok(Box::into_raw(boxed_client) as jobject)
-        })
+        let timeout = if request_timeout > 0 { Some(request_timeout as u32) } else { None };
+
+        // Create the client
+        let client = GlideJniClient::new(
+            parsed_addresses,
+            db_id,
+            username_opt,
+            password_opt,
+            tls_mode,
+            cluster_mode == JNI_TRUE,
+            timeout,
+        ).await?;
+
+        // Box the client and return as raw pointer
+        let boxed_client = Box::new(client);
+        Ok(Box::into_raw(boxed_client) as jobject)
     });
 
     match result {
-        Ok(Ok(client_ptr)) => client_ptr,
-        Ok(Err(error)) => {
+        Ok(client_ptr) => client_ptr,
+        Err(error) => {
             crate::error::throw_glide_exception(&mut env, &error);
-            ptr::null_mut()
-        }
-        Err(_) => {
-            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError("Panic occurred".to_string()));
             ptr::null_mut()
         }
     }
@@ -252,42 +252,46 @@ pub extern "system" fn Java_io_valkey_glide_client_GlideClient_get(
     client_ptr: jobject,
     key: jstring,
 ) -> jstring {
-    let result = std::panic::catch_unwind(|| {
-        if client_ptr.is_null() {
-            return Err(GlideError::NullPointer("Client pointer is null".to_string()));
+    if client_ptr.is_null() {
+        crate::error::throw_glide_exception(&mut env, &GlideError::NullPointer("Client pointer is null".to_string()));
+        return ptr::null_mut();
+    }
+
+    let client = unsafe { &*(client_ptr as *const GlideJniClient) };
+    let key_str: String = match env.get_string(&unsafe { JString::from_raw(key) }) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to get key string: {}", e)));
+            return ptr::null_mut();
         }
+    };
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_str: String = env.get_string(&JString::from_raw(key))
-            .map_err(|e| GlideError::JniError(format!("Failed to get key string: {}", e)))?
-            .into();
-
-        // Get Tokio runtime handle and execute
-        let rt = glide_core::client::get_or_init_runtime()
-            .map_err(|e| GlideError::RuntimeError(e))?;
-
-        let result = rt.runtime.block_on(async {
-            client.get(&key_str).await
-        })?;
-
-        match result {
-            Some(value) => {
-                let java_string = env.new_string(&value)
-                    .map_err(|e| GlideError::JniError(format!("Failed to create Java string: {}", e)))?;
-                Ok(java_string.into_raw())
-            }
-            None => Ok(ptr::null_mut()),
+    // Get Tokio runtime handle and execute
+    let rt = match glide_core::client::get_or_init_runtime() {
+        Ok(rt) => rt,
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError(e));
+            return ptr::null_mut();
         }
+    };
+
+    let result = rt.runtime.block_on(async {
+        client.get(&key_str).await
     });
 
     match result {
-        Ok(Ok(string_ptr)) => string_ptr,
-        Ok(Err(error)) => {
-            crate::error::throw_glide_exception(&mut env, &error);
-            ptr::null_mut()
+        Ok(Some(value)) => {
+            match env.new_string(&value) {
+                Ok(java_string) => java_string.into_raw(),
+                Err(e) => {
+                    crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to create Java string: {}", e)));
+                    ptr::null_mut()
+                }
+            }
         }
-        Err(_) => {
-            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError("Panic occurred".to_string()));
+        Ok(None) => ptr::null_mut(),
+        Err(error) => {
+            crate::error::throw_glide_exception(&mut env, &error);
             ptr::null_mut()
         }
     }
@@ -302,38 +306,44 @@ pub extern "system" fn Java_io_valkey_glide_client_GlideClient_set(
     key: jstring,
     value: jstring,
 ) -> jboolean {
-    let result = std::panic::catch_unwind(|| {
-        if client_ptr.is_null() {
-            return Err(GlideError::NullPointer("Client pointer is null".to_string()));
+    if client_ptr.is_null() {
+        crate::error::throw_glide_exception(&mut env, &GlideError::NullPointer("Client pointer is null".to_string()));
+        return JNI_FALSE;
+    }
+
+    let client = unsafe { &*(client_ptr as *const GlideJniClient) };
+    let key_str: String = match env.get_string(&unsafe { JString::from_raw(key) }) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to get key string: {}", e)));
+            return JNI_FALSE;
         }
+    };
+    let value_str: String = match env.get_string(&unsafe { JString::from_raw(value) }) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to get value string: {}", e)));
+            return JNI_FALSE;
+        }
+    };
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_str: String = env.get_string(&JString::from_raw(key))
-            .map_err(|e| GlideError::JniError(format!("Failed to get key string: {}", e)))?
-            .into();
-        let value_str: String = env.get_string(&JString::from_raw(value))
-            .map_err(|e| GlideError::JniError(format!("Failed to get value string: {}", e)))?
-            .into();
+    // Get Tokio runtime handle and execute
+    let rt = match glide_core::client::get_or_init_runtime() {
+        Ok(rt) => rt,
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError(e));
+            return JNI_FALSE;
+        }
+    };
 
-        // Get Tokio runtime handle and execute
-        let rt = glide_core::client::get_or_init_runtime()
-            .map_err(|e| GlideError::RuntimeError(e))?;
-
-        rt.runtime.block_on(async {
-            client.set(&key_str, &value_str).await
-        })?;
-
-        Ok(JNI_TRUE)
+    let result = rt.runtime.block_on(async {
+        client.set(&key_str, &value_str).await
     });
 
     match result {
-        Ok(Ok(success)) => success,
-        Ok(Err(error)) => {
+        Ok(()) => JNI_TRUE,
+        Err(error) => {
             crate::error::throw_glide_exception(&mut env, &error);
-            JNI_FALSE
-        }
-        Err(_) => {
-            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError("Panic occurred".to_string()));
             JNI_FALSE
         }
     }
@@ -347,35 +357,37 @@ pub extern "system" fn Java_io_valkey_glide_client_GlideClient_del(
     client_ptr: jobject,
     key: jstring,
 ) -> jint {
-    let result = std::panic::catch_unwind(|| {
-        if client_ptr.is_null() {
-            return Err(GlideError::NullPointer("Client pointer is null".to_string()));
+    if client_ptr.is_null() {
+        crate::error::throw_glide_exception(&mut env, &GlideError::NullPointer("Client pointer is null".to_string()));
+        return -1;
+    }
+
+    let client = unsafe { &*(client_ptr as *const GlideJniClient) };
+    let key_str: String = match env.get_string(&unsafe { JString::from_raw(key) }) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to get key string: {}", e)));
+            return -1;
         }
+    };
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_str: String = env.get_string(&JString::from_raw(key))
-            .map_err(|e| GlideError::JniError(format!("Failed to get key string: {}", e)))?
-            .into();
+    // Get Tokio runtime handle and execute
+    let rt = match glide_core::client::get_or_init_runtime() {
+        Ok(rt) => rt,
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError(e));
+            return -1;
+        }
+    };
 
-        // Get Tokio runtime handle and execute
-        let rt = glide_core::client::get_or_init_runtime()
-            .map_err(|e| GlideError::RuntimeError(e))?;
-
-        let result = rt.runtime.block_on(async {
-            client.del(&key_str).await
-        })?;
-
-        Ok(result as jint)
+    let result = rt.runtime.block_on(async {
+        client.del(&key_str).await
     });
 
     match result {
-        Ok(Ok(count)) => count,
-        Ok(Err(error)) => {
+        Ok(count) => count as jint,
+        Err(error) => {
             crate::error::throw_glide_exception(&mut env, &error);
-            -1
-        }
-        Err(_) => {
-            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError("Panic occurred".to_string()));
             -1
         }
     }
@@ -388,34 +400,38 @@ pub extern "system" fn Java_io_valkey_glide_client_GlideClient_ping(
     _class: JClass,
     client_ptr: jobject,
 ) -> jstring {
-    let result = std::panic::catch_unwind(|| {
-        if client_ptr.is_null() {
-            return Err(GlideError::NullPointer("Client pointer is null".to_string()));
+    if client_ptr.is_null() {
+        crate::error::throw_glide_exception(&mut env, &GlideError::NullPointer("Client pointer is null".to_string()));
+        return ptr::null_mut();
+    }
+
+    let client = unsafe { &*(client_ptr as *const GlideJniClient) };
+
+    // Get Tokio runtime handle and execute
+    let rt = match glide_core::client::get_or_init_runtime() {
+        Ok(rt) => rt,
+        Err(e) => {
+            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError(e));
+            return ptr::null_mut();
         }
+    };
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-
-        // Get Tokio runtime handle and execute
-        let rt = glide_core::client::get_or_init_runtime()
-            .map_err(|e| GlideError::RuntimeError(e))?;
-
-        let result = rt.runtime.block_on(async {
-            client.ping().await
-        })?;
-
-        let java_string = env.new_string(&result)
-            .map_err(|e| GlideError::JniError(format!("Failed to create Java string: {}", e)))?;
-        Ok(java_string.into_raw())
+    let result = rt.runtime.block_on(async {
+        client.ping().await
     });
 
     match result {
-        Ok(Ok(string_ptr)) => string_ptr,
-        Ok(Err(error)) => {
-            crate::error::throw_glide_exception(&mut env, &error);
-            ptr::null_mut()
+        Ok(response) => {
+            match env.new_string(&response) {
+                Ok(java_string) => java_string.into_raw(),
+                Err(e) => {
+                    crate::error::throw_glide_exception(&mut env, &GlideError::JniError(format!("Failed to create Java string: {}", e)));
+                    ptr::null_mut()
+                }
+            }
         }
-        Err(_) => {
-            crate::error::throw_glide_exception(&mut env, &GlideError::RuntimeError("Panic occurred".to_string()));
+        Err(error) => {
+            crate::error::throw_glide_exception(&mut env, &error);
             ptr::null_mut()
         }
     }
