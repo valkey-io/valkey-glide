@@ -4109,14 +4109,17 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    describe.skip("script flush is flaky - https://github.com/valkey-io/valkey-glide/issues/4158", () => {
+    describe("script flush test", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "script flush test_%p",
             async (protocol) => {
                 await runTest(async (client: BaseClient) => {
-                    // Load a script
-                    const script = new Script("return 'Hello'");
-                    expect(await client.invokeScript(script)).toEqual("Hello");
+                    // Load a script - create a unique script for each test iteration
+                    const randomString = getRandomKey();
+                    const script = new Script(`return '${randomString}'`);
+                    expect(await client.invokeScript(script)).toEqual(
+                        randomString,
+                    );
 
                     // Check existence of script
                     expect(
