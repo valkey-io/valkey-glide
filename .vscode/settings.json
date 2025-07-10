@@ -11,7 +11,6 @@
         "glide-core/Cargo.toml",
         "logger_core/Cargo.toml",
         "glide-core/redis-rs/Cargo.toml",
-        "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml",
         "rust-jni/Cargo.toml"
     ],
