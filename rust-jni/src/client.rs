@@ -1,19 +1,17 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! High-performance JNI client implementation.
+//! High-performance JNI client implementation with direct glide-core integration.
 //!
-//! This module provides a direct integration with glide-core, eliminating
-//! Unix Domain Socket overhead and enabling zero-copy operations where possible.
+//! This module provides JNI bindings that directly use glide-core's Client,
+//! eliminating Unix Domain Socket overhead and enabling zero-copy operations.
 
-use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode, AuthenticationInfo};
 use jni::objects::{JClass, JObject, JString, JObjectArray};
 use jni::sys::{jboolean, jint, jlong, jobject, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 use redis::{cmd, Value};
 use std::ptr;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 
 use crate::error::JniResult;
 use crate::{jni_result, jni_error};
@@ -30,121 +28,6 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
             .build()
             .expect("Failed to create Tokio runtime")
     })
-}
-
-/// High-performance JNI client wrapping glide-core
-pub struct GlideJniClient {
-    inner: Arc<Mutex<Client>>,
-}
-
-impl GlideJniClient {
-    /// Create a new client with the specified configuration
-    pub async fn new(
-        addresses: Vec<NodeAddress>,
-        database_id: Option<i64>,
-        username: Option<String>,
-        password: Option<String>,
-        tls_mode: Option<TlsMode>,
-        cluster_mode: bool,
-        request_timeout: Option<Duration>,
-    ) -> JniResult<Self> {
-        let mut connection_request = ConnectionRequest::default();
-        connection_request.addresses = addresses;
-
-        if let Some(db_id) = database_id {
-            connection_request.database_id = db_id;
-        }
-
-        if username.is_some() || password.is_some() {
-            connection_request.authentication_info = Some(glide_core::client::AuthenticationInfo {
-                username,
-                password,
-            });
-        }
-
-        if let Some(tls) = tls_mode {
-            connection_request.tls_mode = Some(tls);
-        }
-
-        connection_request.cluster_mode_enabled = cluster_mode;
-
-        if let Some(timeout) = request_timeout {
-            connection_request.request_timeout = Some(timeout.as_millis() as u32);
-        }
-
-        let client = Client::new(connection_request, None).await?;
-
-        Ok(Self {
-            inner: Arc::new(Mutex::new(client)),
-        })
-    }
-
-    /// Execute GET command with zero-copy optimization
-    pub async fn get(&self, key: &[u8]) -> JniResult<Option<Vec<u8>>> {
-        let mut cmd = cmd("GET");
-        cmd.arg(key);
-        let mut client = self.inner.lock().await;
-
-        let result = client.send_command(&cmd, None).await
-            .map_err(|e| jni_error!(Command, "GET failed: {}", e))?;
-
-        match result {
-            Value::BulkString(bytes) => Ok(Some(bytes)),
-            Value::Nil => Ok(None),
-            other => Err(jni_error!(UnexpectedResponse, "GET returned unexpected type: {:?}", other)),
-        }
-    }
-
-    /// Execute SET command with zero-copy optimization
-    pub async fn set(&self, key: &[u8], value: &[u8]) -> JniResult<()> {
-        let mut cmd = cmd("SET");
-        cmd.arg(key).arg(value);
-        let mut client = self.inner.lock().await;
-
-        let result = client.send_command(&cmd, None).await
-            .map_err(|e| jni_error!(Command, "SET failed: {}", e))?;
-
-        match result {
-            Value::SimpleString(response) => {
-                if response.to_uppercase() == "OK" {
-                    Ok(())
-                } else {
-                    Err(jni_error!(UnexpectedResponse, "SET returned unexpected result: '{}' (expected 'OK')", response))
-                }
-            }
-            Value::Okay => Ok(()),
-            other => Err(jni_error!(UnexpectedResponse, "SET returned unexpected result type: {:?}", other)),
-        }
-    }
-
-    /// Execute DEL command
-    pub async fn del(&self, key: &[u8]) -> JniResult<i64> {
-        let mut cmd = cmd("DEL");
-        cmd.arg(key);
-        let mut client = self.inner.lock().await;
-
-        let result = client.send_command(&cmd, None).await
-            .map_err(|e| jni_error!(Command, "DEL failed: {}", e))?;
-
-        match result {
-            Value::Int(count) => Ok(count),
-            other => Err(jni_error!(UnexpectedResponse, "DEL returned unexpected type: {:?}", other)),
-        }
-    }
-
-    /// Execute PING command
-    pub async fn ping(&self) -> JniResult<String> {
-        let cmd = cmd("PING");
-        let mut client = self.inner.lock().await;
-
-        let result = client.send_command(&cmd, None).await
-            .map_err(|e| jni_error!(Command, "PING failed: {}", e))?;
-
-        match result {
-            Value::SimpleString(response) => Ok(response),
-            other => Err(jni_error!(UnexpectedResponse, "PING returned unexpected type: {:?}", other)),
-        }
-    }
 }
 
 // Helper functions for JNI parameter parsing
@@ -184,18 +67,11 @@ fn parse_optional_string(env: &mut JNIEnv, jstring: jstring) -> JniResult<Option
     }
 }
 
-/// Convert Java string to Rust bytes
-fn get_bytes_from_java(env: &mut JNIEnv, jstr: jstring) -> JniResult<Vec<u8>> {
-    let jstring_obj = unsafe { JString::from_raw(jstr) };
-    let java_str = env.get_string(&jstring_obj)?;
-    Ok(java_str.to_bytes().to_vec())
-}
-
 // JNI function implementations
 
-/// Create a new Glide client
+/// Create a new Glide client with full configuration
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_createClient(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClient(
     mut env: JNIEnv,
     _class: JClass,
     addresses: jobject,
@@ -205,6 +81,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_createClient(
     use_tls: jboolean,
     cluster_mode: jboolean,
     request_timeout_ms: jint,
+    connection_timeout_ms: jint,
 ) -> jlong {
     let mut result = || -> JniResult<jlong> {
         let addresses_obj = unsafe { JObject::from_raw(addresses) };
@@ -220,23 +97,51 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_createClient(
             Some(TlsMode::NoTls)
         };
 
-        let timeout = if request_timeout_ms > 0 {
+        let request_timeout = if request_timeout_ms > 0 {
             Some(Duration::from_millis(request_timeout_ms as u64))
         } else {
             None
         };
 
+        let connection_timeout = if connection_timeout_ms > 0 {
+            Some(Duration::from_millis(connection_timeout_ms as u64))
+        } else {
+            None
+        };
+
+        // Create ConnectionRequest to match glide-core API
+        let mut connection_request = ConnectionRequest::default();
+        connection_request.addresses = parsed_addresses;
+        
+        if let Some(db_id) = db_id {
+            connection_request.database_id = db_id;
+        }
+        
+        if username_opt.is_some() || password_opt.is_some() {
+            connection_request.authentication_info = Some(AuthenticationInfo {
+                username: username_opt,
+                password: password_opt,
+            });
+        }
+        
+        if let Some(tls) = tls_mode {
+            connection_request.tls_mode = Some(tls);
+        }
+        
+        connection_request.cluster_mode_enabled = cluster_mode == JNI_TRUE;
+        
+        if let Some(timeout) = request_timeout {
+            connection_request.request_timeout = Some(timeout.as_millis() as u32);
+        }
+        
+        if let Some(timeout) = connection_timeout {
+            connection_request.connection_timeout = Some(timeout.as_millis() as u32);
+        }
+        
+        // Create the actual glide-core client
         let client = get_runtime().block_on(async {
-            GlideJniClient::new(
-                parsed_addresses,
-                db_id,
-                username_opt,
-                password_opt,
-                tls_mode,
-                cluster_mode == JNI_TRUE,
-                timeout,
-            ).await
-        })?;
+            Client::new(connection_request, None).await
+        }).map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
 
         let boxed_client = Box::new(client);
         Ok(Box::into_raw(boxed_client) as jlong)
@@ -247,21 +152,21 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_createClient(
 
 /// Close and free a Glide client
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_closeClient(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClient(
     _env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
 ) {
     if client_ptr != 0 {
         unsafe {
-            let _ = Box::from_raw(client_ptr as *mut GlideJniClient);
+            let _ = Box::from_raw(client_ptr as *mut Client);
         }
     }
 }
 
 /// Execute GET command
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_get(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_get(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
@@ -272,19 +177,25 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_get(
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_bytes = get_bytes_from_java(&mut env, key)?;
-
+        let client = unsafe { &mut *(client_ptr as *mut Client) };
+        let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
+        
+        let mut cmd = cmd("GET");
+        cmd.arg(&key_str);
+        
         let response = get_runtime().block_on(async {
-            client.get(&key_bytes).await
+            client.send_command(&cmd, None).await
         })?;
 
         match response {
-            Some(bytes) => {
-                let java_string = env.new_string(String::from_utf8(bytes)?)?;
+            Value::BulkString(bytes) => {
+                let value_str = String::from_utf8(bytes)
+                    .map_err(|e| jni_error!(Utf8, "Failed to convert response to string: {}", e))?;
+                let java_string = env.new_string(&value_str)?;
                 Ok(java_string.into_raw())
             }
-            None => Ok(ptr::null_mut()),
+            Value::Nil => Ok(ptr::null_mut()),
+            other => Err(jni_error!(UnexpectedResponse, "GET returned unexpected type: {:?}", other)),
         }
     };
 
@@ -293,7 +204,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_get(
 
 /// Execute SET command
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_set(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_set(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
@@ -305,49 +216,30 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_set(
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_bytes = get_bytes_from_java(&mut env, key)?;
-        let value_bytes = get_bytes_from_java(&mut env, value)?;
-
-        get_runtime().block_on(async {
-            client.set(&key_bytes, &value_bytes).await
+        let client = unsafe { &mut *(client_ptr as *mut Client) };
+        let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
+        let value_str: String = env.get_string(&unsafe { JString::from_raw(value) })?.into();
+        
+        let mut cmd = cmd("SET");
+        cmd.arg(&key_str).arg(&value_str);
+        
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
         })?;
-
-        Ok(JNI_TRUE)
+        
+        match response {
+            Value::SimpleString(ref s) if s.to_uppercase() == "OK" => Ok(JNI_TRUE),
+            Value::Okay => Ok(JNI_TRUE),
+            other => Err(jni_error!(UnexpectedResponse, "SET returned unexpected result: {:?}", other)),
+        }
     };
 
     jni_result!(&mut env, result(), JNI_FALSE)
 }
 
-/// Execute DEL command
-#[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_del(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    key: jstring,
-) -> jint {
-    let mut result = || -> JniResult<jint> {
-        if client_ptr == 0 {
-            return Err(jni_error!(NullPointer, "Client pointer is null"));
-        }
-
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-        let key_bytes = get_bytes_from_java(&mut env, key)?;
-
-        let count = get_runtime().block_on(async {
-            client.del(&key_bytes).await
-        })?;
-
-        Ok(count as jint)
-    };
-
-    jni_result!(&mut env, result(), -1)
-}
-
 /// Execute PING command
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_ping(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_ping(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
@@ -357,14 +249,21 @@ pub extern "system" fn Java_io_valkey_glide_jni_GlideJniClient_ping(
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }
 
-        let client = unsafe { &*(client_ptr as *const GlideJniClient) };
-
+        let client = unsafe { &mut *(client_ptr as *mut Client) };
+        
+        let cmd = cmd("PING");
+        
         let response = get_runtime().block_on(async {
-            client.ping().await
+            client.send_command(&cmd, None).await
         })?;
 
-        let java_string = env.new_string(&response)?;
-        Ok(java_string.into_raw())
+        match response {
+            Value::SimpleString(s) => {
+                let java_string = env.new_string(&s)?;
+                Ok(java_string.into_raw())
+            }
+            other => Err(jni_error!(UnexpectedResponse, "PING returned unexpected type: {:?}", other)),
+        }
     };
 
     jni_result!(&mut env, result(), ptr::null_mut())

@@ -1,15 +1,16 @@
 package io.valkey.glide.jni.client;
 
 import java.lang.ref.Cleaner;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * JNI client for POC benchmarking against UDS implementation.
+ * High-performance JNI client for Valkey GLIDE with direct glide-core integration.
  * <p>
- * This implementation provides the SAME API as the UDS BaseClient - returning
- * CompletableFuture for all operations to ensure fair performance comparison.
- * The goal is to measure the performance difference of JNI vs UDS+Protobuf
- * while maintaining identical async semantics.
+ * This implementation bypasses Unix Domain Sockets and uses direct JNI calls
+ * to the Rust glide-core for maximum performance while maintaining the same
+ * async API as the standard Glide client.
  */
 public class GlideJniClient implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -38,29 +39,90 @@ public class GlideJniClient implements AutoCloseable {
     private final NativeState nativeState;
 
     /**
-     * Command type constants for the POC
+     * Configuration for GlideJniClient
      */
-    public static final class CommandType {
-        public static final int GET = 1;
-        public static final int SET = 2;
-        public static final int PING = 3;
+    public static class Config {
+        private final List<String> addresses;
+        private boolean useTls = false;
+        private boolean clusterMode = false;
+        private int requestTimeoutMs = 5000;
+        private int connectionTimeoutMs = 5000;
+        private String username = null;
+        private String password = null;
+        private int databaseId = 0;
+
+        public Config(List<String> addresses) {
+            this.addresses = addresses;
+        }
+
+        public Config useTls(boolean useTls) {
+            this.useTls = useTls;
+            return this;
+        }
+
+        public Config clusterMode(boolean clusterMode) {
+            this.clusterMode = clusterMode;
+            return this;
+        }
+
+        public Config requestTimeout(int timeoutMs) {
+            this.requestTimeoutMs = timeoutMs;
+            return this;
+        }
+
+        public Config connectionTimeout(int timeoutMs) {
+            this.connectionTimeoutMs = timeoutMs;
+            return this;
+        }
+
+        public Config credentials(String username, String password) {
+            this.username = username;
+            this.password = password;
+            return this;
+        }
+
+        public Config databaseId(int databaseId) {
+            this.databaseId = databaseId;
+            return this;
+        }
+
+        // Package-private getters for JNI access
+        String[] getAddresses() { return addresses.toArray(new String[0]); }
+        boolean getUseTls() { return useTls; }
+        boolean getClusterMode() { return clusterMode; }
+        int getRequestTimeoutMs() { return requestTimeoutMs; }
+        int getConnectionTimeoutMs() { return connectionTimeoutMs; }
+        String getUsername() { return username; }
+        String getPassword() { return password; }
+        int getDatabaseId() { return databaseId; }
     }
 
     /**
-     * Create a new GlideJniClient connected to Valkey
+     * Create a new GlideJniClient with the specified configuration
      *
-     * @param host Valkey server hostname or IP address
-     * @param port Valkey server port
+     * @param config Configuration for the client connection
      */
-    public GlideJniClient(String host, int port) {
-        if (host == null) {
-            throw new IllegalArgumentException("Host cannot be null");
+    public GlideJniClient(Config config) {
+        if (config == null) {
+            throw new IllegalArgumentException("Config cannot be null");
         }
-        if (port <= 0 || port > 65535) {
-            throw new IllegalArgumentException("Port must be between 1 and 65535");
-        }        this.nativeClientPtr = connect(host, port);
+        if (config.addresses.isEmpty()) {
+            throw new IllegalArgumentException("At least one address must be provided");
+        }
+
+        this.nativeClientPtr = createClient(
+            config.getAddresses(),
+            config.getDatabaseId(),
+            config.getUsername(),
+            config.getPassword(),
+            config.getUseTls(),
+            config.getClusterMode(),
+            config.getRequestTimeoutMs(),
+            config.getConnectionTimeoutMs()
+        );
+        
         if (this.nativeClientPtr == 0) {
-            throw new RuntimeException("Failed to connect to Valkey: " + host + ":" + port);
+            throw new RuntimeException("Failed to create JNI client");
         }
 
         // Create shared state for proper cleanup coordination
@@ -68,6 +130,16 @@ public class GlideJniClient implements AutoCloseable {
 
         // Register cleanup action with Cleaner - modern replacement for finalize()
         this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
+    }
+
+    /**
+     * Convenience constructor for simple host:port connections
+     *
+     * @param host Valkey server hostname or IP address
+     * @param port Valkey server port
+     */
+    public GlideJniClient(String host, int port) {
+        this(new Config(Arrays.asList(host + ":" + port)));
     }
 
     /**
@@ -83,11 +155,10 @@ public class GlideJniClient implements AutoCloseable {
 
         checkNotClosed();
 
-        // Execute synchronously and wrap in completed future for better performance
+        // Execute using native JNI method
         try {
-            byte[] result = executeCommand(nativeClientPtr, CommandType.GET, key.getBytes());
-            String value = result != null && result.length > 0 ? new String(result) : null;
-            return CompletableFuture.completedFuture(value);
+            String result = get(nativeClientPtr, key);
+            return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -109,27 +180,10 @@ public class GlideJniClient implements AutoCloseable {
 
         checkNotClosed();
 
-        // Execute synchronously and wrap in completed future for better performance
+        // Execute using native JNI method
         try {
-            // Simple payload format: key_length(4 bytes) + key + value
-            byte[] keyBytes = key.getBytes();
-            byte[] valueBytes = value.getBytes();
-            byte[] payload = new byte[4 + keyBytes.length + valueBytes.length];
-
-            // Write key length
-            payload[0] = (byte) (keyBytes.length >>> 24);
-            payload[1] = (byte) (keyBytes.length >>> 16);
-            payload[2] = (byte) (keyBytes.length >>> 8);
-            payload[3] = (byte) keyBytes.length;
-
-            // Write key
-            System.arraycopy(keyBytes, 0, payload, 4, keyBytes.length);
-
-            // Write value
-            System.arraycopy(valueBytes, 0, payload, 4 + keyBytes.length, valueBytes.length);
-
-            byte[] result = executeCommand(nativeClientPtr, CommandType.SET, payload);
-            return CompletableFuture.completedFuture(new String(result)); // Should be "OK"
+            boolean success = set(nativeClientPtr, key, value);
+            return CompletableFuture.completedFuture(success ? "OK" : null);
         } catch (Exception e) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -145,10 +199,10 @@ public class GlideJniClient implements AutoCloseable {
     public CompletableFuture<String> ping() {
         checkNotClosed();
 
-        // Execute synchronously and wrap in completed future for better performance
+        // Execute using native JNI method
         try {
-            byte[] result = executeCommand(nativeClientPtr, CommandType.PING, new byte[0]);
-            return CompletableFuture.completedFuture(new String(result)); // Should be "PONG"
+            String result = ping(nativeClientPtr);
+            return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -194,7 +248,7 @@ public class GlideJniClient implements AutoCloseable {
             long ptr = nativePtr;
             if (ptr != 0) {
                 nativePtr = 0;
-                disconnect(ptr);
+                closeClient(ptr);
             }
         }
     }
@@ -226,31 +280,63 @@ public class GlideJniClient implements AutoCloseable {
         }
     }
 
-    // Native method declarations - match the Rust function signatures
+    // Native method declarations - match the Rust JNI function signatures
 
     /**
-     * Connect to Valkey and create a native client
+     * Create a new Glide client with full configuration
      *
-     * @param host Valkey server hostname or IP address
-     * @param port Valkey server port
+     * @param addresses Array of "host:port" addresses
+     * @param databaseId Database ID to select
+     * @param username Username for authentication (null if not used)
+     * @param password Password for authentication (null if not used)
+     * @param useTls Whether to use TLS encryption
+     * @param clusterMode Whether to use cluster mode
+     * @param requestTimeoutMs Request timeout in milliseconds
+     * @param connectionTimeoutMs Connection timeout in milliseconds
      * @return native pointer to client instance
      */
-    private static native long connect(String host, int port);
+    private static native long createClient(
+        String[] addresses,
+        int databaseId,
+        String username,
+        String password,
+        boolean useTls,
+        boolean clusterMode,
+        int requestTimeoutMs,
+        int connectionTimeoutMs
+    );
 
     /**
-     * Disconnect and release a native client
+     * Close and release a native client
      *
      * @param clientPtr native pointer to client instance
      */
-    private static native void disconnect(long clientPtr);
+    private static native void closeClient(long clientPtr);
 
     /**
-     * Execute a command - core function for POC benchmarking
+     * Execute GET command
      *
      * @param clientPtr native pointer to client instance
-     * @param commandType command type (GET=1, SET=2, PING=3)
-     * @param payload command payload as bytes
-     * @return response as byte array
+     * @param key the key to get
+     * @return value as string, or null if key doesn't exist
      */
-    private static native byte[] executeCommand(long clientPtr, int commandType, byte[] payload);
+    private static native String get(long clientPtr, String key);
+
+    /**
+     * Execute SET command
+     *
+     * @param clientPtr native pointer to client instance
+     * @param key the key to set
+     * @param value the value to set
+     * @return true if successful
+     */
+    private static native boolean set(long clientPtr, String key, String value);
+
+    /**
+     * Execute PING command
+     *
+     * @param clientPtr native pointer to client instance
+     * @return "PONG" or similar response
+     */
+    private static native String ping(long clientPtr);
 }

@@ -57,13 +57,6 @@ test {
     systemProperty 'java.library.path', file('../rust-jni/target/release').absolutePath
 }
 
-// JMH benchmark task
-task benchmark(type: JavaExec, dependsOn: testClasses) {
-    classpath = sourceSets.test.runtimeClasspath
-    main = 'org.openjdk.jmh.Main'
-    args = ['-f', '1', '-wi', '3', '-i', '5', '-r', '5s']
-}
-
 publishing {
     publications {
         maven(MavenPublication) {

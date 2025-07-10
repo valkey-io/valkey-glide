@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.glide;
 
-import io.valkey.glide.jni.GlideJniClient;
+import io.valkey.glide.jni.client.GlideJniClient;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
 import java.util.Arrays;
@@ -36,8 +36,7 @@ public class GlideJniAsyncClient implements AsyncClient<String> {
             return CompletableFuture.failedFuture(new IllegalStateException("Client not connected"));
         }
         
-        return jniClient.setAsync(key, value)
-                .thenApply(success -> success ? "OK" : null);
+        return jniClient.set(key, value);
     }
 
     @Override
@@ -46,7 +45,7 @@ public class GlideJniAsyncClient implements AsyncClient<String> {
             return CompletableFuture.failedFuture(new IllegalStateException("Client not connected"));
         }
         
-        return jniClient.getAsync(key);
+        return jniClient.get(key);
     }
 
     @Override
