@@ -13,15 +13,8 @@
         "glide-core/redis-rs/Cargo.toml",
         "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml",
-        "ffi/Cargo.toml",
         "rust-jni/Cargo.toml"
     ],
-    "python.testing.pytestArgs": ["python"],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "[github-actions-workflow]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
     "yaml.schemas": {
         "https://json.schemastore.org/github-workflow.json": [
             "*.github/workflows/*.yaml",
