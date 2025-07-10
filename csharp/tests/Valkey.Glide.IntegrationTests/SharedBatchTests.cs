@@ -64,7 +64,7 @@ public class SharedBatchTests
         // Exceptions aren't raised, but stored in the result set
         Assert.Multiple(
             () => Assert.Equal(4, res.Length),
-            () => Assert.Equal("OK", res[0]),
+            () => Assert.Equal(true, res[0]),
             () => Assert.Equal(1L, (long)res[2]!),
             () => Assert.IsType<RequestException>(res[1]),
             () => Assert.IsType<RequestException>(res[3]),

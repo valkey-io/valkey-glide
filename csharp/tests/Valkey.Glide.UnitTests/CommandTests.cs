@@ -57,7 +57,7 @@ public class CommandTests
             () => Assert.Null(Request.CustomCommand([]).Converter(null)),
 
             // String Commands
-            () => Assert.Equal("OK", Request.StringSet("key", "value").Converter("OK")),
+            () => Assert.True(Request.StringSet("key", "value").Converter("OK")),
             () => Assert.Equal<GlideString>("value", Request.StringGet("key").Converter("value")),
             () => Assert.Null(Request.StringGet("key").Converter(null)),
             () => Assert.Equal(5L, Request.StringLength("key").Converter(5L)),

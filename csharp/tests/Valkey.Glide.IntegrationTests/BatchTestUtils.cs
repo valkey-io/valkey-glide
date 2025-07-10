@@ -21,9 +21,9 @@ internal class BatchTestUtils
 
         // Use IBatch interface directly - no casting needed
         _ = batch.StringSetAsync(key1, value1);
-        testData.Add(new("OK", "StringSetAsync(key1, value1)"));
+        testData.Add(new(true, "StringSetAsync(key1, value1)"));
         _ = batch.StringSetAsync(key2, value2);
-        testData.Add(new("OK", "StringSetAsync(key2, value2)"));
+        testData.Add(new(true, "StringSetAsync(key2, value2)"));
         _ = batch.StringGetAsync(key1);
         testData.Add(new(new GlideString(value1), "StringGetAsync(key1)"));
         _ = batch.StringGetAsync(key2);

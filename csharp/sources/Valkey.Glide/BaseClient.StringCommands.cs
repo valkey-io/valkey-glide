@@ -8,10 +8,7 @@ namespace Valkey.Glide;
 public abstract partial class BaseClient : IStringBaseCommands
 {
     public async Task<bool> StringSetAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
-    {
-        _ = await Command(Request.StringSet(key, value));
-        return true;
-    }
+        => await Command(Request.StringSet(key, value));
 
     public async Task<ValkeyValue> StringGetAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringGet(key));

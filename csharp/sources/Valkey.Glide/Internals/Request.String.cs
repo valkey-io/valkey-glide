@@ -9,8 +9,11 @@ internal partial class Request
     public static Cmd<GlideString, GlideString> StringGet(GlideString key)
         => Simple<GlideString>(RequestType.Get, [key], true);
 
-    public static Cmd<string, string> StringSet(GlideString key, GlideString value)
-        => OK(RequestType.Set, [key, value]);
+    public static Cmd<string, bool> StringSet(ValkeyKey key, ValkeyValue value)
+    {
+        GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
+        return new(RequestType.Set, args, false, response => response == "OK");
+    }
 
     public static Cmd<object[], GlideString?[]> StringGetMultiple(GlideString[] keys)
         => new(RequestType.MGet, keys, false, array =>
