@@ -2,7 +2,7 @@
 name = "glide-jni"
 version = "0.1.0"
 edition = "2021"
-description = "JNI bindings for Valkey Glide"
+description = "High-performance JNI bindings for Valkey Glide"
 license = "Apache-2.0"
 
 [lib]
@@ -11,15 +11,19 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21.1"
-thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
-redis = { version = "0.32", features = ["aio", "tokio-comp"] }
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+redis = { path = "../glide-core/redis-rs/redis", features = ["tokio-comp"] }
 
 [dependencies.glide-core]
 path = "../glide-core"
 
 [profile.release]
-opt-level = 3         # Optimize for performance - same as Java client
-lto = "fat"           # Enable the most aggressive Link Time Optimization
-codegen-units = 1     # Reduce code generation units for better optimization
-strip = "symbols"     # Remove symbols for smaller binary size
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
