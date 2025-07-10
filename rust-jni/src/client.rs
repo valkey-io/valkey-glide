@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use crate::error::{JniResult};
+use crate::error::JniResult;
 use crate::{jni_result, jni_error};
 
 /// Runtime singleton for efficient Tokio integration
