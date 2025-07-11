@@ -51,6 +51,12 @@ public interface IStringBaseCommands
     /// Returns the values of all specified keys.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/mget/">valkey.io</seealso>
+    /// <note> In cluster mode, if keys in <paramref name="keys"/> map to different hash slots, the command
+    /// will be split across these slots and executed separately for each. This means the command
+    /// is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+    /// call will return the first encountered error, even though some requests may have succeeded
+    /// while others did not. If this behavior impacts your application logic, consider splitting
+    /// the request into sub-requests per slot to ensure atomicity.</note>
     /// <param name="keys">A list of keys to retrieve values for.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>
@@ -70,9 +76,15 @@ public interface IStringBaseCommands
     Task<ValkeyValue[]> StringGetAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Sets the given keys to their respective values.
+    /// Sets multiple keys to multiple values in a single operation.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/mset/">valkey.io</seealso>
+    /// <note>In cluster mode, if keys in <paramref name="values"/> map to different hash slots, the command
+    /// will be split across these slots and executed separately for each. This means the command
+    /// is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+    /// call will return the first encountered error, even though some requests may have succeeded
+    /// while others did not. If this behavior impacts your application logic, consider splitting
+    /// the request into sub-requests per slot to ensure atomicity.</note>
     /// <param name="values">An array of key-value pairs to set.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns><see langword="true"/> if the strings were set, <see langword="false"/> otherwise.</returns>
@@ -93,6 +105,8 @@ public interface IStringBaseCommands
     /// <summary>
     /// Returns the substring of the string value stored at key, determined by the offsets 
     /// start and end (both are inclusive).
+    /// Negative offsets can be used in order to provide an offset starting from the end of the string. So `-1` means the last
+    /// character, `-2` the penultimate and so forth.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/getrange/">valkey.io</seealso>
     /// <param name="key">The key of the string.</param>
@@ -117,6 +131,9 @@ public interface IStringBaseCommands
     /// <summary>
     /// Overwrites part of the string stored at key, starting at the specified offset, 
     /// for the entire length of value.
+    /// If the offset is larger than the current length of the string at key, the string is padded with zero bytes to make
+    /// offset fit.
+    /// Creates the key if it doesn't exist.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/setrange/">valkey.io</seealso>
     /// <param name="key">The key of the string to update.</param>

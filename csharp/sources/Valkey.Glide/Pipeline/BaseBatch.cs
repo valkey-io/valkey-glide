@@ -22,7 +22,7 @@ namespace Valkey.Glide.Pipeline;
 /// Determines whether the batch is atomic or non-atomic. If <see langword="true" />, the batch will be executed as
 /// an atomic transaction. If <see langword="false" />, the batch will be executed as a non-atomic pipeline.
 /// </param>
-public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch, IBatchStringCommands where T : BaseBatch<T>
+public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
 {
     private readonly List<ICmd> _commands = [];
 
