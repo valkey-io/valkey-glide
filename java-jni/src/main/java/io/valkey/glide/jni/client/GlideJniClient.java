@@ -234,6 +234,129 @@ public class GlideJniClient implements AutoCloseable {
         }
     }
 
+    // ==================== TYPED EXECUTION METHODS ====================
+    // These methods provide direct typed returns, eliminating protobuf overhead
+
+    /**
+     * Execute a command expecting a String result.
+     * Leverages glide-core's value_conversion.rs with ExpectedReturnType::BulkString
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with String result
+     */
+    public CompletableFuture<String> executeStringCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            String result = executeStringCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command expecting a Long result.
+     * Leverages glide-core's value_conversion.rs for numeric types
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with Long result
+     */
+    public CompletableFuture<Long> executeLongCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            long result = executeLongCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Long> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command expecting a Double result.
+     * Leverages glide-core's value_conversion.rs with ExpectedReturnType::Double
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with Double result
+     */
+    public CompletableFuture<Double> executeDoubleCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            double result = executeDoubleCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Double> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command expecting a Boolean result.
+     * Leverages glide-core's value_conversion.rs with ExpectedReturnType::Boolean
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with Boolean result
+     */
+    public CompletableFuture<Boolean> executeBooleanCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            boolean result = executeBooleanCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command expecting an Object[] result.
+     * Leverages glide-core's value_conversion.rs for array types
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with Object[] result
+     */
+    public CompletableFuture<Object[]> executeArrayCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            Object[] result = executeArrayCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Object[]> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command expecting any Object result (for complex types).
+     * Uses glide-core's default value conversion
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @return CompletableFuture with Object result
+     */
+    public CompletableFuture<Object> executeObjectCommand(String command, String[] args) {
+        checkNotClosed();
+        try {
+            Object result = executeCommand(nativeClientPtr, command, args);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
     /**
      * Convenience method to execute a command and return a typed result.
      * This method handles common type casting scenarios.
