@@ -211,6 +211,53 @@ public class GlideJniClient implements AutoCloseable {
     }
 
     /**
+     * Execute any server command using the generic command execution system.
+     * This method provides a unified interface for all server operations.
+     *
+     * @param command The command to execute
+     * @return CompletableFuture with the command result
+     */
+    public CompletableFuture<Object> executeCommand(Command command) {
+        if (command == null) {
+            throw new IllegalArgumentException("Command cannot be null");
+        }
+
+        checkNotClosed();
+
+        try {
+            Object result = executeCommand(nativeClientPtr, command.getCommand(), command.getArgumentsArray());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Convenience method to execute a command and return a typed result.
+     * This method handles common type casting scenarios.
+     *
+     * @param command The command to execute
+     * @param expectedType The expected return type
+     * @param <T> The type to cast the result to
+     * @return CompletableFuture with the typed result
+     */
+    @SuppressWarnings("unchecked")
+    public <T> CompletableFuture<T> executeCommand(Command command, Class<T> expectedType) {
+        return executeCommand(command).thenApply(result -> {
+            if (result == null) {
+                return null;
+            }
+            if (expectedType.isInstance(result)) {
+                return (T) result;
+            }
+            throw new ClassCastException("Expected " + expectedType.getSimpleName() + 
+                                       " but got " + result.getClass().getSimpleName());
+        });
+    }
+
+    /**
      * Check if the client is closed
      *
      * @return true if the client is closed
@@ -339,4 +386,14 @@ public class GlideJniClient implements AutoCloseable {
      * @return "PONG" or similar response
      */
     private static native String ping(long clientPtr);
+
+    /**
+     * Execute any command with arguments
+     *
+     * @param clientPtr native pointer to client instance
+     * @param command the command name
+     * @param args array of byte arrays containing command arguments
+     * @return command result as Object (can be String, Long, byte[], Object[], etc.)
+     */
+    private static native Object executeCommand(long clientPtr, String command, byte[][] args);
 }

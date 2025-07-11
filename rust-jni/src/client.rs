@@ -268,3 +268,95 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_ping(
 
     jni_result!(&mut env, result(), ptr::null_mut())
 }
+
+/// Execute any command with arguments
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: jstring,
+    args: jobject,
+) -> jobject {
+    let mut result = || -> JniResult<jobject> {
+        if client_ptr == 0 {
+            return Err(jni_error!(NullPointer, "Client pointer is null"));
+        }
+
+        let client = unsafe { &mut *(client_ptr as *mut Client) };
+        let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Parse the byte[][] args parameter
+        let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
+        let args_length = env.get_array_length(&args_array)?;
+        
+        let mut cmd = cmd(&command_str);
+        
+        // Add each argument to the command
+        for i in 0..args_length {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            // Cast to byte array and convert to Vec<u8>
+            let byte_array = jni::objects::JByteArray::from(arg_obj);
+            let arg_bytes = env.convert_byte_array(&byte_array)?;
+            cmd.arg(&arg_bytes);
+        }
+        
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert the response to a Java object
+        convert_value_to_java_object(&mut env, response)
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Convert a server response value to a Java Object
+fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<jobject> {
+    match value {
+        Value::Nil => Ok(ptr::null_mut()),
+        Value::SimpleString(s) => {
+            let java_string = env.new_string(&s)?;
+            Ok(java_string.into_raw())
+        }
+        Value::BulkString(bytes) => {
+            // Try to convert to UTF-8 string, fallback to byte array if invalid
+            match String::from_utf8(bytes.clone()) {
+                Ok(string) => {
+                    let java_string = env.new_string(&string)?;
+                    Ok(java_string.into_raw())
+                }
+                Err(_) => {
+                    // For binary data, return as byte array
+                    let byte_array = env.new_byte_array(bytes.len() as i32)?;
+                    env.set_byte_array_region(&byte_array, 0, &bytes.iter().map(|&b| b as i8).collect::<Vec<i8>>())?;
+                    Ok(byte_array.into_raw())
+                }
+            }
+        }
+        Value::Int(i) => {
+            let long_class = env.find_class("java/lang/Long")?;
+            let long_value = env.new_object(long_class, "(J)V", &[i.into()])?;
+            Ok(long_value.into_raw())
+        }
+        Value::Array(arr) => {
+            // Create an Object array to hold the results
+            let object_class = env.find_class("java/lang/Object")?;
+            let java_array = env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
+            
+            for (i, item) in arr.into_iter().enumerate() {
+                let java_item = convert_value_to_java_object(env, item)?;
+                let java_item_obj = unsafe { JObject::from_raw(java_item) };
+                env.set_object_array_element(&java_array, i as i32, java_item_obj)?;
+            }
+            
+            Ok(java_array.into_raw())
+        }
+        Value::Okay => {
+            let java_string = env.new_string("OK")?;
+            Ok(java_string.into_raw())
+        }
+        other => Err(jni_error!(UnexpectedResponse, "Unsupported response type: {:?}", other)),
+    }
+}
