@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands.Options;
+
 using static Valkey.Glide.Internals.Request;
 
 namespace Valkey.Glide.Pipeline;
