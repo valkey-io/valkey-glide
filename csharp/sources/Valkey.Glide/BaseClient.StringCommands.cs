@@ -22,7 +22,7 @@ public abstract partial class BaseClient : IStringBaseCommands
     public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringGetRange(key, start, end));
 
-    public async Task<long> StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    public async Task<ValkeyValue> StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringSetRange(key, offset, value));
 
     public async Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)

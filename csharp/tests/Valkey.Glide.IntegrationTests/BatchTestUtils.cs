@@ -20,20 +20,20 @@ internal class BatchTestUtils
         string value2 = "test-value";
 
         // Use IBatch interface directly - no casting needed
-        _ = batch.StringSetAsync(key1, value1);
-        testData.Add(new(true, "StringSetAsync(key1, value1)"));
-        _ = batch.StringSetAsync(key2, value2);
-        testData.Add(new(true, "StringSetAsync(key2, value2)"));
-        _ = batch.StringGetAsync(key1);
-        testData.Add(new(new GlideString(value1), "StringGetAsync(key1)"));
-        _ = batch.StringGetAsync(key2);
-        testData.Add(new(new GlideString(value2), "StringGetAsync(key2)"));
-        _ = batch.StringLengthAsync(key1);
-        testData.Add(new((long)value1.Length, "StringLengthAsync(key1)"));
-        _ = batch.StringLengthAsync(key2);
-        testData.Add(new((long)value2.Length, "StringLengthAsync(key2)"));
-        _ = batch.StringLengthAsync(nonExistingKey);
-        testData.Add(new(0L, "StringLengthAsync(nonExistingKey)"));
+        _ = batch.StringSet(key1, value1);
+        testData.Add(new(true, "StringSet(key1, value1)"));
+        _ = batch.StringSet(key2, value2);
+        testData.Add(new(true, "StringSet(key2, value2)"));
+        _ = batch.StringGet(key1);
+        testData.Add(new(new GlideString(value1), "StringGet(key1)"));
+        _ = batch.StringGet(key2);
+        testData.Add(new(new GlideString(value2), "StringGet(key2)"));
+        _ = batch.StringLength(key1);
+        testData.Add(new((long)value1.Length, "StringLength(key1)"));
+        _ = batch.StringLength(key2);
+        testData.Add(new((long)value2.Length, "StringLength(key2)"));
+        _ = batch.StringLength(nonExistingKey);
+        testData.Add(new(0L, "StringLength(nonExistingKey)"));
 
         return testData;
     }

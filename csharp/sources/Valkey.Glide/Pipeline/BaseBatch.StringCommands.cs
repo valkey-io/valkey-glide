@@ -27,11 +27,11 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     /// <inheritdoc cref="IBatchStringCommands.StringLengthAsync(ValkeyKey)" />
     public T StringLengthAsync(ValkeyKey key) => AddCmd(Request.StringLength(key));
 
-    IBatch IBatchStringCommands.StringGetAsync(ValkeyKey key) => StringGetAsync(key);
-    IBatch IBatchStringCommands.StringGetAsync(ValkeyKey[] keys) => StringGetAsync(keys);
-    IBatch IBatchStringCommands.StringSetAsync(ValkeyKey key, ValkeyValue value) => StringSetAsync(key, value);
-    IBatch IBatchStringCommands.StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values) => StringSetAsync(values);
-    IBatch IBatchStringCommands.StringGetRangeAsync(ValkeyKey key, long start, long end) => StringGetRangeAsync(key, start, end);
-    IBatch IBatchStringCommands.StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value) => StringSetRangeAsync(key, offset, value);
-    IBatch IBatchStringCommands.StringLengthAsync(ValkeyKey key) => StringLengthAsync(key);
+    IBatch IBatchStringCommands.StringGet(ValkeyKey key) => StringGetAsync(key);
+    IBatch IBatchStringCommands.StringGet(ValkeyKey[] keys) => StringGetAsync(keys);
+    IBatch IBatchStringCommands.StringSet(ValkeyKey key, ValkeyValue value) => StringSetAsync(key, value);
+    IBatch IBatchStringCommands.StringSet(KeyValuePair<ValkeyKey, ValkeyValue>[] values) => StringSetAsync(values);
+    IBatch IBatchStringCommands.StringGetRange(ValkeyKey key, long start, long end) => StringGetRangeAsync(key, start, end);
+    IBatch IBatchStringCommands.StringSetRange(ValkeyKey key, long offset, ValkeyValue value) => StringSetRangeAsync(key, offset, value);
+    IBatch IBatchStringCommands.StringLength(ValkeyKey key) => StringLengthAsync(key);
 }
