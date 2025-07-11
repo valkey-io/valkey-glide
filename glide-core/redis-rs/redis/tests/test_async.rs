@@ -506,7 +506,6 @@ mod basic_async {
             addr: ctx.server.client_addr().clone(),
             redis: redis::RedisConnectionInfo {
                 password: Some("asdcasc".to_string()),
-                protocol: redis::ProtocolVersion::RESP2,
                 ..Default::default()
             },
         };
