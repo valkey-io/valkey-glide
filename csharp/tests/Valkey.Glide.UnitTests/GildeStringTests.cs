@@ -52,6 +52,17 @@ public class GildeStringTests
     }
 
     [Fact]
+    public void ToGlideString_Double_ReturnsCorrectGlideString()
+    {
+        // Arrange & Act & Assert
+        Assert.Equal("123.45", (123.45).ToGlideString().ToString());
+        Assert.Equal("0", (0.0).ToGlideString().ToString());
+        Assert.Equal("-123.45", (-123.45).ToGlideString().ToString());
+        Assert.Equal("1.23456789E+10", (1.23456789E+10).ToGlideString().ToString());
+        Assert.Equal("3.14159", (3.14159).ToGlideString().ToString());
+    }
+
+    [Fact]
     public void ValkeyKeyToGlideStringConversion()
     {
         // Test null ValkeyKey

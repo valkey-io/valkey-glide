@@ -48,6 +48,25 @@ internal class BatchTestUtils
         _ = batch.SetMembers(key1);
         testData.Add(new(Array.Empty<ValkeyValue>(), "SetMembers(key1)", true));
 
+        return testData;
+    }
+
+    public static List<TestInfo> CreateSortedSetTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+        string prefix = "{sortedSetKey}-";
+        string atomicPrefix = isAtomic ? prefix : "";
+        string key1 = $"{atomicPrefix}1-{Guid.NewGuid()}";
+
+        _ = batch.SortedSetAdd(key1, "member1", 1.0);
+        testData.Add(new(true, "SortedSetAdd(key1, member1, 1.0)"));
+
+        _ = batch.SortedSetAdd(key1, [new SortedSetEntry("member2", 2.0), new SortedSetEntry("member3", 3.0)]);
+        testData.Add(new(2L, "SortedSetAdd(key1, [member2:2.0, member3:3.0])"));
+
+        return testData;
+    }
+
         _ = batch.SetRemove(key1, "a");
         testData.Add(new(true, "SetRemove(key1, a)"));
 
