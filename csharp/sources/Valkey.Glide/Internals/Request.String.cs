@@ -12,6 +12,7 @@ internal partial class Request
     public static Cmd<string, bool> StringSet(ValkeyKey key, ValkeyValue value)
     {
         GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
+        // TODO: for lambda function arguments of "response => response == "OK"", replace with OkToBool
         return new(RequestType.Set, args, false, response => response == "OK");
     }
 

@@ -13,6 +13,12 @@ internal partial class Request
         => new(RequestType.CustomCommand, args, true, converter);
 
     /// <summary>
+    /// Create a Cmd which returns OK
+    /// </summary>
+    private static Cmd<string, string> OK(RequestType request, GlideString[] args)
+        => Simple<string>(request, args);
+
+    /// <summary>
     /// Create a Cmd which does not need type conversion
     /// </summary>
     private static Cmd<T, T> Simple<T>(RequestType request, GlideString[] args, bool isNullable = false)
