@@ -27,16 +27,18 @@ public class StandaloneClientTests(TestConfiguration config)
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
-        Assert.Equal("OK", await client.Set(key1, value));
+        Assert.True(await client.StringSetAsync(key1, value));
 
         gs dump = (await client.CustomCommand(["DUMP", key1]) as gs)!;
 
         Assert.Equal("OK", await client.CustomCommand(["RESTORE", key2, "0", dump!]));
-        Assert.Equal(value, (await client.Get(key2))!);
+        ValkeyValue retrievedValue = await client.StringGetAsync(key2);
+        Assert.Equal(value, retrievedValue.ToString());
 
         // Set and get a binary value
-        Assert.Equal("OK", await client.Set(key3, dump!));
-        Assert.Equal(dump, await client.Get(key3));
+        Assert.True(await client.StringSetAsync(key3, dump!));
+        ValkeyValue binaryValue = await client.StringGetAsync(key3);
+        Assert.Equal(dump, (GlideString)binaryValue);
     }
 
     [Fact]
