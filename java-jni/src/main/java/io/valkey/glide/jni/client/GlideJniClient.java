@@ -519,4 +519,37 @@ public class GlideJniClient implements AutoCloseable {
      * @return command result as Object (can be String, Long, byte[], Object[], etc.)
      */
     private static native Object executeCommand(long clientPtr, String command, byte[][] args);
+
+    // ==================== TYPED NATIVE METHODS ====================
+    // These provide direct typed returns, leveraging glide-core's value_conversion.rs
+
+    /**
+     * Execute a command expecting a String result
+     * Uses glide-core's ExpectedReturnType::BulkString for conversion
+     */
+    private static native String executeStringCommand(long clientPtr, String command, String[] args);
+
+    /**
+     * Execute a command expecting a Long result
+     * Uses glide-core's numeric type conversion
+     */
+    private static native long executeLongCommand(long clientPtr, String command, String[] args);
+
+    /**
+     * Execute a command expecting a Double result
+     * Uses glide-core's ExpectedReturnType::Double for conversion
+     */
+    private static native double executeDoubleCommand(long clientPtr, String command, String[] args);
+
+    /**
+     * Execute a command expecting a Boolean result
+     * Uses glide-core's ExpectedReturnType::Boolean for conversion
+     */
+    private static native boolean executeBooleanCommand(long clientPtr, String command, String[] args);
+
+    /**
+     * Execute a command expecting an Object[] result
+     * Uses glide-core's array type conversion
+     */
+    private static native Object[] executeArrayCommand(long clientPtr, String command, String[] args);
 }
