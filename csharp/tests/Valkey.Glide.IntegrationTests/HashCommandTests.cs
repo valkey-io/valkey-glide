@@ -2,7 +2,7 @@
 
 namespace Valkey.Glide.IntegrationTests;
 
-public class HashCommandTests(TestConfiguration config)
+public class HashCommandTests(TestConfiguration config, ITestOutputHelper output) : ConsoleCapturingTestBase(output)
 {
     public TestConfiguration Config { get; } = config;
 
@@ -127,7 +127,7 @@ public class HashCommandTests(TestConfiguration config)
         _ = await client.HashSetAsync(key, "field2", "value-with-longer-content");
 
         Assert.Equal(6, await client.HashStringLengthAsync(key, "field1"));
-        Assert.Equal(23, await client.HashStringLengthAsync(key, "field2"));
+        Assert.Equal(25, await client.HashStringLengthAsync(key, "field2"));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -213,29 +213,28 @@ public class HashCommandTests(TestConfiguration config)
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task TestHashSetWithWhen(BaseClient client)
     {
+        using var console = new ConsoleOutputInterceptor(Output);
+
         string key = Guid.NewGuid().ToString();
 
         // Initial set should succeed
         Assert.True(await client.HashSetAsync(key, "field1", "value1"));
 
-        // Set with When.Always should always succeed and overwrite
-        Assert.True(await client.HashSetAsync(key, "field1", "value1-updated", When.Always));
+        // Overwriting existing value should return false
+        Assert.False(await client.HashSetAsync(key, "field1", "value1-updated", When.Always));
+        // Value should be updated
         Assert.Equal("value1-updated", await client.HashGetAsync(key, "field1"));
-
-        // Set with When.Exists should succeed for existing field
-        Assert.True(await client.HashSetAsync(key, "field1", "value1-updated-again", When.Exists));
-        Assert.Equal("value1-updated-again", await client.HashGetAsync(key, "field1"));
-
-        // Set with When.Exists should fail for non-existing field
-        Assert.False(await client.HashSetAsync(key, "field2", "value2", When.Exists));
-        Assert.Equal(ValkeyValue.Null, await client.HashGetAsync(key, "field2"));
 
         // Set with When.NotExists should fail for existing field
         Assert.False(await client.HashSetAsync(key, "field1", "should-not-update", When.NotExists));
-        Assert.Equal("value1-updated-again", await client.HashGetAsync(key, "field1"));
+        Assert.Equal("value1-updated", await client.HashGetAsync(key, "field1"));
 
         // Set with When.NotExists should succeed for non-existing field
         Assert.True(await client.HashSetAsync(key, "field2", "value2", When.NotExists));
         Assert.Equal("value2", await client.HashGetAsync(key, "field2"));
+
+        // Set with When.Exists should throw an exception
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.HashSetAsync(key, "field1", "should-not-update", When.Exists));
     }
 }

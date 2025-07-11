@@ -48,6 +48,8 @@ internal class ResponseConverters
     /// <exception cref="Exception">When <paramref name="value"/> has incorrect type or value.</exception>
     public static T HandleServerValue<R, T>(object? value, bool isNullable, Func<R, T> converter)
     {
+        Console.WriteLine($"Handling value: {value} ({value?.GetType().GetRealTypeName()})");
+
         if (value is null)
         {
             if (isNullable)
@@ -60,6 +62,6 @@ internal class ResponseConverters
         }
         return value is R val
             ? converter(val)
-            : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
+            : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(R).GetRealTypeName()}");
     }
 }
