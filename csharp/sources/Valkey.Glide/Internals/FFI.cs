@@ -331,6 +331,13 @@ internal class FFI
         Touch = 427,
         Copy = 401,
         Move = 410,
+        GetRange = 1507,
+        MGet = 1513,
+        MSet = 1514,
+        SetRange = 1520,
+        Strlen = 1521,
+        LPop = 811,
+        LPush = 813,
     }
 
     internal enum RouteType : uint

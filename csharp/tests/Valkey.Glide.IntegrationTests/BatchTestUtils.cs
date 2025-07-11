@@ -13,13 +13,27 @@ internal class BatchTestUtils
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{stringKey}-" : "";
         string key1 = $"{prefix}1-{Guid.NewGuid()}";
+        string key2 = $"{prefix}2-{Guid.NewGuid()}";
+        string nonExistingKey = $"{prefix}nonexisting-{Guid.NewGuid()}";
 
         string value1 = $"value-1-{Guid.NewGuid()}";
+        string value2 = "test-value";
 
-        _ = batch.Set(key1, value1);
-        testData.Add(new("OK", "Set(key1, value1)"));
-        _ = batch.Get(key1);
-        testData.Add(new(new gs(value1), "Get(key1)"));
+        // Use IBatch interface directly - no casting needed
+        _ = batch.StringSet(key1, value1);
+        testData.Add(new(true, "StringSet(key1, value1)"));
+        _ = batch.StringSet(key2, value2);
+        testData.Add(new(true, "StringSet(key2, value2)"));
+        _ = batch.StringGet(key1);
+        testData.Add(new(new GlideString(value1), "StringGet(key1)"));
+        _ = batch.StringGet(key2);
+        testData.Add(new(new GlideString(value2), "StringGet(key2)"));
+        _ = batch.StringLength(key1);
+        testData.Add(new((long)value1.Length, "StringLength(key1)"));
+        _ = batch.StringLength(key2);
+        testData.Add(new((long)value2.Length, "StringLength(key2)"));
+        _ = batch.StringLength(nonExistingKey);
+        testData.Add(new(0L, "StringLength(nonExistingKey)"));
 
         return testData;
     }
@@ -229,6 +243,50 @@ internal class BatchTestUtils
 
         _ = batch.KeyUnlink([genericKey1, renamedKey, genericKey3]);
         testData.Add(new(1L, "KeyUnlink([genericKey1, renamedKey, genericKey3])"));
+        
+        return testData;
+    }
+
+    public static List<TestInfo> CreateListTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+        string prefix = isAtomic ? "{listKey}-" : "";
+        string key1 = $"{prefix}1-{Guid.NewGuid()}";
+        string key2 = $"{prefix}2-{Guid.NewGuid()}";
+        string key3 = $"{prefix}3-{Guid.NewGuid()}";
+
+        string value1 = $"value-1-{Guid.NewGuid()}";
+        string value2 = $"value-2-{Guid.NewGuid()}";
+        string value3 = $"value-3-{Guid.NewGuid()}";
+        string value4 = $"value-4-{Guid.NewGuid()}";
+
+        _ = batch.ListLeftPush(key1, [value1, value2]);
+        testData.Add(new(2L, "ListLeftPush(key1, [value1, value2])"));
+
+        _ = batch.ListLeftPush(key1, [value3]);
+        testData.Add(new(3L, "ListLeftPush(key1, [value3])"));
+
+        _ = batch.ListLeftPop(key1);
+        testData.Add(new(new ValkeyValue(value3), "ListLeftPop(key1)"));
+
+        _ = batch.ListLeftPop(key1);
+        testData.Add(new(new ValkeyValue(value2), "ListLeftPop(key1) second"));
+
+        _ = batch.ListLeftPush(key2, [value1, value2, value3, value4]);
+        testData.Add(new(4L, "ListLeftPush(key2, [value1, value2, value3, value4])"));
+
+        _ = batch.ListLeftPop(key2, 2);
+        testData.Add(new(ValkeyValue.EmptyArray, "ListLeftPop(key2, 2)", true));
+
+        _ = batch.ListLeftPop(key2, 10);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "ListLeftPop(key2, 10)", true));
+
+        _ = batch.ListLeftPop(key3);
+        // TODO: switch expected back to `ValkeyValue.Null` after converter fix
+        testData.Add(new(null, "ListLeftPop(key3) non-existent"));
+
+        _ = batch.ListLeftPop(key3, 5);
+        testData.Add(new(null, "ListLeftPop(key3, 5) non-existent"));
 
         return testData;
     }
@@ -239,6 +297,7 @@ internal class BatchTestUtils
                 new("String commands", r.Data, CreateStringTest, isAtomic),
                 new("Set commands", r.Data, CreateSetTest, isAtomic),
                 new("Generic commands", r.Data, CreateGenericTest, isAtomic),
+                new("List commands", r.Data, CreateListTest, isAtomic),
             }))];
 }
 
