@@ -30,6 +30,10 @@ pub enum JniError {
     #[error("Configuration error: {0}")]
     Configuration(String),
 
+    /// Type conversion error
+    #[error("Conversion error: {0}")]
+    ConversionError(String),
+
     /// Invalid input parameters
     #[error("Invalid input: {0}")]
     InvalidInput(String),

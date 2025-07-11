@@ -836,48 +836,51 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Del, keys);
     }
 
     @Override
     public CompletableFuture<Long> del(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
+        // Convert GlideString[] to String[] for JNI compatibility
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return commandManager.executeLongCommand(Del, stringKeys);
     }
 
     @Override
     public CompletableFuture<String> get(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                Get, new String[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(Get, new String[] {key});
     }
 
     @Override
     public CompletableFuture<GlideString> get(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        // For GlideString returns, we get String from JNI and convert back
+        return commandManager.executeStringCommand(Get, new String[] {key.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                GetDel, new String[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(GetDel, new String[] {key});
     }
 
     @Override
     public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                GetDel, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(GetDel, new String[] {key.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String> getex(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                GetEx, new String[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(GetEx, new String[] {key});
     }
 
     @Override
     public CompletableFuture<GlideString> getex(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                GetEx, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(GetEx, new String[] {key.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override

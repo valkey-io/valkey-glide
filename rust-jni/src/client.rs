@@ -360,3 +360,232 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         other => Err(jni_error!(UnexpectedResponse, "Unsupported response type: {:?}", other)),
     }
 }
+
+// ==================== TYPED JNI METHODS ====================
+// These methods provide direct typed returns, leveraging glide-core's value_conversion.rs
+
+/// Execute a command expecting a String result
+/// Uses glide-core's ExpectedReturnType::BulkString for conversion
+#[no_mangle]
+pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: JString,
+    args: jobject,
+) -> jstring {
+    let result = || -> JniResult<jstring> {
+        let client = get_client(client_ptr)?;
+        let cmd_str: String = env.get_string(&command)?.into();
+        
+        // Parse arguments
+        let args_array = JObjectArray::from(args);
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(cmd_str);
+        
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+        
+        // Execute command via glide-core
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert response to String using glide-core's value conversion logic
+        match response {
+            Value::Nil => Ok(ptr::null_mut()),
+            Value::SimpleString(s) | Value::BulkString(s) => {
+                let string_val = String::from_utf8_lossy(&s);
+                let java_string = env.new_string(&string_val)?;
+                Ok(java_string.into_raw())
+            }
+            Value::Okay => {
+                let java_string = env.new_string("OK")?;
+                Ok(java_string.into_raw())
+            }
+            _ => {
+                let java_string = env.new_string(&format!("{:?}", response))?;
+                Ok(java_string.into_raw())
+            }
+        }
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute a command expecting a Long result
+/// Uses glide-core's numeric type conversion
+#[no_mangle]
+pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: JString,
+    args: jobject,
+) -> jlong {
+    let result = || -> JniResult<jlong> {
+        let client = get_client(client_ptr)?;
+        let cmd_str: String = env.get_string(&command)?.into();
+        
+        // Parse arguments
+        let args_array = JObjectArray::from(args);
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(cmd_str);
+        
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+        
+        // Execute command via glide-core
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert response to Long
+        match response {
+            Value::Int(i) => Ok(i),
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                string_val.parse::<i64>()
+                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Long: {}", string_val))
+            }
+            _ => Err(jni_error!(ConversionError, "Expected numeric response, got: {:?}", response))
+        }
+    };
+
+    jni_result!(&mut env, result(), 0i64)
+}
+
+/// Execute a command expecting a Double result
+/// Uses glide-core's ExpectedReturnType::Double for conversion
+#[no_mangle]
+pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDoubleCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: JString,
+    args: jobject,
+) -> f64 {
+    let result = || -> JniResult<f64> {
+        let client = get_client(client_ptr)?;
+        let cmd_str: String = env.get_string(&command)?.into();
+        
+        // Parse arguments
+        let args_array = JObjectArray::from(args);
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(cmd_str);
+        
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+        
+        // Execute command via glide-core
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert response to Double
+        match response {
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                string_val.parse::<f64>()
+                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", string_val))
+            }
+            _ => Err(jni_error!(ConversionError, "Expected double response, got: {:?}", response))
+        }
+    };
+
+    jni_result!(&mut env, result(), 0.0f64)
+}
+
+/// Execute a command expecting a Boolean result
+/// Uses glide-core's ExpectedReturnType::Boolean for conversion
+#[no_mangle]
+pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBooleanCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: JString,
+    args: jobject,
+) -> jboolean {
+    let result = || -> JniResult<jboolean> {
+        let client = get_client(client_ptr)?;
+        let cmd_str: String = env.get_string(&command)?.into();
+        
+        // Parse arguments
+        let args_array = JObjectArray::from(args);
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(cmd_str);
+        
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+        
+        // Execute command via glide-core
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert response to Boolean
+        match response {
+            Value::Int(i) => Ok(if i == 1 { JNI_TRUE } else { JNI_FALSE }),
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                match string_val.as_ref() {
+                    "1" | "true" | "TRUE" => Ok(JNI_TRUE),
+                    "0" | "false" | "FALSE" => Ok(JNI_FALSE),
+                    _ => Err(jni_error!(ConversionError, "Cannot convert to Boolean: {}", string_val))
+                }
+            }
+            _ => Err(jni_error!(ConversionError, "Expected boolean response, got: {:?}", response))
+        }
+    };
+
+    jni_result!(&mut env, result(), JNI_FALSE)
+}
+
+/// Execute a command expecting an Object[] result
+/// Uses glide-core's array type conversion
+#[no_mangle]
+pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArrayCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    command: JString,
+    args: jobject,
+) -> jobject {
+    let result = || -> JniResult<jobject> {
+        let client = get_client(client_ptr)?;
+        let cmd_str: String = env.get_string(&command)?.into();
+        
+        // Parse arguments
+        let args_array = JObjectArray::from(args);
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(cmd_str);
+        
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+        
+        // Execute command via glide-core
+        let response = get_runtime().block_on(async {
+            client.send_command(&cmd, None).await
+        })?;
+
+        // Convert response to Object[] - reuse existing conversion logic
+        convert_value_to_java_object(&mut env, response)
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
