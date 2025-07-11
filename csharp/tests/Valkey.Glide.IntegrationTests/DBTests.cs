@@ -14,7 +14,7 @@ public class DBTests
     {
         (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
 
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
+        ConnectionMultiplexer conn = TestConfiguration.DefaultCompatibleConnection();
 
         IDatabase db = conn.GetDatabase();
         string key = Guid.NewGuid().ToString();

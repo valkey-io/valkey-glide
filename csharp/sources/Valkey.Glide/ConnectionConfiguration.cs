@@ -37,8 +37,12 @@ public abstract class ConnectionConfiguration
     /// Once the maximum value is reached, that will remain the time between retry attempts until a
     /// reconnect attempt is successful. The client will attempt to reconnect indefinitely.
     /// </summary>
+    /// <param name="numberOfRetries"><inheritdoc cref="NumberOfRetries" path="/summary" /></param>
+    /// <param name="factor"><inheritdoc cref="Factor" path="/summary" /></param>
+    /// <param name="exponentBase"><inheritdoc cref="ExponentBase" path="/summary" /></param>
+    /// <param name="jitterPercent"><inheritdoc cref="JitterPercent" path="/summary" /></param>
     [StructLayout(LayoutKind.Sequential)]
-    public struct RetryStrategy(uint numberOfRetries, uint factor, uint exponentBase)
+    public struct RetryStrategy(uint numberOfRetries, uint factor, uint exponentBase, uint? jitterPercent = null)
     {
         /// <summary>
         /// Number of retry attempts that the client should perform when disconnected from the server,
@@ -54,11 +58,12 @@ public abstract class ConnectionConfiguration
         /// The exponent base configured for the strategy.
         /// </summary>
         public uint ExponentBase = exponentBase;
-
+        [MarshalAs(UnmanagedType.U1)]
+        internal bool HasJitterPercent = jitterPercent is not null;
         /// <summary>
         /// The Jitter precent configured for the strategy.
         /// </summary>
-        public uint? JitterPrecent = null;
+        public uint JitterPercent = jitterPercent ?? 0;
     }
 
     /// <summary>
@@ -160,11 +165,53 @@ public abstract class ConnectionConfiguration
     }
 
     /// <summary>
-    /// Configuration for a standalone client. Use <see cref="StandaloneClientConfigurationBuilder"/> to create an instance.
+    /// Configuration for a standalone client. <br />
+    /// Use <see cref="StandaloneClientConfigurationBuilder"/> or <see cref="StandaloneClientConfiguration(List{ValueTuple{string?, ushort?}}?, bool?, uint?, uint?, ReadFrom?, RetryStrategy?, string?, string?, uint?, Protocol?, string?)" /> to create an instance.
     /// </summary>
     public sealed class StandaloneClientConfiguration : BaseClientConfiguration
     {
         internal StandaloneClientConfiguration() { }
+
+        /// <summary>
+        /// Configuration for a standalone client.
+        /// </summary>
+        /// <inheritdoc cref="ClientConfigurationBuilder{T}.WithAuthentication(string?, string)" />
+        /// <param name="addresses"><inheritdoc cref="ClientConfigurationBuilder{T}.Addresses" path="/summary" /></param>
+        /// <param name="useTls"><inheritdoc cref="ClientConfigurationBuilder{T}.UseTls" path="/summary" /></param>
+        /// <param name="requestTimeout"><inheritdoc cref="ClientConfigurationBuilder{T}.RequestTimeout" path="/summary" /></param>
+        /// <param name="connectionTimeout"><inheritdoc cref="ClientConfigurationBuilder{T}.ConnectionTimeout" path="/summary" /></param>
+        /// <param name="readFrom"><inheritdoc cref="ClientConfigurationBuilder{T}.ReadFrom" path="/summary" /></param>
+        /// <param name="retryStrategy"><inheritdoc cref="ClientConfigurationBuilder{T}.ConnectionRetryStrategy" path="/summary" /></param>
+        /// <param name="databaseId"><inheritdoc cref="StandaloneClientConfigurationBuilder.DataBaseId" path="/summary" /></param>
+        /// <param name="protocol"><inheritdoc cref="ClientConfigurationBuilder{T}.ProtocolVersion" path="/summary" /></param>
+        /// <param name="clientName"><inheritdoc cref="ClientConfigurationBuilder{T}.ClientName" path="/summary" /></param>
+        public StandaloneClientConfiguration(
+            List<(string? host, ushort? port)> addresses,
+            bool? useTls = null,
+            uint? requestTimeout = null,
+            uint? connectionTimeout = null,
+            ReadFrom? readFrom = null,
+            RetryStrategy? retryStrategy = null,
+            string? username = null,
+            string? password = null,
+            uint? databaseId = null,
+            Protocol? protocol = null,
+            string? clientName = null
+            )
+        {
+            var builder = new StandaloneClientConfigurationBuilder();
+            addresses.ForEach(addr => builder.Addresses += addr);
+            builder.UseTls = useTls ?? false;
+            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : 0;
+            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : 0;
+            _ = readFrom.HasValue ? builder.ReadFrom = readFrom.Value : new();
+            _ = retryStrategy.HasValue ? builder.ConnectionRetryStrategy = retryStrategy.Value : new();
+            _ = (username ?? password) is not null ? builder.Authentication = (username, password) : new();
+            _ = databaseId.HasValue ? builder.DataBaseId = databaseId.Value : new();
+            _ = protocol.HasValue ? builder.ProtocolVersion = protocol.Value : new();
+            _ = clientName is not null ? builder.ClientName = clientName : "";
+            Request = builder.Build().Request;
+        }
     }
 
     /// <summary>
@@ -173,6 +220,44 @@ public abstract class ConnectionConfiguration
     public sealed class ClusterClientConfiguration : BaseClientConfiguration
     {
         internal ClusterClientConfiguration() { }
+
+        /// <summary>
+        /// Configuration for a cluster client.
+        /// </summary>
+        /// <inheritdoc cref="ClientConfigurationBuilder{T}.WithAuthentication(string?, string)" />
+        /// <param name="addresses"><inheritdoc cref="ClientConfigurationBuilder{T}.Addresses" path="/summary" /></param>
+        /// <param name="useTls"><inheritdoc cref="ClientConfigurationBuilder{T}.UseTls" path="/summary" /></param>
+        /// <param name="requestTimeout"><inheritdoc cref="ClientConfigurationBuilder{T}.RequestTimeout" path="/summary" /></param>
+        /// <param name="connectionTimeout"><inheritdoc cref="ClientConfigurationBuilder{T}.ConnectionTimeout" path="/summary" /></param>
+        /// <param name="readFrom"><inheritdoc cref="ClientConfigurationBuilder{T}.ReadFrom" path="/summary" /></param>
+        /// <param name="retryStrategy"><inheritdoc cref="ClientConfigurationBuilder{T}.ConnectionRetryStrategy" path="/summary" /></param>
+        /// <param name="protocol"><inheritdoc cref="ClientConfigurationBuilder{T}.ProtocolVersion" path="/summary" /></param>
+        /// <param name="clientName"><inheritdoc cref="ClientConfigurationBuilder{T}.ClientName" path="/summary" /></param>
+        public ClusterClientConfiguration(
+            List<(string? host, ushort? port)> addresses,
+            bool? useTls = null,
+            uint? requestTimeout = null,
+            uint? connectionTimeout = null,
+            ReadFrom? readFrom = null,
+            RetryStrategy? retryStrategy = null,
+            string? username = null,
+            string? password = null,
+            Protocol? protocol = null,
+            string? clientName = null
+            )
+        {
+            var builder = new ClusterClientConfigurationBuilder();
+            addresses.ForEach(addr => builder.Addresses += addr);
+            builder.UseTls = useTls ?? false;
+            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : 0;
+            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : 0;
+            _ = readFrom.HasValue ? builder.ReadFrom = readFrom.Value : new();
+            _ = retryStrategy.HasValue ? builder.ConnectionRetryStrategy = retryStrategy.Value : new();
+            _ = (username ?? password) is not null ? builder.Authentication = (username, password) : new();
+            _ = protocol.HasValue ? builder.ProtocolVersion = protocol.Value : new();
+            _ = clientName is not null ? builder.ClientName = clientName : "";
+            Request = builder.Build().Request;
+        }
     }
 
     /// <summary>
@@ -190,9 +275,9 @@ public abstract class ConnectionConfiguration
         }
 
         #region address
-        /// <inheritdoc cref="Addresses"/>
+        /// <inheritdoc cref="Addresses" />
         /// <b>Add</b> a new address to the list.<br />
-        /// See also <seealso cref="Addresses"/>.
+        /// See also <seealso cref="Addresses" />.
         protected (string? host, ushort? port) Address
         {
             set => Config.Addresses.Add(new NodeAddress
@@ -202,7 +287,7 @@ public abstract class ConnectionConfiguration
             });
         }
 
-        /// <inheritdoc cref="Address"/>
+        /// <inheritdoc cref="Address" />
         public T WithAddress(string? host, ushort? port)
         {
             Address = (host, port);
@@ -273,13 +358,13 @@ public abstract class ConnectionConfiguration
         {
             set => Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
         }
-        /// <inheritdoc cref="UseTls"/>
+        /// <inheritdoc cref="UseTls" />
         public T WithTls(bool useTls)
         {
             UseTls = useTls;
             return (T)this;
         }
-        /// <inheritdoc cref="UseTls"/>
+        /// <inheritdoc cref="UseTls" />
         public T WithTls()
         {
             UseTls = true;
@@ -397,6 +482,27 @@ public abstract class ConnectionConfiguration
             return (T)this;
         }
         #endregion
+        #region Connection Retry Strategy
+        /// <summary>
+        /// Strategy used to determine how and when to reconnect, in case of connection failures.<br />
+        /// See also <seealso cref="RetryStrategy" />
+        /// </summary>
+        public RetryStrategy ConnectionRetryStrategy
+        {
+            set => Config.RetryStrategy = value;
+        }
+        /// <inheritdoc cref="ConnectionRetryStrategy" />
+        public T WithConnectionRetryStrategy(RetryStrategy connectionRetryStrategy)
+        {
+            ConnectionRetryStrategy = connectionRetryStrategy;
+            return (T)this;
+        }
+
+        /// <inheritdoc cref="ConnectionRetryStrategy" />
+        /// <inheritdoc cref="RetryStrategy(uint, uint, uint, uint?)" />
+        public T WithConnectionRetryStrategy(uint numberOfRetries, uint factor, uint exponentBase, uint? jitterPercent = null)
+            => WithConnectionRetryStrategy(new RetryStrategy(numberOfRetries, factor, exponentBase, jitterPercent));
+        #endregion
 
         internal ConnectionConfig Build() => Config;
     }
@@ -427,28 +533,6 @@ public abstract class ConnectionConfiguration
             DataBaseId = dataBaseId;
             return this;
         }
-        #endregion
-        #region Connection Retry Strategy
-        /// <summary>
-        /// Strategy used to determine how and when to reconnect, in case of connection failures.<br />
-        /// See also <seealso cref="RetryStrategy"/>
-        /// </summary>
-        public RetryStrategy ConnectionRetryStrategy
-        {
-            set => Config.RetryStrategy = value;
-        }
-        /// <inheritdoc cref="ConnectionRetryStrategy"/>
-        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(RetryStrategy connectionRetryStrategy)
-        {
-            ConnectionRetryStrategy = connectionRetryStrategy;
-            return this;
-        }
-
-        /// <inheritdoc cref="ConnectionRetryStrategy"/>
-        /// <param name="numberOfRetries"><inheritdoc cref="RetryStrategy.NumberOfRetries" path="/summary"/></param>
-        /// <param name="factor"><inheritdoc cref="RetryStrategy.Factor" path="/summary"/></param>
-        /// <param name="exponentBase"><inheritdoc cref="RetryStrategy.ExponentBase" path="/summary"/></param>
-        public StandaloneClientConfigurationBuilder WithConnectionRetryStrategy(uint numberOfRetries, uint factor, uint exponentBase) => WithConnectionRetryStrategy(new RetryStrategy(numberOfRetries, factor, exponentBase));
         #endregion
     }
 
