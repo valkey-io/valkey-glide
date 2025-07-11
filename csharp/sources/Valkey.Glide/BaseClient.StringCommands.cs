@@ -14,21 +14,10 @@ public abstract partial class BaseClient : IStringBaseCommands
         => await Command(Request.StringGet(key));
 
     public async Task<ValkeyValue[]> StringGetAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        GlideString[] glideKeys = [.. keys.Select(k => (GlideString)k)];
-        GlideString?[] result = await Command(Request.StringGetMultiple(glideKeys));
-        return [.. result.Select(r => r is null ? ValkeyValue.Null : (ValkeyValue)r)];
-    }
+        => await Command(Request.StringGetMultiple(keys));
 
     public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, CommandFlags flags = CommandFlags.None)
-    {
-        KeyValuePair<GlideString, GlideString>[] glideValues = [..
-            values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
-        ];
-        GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
-        _ = await Command(Request.StringSetMultiple(keyValuePairs));
-        return true;
-    }
+        => await Command(Request.StringSetMultiple(values));
 
     public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringGetRange(key, start, end));

@@ -10,24 +10,13 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     public T StringGetAsync(ValkeyKey key) => AddCmd(Request.StringGet(key));
 
     /// <inheritdoc cref="IBatchStringCommands.StringGetAsync(ValkeyKey[])" />
-    public T StringGetAsync(ValkeyKey[] keys)
-    {
-        GlideString[] glideKeys = [.. keys.Select(k => (GlideString)k)];
-        return AddCmd(Request.StringGetMultiple(glideKeys));
-    }
+    public T StringGetAsync(ValkeyKey[] keys) => AddCmd(Request.StringGetMultiple(keys));
 
     /// <inheritdoc cref="IBatchStringCommands.StringSetAsync(ValkeyKey, ValkeyValue)" />
     public T StringSetAsync(ValkeyKey key, ValkeyValue value) => AddCmd(Request.StringSet(key, value));
 
     /// <inheritdoc cref="IBatchStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[])" />
-    public T StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values)
-    {
-        KeyValuePair<GlideString, GlideString>[] glideValues = [..
-            values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key, kvp.Value))
-        ];
-        GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
-        return AddCmd(Request.StringSetMultiple(keyValuePairs));
-    }
+    public T StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values) => AddCmd(Request.StringSetMultiple(values));
 
     /// <inheritdoc cref="IBatchStringCommands.StringGetRangeAsync(ValkeyKey, long, long)" />
     public T StringGetRangeAsync(ValkeyKey key, long start, long end) => AddCmd(Request.StringGetRange(key, start, end));

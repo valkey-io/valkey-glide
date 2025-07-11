@@ -20,7 +20,10 @@ public class CommandTests
             () => Assert.Equal(["SET", "key", "value"], Request.StringSet("key", "value").GetArgs()),
             () => Assert.Equal(["GET", "key"], Request.StringGet("key").GetArgs()),
             () => Assert.Equal(["MGET", "key1", "key2", "key3"], Request.StringGetMultiple(["key1", "key2", "key3"]).GetArgs()),
-            () => Assert.Equal(["MSET", "key1", "value1", "key2", "value2"], Request.StringSetMultiple(["key1", "value1", "key2", "value2"]).GetArgs()),
+            () => Assert.Equal(["MSET", "key1", "value1", "key2", "value2"], Request.StringSetMultiple([
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
+            ]).GetArgs()),
             () => Assert.Equal(["STRLEN", "key"], Request.StringLength("key").GetArgs()),
             () => Assert.Equal(["GETRANGE", "key", "0", "5"], Request.StringGetRange("key", 0, 5).GetArgs()),
             () => Assert.Equal(["SETRANGE", "key", "10", "value"], Request.StringSetRange("key", 10, "value").GetArgs()),
@@ -65,7 +68,14 @@ public class CommandTests
             () => Assert.Equal<GlideString>("hello", Request.StringGetRange("key", 0, 4).Converter("hello")),
             () => Assert.Equal<GlideString>("", Request.StringGetRange("key", 0, 4).Converter("")),
             () => Assert.Equal(10L, Request.StringSetRange("key", 5, "world").Converter(10L)),
-            () => Assert.Equal("OK", Request.StringSetMultiple(["key1", "value1", "key2", "value2"]).Converter("OK")),
+            () => Assert.True(Request.StringSetMultiple([
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
+            ]).Converter("OK")),
+            () => Assert.False(Request.StringSetMultiple([
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
+            ]).Converter("ERROR")),
 
             () => Assert.Equal("info", Request.Info([]).Converter("info")),
 
@@ -97,9 +107,9 @@ public class CommandTests
                 object[] mgetResponse = [new GlideString("value1"), null, new GlideString("value3")];
                 var result = Request.StringGetMultiple(["key1", "key2", "key3"]).Converter(mgetResponse);
                 Assert.Equal(3, result.Length);
-                Assert.Equal<GlideString>("value1", result[0]);
-                Assert.Null(result[1]);
-                Assert.Equal<GlideString>("value3", result[2]);
+                Assert.Equal(new ValkeyValue("value1"), result[0]);
+                Assert.Equal(ValkeyValue.Null, result[1]);
+                Assert.Equal(new ValkeyValue("value3"), result[2]);
             },
 
             () =>
@@ -115,8 +125,8 @@ public class CommandTests
                 object[] allNullResponse = [null, null];
                 var result = Request.StringGetMultiple(["key1", "key2"]).Converter(allNullResponse);
                 Assert.Equal(2, result.Length);
-                Assert.Null(result[0]);
-                Assert.Null(result[1]);
+                Assert.Equal(ValkeyValue.Null, result[0]);
+                Assert.Equal(ValkeyValue.Null, result[1]);
             }
         );
     }

@@ -15,12 +15,21 @@ internal partial class Request
         return new(RequestType.Set, args, false, response => response == "OK");
     }
 
-    public static Cmd<object[], GlideString?[]> StringGetMultiple(GlideString[] keys)
-        => new(RequestType.MGet, keys, false, array =>
-            [.. array.Select(item => item as GlideString)]);
+    public static Cmd<object[], ValkeyValue[]> StringGetMultiple(ValkeyKey[] keys)
+    {
+        GlideString[] glideKeys = [.. keys.Select(k => k.ToGlideString())];
+        return new(RequestType.MGet, glideKeys, false, array =>
+            [.. array.Select(item => item is null ? ValkeyValue.Null : (ValkeyValue)(GlideString)item)]);
+    }
 
-    public static Cmd<string, string> StringSetMultiple(GlideString[] keyValuePairs)
-        => OK(RequestType.MSet, keyValuePairs);
+    public static Cmd<string, bool> StringSetMultiple(KeyValuePair<ValkeyKey, ValkeyValue>[] values)
+    {
+        KeyValuePair<GlideString, GlideString>[] glideValues = [..
+            values.Select(kvp => new KeyValuePair<GlideString, GlideString>(kvp.Key.ToGlideString(), kvp.Value.ToGlideString()))
+        ];
+        GlideString[] keyValuePairs = Helpers.ConvertKeyValuePairsToArray(glideValues);
+        return new(RequestType.MSet, keyValuePairs, false, response => response == "OK");
+    }
 
     public static Cmd<long, long> StringSetRange(GlideString key, long offset, GlideString value)
         => Simple<long>(RequestType.SetRange, [key, offset.ToGlideString(), value]);
