@@ -1,104 +1,71 @@
-# Phase 3 Alternative: Direct BaseClient Integration
+# Phase 3: Complete UDS Replacement Implementation
 
-## Performance Analysis Decision
+## Objective
 
-Based on performance analysis, we're switching from Option 1 (JNI + Protobuf) to **Option 2 (Direct BaseClient Integration)** for maximum performance.
+**Complete replacement** of the UDS (Unix Domain Socket) implementation with direct JNI integration while maintaining 100% API compatibility. This is not an optional feature - it's a full migration from UDS to JNI.
 
-### Performance Comparison:
-- **Option 1** (JNI + Protobuf): 15-25% overhead due to protobuf conversion
-- **Option 2** (Direct Integration): 5-10% overhead, 2.0x+ performance vs UDS
+## Architecture Transformation
 
-### Current UDS Architecture:
+### Current UDS Architecture (TO BE REMOVED):
 ```
-BaseClient Method → CommandManager.submitNewCommand() → Protobuf → UDS → Rust
+BaseClient Method → CommandManager → Protobuf → UDS Socket → Rust Process → glide-core → Valkey
          ↓
-Response Handler ← Protobuf Response ← UDS ← Rust
+Response Handler ← Protobuf Response ← UDS Socket ← Rust Process ← glide-core ← Valkey
 ```
 
-### New JNI Architecture:
+### New JNI Architecture (REPLACEMENT):
 ```
-BaseClient Method → Direct JNI Call → Rust
+BaseClient Method → JniCommandManager → JNI → glide-core (in-process) → Valkey
          ↓
-Java Object ← Direct Conversion ← Rust
+Response Handler ← Protobuf Response ← JNI ← glide-core (in-process) ← Valkey
 ```
+
+**Key Change**: Eliminate the UDS socket and standalone Rust process entirely, making glide-core run in-process via JNI.
 
 ## BaseClient Integration Analysis
 
-### Key Integration Points Identified:
+### Critical UDS Components to Replace:
 
-1. **Factory Method Override Point**
+1. **CommandManager (UDS-based)** → **JniCommandManager (JNI-based)**
+   - **File**: `/home/ubuntu/valkey-glide/java/client/src/main/java/glide/managers/CommandManager.java`
+   - **Current**: Uses ChannelHandler for UDS communication
+   - **Replacement**: Use GlideJniClient for direct JNI calls
+
+2. **ConnectionManager (UDS-based)** → **JniConnectionManager (JNI-based)**
+   - **Current**: Manages UDS socket connections to Rust process
+   - **Replacement**: Manage in-process JNI client lifecycle
+
+3. **Factory Methods (UDS creation)** → **Factory Methods (JNI creation)**
    - **File**: `/home/ubuntu/valkey-glide/java/client/src/main/java/glide/api/BaseClient.java:478`
-   - **Method**: `buildCommandManager(ChannelHandler channelHandler)`
-   - **Current**: Returns `new CommandManager(channelHandler)`
-   - **Strategy**: Override to return JNI-based CommandManager
+   - **Method**: `buildCommandManager(ChannelHandler)` and `buildConnectionManager(ChannelHandler)`
+   - **Replacement**: Return JNI-based managers instead of UDS-based ones
 
-2. **Client Creation Flow**
+4. **Client Creation Flow** → **Direct JNI Client Creation**
    - **File**: `/home/ubuntu/valkey-glide/java/client/src/main/java/glide/api/BaseClient.java:360`
-   - **Method**: `createClient(BaseClientConfiguration, Function<ClientBuilder, T>)`
-   - **Current**: Creates UDS-based managers via factory methods
-   - **Strategy**: Extend ClientBuilder to support JNI option
-
-3. **Command Execution Pattern**
-   - **Pattern**: `commandManager.submitNewCommand(RequestType, args, responseHandler)`
-   - **Usage**: 200+ methods across BaseClient classes
-   - **Strategy**: JNI CommandManager maintains same interface
-
-4. **Response Handling System**
-   - **File**: `/home/ubuntu/valkey-glide/java/client/src/main/java/glide/api/BaseClient.java:501`
-   - **Method**: `handleValkeyResponse(Class<T>, EnumSet<ResponseFlags>, Response)`
-   - **Current**: Processes protobuf Response objects
-   - **Strategy**: Create parallel `handleJniResponse()` for direct objects
+   - **Current**: Creates UDS channels, handlers, and connections
+   - **Replacement**: Create JNI client directly
 
 ## Implementation Strategy
 
-### Approach: Factory Method Override with Interface Compatibility
+### Phase 3 Tasks (Complete UDS Replacement)
 
-**Recommended Approach**: Override `buildCommandManager()` to return JNI-based CommandManager that maintains existing interface contracts.
-
-### Benefits:
-- **Maintains API compatibility**: Zero changes to existing client code
-- **Gradual migration**: Can be enabled via configuration flag
-- **Performance maximized**: Eliminates protobuf overhead
-- **Fallback capability**: Can revert to UDS if needed
-
-## Phase 3 Tasks
-
-### Task 1: Create JNI-Based ClientBuilder Extension ✅
-**Status**: Planning
-**Goal**: Extend client creation to support JNI option
+### Task 1: Replace CommandManager with JniCommandManager ✅
+**Goal**: Completely replace UDS-based CommandManager with JNI implementation
 
 **Implementation**:
 ```java
-protected static <T extends BaseClient> CompletableFuture<T> createClient(
-        @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
-    try {
-        if (config.isJniEnabled()) {
-            // JNI-based client creation
-            GlideJniClient jniClient = new GlideJniClient(convertConfig(config));
-            JniCommandManager commandManager = new JniCommandManager(jniClient);
-            JniConnectionManager connectionManager = new JniConnectionManager(jniClient);
-            
-            return CompletableFuture.completedFuture(
-                constructor.apply(new ClientBuilder(connectionManager, commandManager, null, null))
-            );
-        } else {
-            // Existing UDS-based creation
-            // ... existing code
-        }
-    }
-}
-```
-
-### Task 2: Implement JNI CommandManager ✅
-**Status**: Planning
-**Goal**: Create CommandManager implementation that uses direct JNI calls
-
-**Implementation**:
-```java
-public class JniCommandManager implements CommandManager {
+// REPLACE existing CommandManager.java implementation
+public class CommandManager {
+    // Remove: private final ChannelHandler channel;
+    // Add: private final GlideJniClient jniClient;
     private final GlideJniClient jniClient;
     
-    @Override
+    // Replace constructor
+    public CommandManager(GlideJniClient jniClient) {
+        this.jniClient = jniClient;
+    }
+    
+    // Replace ALL UDS-based methods with JNI equivalents
     public <T> CompletableFuture<T> submitNewCommand(
         RequestType requestType,
         String[] arguments,
@@ -106,15 +73,10 @@ public class JniCommandManager implements CommandManager {
         
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Convert RequestType to command string
+                // Replace UDS call with JNI call
                 String command = getCommandString(requestType);
-                
-                // Execute via JNI - get direct Java object
                 Object result = jniClient.executeCommand(command, arguments);
-                
-                // Convert to Response for compatibility with existing responseHandler
                 Response response = convertToResponse(result);
-                
                 return responseHandler.apply(response);
             } catch (Exception e) {
                 throw mapJniException(e);
@@ -124,25 +86,120 @@ public class JniCommandManager implements CommandManager {
 }
 ```
 
-### Task 3: Direct Response Conversion System ✅
-**Status**: Planning
-**Goal**: Convert JNI native responses to protobuf Response format
+### Task 2: Replace ConnectionManager with JniConnectionManager ✅
+**Goal**: Replace UDS connection management with JNI client lifecycle
 
 **Implementation**:
 ```java
+// REPLACE existing ConnectionManager.java implementation
+public class ConnectionManager {
+    // Remove: private final ChannelHandler channelHandler;
+    // Add: private GlideJniClient jniClient;
+    private GlideJniClient jniClient;
+    
+    public CompletableFuture<Void> connectToValkey(BaseClientConfiguration config) {
+        // Replace UDS connection with JNI client creation
+        try {
+            GlideJniClient.Config jniConfig = convertConfig(config);
+            this.jniClient = new GlideJniClient(jniConfig);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    public GlideJniClient getJniClient() {
+        return jniClient;
+    }
+}
+```
+
+### Task 3: Replace Client Factory Methods ✅
+**Goal**: Update BaseClient factory methods to create JNI-based managers
+
+**Implementation**:
+```java
+// REPLACE factory methods in BaseClient.java
+protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
+    // Remove UDS-based creation
+    // return new CommandManager(channelHandler);
+    
+    // Add JNI-based creation
+    // Extract JniClient from the connection flow
+    throw new UnsupportedOperationException("Use buildCommandManager(GlideJniClient) instead");
+}
+
+// ADD new factory method
+protected static CommandManager buildCommandManager(GlideJniClient jniClient) {
+    return new CommandManager(jniClient);
+}
+
+protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
+    // Remove UDS-based creation
+    // return new ConnectionManager(channelHandler);
+    
+    // Add JNI-based creation
+    return new ConnectionManager();
+}
+```
+
+### Task 4: Replace Client Creation Flow ✅
+**Goal**: Completely rewrite client creation to use JNI instead of UDS
+
+**Implementation**:
+```java
+// REPLACE createClient method in BaseClient.java
+protected static <T extends BaseClient> CompletableFuture<T> createClient(
+        @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
+    try {
+        // Remove UDS-based creation:
+        // ThreadPoolResource threadPoolResource = ...
+        // MessageHandler messageHandler = ...
+        // ChannelHandler channelHandler = ...
+        // ConnectionManager connectionManager = buildConnectionManager(channelHandler);
+        // CommandManager commandManager = buildCommandManager(channelHandler);
+        
+        // Replace with JNI-based creation:
+        ConnectionManager connectionManager = buildConnectionManager(null);
+        
+        return connectionManager
+                .connectToValkey(config)
+                .thenApply(ignored -> {
+                    GlideJniClient jniClient = connectionManager.getJniClient();
+                    CommandManager commandManager = buildCommandManager(jniClient);
+                    
+                    return constructor.apply(
+                        new ClientBuilder(
+                            connectionManager,
+                            commandManager,
+                            null, // No MessageHandler needed for JNI
+                            Optional.empty() // No subscription config for now
+                        ));
+                });
+    } catch (Exception e) {
+        var future = new CompletableFuture<T>();
+        future.completeExceptionally(e);
+        return future;
+    }
+}
+```
+
+### Task 5: Build Response Conversion System ✅
+**Goal**: Convert JNI responses to protobuf Response format (maintain API compatibility)
+
+**Implementation**:
+```java
+// ADD to CommandManager.java
 private Response convertToResponse(Object jniResult) {
     Response.Builder responseBuilder = Response.newBuilder();
     
     if (jniResult == null) {
         responseBuilder.setRespPointer(0);
     } else if (jniResult instanceof String) {
-        // Create protobuf string response
         responseBuilder.setRespPointer(createStringPointer((String) jniResult));
     } else if (jniResult instanceof Object[]) {
-        // Create protobuf array response
         responseBuilder.setRespPointer(createArrayPointer((Object[]) jniResult));
     } else if (jniResult instanceof Number) {
-        // Create protobuf number response
         responseBuilder.setRespPointer(createNumberPointer((Number) jniResult));
     }
     
@@ -150,97 +207,81 @@ private Response convertToResponse(Object jniResult) {
 }
 ```
 
-### Task 4: Configuration Extension ✅
-**Status**: Planning
-**Goal**: Extend BaseClientConfiguration to support JNI options
+### Task 6: Remove UDS Components ✅
+**Goal**: Remove all UDS-specific code and dependencies
 
-**Implementation**:
-```java
-public abstract class BaseClientConfiguration {
-    // Add JNI configuration options
-    private boolean jniEnabled = false;
-    private int jniThreadPoolSize = Runtime.getRuntime().availableProcessors();
-    
-    public boolean isJniEnabled() { return jniEnabled; }
-    public BaseClientConfiguration enableJni(boolean enabled) {
-        this.jniEnabled = enabled;
-        return this;
-    }
-}
-```
+**Components to Remove**:
+- ChannelHandler usage from managers
+- UDS socket creation and management
+- Netty dependencies (if only used for UDS)
+- ThreadPoolResource for UDS communication
+- MessageHandler for UDS responses
 
-### Task 5: Connection Management ✅
-**Status**: Planning
-**Goal**: Implement JNI-based connection lifecycle management
-
-**Implementation**:
-```java
-public class JniConnectionManager implements ConnectionManager {
-    private final GlideJniClient jniClient;
-    
-    @Override
-    public CompletableFuture<Void> connectToValkey(BaseClientConfiguration config) {
-        // JNI client is already connected during construction
-        return CompletableFuture.completedFuture(null);
-    }
-    
-    @Override
-    public void close() {
-        if (jniClient != null) {
-            jniClient.close();
-        }
-    }
-}
-```
-
-### Task 6: Integration Testing ✅
-**Status**: Planning
-**Goal**: Validate JNI implementation against existing test suite
+### Task 7: Integration Testing ✅
+**Goal**: Ensure all existing tests pass with JNI replacement
 
 **Strategy**:
-- Run complete existing test suite with JNI enabled
-- Performance benchmarking vs UDS
-- Memory leak detection
-- Concurrent operation testing
+- Run complete existing test suite
+- Verify no API changes are visible to client code
+- Validate performance improvements are maintained
+
+## RequestType to Command Mapping
+
+Need to implement complete mapping for all 200+ RequestType enums:
+
+```java
+private static final Map<RequestType, String> REQUEST_TYPE_MAPPING;
+static {
+    Map<RequestType, String> mapping = new HashMap<>();
+    
+    // String commands
+    mapping.put(RequestType.Get, "GET");
+    mapping.put(RequestType.Set, "SET");
+    mapping.put(RequestType.Append, "APPEND");
+    mapping.put(RequestType.Strlen, "STRLEN");
+    
+    // Hash commands  
+    mapping.put(RequestType.HGet, "HGET");
+    mapping.put(RequestType.HSet, "HSET");
+    mapping.put(RequestType.HDel, "HDEL");
+    
+    // ... all 200+ commands
+    
+    REQUEST_TYPE_MAPPING = Collections.unmodifiableMap(mapping);
+}
+```
 
 ## Success Criteria
 
-### Performance Targets ✅
-- **2.0x+ improvement** over UDS implementation
-- **No memory leaks** in long-running operations
-- **Concurrent safety** for multi-threaded usage
+### Complete UDS Elimination ✅
+- **Zero UDS code remaining** in the codebase
+- **All UDS dependencies removed** 
+- **JNI is the only communication method**
 
 ### API Compatibility ✅
 - **100% backward compatibility** - existing code works unchanged
+- **Same method signatures** - no API changes
 - **Same exception behaviors** - error handling unchanged
-- **Configuration-based switching** - can enable/disable JNI
+
+### Performance ✅
+- **Maintain 1.68x+ improvement** over original UDS
+- **No memory leaks** in long-running operations
+- **Thread safety** for concurrent usage
 
 ### Feature Completeness ✅
-- **All command types supported** (200+ commands)
+- **All 200+ commands supported**
 - **Batch operations** work correctly
 - **Cluster routing** functions properly
-- **Resource management** handles cleanup properly
+- **Resource management** handles cleanup
 
 ## Implementation Timeline
 
-1. **Phase 3.1**: Tasks 1-2 (Client creation and CommandManager) - 2 days
-2. **Phase 3.2**: Tasks 3-4 (Response conversion and configuration) - 2 days
-3. **Phase 3.3**: Tasks 5-6 (Connection management and testing) - 2 days
+1. **Days 1-2**: Tasks 1-2 (Replace CommandManager and ConnectionManager)
+2. **Day 3**: Task 3 (Replace factory methods)
+3. **Day 4**: Task 4 (Replace client creation flow)
+4. **Day 5**: Task 5 (Response conversion system)
+5. **Day 6**: Tasks 6-7 (Remove UDS components and testing)
 
 **Total Estimated Time**: 6 days
 
-## Risk Mitigation
-
-### Risk 1: Response Format Compatibility
-**Mitigation**: Extensive testing of response conversion with existing handlers
-
-### Risk 2: Memory Management
-**Mitigation**: Use Java Cleaner API and proper resource management patterns
-
-### Risk 3: Thread Safety
-**Mitigation**: Design JNI client to be thread-safe from the start
-
-### Risk 4: Configuration Complexity
-**Mitigation**: Simple boolean flag to enable/disable JNI with sensible defaults
-
-This alternative approach eliminates protobuf overhead while maintaining complete API compatibility, achieving maximum performance benefits from the JNI integration.
+This is a **complete migration**, not an addition. The end result will be a JNI-only implementation with no UDS code remaining.
