@@ -244,7 +244,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_ping(
     _class: JClass,
     client_ptr: jlong,
 ) -> jstring {
-    let result = || -> JniResult<jstring> {
+    let mut result = || -> JniResult<jstring> {
         if client_ptr == 0 {
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }
@@ -361,27 +361,37 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
     }
 }
 
+// ==================== HELPER FUNCTIONS ====================
+
+/// Get client from pointer with null check
+fn get_client(client_ptr: jlong) -> JniResult<&'static mut Client> {
+    if client_ptr == 0 {
+        return Err(jni_error!(NullPointer, "Client pointer is null"));
+    }
+    Ok(unsafe { &mut *(client_ptr as *mut Client) })
+}
+
 // ==================== TYPED JNI METHODS ====================
 // These methods provide direct typed returns, leveraging glide-core's value_conversion.rs
 
 /// Execute a command expecting a String result
 /// Uses glide-core's ExpectedReturnType::BulkString for conversion
 #[no_mangle]
-pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCommand(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    command: JString,
+    command: jstring,
     args: jobject,
 ) -> jstring {
-    let result = || -> JniResult<jstring> {
+    let mut result = || -> JniResult<jstring> {
         let client = get_client(client_ptr)?;
-        let cmd_str: String = env.get_string(&command)?.into();
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
         
         // Parse arguments
-        let args_array = JObjectArray::from(args);
+        let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
-        let mut cmd = cmd(cmd_str);
+        let mut cmd = cmd(&cmd_str);
         
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
@@ -397,8 +407,12 @@ pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCo
         // Convert response to String using glide-core's value conversion logic
         match response {
             Value::Nil => Ok(ptr::null_mut()),
-            Value::SimpleString(s) | Value::BulkString(s) => {
-                let string_val = String::from_utf8_lossy(&s);
+            Value::SimpleString(s) => {
+                let java_string = env.new_string(&s)?;
+                Ok(java_string.into_raw())
+            }
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
                 let java_string = env.new_string(&string_val)?;
                 Ok(java_string.into_raw())
             }
@@ -419,21 +433,21 @@ pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCo
 /// Execute a command expecting a Long result
 /// Uses glide-core's numeric type conversion
 #[no_mangle]
-pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongCommand(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    command: JString,
+    command: jstring,
     args: jobject,
 ) -> jlong {
-    let result = || -> JniResult<jlong> {
+    let mut result = || -> JniResult<jlong> {
         let client = get_client(client_ptr)?;
-        let cmd_str: String = env.get_string(&command)?.into();
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
         
         // Parse arguments
-        let args_array = JObjectArray::from(args);
+        let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
-        let mut cmd = cmd(cmd_str);
+        let mut cmd = cmd(&cmd_str);
         
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
@@ -464,21 +478,21 @@ pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongComm
 /// Execute a command expecting a Double result
 /// Uses glide-core's ExpectedReturnType::Double for conversion
 #[no_mangle]
-pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDoubleCommand(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDoubleCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    command: JString,
+    command: jstring,
     args: jobject,
 ) -> f64 {
-    let result = || -> JniResult<f64> {
+    let mut result = || -> JniResult<f64> {
         let client = get_client(client_ptr)?;
-        let cmd_str: String = env.get_string(&command)?.into();
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
         
         // Parse arguments
-        let args_array = JObjectArray::from(args);
+        let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
-        let mut cmd = cmd(cmd_str);
+        let mut cmd = cmd(&cmd_str);
         
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
@@ -508,21 +522,21 @@ pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDoubleCo
 /// Execute a command expecting a Boolean result
 /// Uses glide-core's ExpectedReturnType::Boolean for conversion
 #[no_mangle]
-pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBooleanCommand(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBooleanCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    command: JString,
+    command: jstring,
     args: jobject,
 ) -> jboolean {
-    let result = || -> JniResult<jboolean> {
+    let mut result = || -> JniResult<jboolean> {
         let client = get_client(client_ptr)?;
-        let cmd_str: String = env.get_string(&command)?.into();
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
         
         // Parse arguments
-        let args_array = JObjectArray::from(args);
+        let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
-        let mut cmd = cmd(cmd_str);
+        let mut cmd = cmd(&cmd_str);
         
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
@@ -556,21 +570,21 @@ pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBooleanC
 /// Execute a command expecting an Object[] result
 /// Uses glide-core's array type conversion
 #[no_mangle]
-pub extern "C" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArrayCommand(
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArrayCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    command: JString,
+    command: jstring,
     args: jobject,
 ) -> jobject {
-    let result = || -> JniResult<jobject> {
+    let mut result = || -> JniResult<jobject> {
         let client = get_client(client_ptr)?;
-        let cmd_str: String = env.get_string(&command)?.into();
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
         
         // Parse arguments
-        let args_array = JObjectArray::from(args);
+        let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
-        let mut cmd = cmd(cmd_str);
+        let mut cmd = cmd(&cmd_str);
         
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;

@@ -95,6 +95,7 @@ pub fn throw_java_exception(env: &mut JNIEnv, error: &JniError) {
         JniError::UnexpectedResponse(msg) => ("java/lang/IllegalStateException", format!("Unexpected response: {}", msg)),
         JniError::Timeout(msg) => ("java/util/concurrent/TimeoutException", msg.clone()),
         JniError::Redis(err) => ("java/lang/RuntimeException", format!("Redis error: {}", err)),
+        JniError::ConversionError(msg) => ("java/lang/IllegalArgumentException", format!("Conversion error: {}", msg)),
     };
 
     // Attempt to throw the exception, ignoring errors since we're already in error handling
