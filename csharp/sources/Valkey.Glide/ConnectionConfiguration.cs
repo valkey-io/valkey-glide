@@ -26,7 +26,7 @@ public abstract class ConnectionConfiguration
         public string? ClientName;
 
         internal FFI.ConnectionConfig ToFfi() =>
-            new(Addresses, TlsMode, ClusterMode, (uint?)RequestTimeout?.Milliseconds, (uint?)ConnectionTimeout?.Milliseconds, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
+            new(Addresses, TlsMode, ClusterMode, (uint?)RequestTimeout?.TotalMilliseconds, (uint?)ConnectionTimeout?.TotalMilliseconds, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
     }
 
     /// <summary>
