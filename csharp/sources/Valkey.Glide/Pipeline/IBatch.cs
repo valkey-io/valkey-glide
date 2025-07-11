@@ -7,7 +7,7 @@ using static Valkey.Glide.Commands.Options.InfoOptions;
 namespace Valkey.Glide.Pipeline;
 
 // BaseBatch was split into two types, one for docs, another for the impl. This also ease the testing.
-internal interface IBatch : IBatchSetCommands
+internal interface IBatch : IBatchSetCommands, IBatchConnectionManagementCommands
 {
     // inherit all docs except `remarks` section which stores en example (not relevant for batch)
     // and returns section, because we customize it.
