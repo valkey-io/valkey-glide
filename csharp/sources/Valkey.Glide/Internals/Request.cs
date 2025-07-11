@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Text.Json;
+
 using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide.Internals;
@@ -33,7 +35,7 @@ internal partial class Request
     /// <param name="request">The request type</param>
     /// <param name="args">The command arguments</param>
     /// <returns>A command that converts the response to a boolean value (true if response equals 1)</returns>
-    private static Cmd<T, bool> Boolean<T>(RequestType request, GlideString[] args)
+    private static Cmd<T, Boolean> Boolean<T>(RequestType request, GlideString[] args)
         => new(request, args, false, response => Convert.ToInt64(response) == 1);
 
     /// <summary>
@@ -60,10 +62,14 @@ internal partial class Request
     /// <param name="request">The request type</param>
     /// <param name="args">The command arguments</param>
     /// <returns>A command that converts a HashSet to a ValkeyValue array</returns>
-    private static Cmd<HashSet<object>, ValkeyValue[]> HashSetToValkeyValueArray(RequestType request, GlideString[] args)
-        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
+    private static Cmd<object[], ValkeyValue[]> ObjectArrayToValkeyValueArray(RequestType request, GlideString[] args)
+        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
 
-    private static Cmd<Dictionary<GlideString, GlideString>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
-        => new(request, args, isNullable, dict => [.. dict.Select(kv =>
-            new HashEntry((ValkeyValue)kv.Key, (ValkeyValue)kv.Value))]);
+    private static Cmd<Object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, objects => [.. objects.Select(he =>
+            new HashEntry((GlideString)((Object[])he)[0], (GlideString)((Object[])he)[1]))]);
+
+    private static Cmd<Dictionary<GlideString, Object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, dict => [.. dict.Select(he =>
+            new HashEntry(he.Key, (GlideString)he.Value))]);
 }
