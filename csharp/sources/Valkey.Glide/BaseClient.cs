@@ -97,24 +97,6 @@ public abstract partial class BaseClient : IDisposable
         // All memory allocated is auto-freed by `using` operator
     }
 
-    private async Task<long> ExecuteLongCommand(RequestType requestType, GlideString[] arguments, Route? route = null)
-    {
-        // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
-        using Cmd cmd = new(requestType, arguments);
-
-        // 2. Allocate memory for route
-        using FFI.Route? ffiRoute = route?.ToFfi();
-
-        // 3. Sumbit request to the rust part
-        Message message = _messageContainer.GetMessageForCall();
-        CommandFfi(_clientPointer, (ulong)message.Index, cmd.ToPtr(), ffiRoute?.ToPtr() ?? IntPtr.Zero);
-
-        // 4. Get a response and Handle it
-        return HandleLongResponse(await message);
-
-        // All memory allocated is auto-freed by `using` operator
-    }
-
     protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
     {
         // 1. Allocate memory for batch, which allocates all nested Cmds
