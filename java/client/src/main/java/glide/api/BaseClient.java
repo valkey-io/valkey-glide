@@ -296,8 +296,6 @@ import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
-import response.ResponseOuterClass.ConstantResponse;
-import response.ResponseOuterClass.Response;
 
 /** Base Client class */
 public abstract class BaseClient
@@ -317,7 +315,7 @@ public abstract class BaseClient
                 PubSubBaseCommands {
 
     /** Valkey simple string response with "OK" */
-    public static final String OK = ConstantResponse.OK.toString();
+    public static final String OK = "OK";
 
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
