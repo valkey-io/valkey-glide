@@ -6,25 +6,25 @@ namespace Valkey.Glide.Pipeline;
 
 public abstract partial class BaseBatch<T> where T : BaseBatch<T>
 {
-    /// <inheritdoc cref="IBatchStringCommands.StringGetAsync(ValkeyKey)" />
+    /// <inheritdoc cref="IBatchStringCommands.StringGet(ValkeyKey)" />
     public T StringGetAsync(ValkeyKey key) => AddCmd(Request.StringGet(key));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringGetAsync(ValkeyKey[])" />
+    /// <inheritdoc cref="IBatchStringCommands.StringGet(ValkeyKey[])" />
     public T StringGetAsync(ValkeyKey[] keys) => AddCmd(Request.StringGetMultiple(keys));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringSetAsync(ValkeyKey, ValkeyValue)" />
+    /// <inheritdoc cref="IBatchStringCommands.StringSet(ValkeyKey, ValkeyValue)" />
     public T StringSetAsync(ValkeyKey key, ValkeyValue value) => AddCmd(Request.StringSet(key, value));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[])" />
+    /// <inheritdoc cref="IBatchStringCommands.StringSet(KeyValuePair{ValkeyKey, ValkeyValue}[])" />
     public T StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values) => AddCmd(Request.StringSetMultiple(values));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringGetRangeAsync(ValkeyKey, long, long)" />
+    /// <inheritdoc cref="IBatchStringCommands.StringGetRange(ValkeyKey, long, long)" />
     public T StringGetRangeAsync(ValkeyKey key, long start, long end) => AddCmd(Request.StringGetRange(key, start, end));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringSetRangeAsync(ValkeyKey, long, ValkeyValue)" />
+    /// <inheritdoc cref="IBatchStringCommands.StringSetRange(ValkeyKey, long, ValkeyValue)" />
     public T StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value) => AddCmd(Request.StringSetRange(key, offset, value));
 
-    /// <inheritdoc cref="IBatchStringCommands.StringLengthAsync(ValkeyKey)" />
+    /// <inheritdoc cref="IBatchStringCommands.StringLength(ValkeyKey)" />
     public T StringLengthAsync(ValkeyKey key) => AddCmd(Request.StringLength(key));
 
     IBatch IBatchStringCommands.StringGet(ValkeyKey key) => StringGetAsync(key);
