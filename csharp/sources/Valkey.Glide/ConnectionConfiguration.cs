@@ -16,8 +16,8 @@ public abstract class ConnectionConfiguration
         public List<NodeAddress> Addresses = [];
         public TlsMode? TlsMode;
         public bool ClusterMode;
-        public uint? RequestTimeout;
-        public uint? ConnectionTimeout;
+        public TimeSpan? RequestTimeout;
+        public TimeSpan? ConnectionTimeout;
         public ReadFrom? ReadFrom;
         public RetryStrategy? RetryStrategy;
         public AuthenticationInfo? AuthenticationInfo;
@@ -26,7 +26,7 @@ public abstract class ConnectionConfiguration
         public string? ClientName;
 
         internal FFI.ConnectionConfig ToFfi() =>
-            new(Addresses, TlsMode, ClusterMode, RequestTimeout, ConnectionTimeout, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
+            new(Addresses, TlsMode, ClusterMode, (uint?)RequestTimeout?.Milliseconds, (uint?)ConnectionTimeout?.Milliseconds, ReadFrom, RetryStrategy, AuthenticationInfo, DatabaseId, Protocol, ClientName);
     }
 
     /// <summary>
@@ -77,9 +77,9 @@ public abstract class ConnectionConfiguration
         public string? Az;
 
         /// <summary>
-        /// Init strategy with <seealso cref="ReadFromStrategy.Primary"/> or <seealso cref="ReadFromStrategy.PreferReplica"/> strategy.
+        /// Init strategy with <seealso cref="ReadFromStrategy.Primary" /> or <seealso cref="ReadFromStrategy.PreferReplica" /> strategy.
         /// </summary>
-        /// <param name="strategy">Either <seealso cref="ReadFromStrategy.Primary"/> or <seealso cref="ReadFromStrategy.PreferReplica"/>.</param>
+        /// <param name="strategy">Either <seealso cref="ReadFromStrategy.Primary" /> or <seealso cref="ReadFromStrategy.PreferReplica" />.</param>
         /// <exception cref="ArgumentException">Thrown if another strategy is used.</exception>
         public ReadFrom(ReadFromStrategy strategy)
         {
@@ -92,9 +92,9 @@ public abstract class ConnectionConfiguration
         }
 
         /// <summary>
-        /// Init strategy with <seealso cref="ReadFromStrategy.AzAffinity"/> or <seealso cref="ReadFromStrategy.AzAffinityReplicasAndPrimary"/> strategy and an Availability Zone.
+        /// Init strategy with <seealso cref="ReadFromStrategy.AzAffinity" /> or <seealso cref="ReadFromStrategy.AzAffinityReplicasAndPrimary" /> strategy and an Availability Zone.
         /// </summary>
-        /// <param name="strategy">Either <seealso cref="ReadFromStrategy.AzAffinity"/> or <seealso cref="ReadFromStrategy.AzAffinityReplicasAndPrimary"/>.</param>
+        /// <param name="strategy">Either <seealso cref="ReadFromStrategy.AzAffinity" /> or <seealso cref="ReadFromStrategy.AzAffinityReplicasAndPrimary" />.</param>
         /// <param name="az">An Availability Zone (AZ).</param>
         /// <exception cref="ArgumentException">Thrown if another strategy is used.</exception>
         public ReadFrom(ReadFromStrategy strategy, string az)
@@ -166,7 +166,8 @@ public abstract class ConnectionConfiguration
 
     /// <summary>
     /// Configuration for a standalone client. <br />
-    /// Use <see cref="StandaloneClientConfigurationBuilder"/> or <see cref="StandaloneClientConfiguration(List{ValueTuple{string?, ushort?}}?, bool?, uint?, uint?, ReadFrom?, RetryStrategy?, string?, string?, uint?, Protocol?, string?)" /> to create an instance.
+    /// Use <see cref="StandaloneClientConfigurationBuilder" /> or
+    /// <see cref="StandaloneClientConfiguration(List{ValueTuple{string?, ushort?}}, bool?, TimeSpan?, TimeSpan?, ReadFrom?, RetryStrategy?, string?, string?, uint?, Protocol?, string?)" /> to create an instance.
     /// </summary>
     public sealed class StandaloneClientConfiguration : BaseClientConfiguration
     {
@@ -188,8 +189,8 @@ public abstract class ConnectionConfiguration
         public StandaloneClientConfiguration(
             List<(string? host, ushort? port)> addresses,
             bool? useTls = null,
-            uint? requestTimeout = null,
-            uint? connectionTimeout = null,
+            TimeSpan? requestTimeout = null,
+            TimeSpan? connectionTimeout = null,
             ReadFrom? readFrom = null,
             RetryStrategy? retryStrategy = null,
             string? username = null,
@@ -199,14 +200,14 @@ public abstract class ConnectionConfiguration
             string? clientName = null
             )
         {
-            var builder = new StandaloneClientConfigurationBuilder();
+            StandaloneClientConfigurationBuilder builder = new();
             addresses.ForEach(addr => builder.Addresses += addr);
             builder.UseTls = useTls ?? false;
-            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : 0;
-            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : 0;
+            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : new();
+            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : new();
             _ = readFrom.HasValue ? builder.ReadFrom = readFrom.Value : new();
             _ = retryStrategy.HasValue ? builder.ConnectionRetryStrategy = retryStrategy.Value : new();
-            _ = (username ?? password) is not null ? builder.Authentication = (username, password) : new();
+            _ = (username ?? password) is not null ? builder.Authentication = (username, password!) : new();
             _ = databaseId.HasValue ? builder.DataBaseId = databaseId.Value : new();
             _ = protocol.HasValue ? builder.ProtocolVersion = protocol.Value : new();
             _ = clientName is not null ? builder.ClientName = clientName : "";
@@ -215,7 +216,8 @@ public abstract class ConnectionConfiguration
     }
 
     /// <summary>
-    /// Configuration for a cluster client. Use <see cref="ClusterClientConfigurationBuilder"/> to create an instance.
+    /// Configuration for a cluster client. Use <see cref="ClusterClientConfigurationBuilder" /> or
+    /// <see cref="ClusterClientConfiguration(List{ValueTuple{string?, ushort?}}, bool?, TimeSpan?, TimeSpan?, ReadFrom?, RetryStrategy?, string?, string?, Protocol?, string?)" /> to create an instance.
     /// </summary>
     public sealed class ClusterClientConfiguration : BaseClientConfiguration
     {
@@ -236,8 +238,8 @@ public abstract class ConnectionConfiguration
         public ClusterClientConfiguration(
             List<(string? host, ushort? port)> addresses,
             bool? useTls = null,
-            uint? requestTimeout = null,
-            uint? connectionTimeout = null,
+            TimeSpan? requestTimeout = null,
+            TimeSpan? connectionTimeout = null,
             ReadFrom? readFrom = null,
             RetryStrategy? retryStrategy = null,
             string? username = null,
@@ -246,14 +248,14 @@ public abstract class ConnectionConfiguration
             string? clientName = null
             )
         {
-            var builder = new ClusterClientConfigurationBuilder();
+            ClusterClientConfigurationBuilder builder = new();
             addresses.ForEach(addr => builder.Addresses += addr);
             builder.UseTls = useTls ?? false;
-            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : 0;
-            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : 0;
+            _ = requestTimeout.HasValue ? builder.RequestTimeout = requestTimeout.Value : new();
+            _ = connectionTimeout.HasValue ? builder.ConnectionTimeout = connectionTimeout.Value : new();
             _ = readFrom.HasValue ? builder.ReadFrom = readFrom.Value : new();
             _ = retryStrategy.HasValue ? builder.ConnectionRetryStrategy = retryStrategy.Value : new();
-            _ = (username ?? password) is not null ? builder.Authentication = (username, password) : new();
+            _ = (username ?? password) is not null ? builder.Authentication = (username, password!) : new();
             _ = protocol.HasValue ? builder.ProtocolVersion = protocol.Value : new();
             _ = clientName is not null ? builder.ClientName = clientName : "";
             Request = builder.Build().Request;
@@ -315,14 +317,14 @@ public abstract class ConnectionConfiguration
                 _owner = owner;
             }
 
-            /// <inheritdoc cref="WithAddress(string?, ushort?)"/>
+            /// <inheritdoc cref="WithAddress(string?, ushort?)" />
             public static AddressBuilder operator +(AddressBuilder builder, (string? host, ushort? port) address)
             {
                 _ = builder._owner.WithAddress(address.host, address.port);
                 return builder;
             }
 
-            /// <inheritdoc cref="WithAddress(string)"/>
+            /// <inheritdoc cref="WithAddress(string)" />
             public static AddressBuilder operator +(AddressBuilder builder, string host)
             {
                 _ = builder._owner.WithAddress(host);
@@ -356,6 +358,7 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public bool UseTls
         {
+            get => Config.TlsMode == TlsMode.SecureTls;
             set => Config.TlsMode = value ? TlsMode.SecureTls : TlsMode.NoTls;
         }
         /// <inheritdoc cref="UseTls" />
@@ -373,17 +376,19 @@ public abstract class ConnectionConfiguration
         #endregion
         #region Request Timeout
         /// <summary>
-        /// The duration in milliseconds that the client should wait for a request to complete. This
+        /// The duration that the client should wait for a request to complete. This
         /// duration encompasses sending the request, awaiting for a response from the server, and any
         /// required reconnections or retries. If the specified timeout is exceeded for a pending request,
-        /// it will result in a timeout error. If not set, a default value will be used.
+        /// it will result in a timeout error.<br />
+        /// If not explicitly set, a default value of <c>250</c> milliseconds will be used.
         /// </summary>
-        public uint RequestTimeout
+        public TimeSpan RequestTimeout
         {
+            get => Config.RequestTimeout ?? TimeSpan.FromMilliseconds(250);
             set => Config.RequestTimeout = value;
         }
-        /// <inheritdoc cref="RequestTimeout"/>
-        public T WithRequestTimeout(uint requestTimeout)
+        /// <inheritdoc cref="RequestTimeout" />
+        public T WithRequestTimeout(TimeSpan requestTimeout)
         {
             RequestTimeout = requestTimeout;
             return (T)this;
@@ -391,17 +396,18 @@ public abstract class ConnectionConfiguration
         #endregion
         #region Connection Timeout
         /// <summary>
-        /// The duration in milliseconds to wait for a TCP/TLS connection to complete.
+        /// The duration to wait for a TCP/TLS connection to complete.
         /// This applies both during initial client creation and any reconnections that may occur during request processing.<br />
         /// <b>Note</b>: A high connection timeout may lead to prolonged blocking of the entire command pipeline.<br />
         /// If not explicitly set, a default value of <c>250</c> milliseconds will be used.
         /// </summary>
-        public uint ConnectionTimeout
+        public TimeSpan ConnectionTimeout
         {
+            get => Config.ConnectionTimeout ?? TimeSpan.FromMilliseconds(250);
             set => Config.ConnectionTimeout = value;
         }
-        /// <inheritdoc cref="ConnectionTimeout"/>
-        public T WithConnectionTimeout(uint connectionTimeout)
+        /// <inheritdoc cref="ConnectionTimeout" />
+        public T WithConnectionTimeout(TimeSpan connectionTimeout)
         {
             ConnectionTimeout = connectionTimeout;
             return (T)this;
@@ -409,13 +415,13 @@ public abstract class ConnectionConfiguration
         #endregion
         #region Read From
         /// <summary>
-        /// Configure the client's read from strategy. If not set, <seealso cref="ReadFromStrategy.Primary"/> will be used.
+        /// Configure the client's read from strategy. If not set, <seealso cref="ReadFromStrategy.Primary" /> will be used.
         /// </summary>
         public ReadFrom ReadFrom
         {
             set => Config.ReadFrom = value;
         }
-        /// <inheritdoc cref="ReadFrom"/>
+        /// <inheritdoc cref="ReadFrom" />
         public T WithReadFrom(ReadFrom readFrom)
         {
             ReadFrom = readFrom;
@@ -451,15 +457,16 @@ public abstract class ConnectionConfiguration
         #endregion
         #region Protocol
         /// <summary>
-        /// Configure the protocol version to use. If not set, <seealso cref="Protocol.RESP3"/> will be used.<br />
-        /// See also <seealso cref="Protocol"/>.
+        /// Configure the protocol version to use. If not set, <seealso cref="Protocol.RESP3" /> will be used.<br />
+        /// See also <seealso cref="Protocol" />.
         /// </summary>
         public Protocol ProtocolVersion
         {
+            get => Config.Protocol ?? Protocol.RESP3;
             set => Config.Protocol = value;
         }
 
-        /// <inheritdoc cref="ProtocolVersion"/>
+        /// <inheritdoc cref="ProtocolVersion" />
         public T WithProtocolVersion(Protocol protocol)
         {
             ProtocolVersion = protocol;
@@ -472,10 +479,11 @@ public abstract class ConnectionConfiguration
         /// </summary>
         public string? ClientName
         {
+            get => Config.ClientName ?? "GlideC#";
             set => Config.ClientName = value;
         }
 
-        /// <inheritdoc cref="ClientName"/>
+        /// <inheritdoc cref="ClientName" />
         public T WithClientName(string? clientName)
         {
             ClientName = clientName;
@@ -527,7 +535,7 @@ public abstract class ConnectionConfiguration
         {
             set => Config.DatabaseId = value;
         }
-        /// <inheritdoc cref="DataBaseId"/>
+        /// <inheritdoc cref="DataBaseId" />
         public StandaloneClientConfigurationBuilder WithDataBaseId(uint dataBaseId)
         {
             DataBaseId = dataBaseId;

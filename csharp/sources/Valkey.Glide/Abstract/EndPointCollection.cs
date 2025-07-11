@@ -1,9 +1,8 @@
-﻿using System;
+﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 using System.Collections;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Net;
-using System.Threading.Tasks;
 
 namespace Valkey.Glide;
 
@@ -20,27 +19,27 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     }
 
     /// <summary>
-    /// Create a new <see cref="EndPointCollection"/>.
+    /// Create a new <see cref="EndPointCollection" />.
     /// </summary>
     public EndPointCollection() { }
 
     /// <summary>
-    /// Create a new <see cref="EndPointCollection"/>.
+    /// Create a new <see cref="EndPointCollection" />.
     /// </summary>
     /// <param name="endpoints">The endpoints to add to the collection.</param>
     public EndPointCollection(IList<EndPoint> endpoints) : base(endpoints) { }
 
     /// <summary>
-    /// Format an <see cref="EndPoint"/>.
+    /// Format an <see cref="EndPoint" />.
     /// </summary>
     /// <param name="endpoint">The endpoint to get a string representation for.</param>
     public static string ToString(EndPoint? endpoint) => Format.ToString(endpoint);
 
     /// <summary>
-    /// Attempt to parse a string into an <see cref="EndPoint"/>.
+    /// Attempt to parse a string into an <see cref="EndPoint" />.
     /// </summary>
     /// <param name="endpoint">The endpoint string to parse.</param>
-    public static EndPoint? TryParse(string endpoint) => Format.TryParseEndPoint(endpoint, out var result) ? result : null;
+    public static EndPoint? TryParse(string endpoint) => Format.TryParseEndPoint(endpoint, out EndPoint? result) ? result : null;
 
     /// <summary>
     /// Adds a new endpoint to the list.
@@ -48,7 +47,7 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     /// <param name="hostAndPort">The host:port string to add an endpoint for to the collection.</param>
     public void Add(string hostAndPort)
     {
-        if (!Format.TryParseEndPoint(hostAndPort, out var endpoint))
+        if (!Format.TryParseEndPoint(hostAndPort, out EndPoint? endpoint))
         {
             throw new ArgumentException($"Could not parse host and port from '{hostAndPort}'", nameof(hostAndPort));
         }
@@ -59,21 +58,21 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     /// Adds a new endpoint to the list.
     /// </summary>
     /// <param name="host">The host to add.</param>
-    /// <param name="port">The port for <paramref name="host"/> to add.</param>
+    /// <param name="port">The port for <paramref name="host" /> to add.</param>
     public void Add(string host, int port) => Add(Format.ParseEndPoint(host, port));
 
     /// <summary>
     /// Adds a new endpoint to the list.
     /// </summary>
     /// <param name="host">The host to add.</param>
-    /// <param name="port">The port for <paramref name="host"/> to add.</param>
+    /// <param name="port">The port for <paramref name="host" /> to add.</param>
     public void Add(IPAddress host, int port) => Add(new IPEndPoint(host, port));
 
     /// <summary>
     /// Try adding a new endpoint to the list.
     /// </summary>
     /// <param name="endpoint">The endpoint to add.</param>
-    /// <returns><see langword="true"/> if the endpoint was added, <see langword="false"/> if not.</returns>
+    /// <returns><see langword="true" /> if the endpoint was added, <see langword="false" /> if not.</returns>
     public bool TryAdd(EndPoint endpoint)
     {
         if (endpoint == null)
@@ -93,10 +92,10 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     }
 
     /// <summary>
-    /// See <see cref="Collection{T}.InsertItem(int, T)"/>.
+    /// See <see cref="Collection{T}.InsertItem(int, T)" />.
     /// </summary>
-    /// <param name="index">The index to add <paramref name="item"/> into the collection at.</param>
-    /// <param name="item">The item to insert at <paramref name="index"/>.</param>
+    /// <param name="index">The index to add <paramref name="item" /> into the collection at.</param>
+    /// <param name="item">The item to insert at <paramref name="index" />.</param>
     protected override void InsertItem(int index, EndPoint item)
     {
         if (item == null)
@@ -112,10 +111,10 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     }
 
     /// <summary>
-    /// See <see cref="Collection{T}.SetItem(int, T)"/>.
+    /// See <see cref="Collection{T}.SetItem(int, T)" />.
     /// </summary>
     /// <param name="index">The index to replace an endpoint at.</param>
-    /// <param name="item">The item to replace the existing endpoint at <paramref name="index"/>.</param>
+    /// <param name="item">The item to replace the existing endpoint at <paramref name="index" />.</param>
     protected override void SetItem(int index, EndPoint item)
     {
         if (item == null)
@@ -139,13 +138,9 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
         base.SetItem(index, item);
     }
 
-    internal void SetDefaultPorts(ServerType? serverType, bool ssl = false)
+    internal void SetDefaultPorts(bool ssl = false)
     {
-        int defaultPort = serverType switch
-        {
-            ServerType.Sentinel => DefaultPorts.Sentinel,
-            _ => ssl ? DefaultPorts.Ssl : DefaultPorts.Standard,
-        };
+        int defaultPort = ssl ? DefaultPorts.Ssl : DefaultPorts.Standard;
 
         for (int i = 0; i < Count; i++)
         {
@@ -157,6 +152,8 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
                 case IPEndPoint ip when ip.Port == 0:
                     this[i] = new IPEndPoint(ip.Address, defaultPort);
                     break;
+                default:
+                    break;
             }
         }
     }
@@ -164,7 +161,7 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     IEnumerator<EndPoint> IEnumerable<EndPoint>.GetEnumerator() => GetEnumerator();
 
-    /// <inheritdoc cref="Collection{EndPoint}.GetEnumerator"/>
+    /// <inheritdoc cref="Collection{EndPoint}.GetEnumerator" />
     public new IEnumerator<EndPoint> GetEnumerator()
     {
         // this does *not* need to handle all threading scenarios; but we do
@@ -179,7 +176,7 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
 
     internal bool HasDnsEndPoints()
     {
-        foreach (var endpoint in this)
+        foreach (EndPoint endpoint in this)
         {
             if (endpoint is DnsEndPoint)
             {
@@ -189,5 +186,5 @@ public sealed class EndPointCollection : Collection<EndPoint>, IEnumerable<EndPo
         return false;
     }
 
-    internal EndPointCollection Clone() => new EndPointCollection(new List<EndPoint>(Items));
+    internal EndPointCollection Clone() => new([.. Items]);
 }

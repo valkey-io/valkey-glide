@@ -2,10 +2,8 @@
 
 namespace Valkey.Glide;
 
-// TODO
-// 1. IDisposable
 /// <summary>
 /// Represents the abstract multiplexer API.
 /// </summary>
-public interface IConnectionMultiplexer
+public interface IConnectionMultiplexer : IDisposable, IAsyncDisposable
 { }

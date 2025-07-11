@@ -13,7 +13,7 @@ namespace Valkey.Glide;
 /// Connection methods common to both standalone and cluster clients.<br />
 /// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-public sealed class ConnectionMultiplexer : IConnectionMultiplexer
+public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Creates a new <see cref="ConnectionMultiplexer" /> instance.
@@ -40,7 +40,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
     public static async Task<ConnectionMultiplexer> ConnectAsync(ConfigurationOptions configuration, TextWriter? log = null)
     {
         Utils.Requires<NotImplementedException>(log == null, "Log writer is not supported by GLIDE");
-        var standaloneConfig = CreateClientConfigBuilder<StandaloneClientConfigurationBuilder>(configuration).Build();
+        StandaloneClientConfiguration standaloneConfig = CreateClientConfigBuilder<StandaloneClientConfigurationBuilder>(configuration).Build();
         GlideClient standalone = await GlideClient.CreateClient(standaloneConfig);
         string info = await standalone.Info([Section.CLUSTER]);
         BaseClientConfiguration config = info.Contains("cluster_enabled:1")
@@ -72,9 +72,9 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
             config.Addresses += (parts[0], ushort.Parse(parts[1]));
         }
         config.UseTls = configuration.Ssl;
-        _ = configuration.ConnectTimeout.HasValue ? config.ConnectionTimeout = (uint)configuration.ConnectTimeout.Value : 0;
-        _ = configuration.ResponseTimeout.HasValue ? config.RequestTimeout = (uint)configuration.ResponseTimeout.Value : 0;
-        _ = (configuration.User ?? configuration.Password) is not null ? config.Authentication = (configuration.User, configuration.Password) : new();
+        _ = configuration.ConnectTimeout.HasValue ? config.ConnectionTimeout = TimeSpan.FromMilliseconds(configuration.ConnectTimeout.Value) : new();
+        _ = configuration.ResponseTimeout.HasValue ? config.RequestTimeout = TimeSpan.FromMilliseconds(configuration.ResponseTimeout.Value) : new();
+        _ = (configuration.User ?? configuration.Password) is not null ? config.Authentication = (configuration.User, configuration.Password!) : new();
         _ = configuration.ClientName is not null ? config.ClientName = configuration.ClientName : "";
         if (configuration.Protocol is not null)
         {
@@ -82,6 +82,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
             {
                 Protocol.Resp2 => ConnectionConfiguration.Protocol.RESP2,
                 Protocol.Resp3 => ConnectionConfiguration.Protocol.RESP3,
+                _ => throw new ArgumentException($"Unknown value of Protocol: {configuration.Protocol}"),
             };
         }
         if (config is StandaloneClientConfigurationBuilder standalone)
@@ -94,11 +95,28 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer
         return config;
     }
 
-    public IDatabase GetDatabase() => _db;
+    public IDatabase GetDatabase()
+        => _db is not null ? _db : throw new ObjectDisposedException(nameof(ConnectionMultiplexer));
 
-    private readonly IDatabase _db;
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        lock (_lock)
+        {
+            if (_db is null)
+            {
+                return;
+            }
+            _db.Dispose();
+            _db = null;
+        }
+    }
+    public async ValueTask DisposeAsync() => await Task.Run(Dispose);
 
-    private ConnectionMultiplexer(IDatabase db)
+    private readonly object _lock = new();
+    private DatabaseImpl? _db;
+
+    private ConnectionMultiplexer(DatabaseImpl db)
     {
         _db = db;
     }

@@ -83,10 +83,6 @@ public sealed class ConfigurationOptions : ICloneable
         }
     }
 
-    private string? user, password, clientName;
-
-    private int? connectTimeout, responseTimeout, defaultDatabase;
-
     private bool? ssl;
 
     private Proxy? proxy;
@@ -152,29 +148,17 @@ public sealed class ConfigurationOptions : ICloneable
     /// <summary>
     /// The client name to use for all connections.
     /// </summary>
-    public string? ClientName
-    {
-        get => clientName;
-        set => clientName = value;
-    }
+    public string? ClientName { get; set; }
 
     /// <summary>
     /// Specifies the time in milliseconds that should be allowed for connection (defaults to 5 seconds unless SyncTimeout is higher).
     /// </summary>
-    public int? ConnectTimeout
-    {
-        get => connectTimeout;
-        set => connectTimeout = value;
-    }
+    public int? ConnectTimeout { get; set; }
 
     /// <summary>
-    /// Specifies the default database to be used when calling <see cref="ConnectionMultiplexer.GetDatabase(int, object)"/> without any parameters.
+    /// Specifies the default database to be used when calling <see cref="ConnectionMultiplexer.GetDatabase(int, object)" /> without any parameters.
     /// </summary>
-    public int? DefaultDatabase
-    {
-        get => defaultDatabase;
-        set => defaultDatabase = value;
-    }
+    public int? DefaultDatabase { get; set; }
 
     /// <summary>
     /// The server version to assume.
@@ -232,20 +216,12 @@ public sealed class ConfigurationOptions : ICloneable
     /// <summary>
     /// The username to use to authenticate with the server.
     /// </summary>
-    public string? User
-    {
-        get => user;
-        set => user = value;
-    }
+    public string? User { get; set; }
 
     /// <summary>
     /// The password to use to authenticate with the server.
     /// </summary>
-    public string? Password
-    {
-        get => password;
-        set => password = value;
-    }
+    public string? Password { get; set; }
 
     /// <summary>
     /// Type of proxy to use (if any).
@@ -279,11 +255,7 @@ public sealed class ConfigurationOptions : ICloneable
     /// Specifies the time in milliseconds that the system should allow for responses before concluding that the socket is unhealthy.<br />
     /// Default value is 250 ms.
     /// </summary>
-    public int? ResponseTimeout
-    {
-        get => responseTimeout;
-        set => responseTimeout = value;
-    }
+    public int? ResponseTimeout { get; set; }
 
     /// <summary>
     /// Indicates whether the connection should be encrypted.
@@ -325,14 +297,14 @@ public sealed class ConfigurationOptions : ICloneable
     /// </summary>
     public ConfigurationOptions Clone() => new()
     {
-        clientName = clientName,
-        connectTimeout = connectTimeout,
-        user = user,
-        password = password,
+        ClientName = ClientName,
+        ConnectTimeout = ConnectTimeout,
+        User = User,
+        Password = Password,
         ssl = ssl,
         proxy = proxy,
-        responseTimeout = responseTimeout,
-        defaultDatabase = defaultDatabase,
+        ResponseTimeout = ResponseTimeout,
+        DefaultDatabase = DefaultDatabase,
         reconnectRetryPolicy = reconnectRetryPolicy,
         readFrom = readFrom,
         EndPoints = EndPoints.Clone(),
@@ -353,7 +325,7 @@ public sealed class ConfigurationOptions : ICloneable
     /// <summary>
     /// Resolve the default port for any endpoints that did not have a port explicitly specified.
     /// </summary>
-    public void SetDefaultPorts() => EndPoints.SetDefaultPorts(ServerType.Standalone, ssl: Ssl);
+    public void SetDefaultPorts() => EndPoints.SetDefaultPorts(Ssl);
 
     /// <summary>
     /// Returns the effective configuration string for this configuration, including Redis credentials.
@@ -376,12 +348,12 @@ public sealed class ConfigurationOptions : ICloneable
             Append(sb, Format.ToString(endpoint));
         }
         Append(sb, OptionKeys.ClientName, ClientName);
-        Append(sb, OptionKeys.ConnectTimeout, connectTimeout);
-        Append(sb, OptionKeys.User, user);
-        Append(sb, OptionKeys.Password, (includePassword || string.IsNullOrEmpty(password)) ? password : "*****");
+        Append(sb, OptionKeys.ConnectTimeout, ConnectTimeout);
+        Append(sb, OptionKeys.User, User);
+        Append(sb, OptionKeys.Password, (includePassword || string.IsNullOrEmpty(Password)) ? Password : "*****");
         Append(sb, OptionKeys.Ssl, ssl);
         Append(sb, OptionKeys.Proxy, proxy);
-        Append(sb, OptionKeys.ResponseTimeout, responseTimeout);
+        Append(sb, OptionKeys.ResponseTimeout, ResponseTimeout);
         Append(sb, OptionKeys.DefaultDatabase, DefaultDatabase);
         Append(sb, OptionKeys.Protocol, FormatProtocol(Protocol));
 
@@ -426,8 +398,8 @@ public sealed class ConfigurationOptions : ICloneable
 
     private void Clear()
     {
-        clientName = user = password = null;
-        connectTimeout = responseTimeout = null;
+        ClientName = User = Password = null;
+        ConnectTimeout = ResponseTimeout = null;
         ssl = null;
         readFrom = null;
         reconnectRetryPolicy = null;
@@ -474,13 +446,13 @@ public sealed class ConfigurationOptions : ICloneable
                         ConnectTimeout = OptionKeys.ParseInt32(key, value);
                         break;
                     case OptionKeys.User:
-                        user = value;
+                        User = value;
                         break;
                     case OptionKeys.Password:
-                        password = value;
+                        Password = value;
                         break;
                     case OptionKeys.DefaultDatabase:
-                        defaultDatabase = OptionKeys.ParseInt32(key, value);
+                        DefaultDatabase = OptionKeys.ParseInt32(key, value);
                         break;
                     case OptionKeys.Ssl:
                         Ssl = OptionKeys.ParseBoolean(key, value);
