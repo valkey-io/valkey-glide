@@ -85,9 +85,9 @@ public class ClusterClientTests(TestConfiguration config)
     [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
     public async Task CustomCommandWithMultiNodeRoute(GlideClusterClient client)
     {
-        _ = await client.Set("abc", "abc");
-        _ = await client.Set("klm", "klm");
-        _ = await client.Set("xyz", "xyz");
+        _ = await client.StringSetAsync("abc", "abc");
+        _ = await client.StringSetAsync("klm", "klm");
+        _ = await client.StringSetAsync("xyz", "xyz");
 
         long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries)).SingleValue!;
         Assert.True(res >= 3);

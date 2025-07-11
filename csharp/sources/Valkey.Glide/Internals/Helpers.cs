@@ -47,4 +47,21 @@ internal static class Helpers
         }
         return sb.Append('>').ToString();
     }
+
+    /// <summary>
+    /// Converts a KeyValuePair array to an array of key-value pairs for use with MSet command.
+    /// </summary>
+    /// <param name="values">The key-value pairs to convert.</param>
+    /// <returns>An array where keys and values are interleaved: [key1, value1, key2, value2, ...]</returns>
+    public static GlideString[] ConvertKeyValuePairsToArray(KeyValuePair<GlideString, GlideString>[] values)
+    {
+        GlideString[] result = new GlideString[values.Length * 2];
+        int index = 0;
+        foreach (KeyValuePair<GlideString, GlideString> kvp in values)
+        {
+            result[index++] = kvp.Key;
+            result[index++] = kvp.Value;
+        }
+        return result;
+    }
 }
