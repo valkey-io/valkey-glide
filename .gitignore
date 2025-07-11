@@ -79,3 +79,4 @@ copilot-instructions.md
 MANIFEST.MF
 *.so
 java-jni/build/
+.claude/.mcp.json
