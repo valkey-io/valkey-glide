@@ -9,29 +9,29 @@ internal interface IBatchStringCommands
 {
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey, CommandFlags)" /></returns>
-    IBatch StringGetAsync(ValkeyKey key);
+    IBatch StringGet(ValkeyKey key);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetAsync(ValkeyKey[], CommandFlags)" /></returns>
-    IBatch StringGetAsync(ValkeyKey[] keys);
+    IBatch StringGet(ValkeyKey[] keys);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
-    IBatch StringSetAsync(ValkeyKey key, ValkeyValue value);
+    IBatch StringSet(ValkeyKey key, ValkeyValue value);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" /></returns>
-    IBatch StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values);
+    IBatch StringSet(KeyValuePair<ValkeyKey, ValkeyValue>[] values);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" /></returns>
-    IBatch StringGetRangeAsync(ValkeyKey key, long start, long end);
+    IBatch StringGetRange(ValkeyKey key, long start, long end);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringSetRangeAsync(ValkeyKey, long, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringSetRangeAsync(ValkeyKey, long, ValkeyValue, CommandFlags)" /></returns>
-    IBatch StringSetRangeAsync(ValkeyKey key, long offset, ValkeyValue value);
+    IBatch StringSetRange(ValkeyKey key, long offset, ValkeyValue value);
 
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" /></returns>
-    IBatch StringLengthAsync(ValkeyKey key);
+    IBatch StringLength(ValkeyKey key);
 }
