@@ -1,11 +1,13 @@
-﻿using System;
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 
 namespace Valkey.Glide;
 
 /// <summary>
-/// Describes a sorted-set element with the corresponding value.
+/// Describes a sorted-set element with the corresponding score.
 /// </summary>
 public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable, IComparable<SortedSetEntry>
 {
@@ -16,7 +18,7 @@ public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable,
     /// Initializes a <see cref="SortedSetEntry"/> value.
     /// </summary>
     /// <param name="element">The <see cref="ValkeyValue"/> to get an entry for.</param>
-    /// <param name="score">The redis score for <paramref name="element"/>.</param>
+    /// <param name="score">The score for <paramref name="element"/>.</param>
     public SortedSetEntry(ValkeyValue element, double score)
     {
         this.element = element;
@@ -32,20 +34,6 @@ public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable,
     /// The score against the element.
     /// </summary>
     public double Score => score;
-
-    /// <summary>
-    /// The score against the element.
-    /// </summary>
-    [Browsable(false)]
-    [EditorBrowsable(EditorBrowsableState.Never), Obsolete("Please use Score", false)]
-    public double Value => score;
-
-    /// <summary>
-    /// The unique element stored in the sorted set.
-    /// </summary>
-    [Browsable(false)]
-    [EditorBrowsable(EditorBrowsableState.Never), Obsolete("Please use Element", false)]
-    public ValkeyValue Key => element;
 
     /// <summary>
     /// Converts to a key/value pair.
