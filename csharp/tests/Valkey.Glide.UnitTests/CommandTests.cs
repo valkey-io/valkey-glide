@@ -12,7 +12,7 @@ public class CommandTests
     [Fact]
     public void ValidateCommandArgs()
     {
-        Assert.Multiple([
+        Assert.Multiple(
             () => Assert.Equal(["get", "a"], Request.CustomCommand(["get", "a"]).GetArgs()),
             () => Assert.Equal(["ping", "pong", "pang"], Request.CustomCommand(["ping", "pong", "pang"]).GetArgs()),
             () => Assert.Equal(["get"], Request.CustomCommand(["get"]).GetArgs()),
@@ -58,13 +58,27 @@ public class CommandTests
             () => Assert.Equal(["PERSIST", "key"], Request.KeyPersistAsync("key").GetArgs()),
             () => Assert.Equal(["DUMP", "key"], Request.KeyDumpAsync("key").GetArgs()),
             () => Assert.Equal(["RESTORE", "key", "0", "data"], Request.KeyRestoreAsync("key", "data"u8.ToArray()).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray()).GetArgs()),
             () => Assert.Equal(["RESTORE", "key", "5000", "data"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), TimeSpan.FromSeconds(5)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "2303625600000", "data", "ABSTTL"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), new DateTime(2042, 12, 31)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "REPLACE"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().Replace()).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "IDLETIME", "1000"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().SetIdletime(1000)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "FREQ", "5"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().SetFrequency(5)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "REPLACE", "IDLETIME", "2000"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().Replace().SetIdletime(2000)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "REPLACE", "FREQ", "10"], Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().Replace().SetFrequency(10)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions()).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL", "IDLETIME", "2000"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().SetIdletime(2000)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL", "FREQ", "10"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().SetFrequency(10)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL", "REPLACE", "IDLETIME", "3000"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().Replace().SetIdletime(3000)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "0", "data", "ABSTTL", "REPLACE", "FREQ", "20"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().Replace().SetFrequency(20)).GetArgs()),
+            () => Assert.Equal(["RESTORE", "key", "2303625600000", "data", "ABSTTL", "REPLACE"], Request.KeyRestoreDateTimeAsync("key", "data"u8.ToArray(), new DateTime(2042, 12, 31), new RestoreOptions().Replace()).GetArgs()),
+            () => Assert.Throws<ArgumentException>(() => Request.KeyRestoreAsync("key", "data"u8.ToArray(), restoreOptions: new RestoreOptions().SetIdletime(1000).SetFrequency(5)).GetArgs()),
             () => Assert.Equal(["TOUCH", "key"], Request.KeyTouchAsync("key").GetArgs()),
             () => Assert.Equal(["TOUCH", "key1", "key2"], Request.KeyTouchAsync(["key1", "key2"]).GetArgs()),
             () => Assert.Equal(["COPY", "src", "dest"], Request.KeyCopyAsync("src", "dest").GetArgs()),
             () => Assert.Equal(["COPY", "src", "dest", "DB", "1", "REPLACE"], Request.KeyCopyAsync("src", "dest", 1, true).GetArgs()),
-            () => Assert.Equal(["MOVE", "key", "1"], Request.KeyMoveAsync("key", 1).GetArgs()),
-        ]);
+            () => Assert.Equal(["MOVE", "key", "1"], Request.KeyMoveAsync("key", 1).GetArgs())
+        );
     }
 
     [Fact]
@@ -125,6 +139,8 @@ public class CommandTests
             () => Assert.False(Request.KeyPersistAsync("key").Converter(false)),
             () => Assert.NotNull(Request.KeyDumpAsync("key").Converter("dumpdata")),
             () => Assert.Null(Request.KeyDumpAsync("key").Converter(null)),
+            () => Assert.Equal("OK", Request.KeyRestoreAsync("key", new byte[0]).Converter("OK")),
+            () => Assert.Equal("OK", Request.KeyRestoreDateTimeAsync("key", new byte[0]).Converter("OK")),
             () => Assert.True(Request.KeyTouchAsync("key").Converter(1L)),
             () => Assert.False(Request.KeyTouchAsync("key").Converter(0L)),
             () => Assert.Equal(2L, Request.KeyTouchAsync(["key1", "key2"]).Converter(2L)),

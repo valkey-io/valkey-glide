@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 
 namespace Valkey.Glide;
@@ -49,8 +50,11 @@ public abstract partial class BaseClient : IGenericBaseCommands
     public async Task<byte[]?> KeyDumpAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.KeyDumpAsync(key));
 
-    public async Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyRestoreAsync(key, value, expiry));
+    public async Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.KeyRestoreAsync(key, value, expiry, restoreOptions: restoreOptions));
+
+    public async Task KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.KeyRestoreDateTimeAsync(key, value, expiry, restoreOptions: restoreOptions));
 
     public async Task<bool> KeyTouchAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.KeyTouchAsync(key));

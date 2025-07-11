@@ -2,6 +2,8 @@
 
 namespace Valkey.Glide.IntegrationTests;
 
+using Valkey.Glide.Commands.Options;
+
 public class GenericCommandTests(TestConfiguration config)
 {
     public TestConfiguration Config { get; } = config;
@@ -212,6 +214,8 @@ public class GenericCommandTests(TestConfiguration config)
     {
         string sourceKey = Guid.NewGuid().ToString();
         string destKey = Guid.NewGuid().ToString();
+        string replaceKey = Guid.NewGuid().ToString();
+        string replaceDateTimeKey = Guid.NewGuid().ToString();
         string value = "test_value";
 
         // Set a key
@@ -227,6 +231,51 @@ public class GenericCommandTests(TestConfiguration config)
 
         // Verify the restored key
         Assert.Equal(value, await client.Get(destKey));
+
+        // Test RestoreOptions with Replace
+        await client.Set(replaceKey, "old_value");
+        await client.Set(replaceDateTimeKey, "old_value");
+        RestoreOptions replaceOptions = new RestoreOptions().Replace();
+        await client.KeyRestoreAsync(replaceKey, dumpData, restoreOptions: replaceOptions);
+        Assert.Equal(value, await client.Get(replaceKey));
+        await client.KeyRestoreDateTimeAsync(replaceDateTimeKey, dumpData, restoreOptions: replaceOptions);
+        Assert.Equal(value, await client.Get(replaceDateTimeKey));
+
+        // Test RestoreOptions with TTL
+        string ttlKey = Guid.NewGuid().ToString();
+        string ttlDateTimeKey = Guid.NewGuid().ToString();
+        TimeSpan ts = TimeSpan.FromSeconds(30);
+        DateTime dt = new DateTime(2042, 12, 31);
+        await client.KeyRestoreAsync(ttlKey, dumpData, expiry: ts);
+        await client.KeyRestoreDateTimeAsync(ttlDateTimeKey, dumpData, expiry: dt);
+
+        // Verify key exists and has TTL
+        Assert.True(await client.KeyExistsAsync(ttlKey));
+        Assert.True(await client.KeyExistsAsync(ttlDateTimeKey));
+        TimeSpan? ttl = await client.KeyTimeToLiveAsync(ttlKey);
+        TimeSpan? ttlDateTime = await client.KeyTimeToLiveAsync(ttlDateTimeKey);
+        Assert.NotNull(ttl);
+        Assert.NotNull(ttlDateTime);
+        Assert.True(ttl.Value.TotalSeconds > 0);
+        Assert.True(ttlDateTime.Value.TotalSeconds > 0);
+
+        // Test RestoreOptions with IDLETIME
+        string idletimeKey = Guid.NewGuid().ToString();
+        string idletimeDateTimeKey = Guid.NewGuid().ToString();
+        RestoreOptions idletimeOptions = new RestoreOptions().SetIdletime(1000);
+        await client.KeyRestoreAsync(idletimeKey, dumpData, restoreOptions: idletimeOptions);
+        await client.KeyRestoreDateTimeAsync(idletimeDateTimeKey, dumpData, restoreOptions: idletimeOptions);
+        Assert.Equal(value, await client.Get(idletimeKey));
+        Assert.Equal(value, await client.Get(idletimeDateTimeKey));
+
+        // Test RestoreOptions with FREQ
+        string freqKey = Guid.NewGuid().ToString();
+        string freqDateTimeKey = Guid.NewGuid().ToString();
+        RestoreOptions freqOptions = new RestoreOptions().SetFrequency(5);
+        await client.KeyRestoreAsync(freqKey, dumpData, restoreOptions: freqOptions);
+        await client.KeyRestoreDateTimeAsync(freqDateTimeKey, dumpData, restoreOptions: freqOptions);
+        Assert.Equal(value, await client.Get(freqKey));
+        Assert.Equal(value, await client.Get(freqDateTimeKey));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]

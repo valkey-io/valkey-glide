@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
 using static Valkey.Glide.Commands.Options.InfoOptions;
 
 using gs = Valkey.Glide.GlideString;
@@ -7,6 +9,10 @@ namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests(TestConfiguration config)
 {
+#pragma warning disable xUnit1047 // Avoid using TheoryDataRow arguments that might not be serializable
+    public static IEnumerable<TheoryDataRow<bool>> GetAtomic => [new(true), new(false)];
+#pragma warning restore xUnit1047 // Avoid using TheoryDataRow arguments that might not be serializable
+
     public TestConfiguration Config { get; } = config;
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -125,10 +131,10 @@ public class StandaloneClientTests(TestConfiguration config)
         ]);
     }
 
-    [Fact]
-    public async Task KeyCopy_Move()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task KeyCopy_Move(GlideClient client)
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
 
@@ -137,9 +143,8 @@ public class StandaloneClientTests(TestConfiguration config)
         Assert.True(await client.KeyMoveAsync(key, 2));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(GetAtomic))]
     public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
     {
         GlideClient client = TestConfiguration.DefaultStandaloneClient();
@@ -148,25 +153,28 @@ public class StandaloneClientTests(TestConfiguration config)
         string moveKey = Guid.NewGuid().ToString();
         string value = "test-value";
 
-        var batch = new Valkey.Glide.Pipeline.Batch(isAtomic);
+        IBatch batch = new Batch(isAtomic);
 
         // Set up keys
         _ = batch.Set(sourceKey, value);
         _ = batch.Set(moveKey, value);
 
+        IBatchStandalone batch2 = new Batch(isAtomic);
+
         // Test KeyCopy with database parameter
-        _ = batch.KeyCopy(sourceKey, destKey, 1, false);
+        _ = batch2.KeyCopy(sourceKey, destKey, 1, false);
 
         // Test KeyMove
-        _ = batch.KeyMove(moveKey, 2);
+        _ = batch2.KeyMove(moveKey, 2);
 
-        object?[] results = (await client.Exec(batch, false))!;
+        object?[] results = (await client.Exec((Batch)batch, false))!;
+        object?[] results2 = (await client.Exec((Batch)batch2, false))!;
 
         Assert.Multiple(
             () => Assert.Equal("OK", results[0]), // Set sourceKey
             () => Assert.Equal("OK", results[1]), // Set moveKey
-            () => Assert.True((bool)results[2]!), // KeyCopy result
-            () => Assert.True((bool)results[3]!)  // KeyMove result
+            () => Assert.True((bool)results2[0]!), // KeyCopy result
+            () => Assert.True((bool)results2[1]!)  // KeyMove result
         );
     }
 }

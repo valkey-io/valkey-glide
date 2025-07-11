@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using static Valkey.Glide.Internals.Request;
+using Valkey.Glide.Commands.Options;
 
 namespace Valkey.Glide.Pipeline;
 
@@ -51,8 +52,11 @@ public abstract partial class BaseBatch<T>
     /// <inheritdoc cref="IBatchGenericCommands.KeyDump(ValkeyKey)" />
     public T KeyDump(ValkeyKey key) => AddCmd(KeyDumpAsync(key));
 
-    /// <inheritdoc cref="IBatchGenericCommands.KeyRestore(ValkeyKey, byte[], TimeSpan?)" />
-    public T KeyRestore(ValkeyKey key, byte[] value, TimeSpan? expiry = null) => AddCmd(KeyRestoreAsync(key, value, expiry));
+    /// <inheritdoc cref="IBatchGenericCommands.KeyRestore(ValkeyKey, byte[], TimeSpan?, RestoreOptions?)" />
+    public T KeyRestore(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null) => AddCmd(KeyRestoreAsync(key, value, expiry, restoreOptions));
+
+    /// <inheritdoc cref="IBatchGenericCommands.KeyRestoreDateTime(ValkeyKey, byte[], DateTime?, RestoreOptions?)" />
+    public T KeyRestoreDateTime(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null) => AddCmd(KeyRestoreDateTimeAsync(key, value, expiry, restoreOptions));
 
     /// <inheritdoc cref="IBatchGenericCommands.KeyTouch(ValkeyKey)" />
     public T KeyTouch(ValkeyKey key) => AddCmd(KeyTouchAsync(key));
@@ -78,7 +82,8 @@ public abstract partial class BaseBatch<T>
     IBatch IBatchGenericCommands.KeyRenameNX(ValkeyKey key, ValkeyKey newKey) => KeyRenameNX(key, newKey);
     IBatch IBatchGenericCommands.KeyPersist(ValkeyKey key) => KeyPersist(key);
     IBatch IBatchGenericCommands.KeyDump(ValkeyKey key) => KeyDump(key);
-    IBatch IBatchGenericCommands.KeyRestore(ValkeyKey key, byte[] value, TimeSpan? expiry) => KeyRestore(key, value, expiry);
+    IBatch IBatchGenericCommands.KeyRestore(ValkeyKey key, byte[] value, TimeSpan? expiry, RestoreOptions? restoreOptions) => KeyRestore(key, value, expiry, restoreOptions);
+    IBatch IBatchGenericCommands.KeyRestoreDateTime(ValkeyKey key, byte[] value, DateTime? expiry, RestoreOptions? restoreOptions) => KeyRestoreDateTime(key, value, expiry, restoreOptions);
     IBatch IBatchGenericCommands.KeyTouch(ValkeyKey key) => KeyTouch(key);
     IBatch IBatchGenericCommands.KeyTouch(ValkeyKey[] keys) => KeyTouch(keys);
     IBatch IBatchGenericCommands.KeyCopy(ValkeyKey sourceKey, ValkeyKey destinationKey, bool replace) => KeyCopy(sourceKey, destinationKey, replace);

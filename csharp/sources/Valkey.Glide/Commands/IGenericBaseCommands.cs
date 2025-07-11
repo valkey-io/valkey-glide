@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Commands.Options;
+
 namespace Valkey.Glide.Commands;
 
 /// <summary>
@@ -126,8 +128,7 @@ public interface IGenericBaseCommands
     Task<long> KeyExistsAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Set a timeout on key. After the timeout has expired, the key will automatically be deleted.
-    ///
+    /// Set a timeout on key. After the timeout has expired, the key will automatically be deleted.<br/>
     /// If key already has an existing expire set, the time to live is updated to the new value.
     /// If expiry is a non-positive value, the key will be deleted rather than expired.
     /// The timeout will only be cleared by commands that delete or overwrite the contents of key.
@@ -150,7 +151,7 @@ public interface IGenericBaseCommands
     /// <summary>
     /// Sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of
     /// specifying the duration. A timestamp in the past will delete the key immediately. After the timeout has
-    /// expired, the key will automatically be deleted.
+    /// expired, the key will automatically be deleted.<br/>
     /// If key already has an existing expire set, the time to live is updated to the new value.
     /// The timeout will only be cleared by commands that delete or overwrite the contents of key
     /// If key already has an existing expire set, the time to live is updated to the new value.
@@ -281,12 +282,14 @@ public interface IGenericBaseCommands
     /// <summary>
     /// Creates a key associated with a value that is obtained by
     /// deserializing the provided serialized value (obtained via Dump).
+    /// This method takes a duration for the expiry.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/restore"/>
     /// <note>When in cluster mode, both source and destination must map to the same hash slot.</note>
     /// <param name="key">The key to create.</param>
     /// <param name="value">The serialized value to deserialize and assign to key.</param>
-    /// <param name="expiry">The expiry to set. Default value is set to persist.</param>
+    /// <param name="expiry">The expiry to set as a duration. Default value is set to persist.</param>
+    /// <param name="restoreOptions">Set restore options with replace and absolute TTL modifiers, object idletime and frequency.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <remarks>
     /// <example>
@@ -295,7 +298,28 @@ public interface IGenericBaseCommands
     /// </code>
     /// </example>
     /// </remarks>
-    Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, CommandFlags flags = CommandFlags.None);
+    Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Creates a key associated with a value that is obtained by
+    /// deserializing the provided serialized value (obtained via Dump).
+    /// This method takes an exact date and time for the expiry.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/restore"/>
+    /// <note>When in cluster mode, both source and destination must map to the same hash slot.</note>
+    /// <param name="key">The key to create.</param>
+    /// <param name="value">The serialized value to deserialize and assign to key.</param>
+    /// <param name="expiry">The expiry to set as a date and time. Default value is set to persist.</param>
+    /// <param name="restoreOptions">Set restore options with replace and absolute TTL modifiers, object idletime and frequency.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.KeyRestoreAsync(key, serializedValue, TimeSpan.FromMinutes(5));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Alters the last access time of a key(s). A key is ignored if it does not exist.
