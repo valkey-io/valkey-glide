@@ -1497,22 +1497,22 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> exists(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Exists, keys);
     }
 
     @Override
     public CompletableFuture<Long> exists(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Exists, Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new));
     }
 
     @Override
     public CompletableFuture<Long> unlink(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Unlink, keys);
     }
 
     @Override
     public CompletableFuture<Long> unlink(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Unlink, Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new));
     }
 
     @Override
@@ -1719,14 +1719,13 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> scriptShow(@NonNull String sha1) {
-        return commandManager.submitNewCommand(
-                ScriptShow, new String[] {sha1}, this::handleStringResponse);
+        return commandManager.executeStringCommand(ScriptShow, new String[] {sha1});
     }
 
     @Override
     public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
-        return commandManager.submitNewCommand(
-                ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(ScriptShow, new String[] {sha1.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -3326,13 +3325,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> type(@NonNull String key) {
-        return commandManager.submitNewCommand(Type, new String[] {key}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Type, new String[] {key});
     }
 
     @Override
     public CompletableFuture<String> type(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Type, new GlideString[] {key}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Type, new String[] {key.toString()});
     }
 
     @Override
@@ -3601,48 +3599,54 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Boolean> pfadd(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(PfAdd, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> pfadd(
             @NonNull GlideString key, @NonNull GlideString[] elements) {
-        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
-        return commandManager.submitNewCommand(PfAdd, arguments, this::handleBooleanResponse);
+        String[] arguments = ArrayUtils.addFirst(
+                Arrays.stream(elements).map(GlideString::toString).toArray(String[]::new),
+                key.toString()
+        );
+        return commandManager.executeBooleanCommand(PfAdd, arguments);
     }
 
     @Override
     public CompletableFuture<Long> pfcount(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(PfCount, keys);
     }
 
     @Override
     public CompletableFuture<Long> pfcount(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(PfCount, Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new));
     }
 
     @Override
     public CompletableFuture<String> pfmerge(
             @NonNull String destination, @NonNull String[] sourceKeys) {
         String[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
-        return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(PfMerge, arguments);
     }
 
     @Override
     public CompletableFuture<String> pfmerge(
             @NonNull GlideString destination, @NonNull GlideString[] sourceKeys) {
-        GlideString[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
-        return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
+        String[] arguments = ArrayUtils.addFirst(
+                Arrays.stream(sourceKeys).map(GlideString::toString).toArray(String[]::new),
+                destination.toString()
+        );
+        return commandManager.executeStringCommand(PfMerge, arguments);
     }
 
     @Override
     public CompletableFuture<Long> touch(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Touch, keys);
     }
 
     @Override
     public CompletableFuture<Long> touch(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
+        return commandManager.executeLongCommand(Touch, Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new));
     }
 
     @Override
@@ -3653,7 +3657,7 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData));
-        return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoAdd, arguments);
     }
 
     @Override
@@ -3661,14 +3665,18 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull Map<GlideString, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(options.toArgs())
-                        .add(mapGeoDataToGlideStringArray(membersToGeospatialData))
-                        .toArray();
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(options.toArgs())
+                .add(mapGeoDataToArray(membersToGeospatialData.entrySet().stream().collect(
+                    Collectors.toMap(
+                        entry -> entry.getKey().toString(),
+                        Map.Entry::getValue
+                    )
+                )))
+                .toStringArray();
 
-        return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoAdd, arguments);
     }
 
     @Override
@@ -3686,20 +3694,19 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Double[][]> geopos(@NonNull String key, @NonNull String[] members) {
         String[] arguments = concatenateArrays(new String[] {key}, members);
-        return commandManager.submitNewCommand(
-                GeoPos,
-                arguments,
-                response -> castArrayofArrays(handleArrayResponse(response), Double.class));
+        return commandManager.executeObjectCommand(GeoPos, arguments)
+                .thenApply(result -> (Double[][]) result);
     }
 
     @Override
     public CompletableFuture<Double[][]> geopos(
             @NonNull GlideString key, @NonNull GlideString[] members) {
-        GlideString[] arguments = concatenateArrays(new GlideString[] {key}, members);
-        return commandManager.submitNewCommand(
-                GeoPos,
-                arguments,
-                response -> castArrayofArrays(handleArrayResponse(response), Double.class));
+        String[] arguments = concatenateArrays(
+                new String[] {key.toString()},
+                Arrays.stream(members).map(GlideString::toString).toArray(String[]::new)
+        );
+        return commandManager.executeObjectCommand(GeoPos, arguments)
+                .thenApply(result -> (Double[][]) result);
     }
 
     @Override
@@ -3709,7 +3716,7 @@ public abstract class BaseClient
             @NonNull String member2,
             @NonNull GeoUnit geoUnit) {
         String[] arguments = new String[] {key, member1, member2, geoUnit.getValkeyAPI()};
-        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+        return commandManager.executeDoubleCommand(GeoDist, arguments);
     }
 
     @Override
@@ -3718,39 +3725,44 @@ public abstract class BaseClient
             @NonNull GlideString member1,
             @NonNull GlideString member2,
             @NonNull GeoUnit geoUnit) {
-        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getValkeyAPI())};
-        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+        String[] arguments = new String[] {key.toString(), member1.toString(), member2.toString(), geoUnit.getValkeyAPI()};
+        return commandManager.executeDoubleCommand(GeoDist, arguments);
     }
 
     @Override
     public CompletableFuture<Double> geodist(
             @NonNull String key, @NonNull String member1, @NonNull String member2) {
         String[] arguments = new String[] {key, member1, member2};
-        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+        return commandManager.executeDoubleCommand(GeoDist, arguments);
     }
 
     @Override
     public CompletableFuture<Double> geodist(
             @NonNull GlideString key, @NonNull GlideString member1, @NonNull GlideString member2) {
-        GlideString[] arguments = new GlideString[] {key, member1, member2};
-        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+        String[] arguments = new String[] {key.toString(), member1.toString(), member2.toString()};
+        return commandManager.executeDoubleCommand(GeoDist, arguments);
     }
 
     @Override
     public CompletableFuture<String[]> geohash(@NonNull String key, @NonNull String[] members) {
         String[] arguments = concatenateArrays(new String[] {key}, members);
-        return commandManager.submitNewCommand(
-                GeoHash, arguments, response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeObjectCommand(GeoHash, arguments)
+                .thenApply(result -> (String[]) result);
     }
 
     @Override
     public CompletableFuture<GlideString[]> geohash(
             @NonNull GlideString key, @NonNull GlideString[] members) {
-        GlideString[] arguments = concatenateArrays(new GlideString[] {key}, members);
-        return commandManager.submitNewCommand(
-                GeoHash,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] arguments = concatenateArrays(
+                new String[] {key.toString()}, 
+                Arrays.stream(members).map(GlideString::toString).toArray(String[]::new)
+        );
+        return commandManager.executeObjectCommand(GeoHash, arguments)
+                .thenApply(result -> {
+                    if (result == null) return null;
+                    String[] stringArray = (String[]) result;
+                    return Arrays.stream(stringArray).map(GlideString::of).toArray(GlideString[]::new);
+                });
     }
 
     @Override
@@ -4236,7 +4248,7 @@ public abstract class BaseClient
             @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
         String[] args =
                 concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
-        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+        return commandManager.executeObjectCommand(FCall, args);
     }
 
     @Override
@@ -4244,10 +4256,12 @@ public abstract class BaseClient
             @NonNull GlideString function,
             @NonNull GlideString[] keys,
             @NonNull GlideString[] arguments) {
-        GlideString[] args =
-                concatenateArrays(
-                        new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(FCall, args, this::handleBinaryObjectOrNullResponse);
+        String[] args = concatenateArrays(
+                new String[] {function.toString(), Long.toString(keys.length)},
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new)
+        );
+        return commandManager.executeObjectCommand(FCall, args);
     }
 
     @Override
@@ -4255,7 +4269,7 @@ public abstract class BaseClient
             @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
         String[] args =
                 concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
-        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+        return commandManager.executeObjectCommand(FCallReadOnly, args);
     }
 
     @Override
@@ -4263,11 +4277,12 @@ public abstract class BaseClient
             @NonNull GlideString function,
             @NonNull GlideString[] keys,
             @NonNull GlideString[] arguments) {
-        GlideString[] args =
-                concatenateArrays(
-                        new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(
-                FCallReadOnly, args, this::handleBinaryObjectOrNullResponse);
+        String[] args = concatenateArrays(
+                new String[] {function.toString(), Long.toString(keys.length)},
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new)
+        );
+        return commandManager.executeObjectCommand(FCallReadOnly, args);
     }
 
     @Override
