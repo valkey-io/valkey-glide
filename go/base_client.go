@@ -3356,7 +3356,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 //
 // Note:
 //
-//	In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+//	In cluster mode, if keys in `keys` map to different hash slots, the command
 //	will be split across these slots and executed separately for each. This means the command
 //	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 //	call will return the first encountered error, even though some requests may have succeeded
@@ -3430,7 +3430,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, expireTime tim
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
