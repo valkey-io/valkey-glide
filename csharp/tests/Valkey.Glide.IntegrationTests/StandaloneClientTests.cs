@@ -140,7 +140,7 @@ public class StandaloneClientTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
 
-        await client.Set(key, "val");
+        await client.StringSetAsync(key, "val");
         Assert.True(await client.KeyCopyAsync(key, key2, 1));
         Assert.True(await client.KeyMoveAsync(key, 2));
     }
@@ -158,8 +158,8 @@ public class StandaloneClientTests(TestConfiguration config)
         IBatch batch = new Batch(isAtomic);
 
         // Set up keys
-        _ = batch.Set(sourceKey, value);
-        _ = batch.Set(moveKey, value);
+        _ = batch.StringSet(sourceKey, value);
+        _ = batch.StringSet(moveKey, value);
 
         IBatchStandalone batch2 = new Batch(isAtomic);
 
@@ -173,8 +173,8 @@ public class StandaloneClientTests(TestConfiguration config)
         object?[] results2 = (await client.Exec((Batch)batch2, false))!;
 
         Assert.Multiple(
-            () => Assert.Equal("OK", results[0]), // Set sourceKey
-            () => Assert.Equal("OK", results[1]), // Set moveKey
+            () => Assert.True((bool)results[0]), // Set sourceKey
+            () => Assert.True((bool)results[1]), // Set moveKey
             () => Assert.True((bool)results2[0]!), // KeyCopy result
             () => Assert.True((bool)results2[1]!)  // KeyMove result
         );

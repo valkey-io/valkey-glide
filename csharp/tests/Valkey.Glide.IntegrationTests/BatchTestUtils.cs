@@ -172,11 +172,11 @@ internal class BatchTestUtils
         string genericKey2 = $"{atomicPrefix}generic2-{Guid.NewGuid()}";
         string genericKey3 = $"{atomicPrefix}generic3-{Guid.NewGuid()}";
 
-        _ = batch.Set(genericKey1, "value1");
-        testData.Add(new("OK", "Set(genericKey1, value1)"));
+        _ = batch.StringSet(genericKey1, "value1");
+        testData.Add(new(true, "StringSet(genericKey1, value1)"));
 
-        _ = batch.Set(genericKey2, "value2");
-        testData.Add(new("OK", "Set(genericKey2, value2)"));
+        _ = batch.StringSet(genericKey2, "value2");
+        testData.Add(new(true, "StringSet(genericKey2, value2)"));
 
         _ = batch.KeyExists(genericKey1);
         testData.Add(new(true, "KeyExists(genericKey1)"));
@@ -205,8 +205,8 @@ internal class BatchTestUtils
         _ = batch.KeyTouch([genericKey1, genericKey2, genericKey3]);
         testData.Add(new(2L, "KeyTouch([genericKey1, genericKey2, genericKey3])"));
 
-        _ = batch.Set(prefix + genericKey2, "value2");
-        testData.Add(new("OK", "Set(prefix + genericKey2, value2)"));
+        _ = batch.StringSet(prefix + genericKey2, "value2");
+        testData.Add(new(true, "StringSet(prefix + genericKey2, value2)"));
 
         string renamedKey = $"{prefix}renamed-{Guid.NewGuid()}";
         _ = batch.KeyRename(prefix + genericKey2, renamedKey);
@@ -228,8 +228,8 @@ internal class BatchTestUtils
         _ = batch.KeyExists(renameNXKey);
         testData.Add(new(true, "KeyExists(renameNXKey) after renamenx"));
 
-        _ = batch.Set(prefix + genericKey1, "value1");
-        testData.Add(new("OK", "Set(prefix + genericKey1, value1)"));
+        _ = batch.StringSet(prefix + genericKey1, "value1");
+        testData.Add(new(true, "StringSet(prefix + genericKey1, value1)"));
 
         string copiedKey = $"{prefix}copied-{Guid.NewGuid()}";
         _ = batch.KeyCopy(prefix + genericKey1, copiedKey);
@@ -243,7 +243,7 @@ internal class BatchTestUtils
 
         _ = batch.KeyUnlink([genericKey1, renamedKey, genericKey3]);
         testData.Add(new(1L, "KeyUnlink([genericKey1, renamedKey, genericKey3])"));
-        
+
         return testData;
     }
 

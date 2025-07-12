@@ -88,7 +88,7 @@ public class SharedBatchTests
         string key2 = "{DumpRestore}" + Guid.NewGuid();
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        _ = batch.Set(key1, "hello").KeyDump(key1);
+        _ = batch.StringSet(key1, "hello").KeyDump(key1);
 
         object?[] res = isCluster
             ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
@@ -96,7 +96,7 @@ public class SharedBatchTests
 
         Assert.Multiple(
             () => Assert.Equal(2, res.Length),
-            () => Assert.Equal("OK", res[0]),
+            () => Assert.True((bool)res[0]),
             () => Assert.IsType<byte[]?>(res[1])
         );
 
