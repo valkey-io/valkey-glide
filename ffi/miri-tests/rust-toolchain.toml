@@ -1,0 +1,3 @@
+[toolchain]
+channel = "nightly-2025-06-30"
+components = [ "miri" ]
