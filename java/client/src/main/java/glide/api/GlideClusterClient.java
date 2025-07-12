@@ -179,46 +179,39 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull String[] args, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
+        return commandManager.executeObjectCommand(
+                CustomCommand, args, route)
+                .thenApply(result -> handleCustomCommandResponse(route, result));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull GlideString[] args, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, route, response -> handleCustomCommandBinaryResponse(route, response));
+        return commandManager.executeObjectCommand(
+                CustomCommand, Arrays.stream(args).map(GlideString::toString).toArray(String[]::new), route)
+                .thenApply(result -> handleCustomCommandBinaryResponse(route, result));
     }
 
     @SuppressWarnings("unchecked")
-    protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
+    protected ClusterValue<Object> handleCustomCommandResponse(Route route, Object result) {
         if (route instanceof SingleNodeRoute) {
-            return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
+            return ClusterValue.ofSingleValue(result);
         }
-        if (response.hasConstantResponse()) {
-            return ClusterValue.ofSingleValue(handleStringResponse(response));
+        if (result instanceof Map) {
+            return ClusterValue.ofMultiValue((Map<String, Object>) result);
         }
-        var data =
-                handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-        if (data instanceof Map) {
-            return ClusterValue.ofMultiValue((Map<String, Object>) data);
-        }
-        return ClusterValue.ofSingleValue(data);
+        return ClusterValue.ofSingleValue(result);
     }
 
     @SuppressWarnings("unchecked")
-    protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Response response) {
+    protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Object result) {
         if (route instanceof SingleNodeRoute) {
-            return ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response));
+            return ClusterValue.ofSingleValue(result);
         }
-        if (response.hasConstantResponse()) {
-            return ClusterValue.ofSingleValue(handleStringResponse(response));
+        if (result instanceof Map) {
+            return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) castToBinaryStringMap(result));
         }
-        var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
-        if (data instanceof Map) {
-            return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
-        }
-        return ClusterValue.ofSingleValue(data);
+        return ClusterValue.ofSingleValue(result);
     }
 
     @Deprecated
@@ -314,14 +307,13 @@ public class GlideClusterClient extends BaseClient
     }
 
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Info,
                 new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.of((String) result)
+                        : ClusterValue.of((Map<String, String>) result));
     }
 
     @Override
@@ -335,14 +327,13 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> info(
             @NonNull Section[] sections, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Info,
                 Stream.of(sections).map(Enum::toString).toArray(String[]::new),
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.of((String) result)
+                        : ClusterValue.of((Map<String, String>) result));
     }
 
     @Override
@@ -352,14 +343,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<Long>> clientId(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 ClientId,
                 new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleLongResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.of((Long) result)
+                        : ClusterValue.of((Map<String, Long>) result));
     }
 
     @Override
@@ -370,14 +360,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<String>> clientGetName(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 ClientGetName,
                 new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringOrNullResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.of((String) result)
+                        : ClusterValue.of((Map<String, String>) result));
     }
 
     @Override
@@ -413,14 +402,13 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Map<String, String>>> configGet(
             @NonNull String[] parameters, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 ConfigGet,
                 parameters,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue((Map<String, String>) result)
+                        : ClusterValue.ofMultiValue((Map<String, Map<String, String>>) result));
     }
 
     @Override
@@ -452,27 +440,25 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> echo(
             @NonNull String message, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Echo,
                 new String[] {message},
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue((String) result)
+                        : ClusterValue.ofMultiValue((Map<String, String>) result));
     }
 
     @Override
     public CompletableFuture<ClusterValue<GlideString>> echo(
             @NonNull GlideString message, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Echo,
-                new GlideString[] {message},
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleGlideStringResponse(response))
-                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+                new String[] {message.toString()},
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(GlideString.of((String) result))
+                        : ClusterValue.ofMultiValueBinary((Map<GlideString, GlideString>) castToBinaryStringMap(result)));
     }
 
     @Override
@@ -484,15 +470,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<String[]>> time(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Time,
                 new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
-                                : ClusterValue.ofMultiValue(
-                                        castMapOfArrays(handleMapResponse(response), String.class)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(castArray(result, String.class))
+                        : ClusterValue.ofMultiValue(
+                                castMapOfArrays(result, String.class)));
     }
 
     @Override
@@ -502,14 +487,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<Long>> lastsave(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 LastSave,
                 new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleLongResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.of((Long) result)
+                        : ClusterValue.of((Map<String, Long>) result));
     }
 
     @Override
@@ -767,45 +751,45 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
             boolean withCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionList,
                 withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
-                route,
-                response -> handleFunctionListResponse(response, route));
+                route)
+                .thenApply(result -> handleFunctionListResponse(result, route));
     }
 
     public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
             boolean withCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionList,
                 new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
-                route,
-                response -> handleFunctionListResponseBinary(response, route));
+                route)
+                .thenApply(result -> handleFunctionListResponseBinary(result, route));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
             @NonNull String libNamePattern, boolean withCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionList,
                 withCode
                         ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
                         : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
-                route,
-                response -> handleFunctionListResponse(response, route));
+                route)
+                .thenApply(result -> handleFunctionListResponse(result, route));
     }
 
     public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
             @NonNull GlideString libNamePattern, boolean withCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionList,
                 new ArgsBuilder()
                         .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
                         .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
-                route,
-                response -> handleFunctionListResponseBinary(response, route));
+                route)
+                .thenApply(result -> handleFunctionListResponseBinary(result, route));
     }
 
     @Override
@@ -866,14 +850,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<byte[]>> functionDump(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionDump,
-                new GlideString[] {},
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleBytesOrNullResponse(response))
-                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+                new String[] {},
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue((byte[]) result)
+                        : ClusterValue.ofMultiValueBinary((Map<GlideString, byte[]>) castToBinaryMap(result)));
     }
 
     @Override
@@ -946,14 +929,13 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<ClusterValue<Object>> fcall(
             @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
         String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FCall,
                 args,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(result)
+                        : ClusterValue.ofMultiValue((Map<String, Object>) result));
     }
 
     @Override
@@ -961,14 +943,13 @@ public class GlideClusterClient extends BaseClient
             @NonNull GlideString function, @NonNull GlideString[] arguments, @NonNull Route route) {
         GlideString[] args =
                 concatenateArrays(new GlideString[] {function, gs("0")}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FCall,
-                args,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+                Arrays.stream(args).map(GlideString::toString).toArray(String[]::new),
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(result)
+                        : ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) castToBinaryStringMap(result)));
     }
 
     @Override
@@ -1013,14 +994,13 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
             @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
         String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FCallReadOnly,
                 args,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(result)
+                        : ClusterValue.ofMultiValue((Map<String, Object>) result));
     }
 
     @Override
@@ -1028,14 +1008,13 @@ public class GlideClusterClient extends BaseClient
             @NonNull GlideString function, @NonNull GlideString[] arguments, @NonNull Route route) {
         GlideString[] args =
                 concatenateArrays(new GlideString[] {function, gs("0")}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FCallReadOnly,
-                args,
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+                Arrays.stream(args).map(GlideString::toString).toArray(String[]::new),
+                route)
+                .thenApply(result -> route instanceof SingleNodeRoute
+                        ? ClusterValue.ofSingleValue(result)
+                        : ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) castToBinaryStringMap(result)));
     }
 
     @Override
@@ -1100,21 +1079,21 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 ScriptExists,
                 sha1s,
-                route,
-                result -> result != null ? castToBooleanArray(result) : null);
+                route)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(
             @NonNull GlideString[] sha1s, @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 ScriptExists,
-                sha1s,
-                route,
-                result -> result != null ? castToBooleanArray(result) : null);
+                Arrays.stream(sha1s).map(GlideString::toString).toArray(String[]::new),
+                route)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
@@ -1130,14 +1109,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> scriptFlush(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ScriptFlush, new String[0], route, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ScriptFlush, new String[0], route);
     }
 
     @Override
     public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ScriptFlush, new String[] {flushMode.toString()}, route, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, route);
     }
 
     @Override
@@ -1147,43 +1126,44 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> scriptKill(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ScriptKill, new String[0], route, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ScriptKill, new String[0], route);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
-        return commandManager.submitNewCommand(
-                FunctionStats, new String[0], response -> handleFunctionStatsResponse(response, false));
+        return commandManager.executeObjectCommand(
+                FunctionStats, new String[0])
+                .thenApply(result -> result != null ? handleFunctionStatsResponse(result, false) : null);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>
             functionStatsBinary() {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionStats,
-                new GlideString[0],
-                response -> handleFunctionStatsBinaryResponse(response, false));
+                new String[0])
+                .thenApply(result -> result != null ? handleFunctionStatsBinaryResponse(result, false) : null);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(
             @NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionStats,
                 new String[0],
-                route,
-                response -> handleFunctionStatsResponse(response, route instanceof SingleNodeRoute));
+                route)
+                .thenApply(result -> handleFunctionStatsResponse(result, route instanceof SingleNodeRoute));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>
             functionStatsBinary(@NonNull Route route) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionStats,
-                new GlideString[0],
-                route,
-                response -> handleFunctionStatsBinaryResponse(response, route instanceof SingleNodeRoute));
+                new String[0],
+                route)
+                .thenApply(result -> handleFunctionStatsBinaryResponse(result, route instanceof SingleNodeRoute));
     }
 
     public CompletableFuture<String> publish(
@@ -1192,12 +1172,11 @@ public class GlideClusterClient extends BaseClient
             return publish(message, channel);
         }
 
-        return commandManager.submitNewCommand(
+        return commandManager.executeLongCommand(
                 SPublish,
-                new String[] {channel, message},
-                response -> {
+                new String[] {channel, message})
+                .thenApply(result -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
                     return OK;
                 });
     }
@@ -1209,12 +1188,11 @@ public class GlideClusterClient extends BaseClient
             return publish(message, channel);
         }
 
-        return commandManager.submitNewCommand(
+        return commandManager.executeLongCommand(
                 SPublish,
-                new GlideString[] {channel, message},
-                response -> {
+                Arrays.stream(new GlideString[] {channel, message}).map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
                     return OK;
                 });
     }
@@ -1260,14 +1238,15 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(
             @NonNull GlideString[] channels) {
-        return commandManager.submitNewCommand(
-                PubSubShardNumSub, channels, this::handleBinaryStringMapResponse);
+        return commandManager.executeObjectCommand(
+                PubSubShardNumSub, Arrays.stream(channels).map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? (Map<GlideString, Long>) castToBinaryStringMap(result) : null);
     }
 
     @Override
     public CompletableFuture<String> unwatch(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                UnWatch, new String[0], route, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                UnWatch, new String[0], route);
     }
 
     @Override
@@ -1283,8 +1262,9 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<GlideString> randomKeyBinary(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], route, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0], route)
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -1295,8 +1275,9 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
-        return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0])
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
