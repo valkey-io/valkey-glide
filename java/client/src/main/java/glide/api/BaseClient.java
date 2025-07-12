@@ -1432,8 +1432,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> sdiffstore(
             @NonNull GlideString destination, @NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
-        return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
+        String[] arguments = ArrayUtils.addFirst(
+            Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new), 
+            destination.toString()
+        );
+        return commandManager.executeLongCommand(SDiffStore, arguments);
     }
 
     @Override
@@ -1485,14 +1488,17 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> sunionstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
-        return commandManager.submitNewCommand(SUnionStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(SUnionStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> sunionstore(
             @NonNull GlideString destination, @NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
-        return commandManager.submitNewCommand(SUnionStore, arguments, this::handleLongResponse);
+        String[] arguments = ArrayUtils.addFirst(
+            Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new), 
+            destination.toString()
+        );
+        return commandManager.executeLongCommand(SUnionStore, arguments);
     }
 
     @Override
@@ -1567,29 +1573,30 @@ public abstract class BaseClient
             @NonNull String key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
         String[] arguments =
                 ArrayUtils.addAll(new String[] {key, Long.toString(unixSeconds)}, expireOptions.toArgs());
-        return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(ExpireAt, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> expireAt(
             @NonNull GlideString key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(unixSeconds).add(expireOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(unixSeconds)
+                .add(expireOptions.toArgs())
+                .toStringArray();
+        return commandManager.executeBooleanCommand(ExpireAt, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> pexpire(@NonNull String key, long milliseconds) {
-        return commandManager.submitNewCommand(
-                PExpire, new String[] {key, Long.toString(milliseconds)}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                PExpire, new String[] {key, Long.toString(milliseconds)});
     }
 
     @Override
     public CompletableFuture<Boolean> pexpire(@NonNull GlideString key, long milliseconds) {
-        return commandManager.submitNewCommand(
-                PExpire,
-                new GlideString[] {key, gs(Long.toString(milliseconds))},
-                this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                PExpire, new String[] {key.toString(), Long.toString(milliseconds)});
     }
 
     @Override
@@ -1597,15 +1604,18 @@ public abstract class BaseClient
             @NonNull String key, long milliseconds, @NonNull ExpireOptions expireOptions) {
         String[] arguments =
                 ArrayUtils.addAll(new String[] {key, Long.toString(milliseconds)}, expireOptions.toArgs());
-        return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(PExpire, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> pexpire(
             @NonNull GlideString key, long milliseconds, @NonNull ExpireOptions expireOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(milliseconds).add(expireOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(milliseconds)
+                .add(expireOptions.toArgs())
+                .toStringArray();
+        return commandManager.executeBooleanCommand(PExpire, arguments);
     }
 
     @Override
@@ -1630,26 +1640,29 @@ public abstract class BaseClient
         String[] arguments =
                 ArrayUtils.addAll(
                         new String[] {key, Long.toString(unixMilliseconds)}, expireOptions.toArgs());
-        return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(PExpireAt, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> pexpireAt(
             @NonNull GlideString key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(unixMilliseconds).add(expireOptions.toArgs()).toArray();
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(unixMilliseconds)
+                .add(expireOptions.toArgs())
+                .toStringArray();
 
-        return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(PExpireAt, arguments);
     }
 
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
-        return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(TTL, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> ttl(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(TTL, new GlideString[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(TTL, new String[] {key.toString()});
     }
 
     @Override
@@ -1810,7 +1823,7 @@ public abstract class BaseClient
                         options.toArgs(),
                         new String[] {"INCR", Double.toString(increment), member});
 
-        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleOrNullResponse);
+        return commandManager.executeDoubleCommand(ZAdd, arguments);
     }
 
     @Override
@@ -1819,13 +1832,13 @@ public abstract class BaseClient
             @NonNull GlideString member,
             double increment,
             @NonNull ZAddOptions options) {
-        GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        options.toArgsBinary(),
-                        new GlideString[] {gs("INCR"), gs(Double.toString(increment)), member});
+        String[] arguments = concatenateArrays(
+                new String[] {key.toString()},
+                options.toArgs(),
+                new String[] {"INCR", Double.toString(increment), member.toString()}
+        );
 
-        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleOrNullResponse);
+        return commandManager.executeDoubleCommand(ZAdd, arguments);
     }
 
     @Override
@@ -1835,18 +1848,18 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
 
-        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleResponse);
+        return commandManager.executeDoubleCommand(ZAdd, arguments);
     }
 
     @Override
     public CompletableFuture<Double> zaddIncr(
             @NonNull GlideString key, @NonNull GlideString member, double increment) {
-        GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        new GlideString[] {gs("INCR"), gs(Double.toString(increment)), member});
+        String[] arguments = concatenateArrays(
+                new String[] {key.toString()},
+                new String[] {"INCR", Double.toString(increment), member.toString()}
+        );
 
-        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleResponse);
+        return commandManager.executeDoubleCommand(ZAdd, arguments);
     }
 
     @Override
@@ -1913,14 +1926,18 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
+        return commandManager.executeObjectCommand(BZPopMin, arguments)
+                .thenApply(result -> (Object[]) result);
     }
 
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull GlideString[] keys, double timeout) {
-        GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
-                BZPopMin, arguments, this::handleArrayOrNullResponseBinary);
+        String[] arguments = ArrayUtils.add(
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                Double.toString(timeout)
+        );
+        return commandManager.executeObjectCommand(BZPopMin, arguments)
+                .thenApply(result -> (Object[]) result);
     }
 
     @Override
@@ -1962,14 +1979,18 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
+        return commandManager.executeObjectCommand(BZPopMax, arguments)
+                .thenApply(result -> (Object[]) result);
     }
 
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull GlideString[] keys, double timeout) {
-        GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
-                BZPopMax, arguments, this::handleArrayOrNullResponseBinary);
+        String[] arguments = ArrayUtils.add(
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                Double.toString(timeout)
+        );
+        return commandManager.executeObjectCommand(BZPopMax, arguments)
+                .thenApply(result -> (Object[]) result);
     }
 
     @Override

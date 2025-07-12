@@ -3,7 +3,7 @@
 ## Overview
 Systematic conversion of BaseClient methods from protobuf UDS pattern to direct JNI typed returns.
 
-**Total Progress: 140+ methods converted out of ~200+ methods (70% complete)**
+**Total Progress: 160+ methods converted out of ~200+ methods (80% complete)**
 
 ## Conversion Pattern
 ```java
@@ -42,10 +42,16 @@ CompletableFuture<String> result = commandManager.executeStringCommand(Get, args
 ### Geo Commands
 - **Batch 1**: geoadd, geodist, geohash, geopos (basic geo operations)
 
-## IN PROGRESS 🔄
-
 ### HyperLogLog Commands
 - **Batch 1**: pfadd, pfcount, pfmerge
+
+### Key Management Commands
+- **Batch 1**: touch, exists, unlink, type
+
+## IN PROGRESS 🔄
+
+### Remaining Methods Search
+- **Next**: Finding remaining unconverted methods
 
 ## PENDING BATCHES 📋
 
