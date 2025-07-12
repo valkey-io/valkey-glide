@@ -278,7 +278,7 @@ import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.StatisticsResolver;
-import glide.managers.BaseResponseResolver;
+// Removed: import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
@@ -322,13 +322,9 @@ public abstract class BaseClient
     protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
-    /** Helper which extracts data from received {@link Response}s from GLIDE. */
-    private static final BaseResponseResolver responseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointer);
+    // Removed: Response resolvers are no longer needed with JNI direct typed returns
 
-    /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
-    private static final BaseResponseResolver binaryResponseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointerBinary);
+    // Removed: Binary response resolvers are no longer needed with JNI direct typed returns
 
     /** A constructor. */
     protected BaseClient(ClientBuilder builder) {
@@ -454,12 +450,12 @@ public abstract class BaseClient
 
     protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
         if (config.getSubscriptionConfiguration() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
+            return new MessageHandler(Optional.empty(), Optional.empty(), null);
         }
         return new MessageHandler(
                 config.getSubscriptionConfiguration().getCallback(),
                 config.getSubscriptionConfiguration().getContext(),
-                binaryResponseResolver);
+                null);
     }
 
     protected static ChannelHandler buildChannelHandler(
@@ -477,211 +473,23 @@ public abstract class BaseClient
         return new CommandManager(channelHandler);
     }
 
-    /**
-     * Extracts the value from a <code>GLIDE core</code> response message and either throws an
-     * exception or returns the value as an object of type <code>T</code>.
-     *
-     * @param response protobuf message.
-     * @param classType Parameter <code>T</code> class type.
-     * @param flags A set of parameters which describes how to handle the response. Could be empty or
-     *     any combination of
-     *     <ul>
-     *       <li>{@link ResponseFlags#ENCODING_UTF8} to return the data as a <code>String</code>; if
-     *           unset, a <code>byte[]</code> is returned.
-     *       <li>{@link ResponseFlags#IS_NULLABLE} to accept <code>null</code> values.
-     *     </ul>
-     *
-     * @return Response as an object of type <code>T</code> or <code>null</code>.
-     * @param <T> The return value type.
-     * @throws GlideException On a type mismatch.
-     */
-    @SuppressWarnings("unchecked")
-    protected <T> T handleValkeyResponse(
-            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws GlideException {
-        boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
-        boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
-        Object value =
-                encodingUtf8 ? responseResolver.apply(response) : binaryResponseResolver.apply(response);
-        if (isNullable && (value == null)) {
-            return null;
-        }
+    // Removed: handleValkeyResponse method - replaced with direct JNI typed returns
 
-        value = convertByteArrayToGlideString(value);
+    // Removed: Object and String Response handler methods - replaced with direct JNI typed returns
 
-        if (classType.isInstance(value)) {
-            return (T) value;
-        }
-        String className = value == null ? "null" : value.getClass().getSimpleName();
-        throw new GlideException(
-                "Unexpected return type from Glide: got "
-                        + className
-                        + " expected "
-                        + classType.getSimpleName());
-    }
+    // Removed: GlideString and Boolean Response handler methods - replaced with direct JNI typed returns
 
-    protected Object handleObjectOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(
-                Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
-    }
+    // Removed: Long and Double Response handler methods - replaced with direct JNI typed returns
 
-    protected Object handleBinaryObjectOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
+    // Removed: Array Response handler methods - replaced with direct JNI typed returns
 
-    protected String handleStringResponse(Response response) throws GlideException {
-        return handleValkeyResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-    }
+    // Removed: Map Response handler methods - replaced with direct JNI typed returns
 
-    protected String handleStringOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(
-                String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
-    }
+    // Removed: Map or Null Response handler methods - replaced with direct JNI typed returns
 
-    protected byte[] handleBytesOrNullResponse(Response response) throws GlideException {
-        var result =
-                handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-        if (result == null) return null;
+    // Removed: XRead Response handler methods - replaced with direct JNI typed returns
 
-        return result.getBytes();
-    }
-
-    protected GlideString handleGlideStringOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    protected GlideString handleGlideStringResponse(Response response) throws GlideException {
-        return handleValkeyResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    protected Boolean handleBooleanResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    protected Long handleLongResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    protected Long handleLongOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    protected Double handleDoubleResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    protected Double handleDoubleOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    protected Object[] handleArrayResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-    }
-
-    protected Object[] handleArrayResponseBinary(Response response) throws GlideException {
-        return handleValkeyResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    protected Object[] handleArrayOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(
-                Object[].class,
-                EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
-                response);
-    }
-
-    protected Object[] handleArrayOrNullResponseBinary(Response response) throws GlideException {
-        return handleValkeyResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code>.
-     * @param <V> Value type.
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<String, V> handleMapResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-    }
-
-    /**
-     * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
-     *
-     * @param response A Protobuf response
-     * @return A map of <code>GlideString</code> to <code>V</code>.
-     * @param <V> Value type.
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
-    protected <V> Map<GlideString, V> handleBinaryStringMapResponse(Response response)
-            throws GlideException {
-        return handleValkeyResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code> or <code>null</code>
-     * @param <V> Value type.
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws GlideException {
-        return handleValkeyResponse(
-                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code> or <code>null</code>
-     * @param <V> Value type.
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
-            throws GlideException {
-        return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of a map of <code>String[][]</code>
-     */
-    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-            throws GlideException {
-        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-        if (mapResponse == null) {
-            return null;
-        }
-        return mapResponse.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                Map.Entry::getKey,
-                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of a map of <code>GlideString[][]</code>
-     */
-    protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(
-            Response response) throws GlideException {
-        Map<GlideString, Object> mapResponse = handleBinaryStringMapOrNullResponse(response);
-        if (mapResponse == null) {
-            return null;
-        }
-        return mapResponse.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                Map.Entry::getKey,
-                                e ->
-                                        castMapOf2DArray(
-                                                (Map<GlideString, Object[][]>) e.getValue(), GlideString.class)));
-    }
-
-    @SuppressWarnings("unchecked") // raw Set cast to Set<String>
-    protected Set<String> handleSetResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-    }
-
-    @SuppressWarnings("unchecked")
-    protected Set<GlideString> handleSetBinaryResponse(Response response) throws GlideException {
-        return handleValkeyResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
+    // Removed: Set Response handler methods - replaced with direct JNI typed returns
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
     @SuppressWarnings("unchecked")
@@ -729,35 +537,7 @@ public abstract class BaseClient
         return response;
     }
 
-    /** Process a <code>FUNCTION STATS</code> cluster response. */
-    protected ClusterValue<Map<String, Map<String, Object>>> handleFunctionStatsResponse(
-            Response response, boolean isSingleValue) {
-        if (isSingleValue) {
-            return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
-        } else {
-            Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
-                nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
-            }
-            return ClusterValue.ofMultiValue(data);
-        }
-    }
-
-    /** Process a <code>FUNCTION STATS</code> cluster response. */
-    protected ClusterValue<Map<GlideString, Map<GlideString, Object>>>
-            handleFunctionStatsBinaryResponse(Response response, boolean isSingleValue) {
-        if (isSingleValue) {
-            return ClusterValue.ofSingleValue(
-                    handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
-        } else {
-            Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
-                    handleBinaryStringMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
-                nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
-            }
-            return ClusterValue.ofMultiValueBinary(data);
-        }
-    }
+    // Removed: Function Stats cluster Response handler methods - replaced with direct JNI typed returns
 
     /** Process a <code>LCS key1 key2 IDX</code> response */
     protected Map<String, Object> handleLcsIdxResponse(Map<String, Object> response)
@@ -886,78 +666,106 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
-        return commandManager.submitNewCommand(GetEx, arguments, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(GetEx, arguments);
     }
 
     @Override
     public CompletableFuture<GlideString> getex(
             @NonNull GlideString key, @NonNull GetExOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(options.toArgs()).toArray();
-        return commandManager.submitNewCommand(GetEx, arguments, this::handleGlideStringOrNullResponse);
+        // Convert key and options to String array for JNI compatibility
+        String[] arguments = new String[1 + options.toArgs().length];
+        arguments[0] = key.toString();
+        System.arraycopy(options.toArgs(), 0, arguments, 1, options.toArgs().length);
+        return commandManager.executeStringCommand(GetEx, arguments)
+            .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {
-        return commandManager.submitNewCommand(
-                Set, new String[] {key, value}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Set, new String[] {key, value});
     }
 
     @Override
     public CompletableFuture<String> set(@NonNull GlideString key, @NonNull GlideString value) {
-        return commandManager.submitNewCommand(
-                Set, new GlideString[] {key, value}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Set, new String[] {key.toString(), value.toString()});
     }
 
     @Override
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
-        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(Set, arguments);
     }
 
     @Override
     public CompletableFuture<String> set(
             @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(value).add(options.toArgs()).toArray();
-        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+        // Convert to String array for JNI compatibility
+        String[] arguments = new String[2 + options.toArgs().length];
+        arguments[0] = key.toString();
+        arguments[1] = value.toString();
+        System.arraycopy(options.toArgs(), 0, arguments, 2, options.toArgs().length);
+        return commandManager.executeStringCommand(Set, arguments);
     }
 
     @Override
     public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
-        return commandManager.submitNewCommand(
-                Append, new String[] {key, value}, this::handleLongResponse);
+        return commandManager.executeLongCommand(Append, new String[] {key, value});
     }
 
     @Override
     public CompletableFuture<Long> append(@NonNull GlideString key, @NonNull GlideString value) {
-        return commandManager.submitNewCommand(
-                Append, new GlideString[] {key, value}, this::handleLongResponse);
+        return commandManager.executeLongCommand(Append, new String[] {key.toString(), value.toString()});
     }
 
     @Override
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(
-                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+        return commandManager.executeArrayCommand(MGet, keys)
+                .thenApply(objects -> {
+                    if (objects == null) return null;
+                    String[] result = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        result[i] = objects[i] != null ? objects[i].toString() : null;
+                    }
+                    return result;
+                });
     }
 
     @Override
     public CompletableFuture<GlideString[]> mget(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(
-                MGet,
-                keys,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        // Convert GlideString[] to String[] for JNI compatibility
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        
+        return commandManager.executeArrayCommand(MGet, stringKeys)
+                .thenApply(objects -> {
+                    if (objects == null) return null;
+                    GlideString[] result = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        result[i] = objects[i] != null ? GlideString.of(objects[i].toString()) : null;
+                    }
+                    return result;
+                });
     }
 
     @Override
     public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+        return commandManager.executeStringCommand(MSet, args);
     }
 
     @Override
     public CompletableFuture<String> msetBinary(@NonNull Map<GlideString, GlideString> keyValueMap) {
-        GlideString[] args = convertMapToKeyValueGlideStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+        // Convert GlideString key-values to String array for JNI compatibility
+        String[] args = new String[keyValueMap.size() * 2];
+        int i = 0;
+        for (Map.Entry<GlideString, GlideString> entry : keyValueMap.entrySet()) {
+            args[i++] = entry.getKey().toString();
+            args[i++] = entry.getValue().toString();
+        }
+        return commandManager.executeStringCommand(MSet, args);
     }
 
     @Override
@@ -1057,16 +865,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
-        return commandManager.submitNewCommand(
-                IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
+        return commandManager.executeDoubleCommand(
+                IncrByFloat, new String[] {key, Double.toString(amount)});
     }
 
     @Override
     public CompletableFuture<Double> incrByFloat(@NonNull GlideString key, double amount) {
-        return commandManager.submitNewCommand(
-                IncrByFloat,
-                new GlideString[] {key, gs(Double.toString(amount))},
-                this::handleDoubleResponse);
+        return commandManager.executeDoubleCommand(
+                IncrByFloat, new String[] {key.toString(), Double.toString(amount)});
     }
 
     @Override
@@ -1748,14 +1554,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Boolean> expire(@NonNull String key, long seconds) {
-        return commandManager.submitNewCommand(
-                Expire, new String[] {key, Long.toString(seconds)}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                Expire, new String[] {key, Long.toString(seconds)});
     }
 
     @Override
     public CompletableFuture<Boolean> expire(@NonNull GlideString key, long seconds) {
-        return commandManager.submitNewCommand(
-                Expire, new GlideString[] {key, gs(Long.toString(seconds))}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                Expire, new String[] {key.toString(), Long.toString(seconds)});
     }
 
     @Override
@@ -1763,16 +1569,20 @@ public abstract class BaseClient
             @NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
         String[] arguments =
                 ArrayUtils.addAll(new String[] {key, Long.toString(seconds)}, expireOptions.toArgs());
-        return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Expire, arguments);
     }
 
     @Override
     public CompletableFuture<Boolean> expire(
             @NonNull GlideString key, long seconds, @NonNull ExpireOptions expireOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(seconds).add(expireOptions.toArgs()).toArray();
+        // Convert GlideString to String array for JNI compatibility
+        String[] baseArgs = {key.toString(), Long.toString(seconds)};
+        String[] expireArgs = expireOptions.toArgs();
+        String[] arguments = new String[baseArgs.length + expireArgs.length];
+        System.arraycopy(baseArgs, 0, arguments, 0, baseArgs.length);
+        System.arraycopy(expireArgs, 0, arguments, baseArgs.length, expireArgs.length);
 
-        return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Expire, arguments);
     }
 
     @Override
@@ -4644,27 +4454,16 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> publish(@NonNull String message, @NonNull String channel) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeStringCommand(
                 Publish,
-                new String[] {channel, message},
-                response -> {
-                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
-                    return OK;
-                });
+                new String[] {channel, message});
     }
 
     @Override
     public CompletableFuture<String> publish(
             @NonNull GlideString message, @NonNull GlideString channel) {
-        return commandManager.submitNewCommand(
-                Publish,
-                new GlideString[] {channel, message},
-                response -> {
-                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
-                    return OK;
-                });
+        String[] arguments = new String[] {channel.toString(), message.toString()};
+        return commandManager.executeStringCommand(Publish, arguments);
     }
 
     @Override
