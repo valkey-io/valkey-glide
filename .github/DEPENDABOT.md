@@ -34,11 +34,18 @@ The enhanced workflow implements specific timing constraints for different updat
 
 ### Minor Updates
 - **Auto-approved**: After 1 week
+- **Exception**: Never auto-approved for 0.x versions (considered unstable)
 - **Rationale**: Allow time for the community to identify potential issues
 
 ### Major Updates
-- **Auto-approved**: After 3 weeks
-- **Rationale**: Major updates may introduce breaking changes requiring more stability time
+- **Auto-approved**: Never (manual review required)
+- **Rationale**: Major updates may introduce breaking changes and require careful evaluation
+
+### 0.x Versions (Unstable)
+- **Patch updates**: Auto-approved after 1 hour (same as stable versions)
+- **Minor updates**: Never auto-approved (manual review required)
+- **Major updates**: Never auto-approved (manual review required)
+- **Rationale**: 0.x versions follow different semver semantics where minor updates can contain breaking changes
 
 ## Features
 
@@ -89,7 +96,8 @@ The `.github/workflows/dependabot-management.yml` file provides:
 
 - The workflow only operates on dependabot-created PRs
 - All PRs must pass CI checks before auto-approval
-- Major updates require the longest waiting period
+- Major updates are never auto-approved and require manual review
+- 0.x versions (unstable) minor updates are never auto-approved
 - Manual review is always possible before the timing constraints are met
 
 ## Troubleshooting
@@ -113,8 +121,9 @@ To modify the timing constraints:
 1. Edit the `shouldAutoApprovePR` function in `dependabot-management.yml`
 2. Adjust the age thresholds:
    - Patch: Currently 1 hour (`0.042` days)
-   - Minor: Currently 1 week (`7` days)
-   - Major: Currently 3 weeks (`21` days)
+   - Minor: Currently 1 week (`7` days) - except for 0.x versions
+   - Major: Never auto-approved (manual review required)
+   - 0.x Minor: Never auto-approved (manual review required)
 
 To add more ecosystems:
 
