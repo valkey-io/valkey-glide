@@ -362,6 +362,8 @@ jobs:
                   node dependabot-manager.js
 
             - name: Summary
+              env:
+                  DRY_RUN: ${{ inputs.dry_run || 'false' }}
               run: |
                   echo "## Dependabot Management Summary" >> $GITHUB_STEP_SUMMARY
                   echo "- Processed dependabot PRs with timing constraints" >> $GITHUB_STEP_SUMMARY
@@ -369,4 +371,4 @@ jobs:
                   echo "- Minor updates: Auto-approve after 1 week (except for 0.x versions)" >> $GITHUB_STEP_SUMMARY
                   echo "- Major updates: Never auto-approve (manual review required)" >> $GITHUB_STEP_SUMMARY
                   echo "- 0.x versions: Never auto-approve minor updates (unstable)" >> $GITHUB_STEP_SUMMARY
-                  echo "- Dry run mode: ${{ inputs.dry_run || 'false' }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- Dry run mode: \"$DRY_RUN\"" >> $GITHUB_STEP_SUMMARY
