@@ -608,8 +608,8 @@ impl Value {
 
     /// Extracts a server error from the value, if present.
     ///
-    /// If the value contains a `ServerError`, this function returns it as an `Err(RedisError)`.  
-    /// Otherwise, it wraps the value in `Ok`.  
+    /// If the value contains a `ServerError`, this function returns it as an `Err(RedisError)`.
+    /// Otherwise, it wraps the value in `Ok`.
     ///
     /// If there are multiple errors (e.g., within an array or map), only the first encountered error is returned.
     ///
@@ -1050,7 +1050,7 @@ impl RedisError {
         Some((addr, slot_id))
     }
 
-    /// Returns the redirect info for this error.    
+    /// Returns the redirect info for this error.
     pub(crate) fn redirect(&self, should_exec_asking: bool) -> Option<Redirect> {
         let node = self.redirect_node()?;
         match self.kind() {
@@ -2373,8 +2373,8 @@ pub fn from_owned_redis_value<T: FromRedisValue>(v: Value) -> RedisResult<T> {
 #[repr(C)]
 pub enum ProtocolVersion {
     /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP2.md>
-    #[default]
     RESP2,
     /// <https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md>
+    #[default]
     RESP3,
 }

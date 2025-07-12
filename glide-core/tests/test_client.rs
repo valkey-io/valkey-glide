@@ -28,6 +28,7 @@ pub(crate) mod shared_client_tests {
 
     use super::*;
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
+    use glide_core::connection_request::ProtocolVersion;
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
         FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
@@ -208,6 +209,11 @@ pub(crate) mod shared_client_tests {
                         protocol: protocol_enum,
                         ..Default::default()
                     }),
+                    protocol: match protocol {
+                        2 => ProtocolVersion::RESP2,
+                        3 => ProtocolVersion::RESP3,
+                        _ => panic!(),
+                    },
                     ..Default::default()
                 },
             )
@@ -586,6 +592,11 @@ pub(crate) mod shared_client_tests {
                         protocol: protocol_enum,
                         ..Default::default()
                     }),
+                    protocol: match protocol {
+                        2 => ProtocolVersion::RESP2,
+                        3 => ProtocolVersion::RESP3,
+                        _ => panic!(),
+                    },
                     ..Default::default()
                 },
             )
