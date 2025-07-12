@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
-import command_request.CommandRequestOuterClass.RequestType;
+import glide.models.protobuf.command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
