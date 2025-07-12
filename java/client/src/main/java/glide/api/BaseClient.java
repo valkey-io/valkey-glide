@@ -4697,10 +4697,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> sortStore(
             @NonNull GlideString key, @NonNull GlideString destination) {
-        return commandManager.submitNewCommand(
-                Sort,
-                new GlideString[] {key, gs(STORE_COMMAND_STRING), destination},
-                this::handleLongResponse);
+        String[] arguments = new String[] {key.toString(), STORE_COMMAND_STRING, destination.toString()};
+        return commandManager.executeLongCommand(Sort, arguments);
     }
 
     @Override
@@ -4709,7 +4707,7 @@ public abstract class BaseClient
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
                 concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments);
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(Sort, arguments);
     }
 
     @Override
@@ -4717,16 +4715,13 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GlideString destination,
             @NonNull SortOptionsBinary sortOptions) {
-
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(sortOptions.toArgs())
-                        .add(STORE_COMMAND_STRING)
-                        .add(destination)
-                        .toArray();
-
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+        String[] keyArg = new String[] {key.toString()};
+        String[] optionArgs = Arrays.stream(sortOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] storeArgs = new String[] {STORE_COMMAND_STRING, destination.toString()};
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(keyArg, optionArgs), storeArgs);
+        return commandManager.executeLongCommand(Sort, arguments);
     }
 
     @Override
@@ -4736,8 +4731,8 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy) {
         String[] arguments =
                 concatenateArrays(new String[] {key}, searchFrom.toArgs(), searchBy.toArgs());
-        return commandManager.submitNewCommand(
-                GeoSearch, arguments, response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
@@ -4745,13 +4740,19 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(
-                GeoSearch,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] keyArg = new String[] {key.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(keyArg, fromArgs), byArgs);
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
@@ -4763,8 +4764,8 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), resultOptions.toArgs());
-        return commandManager.submitNewCommand(
-                GeoSearch, arguments, response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
@@ -4773,18 +4774,22 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(resultOptions.toArgs())
-                        .toArray();
-
-        return commandManager.submitNewCommand(
-                GeoSearch,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] keyArg = new String[] {key.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] optionArgs = Arrays.stream(resultOptions.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(keyArg, fromArgs), byArgs), optionArgs);
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
@@ -4796,7 +4801,7 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), options.toArgs());
-        return commandManager.submitNewCommand(GeoSearch, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(GeoSearch, arguments);
     }
 
     @Override
@@ -4805,15 +4810,19 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(
-                GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
+        String[] keyArg = new String[] {key.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] optionArgs = Arrays.stream(options.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(keyArg, fromArgs), byArgs), optionArgs);
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
