@@ -47,13 +47,14 @@ jobs:
 
             - name: Install dependencies
               run: |
-                  npm install @octokit/rest semver
+                  cd .github/workflows
+                  npm install
 
             - name: Create PR management script
               run: |
                   cat > dependabot-manager.js << 'EOF'
-                  const { Octokit } = require("@octokit/rest");
-                  const semver = require("semver");
+                  const { Octokit } = require("./.github/workflows/node_modules/@octokit/rest");
+                  const semver = require("./.github/workflows/node_modules/semver");
 
                   const octokit = new Octokit({
                     auth: process.env.GITHUB_TOKEN,
@@ -62,6 +63,59 @@ jobs:
                   const owner = process.env.GITHUB_REPOSITORY.split('/')[0];
                   const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
                   const dryRun = process.env.DRY_RUN === 'true';
+
+                  // Constants for timing constraints
+                  const HOURS_TO_AUTO_APPROVE_PATCH = 1;
+                  const DAYS_TO_AUTO_APPROVE_MINOR = 7;
+                  const PATCH_APPROVAL_THRESHOLD_DAYS = HOURS_TO_AUTO_APPROVE_PATCH / 24; // Convert to days
+
+                  // Regex for parsing dependabot PR titles
+                  const DEPENDABOT_TITLE_REGEX = /^Bump (.+) from (.+) to (.+)$/;
+
+                  // Helper function to parse dependabot PR title
+                  function parseDependabotTitle(title) {
+                    const match = title.match(DEPENDABOT_TITLE_REGEX);
+                    if (!match) return null;
+                    
+                    const [, depName, fromVersion, toVersion] = match;
+                    return { depName, fromVersion, toVersion };
+                  }
+
+                  // Helper function to identify dependabot PRs more flexibly
+                  function isDependabotPR(pr) {
+                    return pr.user.login === 'dependabot[bot]' ||
+                           pr.user.login === 'dependabot-preview[bot]' ||
+                           pr.user.type === 'Bot' && pr.user.login.includes('dependabot') ||
+                           pr.head.ref.startsWith('dependabot/');
+                  }
+
+                  // Helper function to determine ecosystem label from PR branch
+                  function getEcosystemLabel(pr) {
+                    const branch = pr.head.ref;
+                    
+                    // Extract ecosystem from dependabot branch name
+                    // Pattern: dependabot/{ecosystem}/{dependency_name}-{version}
+                    const branchMatch = branch.match(/^dependabot\/([^\/]+)\//);
+                    if (branchMatch) {
+                      const ecosystem = branchMatch[1];
+                      
+                      // Map dependabot ecosystem names to our label conventions
+                      const ecosystemMap = {
+                        'npm_and_yarn': 'npm',
+                        'npm': 'npm',
+                        'gradle': 'java',
+                        'cargo': 'rust',
+                        'gomod': 'go',
+                        'pip': 'python',
+                        'nuget': 'csharp',
+                        'github_actions': 'github-actions'
+                      };
+                      
+                      return ecosystemMap[ecosystem] || ecosystem;
+                    }
+                    
+                    return null;
+                  }
 
                   async function main() {
                     console.log(`Managing Dependabot PRs for ${owner}/${repo}`);
@@ -74,10 +128,7 @@ jobs:
                       state: 'open',
                     });
 
-                    const dependabotPrs = prs.filter(pr => 
-                      pr.user.login === 'dependabot[bot]' || 
-                      pr.head.ref.startsWith('dependabot/')
-                    );
+                    const dependabotPrs = prs.filter(isDependabotPR);
 
                     console.log(`Found ${dependabotPrs.length} dependabot PRs`);
 
@@ -90,13 +141,13 @@ jobs:
                     console.log(`\nProcessing PR #${pr.number}: ${pr.title}`);
                     
                     // Parse the PR title to extract dependency info
-                    const titleMatch = pr.title.match(/^Bump (.+) from (.+) to (.+)$/);
-                    if (!titleMatch) {
+                    const parsedTitle = parseDependabotTitle(pr.title);
+                    if (!parsedTitle) {
                       console.log(`  Skipping - unable to parse title: ${pr.title}`);
                       return;
                     }
 
-                    const [, depName, fromVersion, toVersion] = titleMatch;
+                    const { depName, fromVersion, toVersion } = parsedTitle;
                     console.log(`  Dependency: ${depName} (${fromVersion} -> ${toVersion})`);
 
                     // Determine update type
@@ -157,9 +208,9 @@ jobs:
 
                     // Check if this is a 0.x version (unstable) - don't auto-approve minor updates
                     if (updateType === 'minor') {
-                      const titleMatch = pr.title.match(/^Bump (.+) from (.+) to (.+)$/);
-                      if (titleMatch) {
-                        const [, depName, fromVersion, toVersion] = titleMatch;
+                      const parsedTitle = parseDependabotTitle(pr.title);
+                      if (parsedTitle) {
+                        const { fromVersion, toVersion } = parsedTitle;
                         try {
                           const from = semver.coerce(fromVersion);
                           const to = semver.coerce(toVersion);
@@ -176,11 +227,11 @@ jobs:
 
                     switch (updateType) {
                       case 'patch':
-                        // Patch updates: immediately (but let's wait at least 1 hour for CI)
-                        return ageInDays >= 0.042; // ~1 hour
+                        // Patch updates: wait for CI completion
+                        return ageInDays >= PATCH_APPROVAL_THRESHOLD_DAYS;
                       case 'minor':
                         // Minor updates: after 1 week (but not for 0.x versions, handled above)
-                        return ageInDays >= 7;
+                        return ageInDays >= DAYS_TO_AUTO_APPROVE_MINOR;
                       default:
                         // Unknown updates: do not auto-approve
                         return false;
@@ -232,6 +283,12 @@ jobs:
                         labels.push(`dependency-${updateType}`);
                       }
 
+                      // Add ecosystem-specific label based on PR branch or existing labels
+                      const ecosystemLabel = getEcosystemLabel(pr);
+                      if (ecosystemLabel) {
+                        labels.push(ecosystemLabel);
+                      }
+
                       if (!dryRun) {
                         await octokit.rest.issues.addLabels({
                           owner,
@@ -257,12 +314,24 @@ jobs:
                         ref: pr.head.sha,
                       });
 
-                      const failedChecks = checks.check_runs.filter(check => 
-                        check.conclusion === 'failure' || check.conclusion === 'cancelled'
+                      // Only allow auto-approval if all checks have concluded successfully
+                      const incompleteChecks = checks.check_runs.filter(check => 
+                        check.conclusion !== 'success' && check.conclusion !== 'skipped'
                       );
 
-                      if (failedChecks.length > 0) {
-                        console.log(`  Cannot auto-approve - failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
+                      if (incompleteChecks.length > 0) {
+                        const failedChecks = incompleteChecks.filter(check =>
+                          check.conclusion === 'failure' || check.conclusion === 'cancelled'
+                        );
+                        const pendingChecks = incompleteChecks.filter(check =>
+                          check.status === 'in_progress' || check.status === 'queued' || check.conclusion === null
+                        );
+                        
+                        if (failedChecks.length > 0) {
+                          console.log(`  Cannot auto-approve - failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
+                        } else {
+                          console.log(`  Cannot auto-approve - pending checks: ${pendingChecks.map(c => c.name).join(', ')}`);
+                        }
                         return;
                       }
 

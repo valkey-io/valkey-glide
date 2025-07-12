@@ -11,24 +11,32 @@
 # - All PRs must pass CI checks before auto-approval
 #
 version: 2
+
+# Common configuration templates
+x-common-schedule: &common-schedule
+    interval: "weekly"
+    day: "monday"
+    time: "09:00"
+
+x-common-groups: &common-groups # Group patch updates to reduce noise
+    patch-updates:
+        update-types:
+            - "patch"
+    # Group minor updates
+    minor-updates:
+        update-types:
+            - "minor"
+
+x-base-config: &base-config
+    schedule: *common-schedule
+    open-pull-requests-limit: 10
+    groups: *common-groups
+
 updates:
     # Enable version updates for npm (TypeScript/Node)
     - package-ecosystem: "npm"
       directory: "/"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          # Group patch updates to reduce noise
-          patch-updates:
-              update-types:
-                  - "patch"
-          # Group minor updates
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "npm"
@@ -36,18 +44,7 @@ updates:
     # Enable version updates for npm (Node client)
     - package-ecosystem: "npm"
       directory: "/node"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "npm"
@@ -56,18 +53,7 @@ updates:
     # Enable version updates for Gradle (Java)
     - package-ecosystem: "gradle"
       directory: "/java"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "gradle"
@@ -76,18 +62,7 @@ updates:
     # Enable version updates for Cargo (Rust - glide-core)
     - package-ecosystem: "cargo"
       directory: "/glide-core"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "cargo"
@@ -96,18 +71,7 @@ updates:
     # Enable version updates for Cargo (Rust - Java wrapper)
     - package-ecosystem: "cargo"
       directory: "/java"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "cargo"
@@ -117,18 +81,7 @@ updates:
     # Enable version updates for Cargo (Rust - Python wrapper)
     - package-ecosystem: "cargo"
       directory: "/python"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "cargo"
@@ -138,18 +91,7 @@ updates:
     # Enable version updates for Go modules
     - package-ecosystem: "gomod"
       directory: "/go"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "go"
@@ -157,18 +99,7 @@ updates:
     # Enable version updates for pip (Python)
     - package-ecosystem: "pip"
       directory: "/python"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "pip"
@@ -177,18 +108,7 @@ updates:
     # Enable version updates for NuGet (C#)
     - package-ecosystem: "nuget"
       directory: "/csharp"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
-      open-pull-requests-limit: 10
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      <<: *base-config
       labels:
           - "dependencies"
           - "nuget"
@@ -197,18 +117,9 @@ updates:
     # Enable version updates for GitHub Actions
     - package-ecosystem: "github-actions"
       directory: "/"
-      schedule:
-          interval: "weekly"
-          day: "monday"
-          time: "09:00"
+      schedule: *common-schedule
       open-pull-requests-limit: 5
-      groups:
-          patch-updates:
-              update-types:
-                  - "patch"
-          minor-updates:
-              update-types:
-                  - "minor"
+      groups: *common-groups
       labels:
           - "dependencies"
           - "github-actions"
