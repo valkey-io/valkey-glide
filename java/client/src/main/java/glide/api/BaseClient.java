@@ -770,85 +770,73 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(ObjectEncoding, new String[] {key});
     }
 
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(ObjectEncoding, new String[] {key.toString()});
     }
 
     @Override
     public CompletableFuture<Long> objectFreq(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectFreq, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> objectFreq(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ObjectFreq, new GlideString[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectFreq, new String[] {key.toString()});
     }
 
     @Override
     public CompletableFuture<Long> objectIdletime(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                ObjectIdleTime, new String[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectIdleTime, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> objectIdletime(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ObjectIdleTime, new GlideString[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectIdleTime, new String[] {key.toString()});
     }
 
     @Override
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                ObjectRefCount, new String[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectRefCount, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> objectRefcount(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ObjectRefCount, new GlideString[] {key}, this::handleLongOrNullResponse);
+        return commandManager.executeLongCommand(ObjectRefCount, new String[] {key.toString()});
     }
 
     @Override
     public CompletableFuture<String> rename(@NonNull String key, @NonNull String newKey) {
-        return commandManager.submitNewCommand(
-                Rename, new String[] {key, newKey}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Rename, new String[] {key, newKey});
     }
 
     @Override
     public CompletableFuture<String> rename(@NonNull GlideString key, @NonNull GlideString newKey) {
-        return commandManager.submitNewCommand(
-                Rename, new GlideString[] {key, newKey}, this::handleStringResponse);
+        return commandManager.executeStringCommand(Rename, new String[] {key.toString(), newKey.toString()});
     }
 
     @Override
     public CompletableFuture<Boolean> renamenx(@NonNull String key, @NonNull String newKey) {
-        return commandManager.submitNewCommand(
-                RenameNX, new String[] {key, newKey}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(RenameNX, new String[] {key, newKey});
     }
 
     @Override
     public CompletableFuture<Boolean> renamenx(
             @NonNull GlideString key, @NonNull GlideString newKey) {
-        return commandManager.submitNewCommand(
-                RenameNX, new GlideString[] {key, newKey}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(RenameNX, new String[] {key.toString(), newKey.toString()});
     }
 
     @Override
     public CompletableFuture<Long> incr(@NonNull String key) {
-        return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(Incr, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> incr(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(Incr, new GlideString[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(Incr, new String[] {key.toString()});
     }
 
     @Override
@@ -4839,7 +4827,7 @@ public abstract class BaseClient
                         searchBy.toArgs(),
                         options.toArgs(),
                         resultOptions.toArgs());
-        return commandManager.submitNewCommand(GeoSearch, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(GeoSearch, arguments);
     }
 
     @Override
@@ -4849,16 +4837,22 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .add(resultOptions.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(
-                GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
+        String[] keyArg = new String[] {key.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] optionArgs = Arrays.stream(options.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] resultArgs = Arrays.stream(resultOptions.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(keyArg, fromArgs), byArgs), optionArgs), resultArgs);
+        return commandManager.executeArrayCommand(GeoSearch, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
@@ -4870,7 +4864,7 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {destination, source}, searchFrom.toArgs(), searchBy.toArgs());
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4879,14 +4873,15 @@ public abstract class BaseClient
             @NonNull GlideString source,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        String[] destSourceArgs = new String[] {destination.toString(), source.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(destSourceArgs, fromArgs), byArgs);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4902,7 +4897,7 @@ public abstract class BaseClient
                         searchFrom.toArgs(),
                         searchBy.toArgs(),
                         resultOptions.toArgs());
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4912,15 +4907,18 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(resultOptions.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        String[] destSourceArgs = new String[] {destination.toString(), source.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] resultArgs = Arrays.stream(resultOptions.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(destSourceArgs, fromArgs), byArgs), resultArgs);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4936,7 +4934,7 @@ public abstract class BaseClient
                         searchFrom.toArgs(),
                         searchBy.toArgs(),
                         options.toArgs());
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4946,15 +4944,18 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        String[] destSourceArgs = new String[] {destination.toString(), source.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] optionArgs = Arrays.stream(options.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(destSourceArgs, fromArgs), byArgs), optionArgs);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4972,7 +4973,7 @@ public abstract class BaseClient
                         searchBy.toArgs(),
                         options.toArgs(),
                         resultOptions.toArgs());
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
@@ -4983,35 +4984,41 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .add(resultOptions.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+        String[] destSourceArgs = new String[] {destination.toString(), source.toString()};
+        String[] fromArgs = Arrays.stream(searchFrom.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] byArgs = Arrays.stream(searchBy.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] optionArgs = Arrays.stream(options.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] resultArgs = Arrays.stream(resultOptions.toArgs())
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(ArrayUtils.addAll(destSourceArgs, fromArgs), byArgs), optionArgs), resultArgs);
+        return commandManager.executeLongCommand(GeoSearchStore, arguments);
     }
 
     @Override
     public CompletableFuture<Object[]> sscan(@NonNull String key, @NonNull String cursor) {
         String[] arguments = new String[] {key, cursor};
-        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(SScan, arguments);
     }
 
     @Override
     public CompletableFuture<Object[]> sscan(@NonNull GlideString key, @NonNull GlideString cursor) {
-        GlideString[] arguments = new GlideString[] {key, cursor};
-        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] arguments = new String[] {key.toString(), cursor.toString()};
+        return commandManager.executeArrayCommand(SScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Object[]> sscan(
             @NonNull String key, @NonNull String cursor, @NonNull SScanOptions sScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, sScanOptions.toArgs());
-        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(SScan, arguments);
     }
 
     @Override
@@ -5019,29 +5026,33 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GlideString cursor,
             @NonNull SScanOptionsBinary sScanOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(cursor).add(sScanOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] keyArgs = new String[] {key.toString(), cursor.toString()};
+        String[] optionArgs = Arrays.stream(sScanOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(keyArgs, optionArgs);
+        return commandManager.executeArrayCommand(SScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Object[]> zscan(@NonNull String key, @NonNull String cursor) {
         String[] arguments = new String[] {key, cursor};
-        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(ZScan, arguments);
     }
 
     @Override
     public CompletableFuture<Object[]> zscan(@NonNull GlideString key, @NonNull GlideString cursor) {
-        GlideString[] arguments = new GlideString[] {key, cursor};
-        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] arguments = new String[] {key.toString(), cursor.toString()};
+        return commandManager.executeArrayCommand(ZScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Object[]> zscan(
             @NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, zScanOptions.toArgs());
-        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(ZScan, arguments);
     }
 
     @Override
@@ -5049,29 +5060,33 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GlideString cursor,
             @NonNull ZScanOptionsBinary zScanOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(cursor).add(zScanOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] keyArgs = new String[] {key.toString(), cursor.toString()};
+        String[] optionArgs = Arrays.stream(zScanOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(keyArgs, optionArgs);
+        return commandManager.executeArrayCommand(ZScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Object[]> hscan(@NonNull String key, @NonNull String cursor) {
         String[] arguments = new String[] {key, cursor};
-        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(HScan, arguments);
     }
 
     @Override
     public CompletableFuture<Object[]> hscan(@NonNull GlideString key, @NonNull GlideString cursor) {
-        GlideString[] arguments = new GlideString[] {key, cursor};
-        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] arguments = new String[] {key.toString(), cursor.toString()};
+        return commandManager.executeArrayCommand(HScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Object[]> hscan(
             @NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs());
-        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(HScan, arguments);
     }
 
     @Override
@@ -5079,17 +5094,19 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GlideString cursor,
             @NonNull HScanOptionsBinary hScanOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(cursor).add(hScanOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);
+        String[] keyArgs = new String[] {key.toString(), cursor.toString()};
+        String[] optionArgs = Arrays.stream(hScanOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(keyArgs, optionArgs);
+        return commandManager.executeArrayCommand(HScan, arguments)
+                .thenApply(array -> convertByteArrayToGlideString(array));
     }
 
     @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeLongCommand(
                 Wait,
-                new String[] {Long.toString(numreplicas), Long.toString(timeout)},
-                this::handleLongResponse);
+                new String[] {Long.toString(numreplicas), Long.toString(timeout)});
     }
 }
