@@ -211,7 +211,7 @@ internal class FFI
             RetryStrategy? retryStrategy,
             AuthenticationInfo? authenticationInfo,
             uint databaseId,
-            Protocol? protocol,
+            ConnectionConfiguration.Protocol? protocol,
             string? clientName)
         {
             _addresses = addresses;
@@ -331,7 +331,7 @@ internal class FFI
         AllNodes,
         AllPrimaries,
         SlotId,
-        SlotType,
+        SlotKey,
         ByAddress,
     }
 
@@ -376,7 +376,7 @@ internal class FFI
         public uint DatabaseId;
         [MarshalAs(UnmanagedType.U1)]
         public bool HasProtocol;
-        public Protocol Protocol;
+        public ConnectionConfiguration.Protocol Protocol;
         [MarshalAs(UnmanagedType.LPStr)]
         public string? ClientName;
         // TODO more config params, see ffi.rs

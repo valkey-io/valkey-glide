@@ -98,7 +98,7 @@ public abstract class Route
         public readonly string SlotKey = slotKey;
         public new readonly SlotType SlotType = slotType;
 
-        internal override FFI.Route ToFfi() => new(RouteType.SlotId, slotKeyInfo: (SlotKey, SlotType));
+        internal override FFI.Route ToFfi() => new(RouteType.SlotKey, slotKeyInfo: (SlotKey, SlotType));
     }
 
     /// <summary>
@@ -138,7 +138,7 @@ public abstract class Route
             Port = int.Parse(parts[1]);
         }
 
-        internal override FFI.Route ToFfi() => new(RouteType.SlotId, address: (Host, Port));
+        internal override FFI.Route ToFfi() => new(RouteType.ByAddress, address: (Host, Port));
     }
 
     internal Route() { }
