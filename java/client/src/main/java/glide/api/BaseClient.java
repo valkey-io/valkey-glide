@@ -2095,29 +2095,42 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Double>> zdiffWithScores(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
         arguments = ArrayUtils.add(arguments, WITH_SCORES_VALKEY_API);
-        return commandManager.submitNewCommand(ZDiff, arguments, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ZDiff, arguments)
+                .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zdiffWithScores(@NonNull GlideString[] keys) {
-        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
-        arguments = ArrayUtils.add(arguments, gs(WITH_SCORES_VALKEY_API));
-        return commandManager.submitNewCommand(ZDiff, arguments, this::handleBinaryStringMapResponse);
+        String[] arguments = new ArgsBuilder()
+                .add(keys.length)
+                .add(Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new))
+                .add(WITH_SCORES_VALKEY_API)
+                .toStringArray();
+        return commandManager.executeObjectCommand(ZDiff, arguments)
+                .thenApply(result -> {
+                    if (result == null) return null;
+                    Map<String, Double> stringMap = (Map<String, Double>) result;
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
     public CompletableFuture<Long> zdiffstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments =
                 ArrayUtils.addAll(new String[] {destination, Long.toString(keys.length)}, keys);
-        return commandManager.submitNewCommand(ZDiffStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZDiffStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zdiffstore(
             @NonNull GlideString destination, @NonNull GlideString[] keys) {
-        GlideString[] arguments =
-                ArrayUtils.addAll(new GlideString[] {destination, gs(Long.toString(keys.length))}, keys);
-        return commandManager.submitNewCommand(ZDiffStore, arguments, this::handleLongResponse);
+        String[] arguments = ArrayUtils.addAll(
+                new String[] {destination.toString(), Long.toString(keys.length)},
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new)
+        );
+        return commandManager.executeLongCommand(ZDiffStore, arguments);
     }
 
     @Override
@@ -2215,7 +2228,7 @@ public abstract class BaseClient
         String[] arguments =
                 RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse);
 
-        return commandManager.submitNewCommand(ZRangeStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZRangeStore, arguments);
     }
 
     @Override
@@ -2224,10 +2237,11 @@ public abstract class BaseClient
             @NonNull GlideString source,
             @NonNull RangeQuery rangeQuery,
             boolean reverse) {
-        GlideString[] arguments =
-                RangeOptions.createZRangeStoreArgsBinary(destination, source, rangeQuery, reverse);
+        String[] arguments = RangeOptions.createZRangeStoreArgs(
+                destination.toString(), source.toString(), rangeQuery, reverse
+        );
 
-        return commandManager.submitNewCommand(ZRangeStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZRangeStore, arguments);
     }
 
     @Override
@@ -2252,7 +2266,7 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs());
-        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZUnionStore, arguments);
     }
 
     @Override
@@ -2260,29 +2274,30 @@ public abstract class BaseClient
             @NonNull GlideString destination,
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(keysOrWeightedKeys.toArgs())
-                        .add(aggregate.toArgs())
-                        .toArray();
+        String[] arguments = concatenateArrays(
+                new String[] {destination.toString()},
+                keysOrWeightedKeys.toArgs(),
+                aggregate.toArgs()
+        );
 
-        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZUnionStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zunionstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
-        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZUnionStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zunionstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs()).toArray();
-        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+        String[] arguments = concatenateArrays(
+                new String[] {destination.toString()},
+                keysOrWeightedKeys.toArgs()
+        );
+        return commandManager.executeLongCommand(ZUnionStore, arguments);
     }
 
     @Override
@@ -2293,7 +2308,7 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs());
-        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZInterStore, arguments);
     }
 
     @Override
@@ -2301,42 +2316,45 @@ public abstract class BaseClient
             @NonNull GlideString destination,
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(keysOrWeightedKeys.toArgs())
-                        .add(aggregate.toArgs())
-                        .toArray();
-        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+        String[] arguments = concatenateArrays(
+                new String[] {destination.toString()},
+                keysOrWeightedKeys.toArgs(),
+                aggregate.toArgs()
+        );
+        return commandManager.executeLongCommand(ZInterStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zinterstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
-        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZInterStore, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zinterstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        GlideString[] arguments =
-                concatenateArrays(new GlideString[] {destination}, keysOrWeightedKeys.toArgs());
-        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+        String[] arguments = concatenateArrays(
+                new String[] {destination.toString()},
+                keysOrWeightedKeys.toArgs()
+        );
+        return commandManager.executeLongCommand(ZInterStore, arguments);
     }
 
     @Override
     public CompletableFuture<String[]> zunion(@NonNull KeyArray keys) {
-        return commandManager.submitNewCommand(
-                ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeObjectCommand(ZUnion, keys.toArgs())
+                .thenApply(result -> (String[]) result);
     }
 
     @Override
     public CompletableFuture<GlideString[]> zunion(@NonNull KeyArrayBinary keys) {
-        return commandManager.submitNewCommand(
-                ZUnion,
-                keys.toArgs(),
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+        return commandManager.executeObjectCommand(ZUnion, keys.toArgs())
+                .thenApply(result -> {
+                    if (result == null) return null;
+                    String[] stringArray = (String[]) result;
+                    return Arrays.stream(stringArray).map(GlideString::of).toArray(GlideString[]::new);
+                });
     }
 
     @Override
@@ -2345,19 +2363,25 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ZUnion, arguments)
+                .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(keysOrWeightedKeys.toArgs())
-                        .add(aggregate.toArgs())
-                        .add(WITH_SCORES_VALKEY_API)
-                        .toArray();
-        return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
+        String[] arguments = concatenateArrays(
+                keysOrWeightedKeys.toArgs(),
+                aggregate.toArgs(),
+                new String[] {WITH_SCORES_VALKEY_API}
+        );
+        return commandManager.executeObjectCommand(ZUnion, arguments)
+                .thenApply(result -> {
+                    Map<String, Double> stringMap = (Map<String, Double>) result;
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
@@ -2365,30 +2389,40 @@ public abstract class BaseClient
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ZUnion, arguments)
+                .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API).toArray();
+        String[] arguments = concatenateArrays(
+                keysOrWeightedKeys.toArgs(),
+                new String[] {WITH_SCORES_VALKEY_API}
+        );
 
-        return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
+        return commandManager.executeObjectCommand(ZUnion, arguments)
+                .thenApply(result -> {
+                    Map<String, Double> stringMap = (Map<String, Double>) result;
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
     public CompletableFuture<String[]> zinter(@NonNull KeyArray keys) {
-        return commandManager.submitNewCommand(
-                ZInter, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeObjectCommand(ZInter, keys.toArgs())
+                .thenApply(result -> (String[]) result);
     }
 
     @Override
     public CompletableFuture<GlideString[]> zinter(@NonNull KeyArrayBinary keys) {
-        return commandManager.submitNewCommand(
-                ZInter,
-                keys.toArgs(),
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+        return commandManager.executeObjectCommand(ZInter, keys.toArgs())
+                .thenApply(result -> {
+                    String[] stringArray = (String[]) result;
+                    return Arrays.stream(stringArray).map(GlideString::of).toArray(GlideString[]::new);
+                });
     }
 
     @Override
@@ -2397,19 +2431,25 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ZInter, arguments)
+                .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zinterWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(keysOrWeightedKeys.toArgs())
-                        .add(aggregate.toArgs())
-                        .add(WITH_SCORES_VALKEY_API)
-                        .toArray();
-        return commandManager.submitNewCommand(ZInter, arguments, this::handleBinaryStringMapResponse);
+        String[] arguments = concatenateArrays(
+                keysOrWeightedKeys.toArgs(),
+                aggregate.toArgs(),
+                new String[] {WITH_SCORES_VALKEY_API}
+        );
+        return commandManager.executeObjectCommand(ZInter, arguments)
+                .thenApply(result -> {
+                    Map<String, Double> stringMap = (Map<String, Double>) result;
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
@@ -2417,92 +2457,96 @@ public abstract class BaseClient
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ZInter, arguments)
+                .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zinterWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        GlideString[] arguments =
-                concatenateArrays(
-                        keysOrWeightedKeys.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
-        return commandManager.submitNewCommand(ZInter, arguments, this::handleBinaryStringMapResponse);
+        String[] arguments = concatenateArrays(
+                keysOrWeightedKeys.toArgs(),
+                new String[] {WITH_SCORES_VALKEY_API}
+        );
+        return commandManager.executeObjectCommand(ZInter, arguments)
+                .thenApply(result -> {
+                    Map<String, Double> stringMap = (Map<String, Double>) result;
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
     public CompletableFuture<String> zrandmember(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                ZRandMember, new String[] {key}, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(ZRandMember, new String[] {key});
     }
 
     @Override
     public CompletableFuture<GlideString> zrandmember(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ZRandMember, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(ZRandMember, new String[] {key.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String[]> zrandmemberWithCount(@NonNull String key, long count) {
-        return commandManager.submitNewCommand(
-                ZRandMember,
-                new String[] {key, Long.toString(count)},
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeObjectCommand(ZRandMember, new String[] {key, Long.toString(count)})
+                .thenApply(result -> (String[]) result);
     }
 
     @Override
     public CompletableFuture<GlideString[]> zrandmemberWithCount(
             @NonNull GlideString key, long count) {
-        return commandManager.submitNewCommand(
-                ZRandMember,
-                new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+        return commandManager.executeObjectCommand(ZRandMember, new String[] {key.toString(), Long.toString(count)})
+                .thenApply(result -> {
+                    String[] stringArray = (String[]) result;
+                    return Arrays.stream(stringArray).map(GlideString::of).toArray(GlideString[]::new);
+                });
     }
 
     @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
             @NonNull String key, long count) {
         String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_VALKEY_API};
-        return commandManager.submitNewCommand(
-                ZRandMember,
-                arguments,
-                response -> castArray(handleArrayResponse(response), Object[].class));
+        return commandManager.executeObjectCommand(ZRandMember, arguments)
+                .thenApply(result -> (Object[][]) result);
     }
 
     @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
             @NonNull GlideString key, long count) {
-        GlideString[] arguments =
-                new GlideString[] {key, gs(Long.toString(count)), gs(WITH_SCORES_VALKEY_API)};
-        return commandManager.submitNewCommand(
-                ZRandMember,
-                arguments,
-                response -> castArray(handleArrayResponseBinary(response), Object[].class));
+        String[] arguments = new String[] {key.toString(), Long.toString(count), WITH_SCORES_VALKEY_API};
+        return commandManager.executeObjectCommand(ZRandMember, arguments)
+                .thenApply(result -> (Object[][]) result);
     }
 
     @Override
     public CompletableFuture<Double> zincrby(
             @NonNull String key, double increment, @NonNull String member) {
         String[] arguments = new String[] {key, Double.toString(increment), member};
-        return commandManager.submitNewCommand(ZIncrBy, arguments, this::handleDoubleResponse);
+        return commandManager.executeDoubleCommand(ZIncrBy, arguments);
     }
 
     @Override
     public CompletableFuture<Double> zincrby(
             @NonNull GlideString key, double increment, @NonNull GlideString member) {
-        GlideString[] arguments = new GlideString[] {key, gs(Double.toString(increment)), member};
-        return commandManager.submitNewCommand(ZIncrBy, arguments, this::handleDoubleResponse);
+        String[] arguments = new String[] {key.toString(), Double.toString(increment), member.toString()};
+        return commandManager.executeDoubleCommand(ZIncrBy, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
-        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZInterCard, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Integer.toString(keys.length)));
-        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+        String[] arguments = ArrayUtils.addFirst(
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                Integer.toString(keys.length)
+        );
+        return commandManager.executeLongCommand(ZInterCard, arguments);
     }
 
     @Override
@@ -2512,17 +2556,17 @@ public abstract class BaseClient
                         new String[] {Integer.toString(keys.length)},
                         keys,
                         new String[] {LIMIT_VALKEY_API, Long.toString(limit)});
-        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(ZInterCard, arguments);
     }
 
     @Override
     public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys, long limit) {
-        GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {gs(Integer.toString(keys.length))},
-                        keys,
-                        new GlideString[] {gs(LIMIT_VALKEY_API), gs(Long.toString(limit))});
-        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+        String[] arguments = concatenateArrays(
+                new String[] {Integer.toString(keys.length)},
+                Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new),
+                new String[] {LIMIT_VALKEY_API, Long.toString(limit)}
+        );
+        return commandManager.executeLongCommand(ZInterCard, arguments);
     }
 
     @Override
@@ -2553,7 +2597,7 @@ public abstract class BaseClient
         String[] arguments =
                 ArrayUtils.addAll(
                         ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
-        return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(XAdd, arguments);
     }
 
     @Override
@@ -2563,7 +2607,7 @@ public abstract class BaseClient
                 ArrayUtils.addAll(
                         ArrayUtils.addFirst(options.toArgs(), key),
                         convertNestedArrayToKeyValueStringArray(values));
-        return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(XAdd, arguments);
     }
 
     @Override
@@ -2571,14 +2615,21 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull Map<GlideString, GlideString> values,
             @NonNull StreamAddOptionsBinary options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(options.toArgs())
-                        .add(convertMapToKeyValueGlideStringArray(values))
-                        .toArray();
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(options.toArgs())
+                .add(convertMapToKeyValueStringArray(
+                    values.entrySet().stream().collect(
+                        Collectors.toMap(
+                            entry -> entry.getKey().toString(),
+                            entry -> entry.getValue().toString()
+                        )
+                    )
+                ))
+                .toStringArray();
 
-        return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(XAdd, arguments)
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -2586,14 +2637,18 @@ public abstract class BaseClient
             @NonNull GlideString key,
             @NonNull GlideString[][] values,
             @NonNull StreamAddOptionsBinary options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(options.toArgs())
-                        .add(convertNestedArrayToKeyValueGlideStringArray(values))
-                        .toArray();
+        String[] arguments = new ArgsBuilder()
+                .add(key.toString())
+                .add(options.toArgs())
+                .add(convertNestedArrayToKeyValueStringArray(
+                    Arrays.stream(values).map(arr -> 
+                        new String[]{arr[0].toString(), arr[1].toString()}
+                    ).toArray(String[][]::new)
+                ))
+                .toStringArray();
 
-        return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(XAdd, arguments)
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -2612,50 +2667,76 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
-        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
+        return commandManager.executeObjectCommand(XRead, arguments)
+                .thenApply(result -> (Map<String, Map<String, String[][]>>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
             @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull StreamReadOptions options) {
-        GlideString[] arguments = options.toArgsBinary(keysAndIds);
-        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponseBinary);
+        String[] arguments = options.toArgs(
+                keysAndIds.entrySet().stream().collect(
+                    Collectors.toMap(
+                        entry -> entry.getKey().toString(),
+                        entry -> entry.getValue().toString()
+                    )
+                )
+        );
+        return commandManager.executeObjectCommand(XRead, arguments)
+                .thenApply(result -> {
+                    Map<String, Map<String, String[][]>> stringResult = (Map<String, Map<String, String[][]>>) result;
+                    Map<GlideString, Map<GlideString, GlideString[][]>> glideResult = new HashMap<>();
+                    stringResult.forEach((k, v) -> {
+                        Map<GlideString, GlideString[][]> innerMap = new HashMap<>();
+                        v.forEach((ik, iv) -> {
+                            GlideString[][] glideArray = Arrays.stream(iv)
+                                .map(arr -> Arrays.stream(arr).map(GlideString::of).toArray(GlideString[]::new))
+                                .toArray(GlideString[][]::new);
+                            innerMap.put(GlideString.of(ik), glideArray);
+                        });
+                        glideResult.put(GlideString.of(k), innerMap);
+                    });
+                    return glideResult;
+                });
     }
 
     @Override
     public CompletableFuture<Long> xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
-        return commandManager.submitNewCommand(XTrim, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(XTrim, arguments);
     }
 
     @Override
     public CompletableFuture<Long> xtrim(
             @NonNull GlideString key, @NonNull StreamTrimOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(options.toArgs()).toArray();
+        String[] arguments = new ArgsBuilder().add(key.toString()).add(options.toArgs()).toStringArray();
 
-        return commandManager.submitNewCommand(XTrim, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(XTrim, arguments);
     }
 
     @Override
     public CompletableFuture<Long> xlen(@NonNull String key) {
-        return commandManager.submitNewCommand(XLen, new String[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(XLen, new String[] {key});
     }
 
     @Override
     public CompletableFuture<Long> xlen(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(XLen, new GlideString[] {key}, this::handleLongResponse);
+        return commandManager.executeLongCommand(XLen, new String[] {key.toString()});
     }
 
     @Override
     public CompletableFuture<Long> xdel(@NonNull String key, @NonNull String[] ids) {
         String[] arguments = ArrayUtils.addFirst(ids, key);
-        return commandManager.submitNewCommand(XDel, arguments, this::handleLongResponse);
+        return commandManager.executeLongCommand(XDel, arguments);
     }
 
     @Override
     public CompletableFuture<Long> xdel(@NonNull GlideString key, @NonNull GlideString[] ids) {
-        GlideString[] arguments = ArrayUtils.addFirst(ids, key);
-        return commandManager.submitNewCommand(XDel, arguments, this::handleLongResponse);
+        String[] arguments = ArrayUtils.addFirst(
+                Arrays.stream(ids).map(GlideString::toString).toArray(String[]::new),
+                key.toString()
+        );
+        return commandManager.executeLongCommand(XDel, arguments);
     }
 
     @Override
@@ -2771,7 +2852,7 @@ public abstract class BaseClient
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
         String[] arguments = concatenateArrays(new String[] {key, groupName, id}, options.toArgs());
-        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(XGroupCreate, arguments);
     }
 
     @Override
@@ -2780,9 +2861,10 @@ public abstract class BaseClient
             @NonNull GlideString groupName,
             @NonNull GlideString id,
             @NonNull StreamGroupOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs()).toArray();
-        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+        String[] arguments = Arrays.stream(new ArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs()).toArray())
+                .map(GlideString::toString).toArray(String[]::new);
+        return commandManager.executeStringCommand(XGroupCreate, arguments)
+                .thenApply(result -> result);
     }
 
     @Override
@@ -2847,7 +2929,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String groupName, @NonNull String id, long entriesRead) {
         String[] arguments =
                 new String[] {key, groupName, id, ENTRIES_READ_VALKEY_API, Long.toString(entriesRead)};
-        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(XGroupSetId, arguments);
     }
 
     @Override
@@ -2856,15 +2938,15 @@ public abstract class BaseClient
             @NonNull GlideString groupName,
             @NonNull GlideString id,
             long entriesRead) {
-        GlideString[] arguments =
-                new ArgsBuilder()
+        String[] arguments = Arrays.stream(new ArgsBuilder()
                         .add(key)
                         .add(groupName)
                         .add(id)
                         .add(ENTRIES_READ_VALKEY_API)
                         .add(entriesRead)
-                        .toArray();
-        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
+                        .toArray())
+                .map(GlideString::toString).toArray(String[]::new);
+        return commandManager.executeStringCommand(XGroupSetId, arguments);
     }
 
     @Override
@@ -2888,7 +2970,8 @@ public abstract class BaseClient
             @NonNull String consumer,
             @NonNull StreamReadGroupOptions options) {
         String[] arguments = options.toArgs(group, consumer, keysAndIds);
-        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
+        return commandManager.executeObjectCommand(XReadGroup, arguments)
+                .thenApply(result -> result != null ? castToMapOfStringToMapOfStringToStringArray(result) : null);
     }
 
     @Override
@@ -2897,22 +2980,25 @@ public abstract class BaseClient
             @NonNull GlideString group,
             @NonNull GlideString consumer,
             @NonNull StreamReadGroupOptions options) {
-        GlideString[] arguments = options.toArgsBinary(group, consumer, keysAndIds);
-        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponseBinary);
+        String[] arguments = Arrays.stream(options.toArgsBinary(group, consumer, keysAndIds))
+                .map(GlideString::toString).toArray(String[]::new);
+        return commandManager.executeObjectCommand(XReadGroup, arguments)
+                .thenApply(result -> result != null ? castToMapOfGlideStringToMapOfGlideStringToGlideStringArray(result) : null);
     }
 
     @Override
     public CompletableFuture<Long> xack(
             @NonNull String key, @NonNull String group, @NonNull String[] ids) {
         String[] args = concatenateArrays(new String[] {key, group}, ids);
-        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
+        return commandManager.executeLongCommand(XAck, args);
     }
 
     @Override
     public CompletableFuture<Long> xack(
             @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString[] ids) {
-        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, ids);
-        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
+        String[] args = Arrays.stream(concatenateArrays(new GlideString[] {key, group}, ids))
+                .map(GlideString::toString).toArray(String[]::new);
+        return commandManager.executeLongCommand(XAck, args);
     }
 
     @Override
@@ -2984,7 +3070,8 @@ public abstract class BaseClient
             @NonNull String[] ids) {
         String[] args =
                 concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids);
-        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+        return commandManager.executeObjectCommand(XClaim, args)
+                .thenApply(result -> result != null ? castToMapOfStringToStringArray(result) : null);
     }
 
     @Override
@@ -3014,7 +3101,8 @@ public abstract class BaseClient
         String[] args =
                 concatenateArrays(
                         new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids, options.toArgs());
-        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+        return commandManager.executeObjectCommand(XClaim, args)
+                .thenApply(result -> result != null ? castToMapOfStringToStringArray(result) : null);
     }
 
     @Override

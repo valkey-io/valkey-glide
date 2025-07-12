@@ -3,7 +3,7 @@
 ## Overview
 Systematic conversion of BaseClient methods from protobuf UDS pattern to direct JNI typed returns.
 
-**Total Progress: 160+ methods converted out of ~200+ methods (80% complete)**
+**Total Progress: 180+ methods converted out of ~200+ methods (90% complete)**
 
 ## Conversion Pattern
 ```java
@@ -48,10 +48,31 @@ CompletableFuture<String> result = commandManager.executeStringCommand(Get, args
 ### Key Management Commands
 - **Batch 1**: touch, exists, unlink, type
 
+### Expire/TTL Commands  
+- **Batch 1**: ttl, expireAt, pexpire, pexpireAt
+
+### Set Store Commands
+- **Batch 1**: sdiffstore, sunionstore
+
+### ZAdd Variants
+- **Batch 1**: zaddIncr methods
+
+### Blocking Pop Commands
+- **Batch 1**: bzpopmin, bzpopmax
+
+### ZDiff Commands
+- **Batch 1**: zdiffWithScores, zdiffstore methods
+
+### ZRange Store Commands
+- **Batch 1**: zrangestore methods
+
+### ZUnion Store Commands
+- **Batch 1**: zunionstore methods (multiple variants)
+
 ## IN PROGRESS 🔄
 
-### Remaining Methods Search
-- **Next**: Finding remaining unconverted methods
+### ZInter Store Commands
+- **Batch 1**: zinterstore methods
 
 ## PENDING BATCHES 📋
 
