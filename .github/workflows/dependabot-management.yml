@@ -1,5 +1,16 @@
 name: Enhanced Dependabot Management
 
+# This workflow implements timing constraints for dependabot PRs:
+# - Patch updates: Auto-approved after 1 hour (safe bug fixes)
+# - Minor updates: Auto-approved after 1 week (except 0.x versions)
+# - Major updates: Never auto-approved (breaking changes)
+# - 0.x minor updates: Never auto-approved (unstable/breaking changes)
+#
+# Security considerations:
+# - Only operates on dependabot-created PRs
+# - Requires CI checks to pass before auto-approval
+# - Manual review always possible before timing constraints are met
+
 on:
   schedule:
     # Run every Monday at 10:00 AM UTC (after dependabot runs)

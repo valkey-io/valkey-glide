@@ -1,3 +1,15 @@
+# Dependabot configuration for automated dependency management
+# 
+# Auto-approval timing constraints (implemented in dependabot-management.yml):
+# - Patch updates: Auto-approved after 1 hour (allowing CI completion)
+# - Minor updates: Auto-approved after 1 week (never for 0.x versions)
+# - Major updates: Never auto-approved (manual review required)
+# 
+# Security policy:
+# - Major version updates always require manual review
+# - For 0.x versions: minor updates are never auto-approved (breaking changes)
+# - All PRs must pass CI checks before auto-approval
+#
 version: 2
 updates:
   # Enable version updates for npm (TypeScript/Node)
