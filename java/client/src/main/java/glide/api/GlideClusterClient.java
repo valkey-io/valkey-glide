@@ -103,6 +103,9 @@ public class GlideClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
+    /** Constant for "OK" responses. */
+    private static final String OK = "OK";
+
     /** A private constructor. Use {@link #createClient} to get a client. */
     GlideClusterClient(ClientBuilder builder) {
         super(builder);
@@ -459,7 +462,7 @@ public class GlideClusterClient extends BaseClient
                 route)
                 .thenApply(result -> route instanceof SingleNodeRoute
                         ? ClusterValue.ofSingleValue(GlideString.of((String) result))
-                        : ClusterValue.ofMultiValueBinary((Map<GlideString, GlideString>) castToBinaryStringMap(result)));
+                        : ClusterValue.ofMultiValueBinary(castToBinaryGlideStringMap(result)));
     }
 
     @Override
@@ -476,9 +479,8 @@ public class GlideClusterClient extends BaseClient
                 new String[0],
                 route)
                 .thenApply(result -> route instanceof SingleNodeRoute
-                        ? ClusterValue.ofSingleValue(castArray(result, String.class))
-                        : ClusterValue.ofMultiValue(
-                                castMapOfArrays(result, String.class)));
+                        ? ClusterValue.ofSingleValue(castToStringArray(result))
+                        : ClusterValue.ofMultiValue((Map<String, String[]>) result));
     }
 
     @Override
@@ -1233,7 +1235,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Map<String, Long>> pubsubShardNumSub(@NonNull String[] channels) {
         return commandManager.executeObjectCommand(PubSubShardNumSub, channels)
-                .thenApply(result -> result != null ? castToMapOfStringToString(result) : null);
+                .thenApply(result -> result != null ? (Map<String, Long>) result : null);
     }
 
     @Override
@@ -1241,7 +1243,7 @@ public class GlideClusterClient extends BaseClient
             @NonNull GlideString[] channels) {
         return commandManager.executeObjectCommand(
                 PubSubShardNumSub, Arrays.stream(channels).map(GlideString::toString).toArray(String[]::new))
-                .thenApply(result -> result != null ? (Map<GlideString, Long>) castToBinaryStringMap(result) : null);
+                .thenApply(result -> result != null ? castToBinaryLongMap(result) : null);
     }
 
     @Override
@@ -1311,6 +1313,84 @@ public class GlideClusterClient extends BaseClient
                 .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    // ==================== CASTING HELPER METHODS ====================
+    // These helpers work with the direct Object results from JNI
+
+    /** Cast Object result to String array. */
+    protected String[] castToStringArray(Object result) {
+        if (result == null) return null;
+        Object[] array = (Object[]) result;
+        return Arrays.stream(array).map(String::valueOf).toArray(String[]::new);
+    }
+
+    /** Cast Object result to GlideString array. */
+    protected GlideString[] castToGlideStringArray(Object result) {
+        if (result == null) return null;
+        Object[] array = (Object[]) result;
+        return Arrays.stream(array).map(o -> GlideString.of(String.valueOf(o))).toArray(GlideString[]::new);
+    }
+
+    /** Cast Object result to Boolean array. */
+    protected Boolean[] castToBooleanArray(Object result) {
+        if (result == null) return null;
+        Object[] array = (Object[]) result;
+        return Arrays.stream(array).map(o -> (Boolean) o).toArray(Boolean[]::new);
+    }
+
+    /** Cast Object result to Map<String, String>. */
+    @SuppressWarnings("unchecked")
+    protected Map<String, String> castToMapOfStringToString(Object result) {
+        return result != null ? (Map<String, String>) result : null;
+    }
+
+    /** Cast Object result to Map<GlideString, Object> for binary operations. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, Object> castToBinaryStringMap(Object result) {
+        if (result == null) return null;
+        Map<String, Object> stringMap = (Map<String, Object>) result;
+        Map<GlideString, Object> binaryMap = new java.util.HashMap<>();
+        for (Map.Entry<String, Object> entry : stringMap.entrySet()) {
+            binaryMap.put(GlideString.of(entry.getKey()), entry.getValue());
+        }
+        return binaryMap;
+    }
+
+    /** Cast Object result to Map<GlideString, byte[]> for binary operations. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, byte[]> castToBinaryMap(Object result) {
+        if (result == null) return null;
+        Map<String, byte[]> stringMap = (Map<String, byte[]>) result;
+        Map<GlideString, byte[]> binaryMap = new java.util.HashMap<>();
+        for (Map.Entry<String, byte[]> entry : stringMap.entrySet()) {
+            binaryMap.put(GlideString.of(entry.getKey()), entry.getValue());
+        }
+        return binaryMap;
+    }
+
+    /** Cast Object result to Map<GlideString, Long> for binary operations. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, Long> castToBinaryLongMap(Object result) {
+        if (result == null) return null;
+        Map<String, Long> stringMap = (Map<String, Long>) result;
+        Map<GlideString, Long> binaryMap = new java.util.HashMap<>();
+        for (Map.Entry<String, Long> entry : stringMap.entrySet()) {
+            binaryMap.put(GlideString.of(entry.getKey()), entry.getValue());
+        }
+        return binaryMap;
+    }
+
+    /** Cast Object result to Map<GlideString, GlideString> for binary operations. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, GlideString> castToBinaryGlideStringMap(Object result) {
+        if (result == null) return null;
+        Map<String, String> stringMap = (Map<String, String>) result;
+        Map<GlideString, GlideString> binaryMap = new java.util.HashMap<>();
+        for (Map.Entry<String, String> entry : stringMap.entrySet()) {
+            binaryMap.put(GlideString.of(entry.getKey()), GlideString.of(entry.getValue()));
+        }
+        return binaryMap;
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */

@@ -226,6 +226,20 @@ public class CommandManager {
     }
 
     /**
+     * Execute a command expecting a String result with routing.
+     *
+     * @param requestType Valkey command type
+     * @param arguments Command arguments
+     * @param route Route for command execution
+     * @return CompletableFuture with String result
+     */
+    public CompletableFuture<String> executeStringCommand(
+            RequestType requestType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(requestType);
+        return jniClient.executeStringCommand(spec.command, arguments, route);
+    }
+
+    /**
      * Execute a command expecting a Long result.
      *
      * @param requestType Valkey command type
@@ -278,6 +292,20 @@ public class CommandManager {
     }
 
     /**
+     * Execute a command expecting an Object[] result with routing.
+     *
+     * @param requestType Valkey command type
+     * @param arguments Command arguments
+     * @param route Route for command execution
+     * @return CompletableFuture with Object[] result
+     */
+    public CompletableFuture<Object[]> executeArrayCommand(
+            RequestType requestType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(requestType);
+        return jniClient.executeArrayCommand(spec.command, arguments, route);
+    }
+
+    /**
      * Execute a command expecting any Object result.
      *
      * @param requestType Valkey command type
@@ -288,6 +316,20 @@ public class CommandManager {
             RequestType requestType, String[] arguments) {
         CommandSpec spec = getCommandSpec(requestType);
         return jniClient.executeObjectCommand(spec.command, arguments);
+    }
+
+    /**
+     * Execute a command expecting any Object result with routing.
+     *
+     * @param requestType Valkey command type
+     * @param arguments Command arguments
+     * @param route Route for command execution
+     * @return CompletableFuture with Object result
+     */
+    public CompletableFuture<Object> executeObjectCommand(
+            RequestType requestType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(requestType);
+        return jniClient.executeObjectCommand(spec.command, arguments, route);
     }
 
     /**
