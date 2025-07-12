@@ -4468,70 +4468,89 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String[]> pubsubChannels() {
-        return commandManager.submitNewCommand(
-                PubSubChannels,
-                new String[0],
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(PubSubChannels, new String[0])
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
-        return commandManager.submitNewCommand(
-                PubSubChannels,
-                new GlideString[0],
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+        return commandManager.executeArrayCommand(PubSubChannels, new String[0])
+                .thenApply(array -> Arrays.stream(array)
+                    .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                    .toArray(GlideString[]::new));
     }
 
     @Override
     public CompletableFuture<String[]> pubsubChannels(@NonNull String pattern) {
-        return commandManager.submitNewCommand(
-                PubSubChannels,
-                new String[] {pattern},
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(PubSubChannels, new String[] {pattern})
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannels(@NonNull GlideString pattern) {
-        return commandManager.submitNewCommand(
-                PubSubChannels,
-                new GlideString[] {pattern},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+        String[] arguments = new String[] {pattern.toString()};
+        return commandManager.executeArrayCommand(PubSubChannels, arguments)
+                .thenApply(array -> Arrays.stream(array)
+                    .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                    .toArray(GlideString[]::new));
     }
 
     @Override
     public CompletableFuture<Long> pubsubNumPat() {
-        return commandManager.submitNewCommand(PubSubNumPat, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(PubSubNumPat, new String[0]);
     }
 
     @Override
     public CompletableFuture<Map<String, Long>> pubsubNumSub(@NonNull String[] channels) {
-        return commandManager.submitNewCommand(PubSubNumSub, channels, this::handleMapResponse);
+        return commandManager.executeObjectCommand(PubSubNumSub, channels)
+                .thenApply(result -> (Map<String, Long>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Long>> pubsubNumSub(@NonNull GlideString[] channels) {
-        return commandManager.submitNewCommand(
-                PubSubNumSub, channels, this::handleBinaryStringMapResponse);
+        String[] arguments = Arrays.stream(channels)
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        return commandManager.executeObjectCommand(PubSubNumSub, arguments)
+                .thenApply(result -> {
+                    Map<String, Long> stringMap = (Map<String, Long>) result;
+                    Map<GlideString, Long> glideMap = new HashMap<>();
+                    stringMap.forEach((k, v) -> glideMap.put(GlideString.of(k), v));
+                    return glideMap;
+                });
     }
 
     @Override
     public CompletableFuture<String> watch(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+        return commandManager.executeStringCommand(Watch, keys);
     }
 
     @Override
     public CompletableFuture<String> watch(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+        String[] arguments = Arrays.stream(keys)
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        return commandManager.executeStringCommand(Watch, arguments);
     }
 
     @Override
     public CompletableFuture<Set<String>> sunion(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(SUnion, keys, this::handleSetResponse);
+        return commandManager.executeObjectCommand(SUnion, keys)
+                .thenApply(result -> (Set<String>) result);
     }
 
     @Override
     public CompletableFuture<Set<GlideString>> sunion(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(SUnion, keys, this::handleSetBinaryResponse);
+        String[] arguments = Arrays.stream(keys)
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        return commandManager.executeObjectCommand(SUnion, arguments)
+                .thenApply(result -> {
+                    Set<String> stringSet = (Set<String>) result;
+                    return stringSet.stream()
+                            .map(GlideString::of)
+                            .collect(Collectors.toSet());
+                });
     }
 
     // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm
@@ -4566,15 +4585,16 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
-        GlideString[] arguments = new GlideString[] {key};
-        return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
+        String[] arguments = new String[] {key.toString()};
+        return commandManager.executeObjectCommand(Dump, arguments)
+                .thenApply(result -> (byte[]) result);
     }
 
     @Override
     public CompletableFuture<String> restore(
             @NonNull GlideString key, long ttl, @NonNull byte[] value) {
-        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl)), gs(value)};
-        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+        String[] arguments = new String[] {key.toString(), Long.toString(ttl), new String(value)};
+        return commandManager.executeStringCommand(Restore, arguments);
     }
 
     @Override
@@ -4583,59 +4603,66 @@ public abstract class BaseClient
             long ttl,
             @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
-        GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key, gs(Long.toString(ttl)), gs(value)}, restoreOptions.toArgs());
-        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+        String[] baseArgs = new String[] {key.toString(), Long.toString(ttl), new String(value)};
+        String[] optionArgs = Arrays.stream(restoreOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(baseArgs, optionArgs);
+        return commandManager.executeStringCommand(Restore, arguments);
     }
 
     @Override
     public CompletableFuture<String[]> sort(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                Sort,
-                new String[] {key},
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(Sort, new String[] {key})
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> sort(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Sort,
-                new GlideString[] {key},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] arguments = new String[] {key.toString()};
+        return commandManager.executeArrayCommand(Sort, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
     public CompletableFuture<String[]> sort(@NonNull String key, @NonNull SortOptions sortOptions) {
         String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(Sort, arguments)
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> sort(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(
-                Sort,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] keyArg = new String[] {key.toString()};
+        String[] optionArgs = Arrays.stream(sortOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(keyArg, optionArgs);
+        return commandManager.executeArrayCommand(Sort, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
     public CompletableFuture<String[]> sortReadOnly(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                new String[] {key},
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(SortReadOnly, new String[] {key})
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                new GlideString[] {key},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] arguments = new String[] {key.toString()};
+        return commandManager.executeArrayCommand(SortReadOnly, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
