@@ -271,19 +271,20 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(Ping, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> ping(@NonNull String message) {
-        return commandManager.submitNewCommand(
-                Ping, new String[] {message}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                Ping, new String[] {message});
     }
 
     @Override
     public CompletableFuture<GlideString> ping(@NonNull GlideString message) {
-        return commandManager.submitNewCommand(
-                Ping, new GlideString[] {message}, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                Ping, new String[] {message.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -299,14 +300,16 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<GlideString> ping(@NonNull GlideString message, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                Ping, new GlideString[] {message}, route, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                Ping, new String[] {message.toString()}, route)
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info() {
-        return commandManager.submitNewCommand(
-                Info, new String[0], response -> ClusterValue.of(handleMapResponse(response)));
+        return commandManager.executeObjectCommand(
+                Info, new String[0])
+                .thenApply(result -> result != null ? ClusterValue.of(castToMapOfStringToString(result)) : null);
     }
 
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
@@ -322,10 +325,10 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(@NonNull Section[] sections) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 Info,
-                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
-                response -> ClusterValue.of(handleMapResponse(response)));
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? ClusterValue.of(castToMapOfStringToString(result)) : null);
     }
 
     @Override
@@ -343,7 +346,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> clientId() {
-        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(ClientId, new String[0]);
     }
 
     @Override
@@ -360,8 +363,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clientGetName() {
-        return commandManager.submitNewCommand(
-                ClientGetName, new String[0], this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                ClientGetName, new String[0]);
     }
 
     @Override
@@ -378,8 +381,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configRewrite() {
-        return commandManager.submitNewCommand(
-                ConfigRewrite, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigRewrite, new String[0]);
     }
 
     @Override
@@ -390,8 +393,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configResetStat() {
-        return commandManager.submitNewCommand(
-                ConfigResetStat, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigResetStat, new String[0]);
     }
 
     @Override
@@ -420,8 +423,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configSet(@NonNull Map<String, String> parameters) {
-        return commandManager.submitNewCommand(
-                ConfigSet, convertMapToKeyValueStringArray(parameters), this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigSet, convertMapToKeyValueStringArray(parameters));
     }
 
     @Override
@@ -433,14 +436,15 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> echo(@NonNull String message) {
-        return commandManager.submitNewCommand(
-                Echo, new String[] {message}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                Echo, new String[] {message});
     }
 
     @Override
     public CompletableFuture<GlideString> echo(@NonNull GlideString message) {
-        return commandManager.submitNewCommand(
-                Echo, new GlideString[] {message}, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                Echo, new String[] {message.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -471,8 +475,9 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String[]> time() {
-        return commandManager.submitNewCommand(
-                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(
+                Time, new String[0])
+                .thenApply(result -> result != null ? castToStringArray(result) : null);
     }
 
     @Override
@@ -490,7 +495,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> lastsave() {
-        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(LastSave, new String[0]);
     }
 
     @Override
@@ -507,13 +512,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FlushAll, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FlushAll, new String[] {mode.toString()});
     }
 
     @Override
@@ -530,13 +535,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushdb() {
-        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FlushDB, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FlushDB, new String[] {mode.toString()});
     }
 
     @Override
@@ -553,14 +558,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, arguments);
     }
 
     @Override
@@ -577,7 +582,7 @@ public class GlideClusterClient extends BaseClient
                 concatenateArrays(
                         new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, arguments);
     }
 
     @Override
@@ -638,19 +643,19 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> dbsize() {
-        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(DBSize, new String[0]);
     }
 
     @Override
     public CompletableFuture<Long> dbsize(@NonNull Route route) {
-        return commandManager.submitNewCommand(DBSize, new String[0], route, this::handleLongResponse);
+        return commandManager.executeLongCommand(DBSize, new String[0], route);
     }
 
     @Override
     public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
         String[] arguments =
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
-        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(FunctionLoad, arguments);
     }
 
     @Override
@@ -660,8 +665,9 @@ public class GlideClusterClient extends BaseClient
                 replace
                         ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
                         : new GlideString[] {libraryCode};
-        return commandManager.submitNewCommand(
-                FunctionLoad, arguments, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionLoad, Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
@@ -680,8 +686,9 @@ public class GlideClusterClient extends BaseClient
                 replace
                         ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
                         : new GlideString[] {libraryCode};
-        return commandManager.submitNewCommand(
-                FunctionLoad, arguments, route, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionLoad, Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new), route)
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     /** Process a <code>FUNCTION LIST</code> cluster response. */
@@ -806,14 +813,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionFlush() {
-        return commandManager.submitNewCommand(
-                FunctionFlush, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionFlush, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionFlush, new String[] {mode.toString()});
     }
 
     @Override
@@ -830,14 +837,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionDelete(@NonNull String libName) {
-        return commandManager.submitNewCommand(
-                FunctionDelete, new String[] {libName}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionDelete, new String[] {libName});
     }
 
     @Override
     public CompletableFuture<String> functionDelete(@NonNull GlideString libName) {
-        return commandManager.submitNewCommand(
-                FunctionDelete, new GlideString[] {libName}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionDelete, new String[] {libName.toString()});
     }
 
     @Override
@@ -1036,7 +1043,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FunctionKill, new String[0]);
     }
 
     @Override
@@ -1082,14 +1089,16 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        return commandManager.executeArrayCommand(
+                ScriptExists, sha1s)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        return commandManager.executeArrayCommand(
+                ScriptExists, sha1s)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
@@ -1098,7 +1107,7 @@ public class GlideClusterClient extends BaseClient
                 ScriptExists,
                 sha1s,
                 route,
-                response -> castArray(handleArrayResponse(response), Boolean.class));
+                result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
@@ -1108,18 +1117,18 @@ public class GlideClusterClient extends BaseClient
                 ScriptExists,
                 sha1s,
                 route,
-                response -> castArray(handleArrayResponse(response), Boolean.class));
+                result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
     public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(ScriptFlush, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
-        return commandManager.submitNewCommand(
-                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ScriptFlush, new String[] {flushMode.toString()});
     }
 
     @Override
@@ -1215,34 +1224,34 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String[]> pubsubShardChannels() {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 PubSubShardChannels,
-                new String[0],
-                response -> castArray(handleArrayResponse(response), String.class));
+                new String[0])
+                .thenApply(result -> result != null ? castToStringArray(result) : null);
     }
 
     @Override
     public CompletableFuture<GlideString[]> pubsubShardChannelsBinary() {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 PubSubShardChannels,
-                new GlideString[0],
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+                new String[0])
+                .thenApply(result -> result != null ? castToGlideStringArray(result) : null);
     }
 
     @Override
     public CompletableFuture<String[]> pubsubShardChannels(@NonNull String pattern) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 PubSubShardChannels,
-                new String[] {pattern},
-                response -> castArray(handleArrayResponse(response), String.class));
+                new String[] {pattern})
+                .thenApply(result -> result != null ? castToStringArray(result) : null);
     }
 
     @Override
     public CompletableFuture<GlideString[]> pubsubShardChannels(@NonNull GlideString pattern) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 PubSubShardChannels,
-                new GlideString[] {pattern},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+                new String[] {pattern.toString()})
+                .thenApply(result -> result != null ? castToGlideStringArray(result) : null);
     }
 
     @Override
@@ -1270,8 +1279,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> randomKey(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                RandomKey, new String[0], route, this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0], route);
     }
 
     @Override
@@ -1282,8 +1291,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> randomKey() {
-        return commandManager.submitNewCommand(
-                RandomKey, new String[0], this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0]);
     }
 
     @Override

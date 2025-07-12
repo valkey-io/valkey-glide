@@ -143,13 +143,13 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
-        return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
+        return commandManager.executeObjectCommand(CustomCommand, args);
     }
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull GlideString[] args) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, this::handleBinaryObjectOrNullResponse);
+        return commandManager.executeObjectCommand(
+                CustomCommand, args);
     }
 
     @Deprecated
@@ -189,137 +189,139 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(Ping, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> ping(@NonNull String message) {
-        return commandManager.submitNewCommand(
-                Ping, new String[] {message}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                Ping, new String[] {message});
     }
 
     @Override
     public CompletableFuture<GlideString> ping(@NonNull GlideString message) {
-        return commandManager.submitNewCommand(
-                Ping, new GlideString[] {message}, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                Ping, new String[] {message.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String> info() {
-        return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(Info, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> info(@NonNull Section[] sections) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeStringCommand(
                 Info,
-                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
-                this::handleStringResponse);
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new));
     }
 
     @Override
     public CompletableFuture<String> select(long index) {
-        return commandManager.submitNewCommand(
-                Select, new String[] {Long.toString(index)}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                Select, new String[] {Long.toString(index)});
     }
 
     @Override
     public CompletableFuture<Long> clientId() {
-        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(ClientId, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> clientGetName() {
-        return commandManager.submitNewCommand(
-                ClientGetName, new String[0], this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                ClientGetName, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> configRewrite() {
-        return commandManager.submitNewCommand(
-                ConfigRewrite, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigRewrite, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> configResetStat() {
-        return commandManager.submitNewCommand(
-                ConfigResetStat, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigResetStat, new String[0]);
     }
 
     @Override
     public CompletableFuture<Map<String, String>> configGet(@NonNull String[] parameters) {
-        return commandManager.submitNewCommand(ConfigGet, parameters, this::handleMapResponse);
+        return commandManager.executeObjectCommand(ConfigGet, parameters)
+                .thenApply(result -> result != null ? castToMapOfStringToString(result) : null);
     }
 
     @Override
     public CompletableFuture<String> configSet(@NonNull Map<String, String> parameters) {
-        return commandManager.submitNewCommand(
-                ConfigSet, convertMapToKeyValueStringArray(parameters), this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ConfigSet, convertMapToKeyValueStringArray(parameters));
     }
 
     @Override
     public CompletableFuture<String> echo(@NonNull String message) {
-        return commandManager.submitNewCommand(
-                Echo, new String[] {message}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                Echo, new String[] {message});
     }
 
     @Override
     public CompletableFuture<GlideString> echo(@NonNull GlideString message) {
-        return commandManager.submitNewCommand(
-                Echo, new GlideString[] {message}, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                Echo, new String[] {message.toString()})
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<String[]> time() {
-        return commandManager.submitNewCommand(
-                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(
+                Time, new String[0])
+                .thenApply(result -> result != null ? castToStringArray(result) : null);
     }
 
     @Override
     public CompletableFuture<Long> lastsave() {
-        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(LastSave, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FlushAll, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FlushAll, new String[] {mode.toString()});
     }
 
     @Override
     public CompletableFuture<String> flushdb() {
-        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FlushDB, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FlushDB, new String[] {mode.toString()});
     }
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, arguments);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int version) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeStringCommand(
                 Lolwut,
-                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
-                this::handleStringResponse);
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)});
     }
 
     @Override
@@ -328,19 +330,19 @@ public class GlideClient extends BaseClient
                 concatenateArrays(
                         new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(Lolwut, arguments);
     }
 
     @Override
     public CompletableFuture<Long> dbsize() {
-        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
+        return commandManager.executeLongCommand(DBSize, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
         String[] arguments =
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
-        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
+        return commandManager.executeStringCommand(FunctionLoad, arguments);
     }
 
     @Override
@@ -350,105 +352,108 @@ public class GlideClient extends BaseClient
                 replace
                         ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
                         : new GlideString[] {libraryCode};
-        return commandManager.submitNewCommand(
-                FunctionLoad, arguments, this::handleGlideStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionLoad, Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                Move, new String[] {key, Long.toString(dbIndex)});
     }
 
     @Override
     public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(
+                Move, new String[] {key.toString(), Long.toString(dbIndex)});
     }
 
     @Override
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
-                response -> handleFunctionListResponse(handleArrayResponse(response)));
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0])
+                .thenApply(result -> result != null ? handleFunctionListResponse(result) : null);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
-                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
+                Arrays.stream(new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray())
+                        .map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? handleFunctionListResponseBinary(result) : null);
     }
 
     @Override
     public CompletableFuture<Map<String, Object>[]> functionList(
             @NonNull String libNamePattern, boolean withCode) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 FunctionList,
                 withCode
                         ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
-                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
-                response -> handleFunctionListResponse(handleArrayResponse(response)));
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern})
+                .thenApply(result -> result != null ? handleFunctionListResponse(result) : null);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
             @NonNull GlideString libNamePattern, boolean withCode) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeArrayCommand(
                 FunctionList,
-                new ArgsBuilder()
+                Arrays.stream(new ArgsBuilder()
                         .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
                         .addIf(WITH_CODE_VALKEY_API, withCode)
-                        .toArray(),
-                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
+                        .toArray())
+                        .map(GlideString::toString).toArray(String[]::new))
+                .thenApply(result -> result != null ? handleFunctionListResponseBinary(result) : null);
     }
 
     @Override
     public CompletableFuture<String> functionFlush() {
-        return commandManager.submitNewCommand(
-                FunctionFlush, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionFlush, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
-        return commandManager.submitNewCommand(
-                FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionFlush, new String[] {mode.toString()});
     }
 
     @Override
     public CompletableFuture<String> functionDelete(@NonNull String libName) {
-        return commandManager.submitNewCommand(
-                FunctionDelete, new String[] {libName}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionDelete, new String[] {libName});
     }
 
     @Override
     public CompletableFuture<String> functionDelete(@NonNull GlideString libName) {
-        return commandManager.submitNewCommand(
-                FunctionDelete, new GlideString[] {libName}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionDelete, new String[] {libName.toString()});
     }
 
     @Override
     public CompletableFuture<byte[]> functionDump() {
-        return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[0], this::handleBytesOrNullResponse);
+        return commandManager.executeObjectCommand(
+                FunctionDump, new String[0])
+                .thenApply(result -> result != null ? (byte[]) result : null);
     }
 
     @Override
     public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
-        return commandManager.submitNewCommand(
-                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                FunctionRestore, new String[] {gs(payload).toString()});
     }
 
     @Override
     public CompletableFuture<String> functionRestore(
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
-        return commandManager.submitNewCommand(
+        return commandManager.executeStringCommand(
                 FunctionRestore,
-                new GlideString[] {gs(payload), gs(policy.toString())},
-                this::handleStringResponse);
+                new String[] {gs(payload).toString(), policy.toString()});
     }
 
     @Override
@@ -476,7 +481,7 @@ public class GlideClient extends BaseClient
             @NonNull String source, @NonNull String destination, long destinationDB) {
         String[] arguments =
                 new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Copy, arguments);
     }
 
     @Override
@@ -486,7 +491,7 @@ public class GlideClient extends BaseClient
                 new GlideString[] {
                     source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
                 };
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Copy, arguments);
     }
 
     @Override
@@ -497,7 +502,7 @@ public class GlideClient extends BaseClient
         if (replace) {
             arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
         }
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Copy, arguments);
     }
 
     @Override
@@ -513,97 +518,101 @@ public class GlideClient extends BaseClient
         if (replace) {
             arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
         }
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+        return commandManager.executeBooleanCommand(Copy, arguments);
     }
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(FunctionKill, new String[0]);
     }
 
     @Override
     public CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats() {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionStats,
-                new String[0],
-                response -> handleFunctionStatsResponse(response, false).getMultiValue());
+                new String[0])
+                .thenApply(result -> result != null ? handleFunctionStatsResponse(result, false).getMultiValue() : null);
     }
 
     @Override
     public CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>>
             functionStatsBinary() {
-        return commandManager.submitNewCommand(
+        return commandManager.executeObjectCommand(
                 FunctionStats,
-                new GlideString[0],
-                response -> handleFunctionStatsBinaryResponse(response, false).getMultiValue());
+                new String[0])
+                .thenApply(result -> result != null ? handleFunctionStatsBinaryResponse(result, false).getMultiValue() : null);
     }
 
     @Override
     public CompletableFuture<String> unwatch() {
-        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(UnWatch, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> randomKey() {
-        return commandManager.submitNewCommand(
-                RandomKey, new String[0], this::handleStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0]);
     }
 
     @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
-        return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+        return commandManager.executeStringCommand(
+                RandomKey, new String[0])
+                .thenApply(result -> result != null ? GlideString.of(result) : null);
     }
 
     @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor) {
-        return commandManager.submitNewCommand(Scan, new String[] {cursor}, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(Scan, new String[] {cursor});
     }
 
     @Override
     public CompletableFuture<Object[]> scan(@NonNull GlideString cursor) {
-        return commandManager.submitNewCommand(
-                Scan, new GlideString[] {cursor}, this::handleArrayResponseBinary);
+        return commandManager.executeArrayCommand(
+                Scan, new String[] {cursor.toString()});
     }
 
     @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor, @NonNull ScanOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor);
-        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponse);
+        return commandManager.executeArrayCommand(Scan, arguments);
     }
 
     @Override
     public CompletableFuture<Object[]> scan(
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
-        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+        return commandManager.executeArrayCommand(Scan, 
+                Arrays.stream(arguments).map(GlideString::toString).toArray(String[]::new));
     }
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        return commandManager.executeArrayCommand(
+                ScriptExists, sha1s)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        return commandManager.executeArrayCommand(
+                ScriptExists, sha1s)
+                .thenApply(result -> result != null ? castToBooleanArray(result) : null);
     }
 
     @Override
     public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(ScriptFlush, new String[0]);
     }
 
     @Override
     public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
-        return commandManager.submitNewCommand(
-                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+        return commandManager.executeStringCommand(
+                ScriptFlush, new String[] {flushMode.toString()});
     }
 
     @Override
     public CompletableFuture<String> scriptKill() {
-        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
+        return commandManager.executeStringCommand(ScriptKill, new String[0]);
     }
 }
