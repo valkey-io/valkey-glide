@@ -4669,27 +4669,29 @@ public abstract class BaseClient
     public CompletableFuture<String[]> sortReadOnly(
             @NonNull String key, @NonNull SortOptions sortOptions) {
         String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayResponse(response), String.class));
+        return commandManager.executeArrayCommand(SortReadOnly, arguments)
+                .thenApply(array -> castArray(array, String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        String[] keyArg = new String[] {key.toString()};
+        String[] optionArgs = Arrays.stream(sortOptions.toArgs())
+                .map(GlideString::toString)
+                .toArray(String[]::new);
+        String[] arguments = ArrayUtils.addAll(keyArg, optionArgs);
+        return commandManager.executeArrayCommand(SortReadOnly, arguments)
+                .thenApply(array -> array != null ? 
+                    Arrays.stream(array)
+                        .map(item -> item != null ? GlideString.of(item.toString()) : null)
+                        .toArray(GlideString[]::new) : null);
     }
 
     @Override
     public CompletableFuture<Long> sortStore(@NonNull String key, @NonNull String destination) {
-        return commandManager.submitNewCommand(
-                Sort, new String[] {key, STORE_COMMAND_STRING, destination}, this::handleLongResponse);
+        return commandManager.executeLongCommand(
+                Sort, new String[] {key, STORE_COMMAND_STRING, destination});
     }
 
     @Override
