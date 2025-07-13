@@ -316,6 +316,13 @@ internal class FFI
         SInterStore = 1207,
         SUnion = 1216,
         SUnionStore = 1217,
+        GetRange = 1507,
+        MGet = 1513,
+        MSet = 1514,
+        SetRange = 1520,
+        Strlen = 1521,
+        LPop = 811,
+        LPush = 813,
     }
 
     internal enum RouteType : uint
@@ -324,7 +331,7 @@ internal class FFI
         AllNodes,
         AllPrimaries,
         SlotId,
-        SlotType,
+        SlotKey,
         ByAddress,
     }
 

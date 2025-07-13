@@ -20,18 +20,30 @@ public class TestConfiguration : IDisposable
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
             .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
             .WithTls(TLS);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
             .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
             .WithTls(TLS);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
-        => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).Build()).GetAwaiter().GetResult();
+        => GlideClient.CreateClient(
+                DefaultClientConfig()
+                .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                .Build())
+            .GetAwaiter()
+            .GetResult();
 
     public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(
+                DefaultClusterClientConfig()
+                .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                .Build())
+            .GetAwaiter()
+            .GetResult();
 
     public static GlideClient DefaultStandaloneClient()
         => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
@@ -60,11 +72,17 @@ public class TestConfiguration : IDisposable
             if (field.Count == 0)
             {
                 GlideClient resp2client = GlideClient.CreateClient(
-                    DefaultClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build()
+                    DefaultClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2)
+                    .Build()
                 ).GetAwaiter().GetResult();
                 resp2client.SetInfo("RESP2");
                 GlideClient resp3client = GlideClient.CreateClient(
-                    DefaultClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3).Build()
+                    DefaultClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+                    .Build()
                 ).GetAwaiter().GetResult();
                 resp3client.SetInfo("RESP3");
                 field = [resp2client, resp3client];
@@ -82,11 +100,17 @@ public class TestConfiguration : IDisposable
             if (field.Count == 0)
             {
                 GlideClusterClient resp2client = GlideClusterClient.CreateClient(
-                    DefaultClusterClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2).Build()
+                    DefaultClusterClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2)
+                    .Build()
                 ).GetAwaiter().GetResult();
                 resp2client.SetInfo("RESP2");
                 GlideClusterClient resp3client = GlideClusterClient.CreateClient(
-                    DefaultClusterClientConfig().WithRequestTimeout(TimeSpan.FromSeconds(1)).WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3).Build()
+                    DefaultClusterClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+                    .Build()
                 ).GetAwaiter().GetResult();
                 resp3client.SetInfo("RESP3");
                 field = [resp2client, resp3client];
@@ -113,7 +137,6 @@ public class TestConfiguration : IDisposable
     {
         ConfigurationOptions config = new();
         config.EndPoints.Add(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
-        config.Protocol = Protocol.Resp3;
         config.Ssl = TLS;
         config.ResponseTimeout = 1000;
         return config;
@@ -123,7 +146,6 @@ public class TestConfiguration : IDisposable
     {
         ConfigurationOptions config = new();
         config.EndPoints.Add(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
-        config.Protocol = Protocol.Resp3;
         config.Ssl = TLS;
         config.ResponseTimeout = 1000;
         return config;
@@ -141,11 +163,14 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                ConfigurationOptions config = DefaultCompatibleConfig();
-                config.Protocol = Protocol.Resp3;
-                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(config);
-                config.Protocol = Protocol.Resp2;
-                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(config);
+                ConfigurationOptions resp2conf = DefaultCompatibleConfig();
+                resp2conf.Protocol = Protocol.Resp2;
+                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
+                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                ConfigurationOptions resp3conf = DefaultCompatibleConfig();
+                resp3conf.Protocol = Protocol.Resp3;
+                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
+                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
 
                 field = [resp2Conn, resp3Conn];
             }
@@ -161,11 +186,14 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                ConfigurationOptions config = DefaultCompatibleClusterConfig();
-                config.Protocol = Protocol.Resp3;
-                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(config);
-                config.Protocol = Protocol.Resp2;
-                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(config);
+                ConfigurationOptions resp2conf = DefaultCompatibleClusterConfig();
+                resp2conf.Protocol = Protocol.Resp2;
+                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
+                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                ConfigurationOptions resp3conf = DefaultCompatibleClusterConfig();
+                resp3conf.Protocol = Protocol.Resp3;
+                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
+                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
 
                 field = [resp2Conn, resp3Conn];
             }
@@ -175,13 +203,17 @@ public class TestConfiguration : IDisposable
         private set;
     } = [];
 
-    public static TheoryData<ConnectionMultiplexer> TestConnections
+    public static List<TheoryDataRow<ConnectionMultiplexer, bool>> TestConnections
     {
         get
         {
             if (field.Count == 0)
             {
-                field = [.. TestStandaloneConnections.Select(d => d.Data), .. TestClusterConnections.Select(d => d.Data)];
+#pragma warning disable xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
+                field = [
+                    .. TestStandaloneConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, false)),
+                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))];
+#pragma warning restore xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
             }
             return field;
         }
@@ -191,10 +223,7 @@ public class TestConfiguration : IDisposable
 
     public static void ResetTestConnections()
     {
-        foreach (TheoryDataRow<ConnectionMultiplexer> data in TestConnections)
-        {
-            data.Data.Dispose();
-        }
+        TestConnections.ForEach(test => test.Data.Item1.Dispose());
         TestConnections = [];
         TestClusterConnections = [];
         TestStandaloneConnections = [];

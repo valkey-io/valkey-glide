@@ -3,6 +3,7 @@
 using System.Net;
 
 using Valkey.Glide.Commands;
+using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.ConnectionConfiguration;
@@ -15,6 +16,18 @@ namespace Valkey.Glide;
 /// </summary>
 public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable, IAsyncDisposable
 {
+    /// <inheritdoc cref="ConnectAsync(string, TextWriter?)" />
+    public static ConnectionMultiplexer Connect(string configuration, TextWriter? log = null)
+        => Connect(ConfigurationOptions.Parse(configuration), log);
+
+    /// <inheritdoc cref="ConnectAsync(string, Action{ConfigurationOptions}, TextWriter?)" />
+    public static ConnectionMultiplexer Connect(string configuration, Action<ConfigurationOptions> configure, TextWriter? log = null)
+        => Connect(ConfigurationOptions.Parse(configuration).Apply(configure), log);
+
+    /// <inheritdoc cref="ConnectAsync(ConfigurationOptions, TextWriter?)" />
+    public static ConnectionMultiplexer Connect(ConfigurationOptions configuration, TextWriter? log = null)
+        => ConnectAsync(configuration, log).GetAwaiter().GetResult();
+
     /// <summary>
     /// Creates a new <see cref="ConnectionMultiplexer" /> instance.
     /// </summary>
@@ -47,20 +60,105 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
             ? CreateClientConfigBuilder<ClusterClientConfigurationBuilder>(configuration).Build()
             : standaloneConfig;
 
-        return new(await DatabaseImpl.Create(config));
+        return new(configuration, await DatabaseImpl.Create(config));
     }
 
-    /// <inheritdoc cref="ConnectAsync(string, TextWriter?)" />
-    public static ConnectionMultiplexer Connect(string configuration, TextWriter? log = null)
-        => Connect(ConfigurationOptions.Parse(configuration), log);
+    public EndPoint[] GetEndPoints(bool configuredOnly)
+        => configuredOnly
+            ? [.. RawConfig.EndPoints]
+            : [.. GetServers().Select(s => s.EndPoint)];
 
-    /// <inheritdoc cref="ConnectAsync(string, Action{ConfigurationOptions}, TextWriter?)" />
-    public static ConnectionMultiplexer Connect(string configuration, Action<ConfigurationOptions> configure, TextWriter? log = null)
-        => Connect(ConfigurationOptions.Parse(configuration).Apply(configure), log);
+    public IServer GetServer(string host, int port, object? asyncState = null)
+        => GetServer(Utils.ParseEndPoint(host, port), asyncState);
 
-    /// <inheritdoc cref="ConnectAsync(ConfigurationOptions, TextWriter?)" />
-    public static ConnectionMultiplexer Connect(ConfigurationOptions configuration, TextWriter? log = null)
-        => ConnectAsync(configuration, log).GetAwaiter().GetResult();
+    public IServer GetServer(string hostAndPort, object? asyncState = null)
+        => Utils.TryParseEndPoint(hostAndPort, out IPEndPoint? ep)
+            ? GetServer(ep, asyncState)
+            : throw new ArgumentException($"The specified host and port could not be parsed: {hostAndPort}", nameof(hostAndPort));
+
+    public IServer GetServer(IPAddress host, int port)
+        => GetServer(new IPEndPoint(host, port));
+
+    public IServer GetServer(EndPoint endpoint, object? asyncState = null)
+    {
+        Utils.Requires<NotImplementedException>(asyncState is null, "Async state is not supported by GLIDE");
+        foreach (IServer server in GetServers())
+        {
+            if (server.EndPoint.Equals(endpoint))
+            {
+                return server;
+            }
+        }
+        throw new ArgumentException("The specified endpoint is not defined", nameof(endpoint));
+    }
+
+    // TODO currently this returns only primary node on standalone
+    // https://github.com/valkey-io/valkey-glide/issues/4293
+    public IServer[] GetServers()
+    {
+        // run INFO on all nodes, but disregard the node responses, we need node addresses only
+        if (_db!.IsCluster)
+        {
+            Dictionary<string, string> info = _db.Command(Request.Info([]).ToMultiNodeValue(), Route.AllNodes).GetAwaiter().GetResult();
+            return [.. info.Keys.Select(addr => new ValkeyServer(_db, IPEndPoint.Parse(addr)))];
+        }
+        else
+        {
+            // due to #4293, core ignores route on standalone and always return a single node response
+            string info = _db.Command(Request.Info([]), Route.AllNodes).GetAwaiter().GetResult();
+            // and there is no way to get IP address from server, assuming localhost (127.0.0.1)
+            // we can try to get port only (in some deployments, this info is also missing)
+            int port = 6379;
+            foreach (string line in info.Split("\r\n"))
+            {
+                if (line.Contains("tcp_port:"))
+                {
+                    port = int.Parse(line.Split(':')[1]);
+                }
+            }
+            return [new ValkeyServer(_db, new IPEndPoint(0x100007F, port))];
+        }
+    }
+
+    public bool IsConnected => true;
+
+    public bool IsConnecting => false;
+
+    public IDatabase GetDatabase(int db = -1, object? asyncState = null)
+    {
+        Utils.Requires<NotImplementedException>(db == -1, "To switch the database, please use `SELECT` command.");
+        Utils.Requires<NotImplementedException>(asyncState is null, "Async state is not supported by GLIDE");
+        return _db!;
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        lock (_lock)
+        {
+            if (_db is null)
+            {
+                return;
+            }
+            _db.Dispose();
+            _db = null;
+        }
+    }
+
+    public async ValueTask DisposeAsync() => await Task.Run(Dispose);
+
+    public string ToString() => _db!.ToString();
+
+    internal ConfigurationOptions RawConfig { private set; get; }
+
+    private readonly object _lock = new();
+    private DatabaseImpl? _db;
+
+    private ConnectionMultiplexer(ConfigurationOptions configuration, DatabaseImpl db)
+    {
+        RawConfig = configuration;
+        _db = db;
+    }
 
     private static T CreateClientConfigBuilder<T>(ConfigurationOptions configuration)
         where T : ClientConfigurationBuilder<T>, new()
@@ -93,31 +191,5 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
         _ = configuration.ReadFrom.HasValue ? config.ReadFrom = configuration.ReadFrom.Value : new();
 
         return config;
-    }
-
-    public IDatabase GetDatabase()
-        => _db is not null ? _db : throw new ObjectDisposedException(nameof(ConnectionMultiplexer));
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        lock (_lock)
-        {
-            if (_db is null)
-            {
-                return;
-            }
-            _db.Dispose();
-            _db = null;
-        }
-    }
-    public async ValueTask DisposeAsync() => await Task.Run(Dispose);
-
-    private readonly object _lock = new();
-    private DatabaseImpl? _db;
-
-    private ConnectionMultiplexer(DatabaseImpl db)
-    {
-        _db = db;
     }
 }

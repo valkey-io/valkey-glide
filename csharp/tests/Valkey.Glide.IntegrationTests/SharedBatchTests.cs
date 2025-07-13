@@ -55,7 +55,7 @@ public class SharedBatchTests
 
         IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         // TODO replace custom command
-        _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
+        _ = batch.StringSet(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 
         object?[] res = isCluster
             ? (await ((GlideClusterClient)client).Exec((ClusterBatch)batch, false))!
@@ -64,7 +64,7 @@ public class SharedBatchTests
         // Exceptions aren't raised, but stored in the result set
         Assert.Multiple(
             () => Assert.Equal(4, res.Length),
-            () => Assert.Equal("OK", res[0]),
+            () => Assert.Equal(true, res[0]),
             () => Assert.Equal(1L, (long)res[2]!),
             () => Assert.IsType<RequestException>(res[1]),
             () => Assert.IsType<RequestException>(res[3]),

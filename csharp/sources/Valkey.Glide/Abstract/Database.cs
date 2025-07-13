@@ -13,13 +13,13 @@ internal class DatabaseImpl : GlideClient, IDatabase
     public new async Task<string> Info() => await Info([]);
 
     public new async Task<string> Info(InfoOptions.Section[] sections)
-        => _isCluster
+        => IsCluster
             ? await Command(Request.Info(sections), Route.Random)
             : await base.Info(sections);
 
-    private readonly bool _isCluster;
+    internal readonly bool IsCluster;
 
-    private DatabaseImpl(bool isCluster) { _isCluster = isCluster; }
+    private DatabaseImpl(bool isCluster) { IsCluster = isCluster; }
 
     public static async Task<DatabaseImpl> Create(BaseClientConfiguration config)
         => await CreateClient(config, () => new DatabaseImpl(config is ClusterClientConfiguration));
