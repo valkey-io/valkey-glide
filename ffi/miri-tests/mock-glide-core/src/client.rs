@@ -1,3 +1,7 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+#![allow(unused)]
+
 pub use glide_core::client::{GlideRt, get_or_init_runtime};
 
 use crate::connection_request::ConnectionRequest;

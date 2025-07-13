@@ -1,7 +1,8 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use miri_tests::{PushKind, ClientType, ConnectionResponse, create_client, close_client, free_connection_response};
 use glide_core::{ConnectionRequest, connection_request::{TlsMode, NodeAddress}};
 use protobuf::Message;
-use std::ffi::c_void;
 
 fn create_connection_request(port: u16) -> Vec<u8> {
     let host = "localhost";
@@ -15,14 +16,14 @@ fn create_connection_request(port: u16) -> Vec<u8> {
 }
 
 unsafe extern "C-unwind" fn pubsub_callback(
-    client_ptr: usize,
-    kind: PushKind,
-    message: *const u8,
-    message_len: i64,
-    channel: *const u8,
-    channel_len: i64,
-    pattern: *const u8,
-    pattern_len: i64,
+    _client_ptr: usize,
+    _kind: PushKind,
+    _message: *const u8,
+    _message_len: i64,
+    _channel: *const u8,
+    _channel_len: i64,
+    _pattern: *const u8,
+    _pattern_len: i64,
 ) {
 }
 

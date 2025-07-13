@@ -1,3 +1,5 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 pub mod client;
 pub mod cluster_scan_container;
 pub mod command_request;
