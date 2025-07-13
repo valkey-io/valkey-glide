@@ -25,9 +25,14 @@ from glide_shared.commands.server_modules.json_options import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide_shared.constants import TOK
-from glide_shared.constants import TAsyncGlideClient as TGlideClient
-from glide_shared.constants import TEncodable, TJsonResponse, TJsonUniversalResponse
+from glide_shared.constants import (
+    TOK,
+    TEncodable,
+    TJsonResponse,
+    TJsonUniversalResponse,
+)
+
+from ..glide_client import TGlideClient
 
 
 async def set(

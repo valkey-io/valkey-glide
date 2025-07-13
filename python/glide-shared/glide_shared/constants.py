@@ -1,18 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import (
-    Any,
-    Awaitable,
-    Dict,
-    List,
-    Literal,
-    Mapping,
-    Optional,
-    Protocol,
-    Set,
-    TypeVar,
-    Union,
-)
+from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
 from glide_shared.protobuf.command_request_pb2 import CommandRequest
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
@@ -134,11 +122,3 @@ FtAggregateResponse = List[Mapping[TEncodable, Any]]
 FtProfileResponse = List[
     Union[FtSearchResponse, FtAggregateResponse, Mapping[str, int]]
 ]
-
-
-class TAsyncGlideClient(Protocol):
-    def custom_command(self, args: List[Any]) -> Awaitable[TResult]: ...
-
-
-class TSyncGlideClient(Protocol):
-    def custom_command(self, args: List[Any]) -> TResult: ...

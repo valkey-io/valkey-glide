@@ -28,9 +28,10 @@ from glide_shared.constants import (
     FtInfoResponse,
     FtProfileResponse,
     FtSearchResponse,
+    TEncodable,
 )
-from glide_shared.constants import TAsyncGlideClient as TGlideClient
-from glide_shared.constants import TEncodable
+
+from ..glide_client import TGlideClient
 
 
 async def create(

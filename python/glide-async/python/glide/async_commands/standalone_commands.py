@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide.glide import Script
-from glide_shared.commands.async_commands import CoreCommands
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
@@ -21,6 +20,8 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
+
+from .core import CoreCommands
 
 
 class StandaloneCommands(CoreCommands):

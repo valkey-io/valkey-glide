@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide.glide import ClusterScanCursor, Script
-from glide_shared.commands.async_commands.core import CoreCommands
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
@@ -24,6 +23,8 @@ from glide_shared.constants import (
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
+
+from .core import CoreCommands
 
 
 class ClusterCommands(CoreCommands):

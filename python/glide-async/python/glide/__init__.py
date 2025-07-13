@@ -142,8 +142,8 @@ from glide_shared import (
     VectorType,
     json_batch,
 )
-from glide_shared.commands.async_commands import ft, glide_json
 
+from .async_commands import ft, glide_json
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger

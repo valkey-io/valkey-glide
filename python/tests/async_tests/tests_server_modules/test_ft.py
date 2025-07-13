@@ -7,9 +7,9 @@ import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
+from glide.async_commands import ft
+from glide.async_commands import glide_json as GlideJson
 from glide.glide_client import GlideClusterClient
-from glide_shared.commands.async_commands import ft
-from glide_shared.commands.async_commands import glide_json as GlideJson
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,

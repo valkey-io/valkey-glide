@@ -27,9 +27,6 @@ from glide.glide import (
     start_socket_listener_external,
     value_from_pointer,
 )
-from glide_shared.commands.async_commands.cluster_commands import ClusterCommands
-from glide_shared.commands.async_commands.core import CoreCommands
-from glide_shared.commands.async_commands.standalone_commands import StandaloneCommands
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import BaseClientConfiguration, ServerCredentials
@@ -56,6 +53,9 @@ from glide_shared.protobuf.response_pb2 import Response
 from glide_shared.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide_shared.routes import Route, set_protobuf_route
 
+from .async_commands.cluster_commands import ClusterCommands
+from .async_commands.core import CoreCommands
+from .async_commands.standalone_commands import StandaloneCommands
 from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 

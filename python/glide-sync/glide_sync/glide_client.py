@@ -6,14 +6,15 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from cffi import FFI
-from glide_shared.commands.sync_commands.cluster_commands import ClusterCommands
-from glide_shared.commands.sync_commands.core import CoreCommands
-from glide_shared.commands.sync_commands.standalone_commands import StandaloneCommands
 from glide_shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import ClosingError, RequestError, get_request_error_class
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route, build_protobuf_route
+
+from .sync_commands.cluster_commands import ClusterCommands
+from .sync_commands.core import CoreCommands
+from .sync_commands.standalone_commands import StandaloneCommands
 
 if sys.version_info >= (3, 11):
     from typing import Self

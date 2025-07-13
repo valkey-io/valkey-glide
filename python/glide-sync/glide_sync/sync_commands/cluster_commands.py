@@ -9,7 +9,6 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     InfoSection,
 )
-from glide_shared.commands.sync_commands.core import CoreCommands
 from glide_shared.constants import (
     TOK,
     TClusterResponse,
@@ -20,6 +19,8 @@ from glide_shared.constants import (
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
+
+from .core import CoreCommands
 
 
 class ClusterCommands(CoreCommands):
