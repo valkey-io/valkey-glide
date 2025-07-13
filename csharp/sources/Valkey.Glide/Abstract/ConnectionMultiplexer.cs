@@ -147,7 +147,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
 
     public async ValueTask DisposeAsync() => await Task.Run(Dispose);
 
-    public string ToString() => _db!.ToString();
+    public override string ToString() => _db!.ToString();
 
     internal ConfigurationOptions RawConfig { private set; get; }
 
