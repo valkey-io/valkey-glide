@@ -2,7 +2,6 @@
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
 
-using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests(TestConfiguration config)

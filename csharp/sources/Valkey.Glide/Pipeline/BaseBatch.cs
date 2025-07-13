@@ -24,11 +24,11 @@ namespace Valkey.Glide.Pipeline;
 /// </param>
 public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : BaseBatch<T>
 {
-    private readonly List<ICmd> _commands = [];
+    internal readonly List<ICmd> Commands = [];
 
     internal bool IsAtomic { get; private set; } = isAtomic;
 
-    internal FFI.Batch ToFFI() => new([.. _commands.Select(c => c.ToFfi())], IsAtomic);
+    internal FFI.Batch ToFFI() => new([.. Commands.Select(c => c.ToFfi())], IsAtomic);
 
     /// <summary>
     /// Convert a response received from the server.
@@ -40,19 +40,19 @@ public abstract partial class BaseBatch<T>(bool isAtomic) : IBatch where T : Bas
             return null;
         }
 
-        Debug.Assert(response.Length == _commands.Count,
-            $"Response misaligned: received {response.Length} responses but submitted {_commands.Count} commands");
+        Debug.Assert(response.Length == Commands.Count,
+            $"Response misaligned: received {response.Length} responses but submitted {Commands.Count} commands");
 
         for (int i = 0; i < response?.Length; i++)
         {
-            response[i] = _commands[i].GetConverter()(response[i]);
+            response[i] = Commands[i].GetConverter()(response[i]);
         }
         return response;
     }
 
     internal T AddCmd(ICmd cmd)
     {
-        _commands.Add(cmd);
+        Commands.Add(cmd);
         return (T)this;
     }
 

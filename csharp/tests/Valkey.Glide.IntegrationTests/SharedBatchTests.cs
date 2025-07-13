@@ -25,7 +25,7 @@ public class SharedBatchTests
     public async Task BatchTimeout(BaseClient client, bool isAtomic)
     {
         bool isCluster = client is GlideClusterClient;
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         _ = batch.CustomCommand(["DEBUG", "sleep", "0.5"]);
         BaseBatchOptions options = isCluster ? new ClusterBatchOptions(timeout: 100) : new BatchOptions(timeout: 100);
 
@@ -53,7 +53,7 @@ public class SharedBatchTests
         string key1 = "{BatchRaiseOnError}" + Guid.NewGuid();
         string key2 = "{BatchRaiseOnError}" + Guid.NewGuid();
 
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         // TODO replace custom command
         _ = batch.Set(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 

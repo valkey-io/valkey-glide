@@ -1,14 +1,10 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using Valkey.Glide.Pipeline;
-
-using gs = Valkey.Glide.GlideString;
-
 namespace Valkey.Glide.IntegrationTests;
 
 internal class BatchTestUtils
 {
-    public static List<TestInfo> CreateStringTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateStringTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{stringKey}-" : "";
@@ -24,7 +20,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateSetTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateSetTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = "{setKey}-";
@@ -157,7 +153,7 @@ internal class BatchTestUtils
             }))];
 }
 
-internal delegate List<TestInfo> BatchTestDataProvider(IBatch batch, bool isAtomic);
+internal delegate List<TestInfo> BatchTestDataProvider(Pipeline.IBatch batch, bool isAtomic);
 
 internal record BatchTestData(string TestName, BaseClient Client, BatchTestDataProvider TestDataProvider, bool IsAtomic)
 {

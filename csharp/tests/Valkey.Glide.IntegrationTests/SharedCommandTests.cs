@@ -53,7 +53,7 @@ public class SharedCommandTests(TestConfiguration config)
     [MemberData(nameof(BatchTestUtils.GetTestClientWithAtomic), MemberType = typeof(BatchTestUtils))]
     internal async Task BatchTest(BatchTestData testData)
     {
-        IBatch batch = testData.Client is GlideClient ? new Batch(testData.IsAtomic) : new ClusterBatch(testData.IsAtomic);
+        Pipeline.IBatch batch = testData.Client is GlideClient ? new Batch(testData.IsAtomic) : new ClusterBatch(testData.IsAtomic);
         List<TestInfo> expectedInfo = testData.TestDataProvider(batch, testData.IsAtomic);
 
         object?[] actualResult = testData.Client switch

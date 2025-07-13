@@ -64,14 +64,12 @@ public abstract partial class BaseClient : IDisposable
 
     protected internal delegate T ResponseHandler<T>(IntPtr response);
 
-    /// <summary>
-    /// </summary>
     /// <typeparam name="R">Type received from server.</typeparam>
     /// <typeparam name="T">Type we return to the user.</typeparam>
     /// <param name="command"></param>
     /// <param name="route"></param>
     /// <returns></returns>
-    internal async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
+    virtual internal async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
         using Cmd cmd = command.ToFfi();
@@ -97,7 +95,7 @@ public abstract partial class BaseClient : IDisposable
         // All memory allocated is auto-freed by `using` operator
     }
 
-    protected async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
+    internal async Task<object?[]?> Batch<T>(BaseBatch<T> batch, bool raiseOnError, BaseBatchOptions? options = null) where T : BaseBatch<T>
     {
         // 1. Allocate memory for batch, which allocates all nested Cmds
         using FFI.Batch ffiBatch = batch.ToFFI();
