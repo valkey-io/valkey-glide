@@ -125,9 +125,14 @@ jobs:
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
-                  # Log the edited Cargo.toml file
-                  cat Cargo.toml
+                  # Set the version for the Async client
+                  # List of packages to update
+                  for package in glide-async glide-sync glide-shared; do
+                    echo "Patching version in $package/pyproject.toml"
+                    sed -i $SED_FOR_MACOS 's/^dynamic = \["version"\]/version = ${{ env.RELEASE_VERSION }}/' "./$package/pyproject.toml"
+                    # Log the updated file
+                    cat "./$package/pyproject.toml"
+                  done
 
             - name: Set up Python
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -318,7 +323,15 @@ jobs:
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  sed -i "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  # Set the version for the Async client
+                  # List of packages to update
+                  for package in glide-async glide-sync glide-shared; do
+                    echo "Patching version in $package/pyproject.toml"
+                    sed -i $SED_FOR_MACOS 's/^dynamic = \["version"\]/version = ${{ env.RELEASE_VERSION }}/' "./$package/pyproject.toml"
+                    # Log the updated file
+                    cat "./$package/pyproject.toml"
+                  done
 
             - name: Build source distributions
               uses: PyO3/maturin-action@v1
