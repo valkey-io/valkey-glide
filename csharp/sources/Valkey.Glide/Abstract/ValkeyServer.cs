@@ -1,5 +1,6 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Net;
 
 using Valkey.Glide.Commands.Options;
@@ -51,4 +52,13 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
 
     public IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
         => InfoAsync(section, flags).GetAwaiter().GetResult();
+
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.PingAsync(flags), new ByAddressRoute(EndPoint.ToString()!));
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.PingAsync(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+
+    public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.EchoAsync(message, flags), new ByAddressRoute(EndPoint.ToString()!));
 }

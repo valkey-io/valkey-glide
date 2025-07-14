@@ -81,4 +81,32 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
 
     public async Task<ClusterValue<string>> Info(InfoOptions.Section[] sections, Route route)
         => await Command(Request.Info(sections).ToClusterValue(route is SingleNodeRoute), route);
+
+    public async Task<ClusterValue<TimeSpan>> PingAsync(Route route, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.PingAsync(flags).ToClusterValue(route is SingleNodeRoute), route);
+
+    public async Task<ClusterValue<TimeSpan>> PingAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.PingAsync(message, flags).ToClusterValue(route is SingleNodeRoute), route);
+
+    public async Task<ClusterValue<ValkeyValue>> EchoAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.EchoAsync(message, flags).ToClusterValue(route is SingleNodeRoute), route);
+
+    // Simple methods that return single values
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+    {
+        var result = await PingAsync(Route.Random, flags);
+        return result.HasSingleData ? result.SingleValue : result.MultiValue.Values.First();
+    }
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+    {
+        var result = await PingAsync(message, Route.Random, flags);
+        return result.HasSingleData ? result.SingleValue : result.MultiValue.Values.First();
+    }
+
+    public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+    {
+        var result = await EchoAsync(message, Route.Random, flags);
+        return result.HasSingleData ? result.SingleValue : result.MultiValue.Values.First();
+    }
 }

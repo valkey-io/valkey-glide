@@ -220,10 +220,10 @@ internal class BatchTestUtils
 
         ValkeyValue echoMessage = "Echo test message";
         _ = batch.Echo(echoMessage);
-        testData.Add(new((gs)echoMessage, "Echo(message)"));
+        testData.Add(new(echoMessage, "Echo(message)"));
 
         _ = batch.Echo("");
-        testData.Add(new(new gs(""), "Echo(empty)"));
+        testData.Add(new(new ValkeyValue(""), "Echo(empty)"));
 
         return testData;
     }
