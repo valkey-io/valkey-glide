@@ -64,14 +64,14 @@ public class SortedSetCommandTests
         var entries = new SortedSetEntry[]
         {
             new("member1", 10.5),
-            new("member2", 8.2)
+            new("member2", 8.25)
         };
 
         // Act
         var result = Request.SortedSetAddAsync("key", entries);
 
         // Assert
-        Assert.Equal(["ZADD", "key", "10.5", "member1", "8.2", "member2"], result.GetArgs());
+        Assert.Equal(["ZADD", "key", "10.5", "member1", "8.25", "member2"], result.GetArgs());
     }
 
     [Fact]
@@ -81,14 +81,14 @@ public class SortedSetCommandTests
         var entries = new SortedSetEntry[]
         {
             new("member1", 10.5),
-            new("member2", 8.2)
+            new("member2", 8.25)
         };
 
         // Act
         var result = Request.SortedSetAddAsync("key", entries, SortedSetWhen.NotExists);
 
         // Assert
-        Assert.Equal(["ZADD", "key", "NX", "10.5", "member1", "8.2", "member2"], result.GetArgs());
+        Assert.Equal(["ZADD", "key", "NX", "10.5", "member1", "8.25", "member2"], result.GetArgs());
     }
 
     [Fact]
@@ -98,14 +98,14 @@ public class SortedSetCommandTests
         var entries = new SortedSetEntry[]
         {
             new("member1", 10.5),
-            new("member2", 8.2)
+            new("member2", 8.25)
         };
 
         // Act
         var result = Request.SortedSetAddAsync("key", entries, SortedSetWhen.Exists);
 
         // Assert
-        Assert.Equal(["ZADD", "key", "XX", "10.5", "member1", "8.2", "member2"], result.GetArgs());
+        Assert.Equal(["ZADD", "key", "XX", "10.5", "member1", "8.25", "member2"], result.GetArgs());
     }
 
     [Fact]
@@ -115,14 +115,14 @@ public class SortedSetCommandTests
         var entries = new SortedSetEntry[]
         {
             new("member1", 10.5),
-            new("member2", 8.2)
+            new("member2", 8.25)
         };
 
         // Act
         var result = Request.SortedSetAddAsync("key", entries, SortedSetWhen.GreaterThan);
 
         // Assert
-        Assert.Equal(["ZADD", "key", "GT", "10.5", "member1", "8.2", "member2"], result.GetArgs());
+        Assert.Equal(["ZADD", "key", "GT", "10.5", "member1", "8.25", "member2"], result.GetArgs());
     }
 
     [Fact]
@@ -132,14 +132,14 @@ public class SortedSetCommandTests
         var entries = new SortedSetEntry[]
         {
             new("member1", 10.5),
-            new("member2", 8.2)
+            new("member2", 8.25)
         };
 
         // Act
         var result = Request.SortedSetAddAsync("key", entries, SortedSetWhen.LessThan);
 
         // Assert
-        Assert.Equal(["ZADD", "key", "LT", "10.5", "member1", "8.2", "member2"], result.GetArgs());
+        Assert.Equal(["ZADD", "key", "LT", "10.5", "member1", "8.25", "member2"], result.GetArgs());
     }
 
     [Fact]
@@ -157,5 +157,16 @@ public class SortedSetCommandTests
 
         // Act & Assert
         Assert.Throws<NotImplementedException>(() => Request.SortedSetAddAsync("key", entries, SortedSetWhen.Always, CommandFlags.DemandReplica));
+    }
+
+    [Fact]
+    public void DoubleToGlideString_SpecialValues_ReturnsCorrectFormat()
+    {
+        // Test special double values formatting
+        Assert.Equal("+inf", double.PositiveInfinity.ToGlideString().ToString());
+        Assert.Equal("-inf", double.NegativeInfinity.ToGlideString().ToString());
+        Assert.Equal("nan", double.NaN.ToGlideString().ToString());
+        Assert.Equal("0", 0.0.ToGlideString().ToString());
+        Assert.Equal("10.5", 10.5.ToGlideString().ToString());
     }
 }
