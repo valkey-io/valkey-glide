@@ -1,6 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.ComponentModel;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
@@ -30,7 +29,7 @@ public abstract partial class BaseClient : ISortedSetCommands
         {
             return 0;
         }
-        
+
         return await Command(Request.SortedSetAddAsync(key, values, when, flags));
     }
 }

@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using Valkey.Glide.Commands.Constants;
-
 using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide.Internals;
@@ -16,7 +14,7 @@ internal partial class Request
         }
 
         List<GlideString> args = [key.ToGlideString()];
-        
+
         // Add conditional options
         if (when.HasFlag(SortedSetWhen.Exists))
         {
@@ -51,7 +49,7 @@ internal partial class Request
         }
 
         List<GlideString> args = [key.ToGlideString()];
-        
+
         // Add conditional options
         if (when.HasFlag(SortedSetWhen.Exists))
         {
@@ -72,7 +70,7 @@ internal partial class Request
         }
 
         // Add score-member pairs
-        foreach (var entry in values)
+        foreach (SortedSetEntry entry in values)
         {
             args.Add(entry.Score.ToGlideString());
             args.Add(entry.Element.ToGlideString());

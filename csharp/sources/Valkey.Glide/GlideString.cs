@@ -42,12 +42,20 @@ public static class GlideStringExtensions
     public static GlideString ToGlideString(this double @double)
     {
         if (double.IsPositiveInfinity(@double))
+        {
             return new("+inf");
+        }
+
         if (double.IsNegativeInfinity(@double))
+        {
             return new("-inf");
+        }
+
         if (double.IsNaN(@double))
+        {
             return new("nan");
-        
+        }
+
         return new(@double.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
     }
 
