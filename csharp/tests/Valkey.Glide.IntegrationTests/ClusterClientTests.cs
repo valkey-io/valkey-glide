@@ -6,7 +6,6 @@ using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Route;
 
-using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class ClusterClientTests(TestConfiguration config)

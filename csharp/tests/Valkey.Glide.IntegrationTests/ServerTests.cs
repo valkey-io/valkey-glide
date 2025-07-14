@@ -7,16 +7,17 @@ namespace Valkey.Glide.IntegrationTests;
 /// <summary>
 /// Tests for <see cref="ValkeyServer" /> class.
 /// </summary>
-public class ServerTests
+public class ServerTests(TestConfiguration config)
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task CanGetServers(bool isCluster)
-    {
-        (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
+    public TestConfiguration Config { get; } = config;
 
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public void CanGetServers(ConnectionMultiplexer conn, bool isCluster)
+    {
+        (string host, ushort port) = isCluster
+            ? TestConfiguration.CLUSTER_HOSTS[0]
+            : TestConfiguration.STANDALONE_HOSTS[0];
 
         Assert.Equal($"{host}:{port}", conn.GetServer(host, port).EndPoint.ToString());
         Assert.Equal($"{host}:{port}", conn.GetServer($"{host}:{port}").EndPoint.ToString());
@@ -25,22 +26,18 @@ public class ServerTests
 
         // TODO currently this returns only primary node on standalone
         // https://github.com/valkey-io/valkey-glide/issues/4293
-        Assert.Equal(isCluster ? TestConfiguration.CLUSTER_HOSTS.Count : 1, conn.GetServers().Length);
+        Assert.Equal(isCluster
+            ? TestConfiguration.CLUSTER_HOSTS.Count
+            : 1, conn.GetServers().Length);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task CanGetServerInfo(bool isCluster)
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task CanGetServerInfo(ConnectionMultiplexer conn, bool isCluster)
     {
-        (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
-
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
-
         foreach (IServer server in conn.GetServers())
         {
-            // TODO protocol isn't yet configurable
-            Assert.Equal(Protocol.Resp3, server.Protocol);
+            Assert.Equal(conn.RawConfig.Protocol, server.Protocol);
             Assert.Equal(TestConfiguration.SERVER_VERSION, server.Version);
             Assert.Equal(isCluster ? ServerType.Cluster : ServerType.Standalone, server.ServerType);
             string info = (await server.InfoRawAsync("server"))!;
