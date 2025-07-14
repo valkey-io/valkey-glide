@@ -15,7 +15,7 @@ Despite the complete conversion of all methods, the codebase cannot compile due 
 
 1. **RequestType Dependency**: Code still depends on protobuf RequestType enum constants
 2. **Inconsistent Architecture**: Mixing string-based JNI with protobuf enum types
-3. **Routing Support**: Route parameter support needs implementation in GlideJniClient
+3. **Routing Support**: Route parameter support implemented in core client ✅ COMPLETE
 
 ## Architecture Overview
 

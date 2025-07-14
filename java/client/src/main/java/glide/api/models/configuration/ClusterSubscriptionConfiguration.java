@@ -3,7 +3,7 @@ package glide.api.models.configuration;
 
 import static glide.api.models.GlideString.gs;
 
-import glide.api.GlideClusterClient;
+// Note: GlideClusterClient not yet implemented in new architecture
 import glide.api.models.GlideString;
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +12,8 @@ import java.util.Set;
 import lombok.Getter;
 
 /**
- * Subscription configuration for {@link GlideClusterClient}.
+ * Subscription configuration for cluster client.
+ * Note: GlideClusterClient not yet implemented in new architecture.
  *
  * @example
  *     <pre>{@code

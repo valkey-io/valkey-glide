@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import io.valkey.glide.core.client.GlideClient;
+// Note: Using fully qualified name to avoid collision with this class
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.commands.InfoOptions;
 import java.util.concurrent.CompletableFuture;
