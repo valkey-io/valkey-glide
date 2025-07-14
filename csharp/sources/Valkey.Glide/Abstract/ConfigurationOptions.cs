@@ -127,7 +127,7 @@ public sealed class ConfigurationOptions : ICloneable
     /// <summary>
     /// Gets the library name to use for CLIENT SETINFO lib-name calls to server during handshake.
     /// </summary>
-    public string? LibraryName => "GlideC#";
+    public string? LibraryName => "GlideCSharp";
 
     /// <summary>
     /// A Boolean value that specifies whether the certificate revocation list is checked during authentication.
