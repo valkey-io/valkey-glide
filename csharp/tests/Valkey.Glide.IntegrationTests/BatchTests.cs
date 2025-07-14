@@ -2,24 +2,21 @@
 
 namespace Valkey.Glide.IntegrationTests;
 
-public class BatchTests
+public class BatchTests(TestConfiguration config)
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task BasicBatch(bool isCluster)
+    public TestConfiguration Config { get; } = config;
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task BasicBatch(ConnectionMultiplexer conn, bool _)
     {
-        (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
-
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
-
         IDatabase db = conn.GetDatabase();
         IBatch batch = db.CreateBatch();
         string key = Guid.NewGuid().ToString();
         Task<bool> t1 = batch.StringSetAsync(key, "val");
         Task<ValkeyValue> t2 = batch.StringGetAsync(key);
         Task<object?> t3 = batch.CustomCommand(["time"]); // This cmd is queued
-        Task<object?> t4 = db.CustomCommand(["time"]); // This cmd is send
+        Task<object?> t4 = db.CustomCommand(["time"]); // This cmd is sent
 
         // wait for t3 for 100ms, expect to time out (batch is queued, not sent yet)
         Assert.False(t3.Wait(100));
@@ -33,15 +30,10 @@ public class BatchTests
         Assert.True(await t1);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task BasicTrans(bool isCluster)
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task BasicTrans(ConnectionMultiplexer conn, bool _)
     {
-        (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
-
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
-
         IDatabase db = conn.GetDatabase();
         ITransaction transaction = db.CreateTransaction();
         string key = Guid.NewGuid().ToString();
