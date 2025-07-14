@@ -23,10 +23,5 @@ public abstract partial class BaseClient : ISortedSetCommands
         => await SortedSetAddAsync(key, values, SortedSetWhenExtensions.Parse(when), flags);
 
     public async Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
-    {
-        // Handle empty array case - return 0 without making a server request
-        return values.Length == 0 
-            ? 0 
-            : await Command(Request.SortedSetAddAsync(key, values, when, flags));
-    }
+        => values.Length == 0 ? 0 : await Command(Request.SortedSetAddAsync(key, values, when, flags));
 }
