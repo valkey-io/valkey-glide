@@ -2,8 +2,6 @@
 
 using Valkey.Glide.Pipeline;
 
-using gs = Valkey.Glide.GlideString;
-
 namespace Valkey.Glide.IntegrationTests;
 
 internal class BatchTestUtils
@@ -25,9 +23,9 @@ internal class BatchTestUtils
         _ = batch.StringSet(key2, value2);
         testData.Add(new(true, "StringSet(key2, value2)"));
         _ = batch.StringGet(key1);
-        testData.Add(new(new GlideString(value1), "StringGet(key1)"));
+        testData.Add(new(new gs(value1), "StringGet(key1)"));
         _ = batch.StringGet(key2);
-        testData.Add(new(new GlideString(value2), "StringGet(key2)"));
+        testData.Add(new(new gs(value2), "StringGet(key2)"));
         _ = batch.StringLength(key1);
         testData.Add(new((long)value1.Length, "StringLength(key1)"));
         _ = batch.StringLength(key2);
@@ -159,6 +157,41 @@ internal class BatchTestUtils
 
         _ = batch.SetLength(key4);
         testData.Add(new(1L, "SetLength(key4) after pop with count"));
+
+        return testData;
+    }
+
+    public static List<TestInfo> CreateSortedSetTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+        string prefix = isAtomic ? "{sortedSetKey}-" : "";
+        string key1 = $"{prefix}1-{Guid.NewGuid()}";
+        string key2 = $"{prefix}2-{Guid.NewGuid()}";
+
+        // Test single member add
+        _ = batch.SortedSetAdd(key1, "member1", 10.5);
+        testData.Add(new(true, "SortedSetAdd(key1, member1, 10.5)"));
+
+        // Test multiple members add
+        var entries = new SortedSetEntry[]
+        {
+            new("member2", 8.2),
+            new("member3", 15.0)
+        };
+        _ = batch.SortedSetAdd(key1, entries);
+        testData.Add(new(2L, "SortedSetAdd(key1, [member2:8.2, member3:15.0])"));
+
+        // Test add with NX (should not add existing member)
+        _ = batch.SortedSetAdd(key1, "member1", 20.0, SortedSetWhen.NotExists);
+        testData.Add(new(false, "SortedSetAdd(key1, member1, 20.0, NotExists)"));
+
+        // Test add with XX (should update existing member)
+        _ = batch.SortedSetAdd(key1, "member2", 12.0, SortedSetWhen.Exists);
+        testData.Add(new(false, "SortedSetAdd(key1, member2, 12.0, Exists)"));
+
+        // Test add new member with NX
+        _ = batch.SortedSetAdd(key2, "newMember", 7.5, SortedSetWhen.NotExists);
+        testData.Add(new(true, "SortedSetAdd(key2, newMember, 7.5, NotExists)"));
 
         return testData;
     }
