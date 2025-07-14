@@ -1,0 +1,358 @@
+import java.nio.file.Paths
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'io.freefair.lombok' version '8.6'
+    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.google.osdetector' version '1.7.3'
+    id 'com.gradleup.shadow' version '8.3.5'
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    testImplementation { extendsFrom shadow }
+}
+
+dependencies {
+    // Add dependency on java-jni module for JNI client
+    implementation project(':java-jni')
+    
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+
+    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
+    // https://github.com/netty/netty/wiki/Native-transports
+    // At the moment, Windows is not supported
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-x86_64'
+
+    // junit
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+
+    //lombok
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+    testCompileOnly 'org.projectlombok:lombok:1.18.32'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+}
+
+ext {
+    checkProtocVersion = { String output ->
+        // Line in format like: libprotoc 29.1
+        int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
+        int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
+        if (majorVersion < 29) {
+            throw new GradleException("Protobuf compiler (protoc) version 29.0 or newer is required. Current version: $output");
+        }
+        return output.split(" ")[1]
+    }
+
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
+tasks.register('protobuf', Exec) {
+    doFirst {
+        try {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    commandLine 'protoc', '--version'
+                    workingDir Paths.get(project.rootDir.path, '..').toFile()
+                    standardOutput = os
+                }
+                checkProtocVersion(os.toString());
+            }
+        } catch (Exception e) {
+            if (e.getMessage().startsWith("A problem occurred starting process")) {
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 29.0 or newer is required.");
+            }
+            throw e
+        }
+
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
+    }
+    commandLine 'protoc',
+        '-Iprotobuf=glide-core/src/protobuf/',
+        '--java_out=java/client/src/main/java/glide/models/protobuf',
+        'glide-core/src/protobuf/connection_request.proto',
+        'glide-core/src/protobuf/command_request.proto',
+        'glide-core/src/protobuf/response.proto'
+    workingDir Paths.get(project.rootDir.path, '..').toFile()
+}
+
+tasks.register('cleanProtobuf') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
+    }
+}
+
+tasks.register('cleanRust') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, '../target').toString())
+    }
+}
+
+tasks.register('buildRust', Exec) {
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
+    workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always'
+}
+
+tasks.register('buildRustFfi', Exec) {
+    commandLine 'cargo', 'build', '--release'
+    workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+}
+
+tasks.register('buildWithRust') {
+    dependsOn 'buildRust'
+    finalizedBy 'build'
+}
+
+tasks.register('buildWithProto') {
+    dependsOn 'protobuf'
+    finalizedBy 'build'
+}
+
+tasks.register('testFfi', Test) {
+    dependsOn 'buildRustFfi'
+    include "glide/ffi/FfiTest.class"
+}
+
+tasks.register('buildAll') {
+    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    finalizedBy 'build'
+}
+
+compileJava.dependsOn('protobuf')
+clean.dependsOn('cleanProtobuf', 'cleanRust')
+
+tasks.register('copyNativeLib', Copy) {
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else {
+        from "${projectDir}/../target/release"
+    }
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+delombok.dependsOn('compileJava')
+jar.dependsOn('copyNativeLib')
+javadoc.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn('buildRust')
+compileTestJava.dependsOn('copyNativeLib')
+test.dependsOn('buildRust')
+testFfi.dependsOn('buildRust')
+
+test {
+    exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude 'glide/models' // exclude protobuf files
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.shadow
+            artifact javadocJar
+            artifact sourcesJar
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide'
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+            pom {
+                name = 'valkey-glide'
+                description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Valkey GLIDE Maintainers'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn jar, shadowJar
+}
+
+java {
+    modularity.inferModulePath = true
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
+signing {
+    sign publishing.publications
+}
+
+tasks.withType(Test) {
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    // This is needed for the FFI tests
+    jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+jar {
+    archiveClassifier = osdetector.classifier
+}
+
+import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.TransformerContext
+import org.apache.tools.zip.ZipOutputStream
+import org.apache.tools.zip.ZipEntry
+
+// https://github.com/grpc/grpc-java/blob/b3db8c2489af25b0d10b6f45e60fd50771aa93d1/netty/shaded/build.gradle#L149
+/**
+ * A Transformer which updates the Netty JAR META-INF/ resources to accurately
+ * reference shaded class names.
+ */
+@CacheableTransformer
+class NettyResourceTransformer implements Transformer {
+
+    // A map of resource file paths to be modified
+    private Map<String, String> resources = [:]
+
+    @Override
+    boolean canTransformResource(FileTreeElement fileTreeElement) {
+        fileTreeElement.name.startsWith("META-INF/native-image/io.netty")
+    }
+
+    @Override
+    void transform(TransformerContext context) {
+        String updatedPath = context.path.replace("io.netty", "glide.io.netty")
+        String updatedContent = context.is.getText().replace("io.netty", "glide.io.netty")
+        resources.put(updatedPath, updatedContent)
+    }
+
+    @Override
+    boolean hasTransformedResource() {
+        resources.size() > 0
+    }
+
+    @Override
+    void modifyOutputStream(ZipOutputStream outputStream, boolean preserveFileTimestamps) {
+        for (resourceEntry in resources) {
+            ZipEntry entry = new ZipEntry(resourceEntry.key)
+            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
+
+            outputStream.putNextEntry(entry)
+            outputStream.write(resourceEntry.value.getBytes())
+            outputStream.closeEntry()
+        }
+    }
+}
+
+shadowJar {
+    dependsOn('copyNativeLib')
+    archiveClassifier = osdetector.classifier
+    excludes.remove("module-info.class")
+    relocate('io.netty', 'glide.io.netty')
+    relocate('com.google.protobuf', 'glide.com.google.protobuf')
+    mergeServiceFiles()
+
+    relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
+    relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
+    transform(NettyResourceTransformer.class)
+}
+
+sourcesJar {
+    // suppress following error
+    // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok {
+    modulePath = classpath
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:" ]
+    failOnError = false // TODO fix all javadoc errors and warnings and remove that
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.html")
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.xml")
+        }
+    }
+}
+
+spotbugs {
+    ignoreFailures = true
+    showStackTraces = true
+}

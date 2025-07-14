@@ -1,0 +1,118 @@
+plugins {
+    // Apply the application plugin to add support for building a CLI application in Java.
+    id 'application'
+    id "com.google.osdetector" version "1.7.3"
+}
+
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+
+    implementation "io.valkey:valkey-glide:${version}:${osdetector.classifier}"
+    implementation project(':java-jni')
+
+    // This dependency is used internally, and not exposed to consumers on their own compile classpath.
+    implementation 'com.google.guava:guava:32.1.1-jre'
+    implementation 'redis.clients:jedis:5.1.2'
+    implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
+    implementation 'commons-cli:commons-cli:1.5.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.5'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
+}
+
+if (!System.getenv("GLIDE_RELEASE_VERSION")) {
+    compileJava.dependsOn ':client:publishToMavenLocal'
+}
+
+application {
+    // Define the main class for the application.
+    mainClass = 'glide.benchmarks.BenchmarkingApp'
+    // Runs for GITHUB_ACTIONS for testing release Maven deployment. Force benchmarks to use glide-rs from Maven Central
+    // deployments.
+    if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
+        def jniLibPath = file("../../rust-jni/target/release/").absolutePath
+        def glideLibPath = file('../../target/release').absolutePath
+        applicationDefaultJvmArgs = ["-Djava.library.path=${jniLibPath}${File.pathSeparator}${glideLibPath}"]
+    }
+}
+
+// JNI Library Build Tasks
+// Define target arch for consistency
+ext {
+    rustTarget = osdetector.os == 'linux' && osdetector.release.id != 'alpine' ?
+        "${arch}-unknown-linux-gnu.2.17" : null
+    rustTargetDir = rustTarget ? "target/${arch}-unknown-linux-gnu/release/" : "target/release/"
+}
+
+tasks.register('buildJniRust', Exec) {
+    description = 'Build the JNI Rust library'
+    if (rustTarget) {
+        commandLine 'cargo', 'zigbuild', '--target', rustTarget, '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
+    workingDir "${project.rootDir}/../rust-jni"
+    environment CARGO_TERM_COLOR: 'always'
+    environment RUSTFLAGS: '-C target-cpu=native -C opt-level=3'
+
+    doLast {
+        println "Built JNI library for target: ${rustTarget ?: 'default'}"
+        println "Library location: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+    }
+}
+
+tasks.register('buildJniRustOptimized', Exec) {
+    description = 'Build the JNI Rust library with maximum optimization'
+    if (rustTarget) {
+        commandLine 'cargo', 'zigbuild', '--target', rustTarget, '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+
+    workingDir "${project.rootDir}/../rust-jni"
+    environment CARGO_TERM_COLOR: 'always'
+    environment RUSTFLAGS: '-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1'
+
+    doLast {
+        println "Built optimized JNI library for target: ${rustTarget ?: 'default'}"
+        println "Library location: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+    }
+}
+
+tasks.register('copyJniLib', Copy) {
+    description = 'Copy JNI native library to resources'
+    dependsOn 'buildJniRust'
+
+    from "${project.rootDir}/../rust-jni/${rustTargetDir}"
+    include "libglidejni.so", "libglidejni.dylib", "glidejni.dll"
+    into sourceSets.main.output.resourcesDir
+
+    doLast {
+        println "JNI library copied from: ${project.rootDir}/../rust-jni/${rustTargetDir}"
+        println "JNI library copied to: ${sourceSets.main.output.resourcesDir}"
+
+        // Verify the library exists
+        def libFile = new File(sourceSets.main.output.resourcesDir, "libglidejni.so")
+        if (libFile.exists()) {
+            println "✅ Library copied successfully: ${libFile.absolutePath}"
+        } else {
+            println "❌ Library not found after copy!"
+        }
+    }
+}
+
+// Make sure JNI library is built before compiling and running
+compileJava.dependsOn('copyJniLib')
+run.dependsOn('copyJniLib')

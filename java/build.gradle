@@ -1,110 +1,68 @@
 plugins {
-    id 'java'
     id 'java-library'
-    id 'io.freefair.lombok' version '8.6'
-    id 'com.diffplug.spotless' version '6.25.0'
-    id 'jacoco'
+    id 'maven-publish'
 }
 
-allprojects {
-    // JaCoCo section (common config for code coverage)
-    apply plugin: 'jacoco'
+group = 'io.valkey'
+version = '0.1.0-SNAPSHOT'
 
-    jacoco {
-        toolVersion = "0.8.9"
-    }
-
-    jacocoTestCoverageVerification {
-        violationRules {
-            rule {
-                element = 'CLASS'
-                excludes = [
-                    'glide.models.protobuf.*',
-                    'glide.connectors.resources.*',
-                    'glide.connectors.handlers.*'
-                ]
-            }
-        }
-    }
-
-    check.dependsOn jacocoTestCoverageVerification
-    // End of JaCoCo section
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    withJavadocJar()
+    withSourcesJar()
 }
 
 repositories {
     mavenCentral()
+    mavenLocal() // For access to local valkey-glide build
 }
 
-subprojects {
-    repositories {
-        // Runs for GITHUB_ACTIONS for testing release Maven deployment.
-        if(System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
-            maven {
-                name = "centralManualTesting"
-                url "https://central.sonatype.com/api/v1/publisher/deployments/download/"
-                credentials(HttpHeaderCredentials)
-                authentication {
-                    header(HttpHeaderAuthentication)
-                }
-            }
-        }
-        mavenCentral()
-    }
-    // minimal java compatibility level
-    apply plugin: 'java'
-    java {
-        toolchain {
-            languageVersion.set(JavaLanguageVersion.of(11))
-            vendor = JvmVendorSpec.ADOPTIUM // Temurin
-        }
-    }
-    tasks.withType(Test) {
-        useJUnitPlatform()
+dependencies {
+    // POC only needs basic Java functionality - no protobuf
 
-        testLogging {
-            exceptionFormat "full"
-            events "started", "skipped", "passed", "failed"
-            showStandardStreams true
-        }
-    }
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
+    testImplementation 'org.mockito:mockito-core:5.4.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
 
-    ext {
-        defaultReleaseVersion = "255.255.255"
-        failedTests = []
-    }
+    // JMH for benchmarking
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+}
 
-    tasks.withType(Test) {
-        afterTest { TestDescriptor descriptor, TestResult result ->
-            if (result.resultType == TestResult.ResultType.FAILURE) {
-                failedTests << "${descriptor.className}.${descriptor.name}"
-            }
-        }
-    }
+// Create a task for running the Cargo build
+task buildNative(type: Exec) {
+    workingDir '../rust-jni'
+    commandLine 'cargo', 'build', '--release'
+}
 
-    gradle.buildFinished {
-        if (!failedTests.empty) {
-            println "\nFailed tests for `:${project.name}`:"
-            failedTests.each { failedTest -> println failedTest }
-            println ""
+// Make Java build depend on native build
+compileJava.dependsOn buildNative
+
+// Copy native libraries to resources
+task copyNativeLibs(type: Copy, dependsOn: buildNative) {
+    from '../rust-jni/target/release/'
+    into 'src/main/resources/native/'
+    include '*.so', '*.dylib', '*.dll'
+}
+
+// Make JAR building depend on copying native libs
+processResources.dependsOn copyNativeLibs
+sourcesJar.dependsOn copyNativeLibs
+
+test {
+    useJUnitPlatform()
+
+    systemProperty 'java.library.path', file('../rust-jni/target/release').absolutePath
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifactId = 'glide-jni'
+            from components.java
         }
     }
 }
-
-// Spotless section (code style)
-spotless {
-    java {
-        target fileTree('.') {
-            include '**/*.java'
-            exclude '**/build/**', '**/build-*/**', '**/protobuf/**'
-        }
-        licenseHeader('/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */')
-        importOrder()
-        removeUnusedImports()
-        trimTrailingWhitespace()
-        endWithNewline()
-        googleJavaFormat('1.22.0').reflowLongStrings().groupArtifact('com.google.googlejavaformat:google-java-format')
-        indentWithTabs(2)
-        indentWithSpaces(4)
-    }
-}
-// End of Spotless section

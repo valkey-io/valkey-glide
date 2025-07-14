@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
-import glide.models.protobuf.command_request.CommandRequestOuterClass.RequestType;
+import io.valkey.glide.jni.commands.CommandType;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
@@ -12,7 +12,6 @@ import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.exceptions.GlideException;
-import io.valkey.glide.jni.client.GlideJniClient;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,147 +27,146 @@ import lombok.RequiredArgsConstructor;
  * REVOLUTIONARY CHANGE: No more protobuf Response objects or response handlers!
  * Commands return native Java objects directly via JNI.
  */
-@RequiredArgsConstructor
 public class CommandManager {
 
-    /** JNI client for direct integration with glide-core. */
-    private final GlideJniClient jniClient;
+    /** TODO: Add dependency to java-jni module for GlideJniClient */
+    // private final GlideJniClient jniClient;
 
     /** Command specifications with expected return types. */
-    private static final Map<RequestType, CommandSpec> COMMAND_SPECS;
+    private static final Map<CommandType, CommandSpec> COMMAND_SPECS;
 
     static {
-        Map<RequestType, CommandSpec> specs = new HashMap<>();
+        Map<CommandType, CommandSpec> specs = new HashMap<>();
         
         // String commands
-        specs.put(RequestType.Get, new CommandSpec("GET", ReturnType.STRING));
-        specs.put(RequestType.Set, new CommandSpec("SET", ReturnType.STRING));
-        specs.put(RequestType.Append, new CommandSpec("APPEND", ReturnType.LONG));
-        specs.put(RequestType.Decr, new CommandSpec("DECR", ReturnType.LONG));
-        specs.put(RequestType.DecrBy, new CommandSpec("DECRBY", ReturnType.LONG));
-        specs.put(RequestType.GetDel, new CommandSpec("GETDEL", ReturnType.STRING));
-        specs.put(RequestType.GetEx, new CommandSpec("GETEX", ReturnType.STRING));
-        specs.put(RequestType.GetRange, new CommandSpec("GETRANGE", ReturnType.STRING));
-        specs.put(RequestType.Incr, new CommandSpec("INCR", ReturnType.LONG));
-        specs.put(RequestType.IncrBy, new CommandSpec("INCRBY", ReturnType.LONG));
-        specs.put(RequestType.IncrByFloat, new CommandSpec("INCRBYFLOAT", ReturnType.DOUBLE));
-        specs.put(RequestType.LCS, new CommandSpec("LCS", ReturnType.OBJECT));
-        specs.put(RequestType.MGet, new CommandSpec("MGET", ReturnType.ARRAY));
-        specs.put(RequestType.MSet, new CommandSpec("MSET", ReturnType.STRING));
-        specs.put(RequestType.MSetNX, new CommandSpec("MSETNX", ReturnType.BOOLEAN));
-        specs.put(RequestType.SetRange, new CommandSpec("SETRANGE", ReturnType.LONG));
-        specs.put(RequestType.Strlen, new CommandSpec("STRLEN", ReturnType.LONG));
+        specs.put(CommandType.GET, new CommandSpec("GET", ReturnType.STRING));
+        specs.put(CommandType.SET, new CommandSpec("SET", ReturnType.STRING));
+        specs.put(CommandType.APPEND, new CommandSpec("APPEND", ReturnType.LONG));
+        specs.put(CommandType.DECR, new CommandSpec("DECR", ReturnType.LONG));
+        specs.put(CommandType.DECRBY, new CommandSpec("DECRBY", ReturnType.LONG));
+        specs.put(CommandType.GETDEL, new CommandSpec("GETDEL", ReturnType.STRING));
+        specs.put(CommandType.GETEX, new CommandSpec("GETEX", ReturnType.STRING));
+        specs.put(CommandType.GETRANGE, new CommandSpec("GETRANGE", ReturnType.STRING));
+        specs.put(CommandType.INCR, new CommandSpec("INCR", ReturnType.LONG));
+        specs.put(CommandType.INCRBY, new CommandSpec("INCRBY", ReturnType.LONG));
+        specs.put(CommandType.INCRBYFLOAT, new CommandSpec("INCRBYFLOAT", ReturnType.DOUBLE));
+        specs.put(CommandType.LCS, new CommandSpec("LCS", ReturnType.OBJECT));
+        specs.put(CommandType.MGET, new CommandSpec("MGET", ReturnType.ARRAY));
+        specs.put(CommandType.MSET, new CommandSpec("MSET", ReturnType.STRING));
+        specs.put(CommandType.MSETNX, new CommandSpec("MSETNX", ReturnType.BOOLEAN));
+        specs.put(CommandType.SETRANGE, new CommandSpec("SETRANGE", ReturnType.LONG));
+        specs.put(CommandType.STRLEN, new CommandSpec("STRLEN", ReturnType.LONG));
 
         // Hash commands
-        specs.put(RequestType.HDel, new CommandSpec("HDEL", ReturnType.LONG));
-        specs.put(RequestType.HExists, new CommandSpec("HEXISTS", ReturnType.BOOLEAN));
-        specs.put(RequestType.HGet, new CommandSpec("HGET", ReturnType.STRING));
-        specs.put(RequestType.HGetAll, new CommandSpec("HGETALL", ReturnType.ARRAY));
-        specs.put(RequestType.HIncrBy, new CommandSpec("HINCRBY", ReturnType.LONG));
-        specs.put(RequestType.HIncrByFloat, new CommandSpec("HINCRBYFLOAT", ReturnType.DOUBLE));
-        specs.put(RequestType.HKeys, new CommandSpec("HKEYS", ReturnType.ARRAY));
-        specs.put(RequestType.HLen, new CommandSpec("HLEN", ReturnType.LONG));
-        specs.put(RequestType.HMGet, new CommandSpec("HMGET", ReturnType.ARRAY));
-        specs.put(RequestType.HRandField, new CommandSpec("HRANDFIELD", ReturnType.OBJECT));
-        specs.put(RequestType.HScan, new CommandSpec("HSCAN", ReturnType.ARRAY));
-        specs.put(RequestType.HSet, new CommandSpec("HSET", ReturnType.LONG));
-        specs.put(RequestType.HSetNX, new CommandSpec("HSETNX", ReturnType.BOOLEAN));
-        specs.put(RequestType.HStrlen, new CommandSpec("HSTRLEN", ReturnType.LONG));
-        specs.put(RequestType.HVals, new CommandSpec("HVALS", ReturnType.ARRAY));
+        specs.put(CommandType.HDEL, new CommandSpec("HDEL", ReturnType.LONG));
+        specs.put(CommandType.HEXISTS, new CommandSpec("HEXISTS", ReturnType.BOOLEAN));
+        specs.put(CommandType.HGET, new CommandSpec("HGET", ReturnType.STRING));
+        specs.put(CommandType.HGETALL, new CommandSpec("HGETALL", ReturnType.ARRAY));
+        specs.put(CommandType.HINCRBY, new CommandSpec("HINCRBY", ReturnType.LONG));
+        specs.put(CommandType.HINCRBYFLOAT, new CommandSpec("HINCRBYFLOAT", ReturnType.DOUBLE));
+        specs.put(CommandType.HKEYS, new CommandSpec("HKEYS", ReturnType.ARRAY));
+        specs.put(CommandType.HLEN, new CommandSpec("HLEN", ReturnType.LONG));
+        specs.put(CommandType.HMGET, new CommandSpec("HMGET", ReturnType.ARRAY));
+        specs.put(CommandType.HRANDFIELD, new CommandSpec("HRANDFIELD", ReturnType.OBJECT));
+        specs.put(CommandType.HSCAN, new CommandSpec("HSCAN", ReturnType.ARRAY));
+        specs.put(CommandType.HSET, new CommandSpec("HSET", ReturnType.LONG));
+        specs.put(CommandType.HSETNX, new CommandSpec("HSETNX", ReturnType.BOOLEAN));
+        specs.put(CommandType.HSTRLEN, new CommandSpec("HSTRLEN", ReturnType.LONG));
+        specs.put(CommandType.HVALS, new CommandSpec("HVALS", ReturnType.ARRAY));
 
         // List commands
-        specs.put(RequestType.BLMove, new CommandSpec("BLMOVE", ReturnType.STRING));
-        specs.put(RequestType.BLPop, new CommandSpec("BLPOP", ReturnType.ARRAY));
-        specs.put(RequestType.BRPop, new CommandSpec("BRPOP", ReturnType.ARRAY));
-        specs.put(RequestType.LIndex, new CommandSpec("LINDEX", ReturnType.STRING));
-        specs.put(RequestType.LInsert, new CommandSpec("LINSERT", ReturnType.LONG));
-        specs.put(RequestType.LLen, new CommandSpec("LLEN", ReturnType.LONG));
-        specs.put(RequestType.LMove, new CommandSpec("LMOVE", ReturnType.STRING));
-        specs.put(RequestType.LPop, new CommandSpec("LPOP", ReturnType.STRING));
-        specs.put(RequestType.LPos, new CommandSpec("LPOS", ReturnType.LONG));
-        specs.put(RequestType.LPush, new CommandSpec("LPUSH", ReturnType.LONG));
-        specs.put(RequestType.LPushX, new CommandSpec("LPUSHX", ReturnType.LONG));
-        specs.put(RequestType.LRange, new CommandSpec("LRANGE", ReturnType.ARRAY));
-        specs.put(RequestType.LRem, new CommandSpec("LREM", ReturnType.LONG));
-        specs.put(RequestType.LSet, new CommandSpec("LSET", ReturnType.STRING));
-        specs.put(RequestType.LTrim, new CommandSpec("LTRIM", ReturnType.STRING));
-        specs.put(RequestType.RPop, new CommandSpec("RPOP", ReturnType.STRING));
-        specs.put(RequestType.RPush, new CommandSpec("RPUSH", ReturnType.LONG));
-        specs.put(RequestType.RPushX, new CommandSpec("RPUSHX", ReturnType.LONG));
+        specs.put(CommandType.BLMOVE, new CommandSpec("BLMOVE", ReturnType.STRING));
+        specs.put(CommandType.BLPOP, new CommandSpec("BLPOP", ReturnType.ARRAY));
+        specs.put(CommandType.BRPOP, new CommandSpec("BRPOP", ReturnType.ARRAY));
+        specs.put(CommandType.LINDEX, new CommandSpec("LINDEX", ReturnType.STRING));
+        specs.put(CommandType.LINSERT, new CommandSpec("LINSERT", ReturnType.LONG));
+        specs.put(CommandType.LLEN, new CommandSpec("LLEN", ReturnType.LONG));
+        specs.put(CommandType.LMOVE, new CommandSpec("LMOVE", ReturnType.STRING));
+        specs.put(CommandType.LPOP, new CommandSpec("LPOP", ReturnType.STRING));
+        specs.put(CommandType.LPOS, new CommandSpec("LPOS", ReturnType.LONG));
+        specs.put(CommandType.LPUSH, new CommandSpec("LPUSH", ReturnType.LONG));
+        specs.put(CommandType.LPUSHX, new CommandSpec("LPUSHX", ReturnType.LONG));
+        specs.put(CommandType.LRANGE, new CommandSpec("LRANGE", ReturnType.ARRAY));
+        specs.put(CommandType.LREM, new CommandSpec("LREM", ReturnType.LONG));
+        specs.put(CommandType.LSET, new CommandSpec("LSET", ReturnType.STRING));
+        specs.put(CommandType.LTRIM, new CommandSpec("LTRIM", ReturnType.STRING));
+        specs.put(CommandType.RPOP, new CommandSpec("RPOP", ReturnType.STRING));
+        specs.put(CommandType.RPUSH, new CommandSpec("RPUSH", ReturnType.LONG));
+        specs.put(CommandType.RPUSHX, new CommandSpec("RPUSHX", ReturnType.LONG));
 
         // Set commands
-        specs.put(RequestType.SAdd, new CommandSpec("SADD", ReturnType.LONG));
-        specs.put(RequestType.SCard, new CommandSpec("SCARD", ReturnType.LONG));
-        specs.put(RequestType.SDiff, new CommandSpec("SDIFF", ReturnType.ARRAY));
-        specs.put(RequestType.SDiffStore, new CommandSpec("SDIFFSTORE", ReturnType.LONG));
-        specs.put(RequestType.SInter, new CommandSpec("SINTER", ReturnType.ARRAY));
-        specs.put(RequestType.SInterStore, new CommandSpec("SINTERSTORE", ReturnType.LONG));
-        specs.put(RequestType.SIsMember, new CommandSpec("SISMEMBER", ReturnType.BOOLEAN));
-        specs.put(RequestType.SMembers, new CommandSpec("SMEMBERS", ReturnType.ARRAY));
-        specs.put(RequestType.SMove, new CommandSpec("SMOVE", ReturnType.BOOLEAN));
-        specs.put(RequestType.SPop, new CommandSpec("SPOP", ReturnType.STRING));
-        specs.put(RequestType.SRandMember, new CommandSpec("SRANDMEMBER", ReturnType.STRING));
-        specs.put(RequestType.SRem, new CommandSpec("SREM", ReturnType.LONG));
-        specs.put(RequestType.SUnion, new CommandSpec("SUNION", ReturnType.ARRAY));
-        specs.put(RequestType.SUnionStore, new CommandSpec("SUNIONSTORE", ReturnType.LONG));
+        specs.put(CommandType.SADD, new CommandSpec("SADD", ReturnType.LONG));
+        specs.put(CommandType.SCARD, new CommandSpec("SCARD", ReturnType.LONG));
+        specs.put(CommandType.SDIFF, new CommandSpec("SDIFF", ReturnType.ARRAY));
+        specs.put(CommandType.SDIFFSTORE, new CommandSpec("SDIFFSTORE", ReturnType.LONG));
+        specs.put(CommandType.SINTER, new CommandSpec("SINTER", ReturnType.ARRAY));
+        specs.put(CommandType.SINTERSTORE, new CommandSpec("SINTERSTORE", ReturnType.LONG));
+        specs.put(CommandType.SISMEMBER, new CommandSpec("SISMEMBER", ReturnType.BOOLEAN));
+        specs.put(CommandType.SMEMBERS, new CommandSpec("SMEMBERS", ReturnType.ARRAY));
+        specs.put(CommandType.SMOVE, new CommandSpec("SMOVE", ReturnType.BOOLEAN));
+        specs.put(CommandType.SPOP, new CommandSpec("SPOP", ReturnType.STRING));
+        specs.put(CommandType.SRANDMEMBER, new CommandSpec("SRANDMEMBER", ReturnType.STRING));
+        specs.put(CommandType.SREM, new CommandSpec("SREM", ReturnType.LONG));
+        specs.put(CommandType.SUNION, new CommandSpec("SUNION", ReturnType.ARRAY));
+        specs.put(CommandType.SUNIONSTORE, new CommandSpec("SUNIONSTORE", ReturnType.LONG));
 
         // Sorted Set commands
-        specs.put(RequestType.BZPopMax, new CommandSpec("BZPOPMAX", ReturnType.ARRAY));
-        specs.put(RequestType.BZPopMin, new CommandSpec("BZPOPMIN", ReturnType.ARRAY));
-        specs.put(RequestType.ZAdd, new CommandSpec("ZADD", ReturnType.LONG));
-        specs.put(RequestType.ZCard, new CommandSpec("ZCARD", ReturnType.LONG));
-        specs.put(RequestType.ZCount, new CommandSpec("ZCOUNT", ReturnType.LONG));
-        specs.put(RequestType.ZDiff, new CommandSpec("ZDIFF", ReturnType.ARRAY));
-        specs.put(RequestType.ZDiffStore, new CommandSpec("ZDIFFSTORE", ReturnType.LONG));
-        specs.put(RequestType.ZIncrBy, new CommandSpec("ZINCRBY", ReturnType.DOUBLE));
-        specs.put(RequestType.ZInter, new CommandSpec("ZINTER", ReturnType.ARRAY));
-        specs.put(RequestType.ZInterStore, new CommandSpec("ZINTERSTORE", ReturnType.LONG));
-        specs.put(RequestType.ZLexCount, new CommandSpec("ZLEXCOUNT", ReturnType.LONG));
-        specs.put(RequestType.ZMScore, new CommandSpec("ZMSCORE", ReturnType.ARRAY));
-        specs.put(RequestType.ZPopMax, new CommandSpec("ZPOPMAX", ReturnType.ARRAY));
-        specs.put(RequestType.ZPopMin, new CommandSpec("ZPOPMIN", ReturnType.ARRAY));
-        specs.put(RequestType.ZRandMember, new CommandSpec("ZRANDMEMBER", ReturnType.STRING));
-        specs.put(RequestType.ZRange, new CommandSpec("ZRANGE", ReturnType.ARRAY));
-        specs.put(RequestType.ZRangeByLex, new CommandSpec("ZRANGEBYLEX", ReturnType.ARRAY));
-        specs.put(RequestType.ZRangeByScore, new CommandSpec("ZRANGEBYSCORE", ReturnType.ARRAY));
-        specs.put(RequestType.ZRank, new CommandSpec("ZRANK", ReturnType.LONG));
-        specs.put(RequestType.ZRem, new CommandSpec("ZREM", ReturnType.LONG));
-        specs.put(RequestType.ZRemRangeByLex, new CommandSpec("ZREMRANGEBYLEX", ReturnType.LONG));
-        specs.put(RequestType.ZRemRangeByRank, new CommandSpec("ZREMRANGEBYRANK", ReturnType.LONG));
-        specs.put(RequestType.ZRemRangeByScore, new CommandSpec("ZREMRANGEBYSCORE", ReturnType.LONG));
-        specs.put(RequestType.ZRevRange, new CommandSpec("ZREVRANGE", ReturnType.ARRAY));
-        specs.put(RequestType.ZRevRangeByLex, new CommandSpec("ZREVRANGEBYLEX", ReturnType.ARRAY));
-        specs.put(RequestType.ZRevRangeByScore, new CommandSpec("ZREVRANGEBYSCORE", ReturnType.ARRAY));
-        specs.put(RequestType.ZRevRank, new CommandSpec("ZREVRANK", ReturnType.LONG));
-        specs.put(RequestType.ZScore, new CommandSpec("ZSCORE", ReturnType.DOUBLE));
-        specs.put(RequestType.ZUnion, new CommandSpec("ZUNION", ReturnType.ARRAY));
-        specs.put(RequestType.ZUnionStore, new CommandSpec("ZUNIONSTORE", ReturnType.LONG));
+        specs.put(CommandType.BZPOPMAX, new CommandSpec("BZPOPMAX", ReturnType.ARRAY));
+        specs.put(CommandType.BZPOPMIN, new CommandSpec("BZPOPMIN", ReturnType.ARRAY));
+        specs.put(CommandType.ZADD, new CommandSpec("ZADD", ReturnType.LONG));
+        specs.put(CommandType.ZCARD, new CommandSpec("ZCARD", ReturnType.LONG));
+        specs.put(CommandType.ZCOUNT, new CommandSpec("ZCOUNT", ReturnType.LONG));
+        specs.put(CommandType.ZDIFF, new CommandSpec("ZDIFF", ReturnType.ARRAY));
+        specs.put(CommandType.ZDIFFSTORE, new CommandSpec("ZDIFFSTORE", ReturnType.LONG));
+        specs.put(CommandType.ZINCRBY, new CommandSpec("ZINCRBY", ReturnType.DOUBLE));
+        specs.put(CommandType.ZINTER, new CommandSpec("ZINTER", ReturnType.ARRAY));
+        specs.put(CommandType.ZINTERSTORE, new CommandSpec("ZINTERSTORE", ReturnType.LONG));
+        specs.put(CommandType.ZLEXCOUNT, new CommandSpec("ZLEXCOUNT", ReturnType.LONG));
+        specs.put(CommandType.ZMSCORE, new CommandSpec("ZMSCORE", ReturnType.ARRAY));
+        specs.put(CommandType.ZPOPMAX, new CommandSpec("ZPOPMAX", ReturnType.ARRAY));
+        specs.put(CommandType.ZPOPMIN, new CommandSpec("ZPOPMIN", ReturnType.ARRAY));
+        specs.put(CommandType.ZRANDMEMBER, new CommandSpec("ZRANDMEMBER", ReturnType.STRING));
+        specs.put(CommandType.ZRANGE, new CommandSpec("ZRANGE", ReturnType.ARRAY));
+        specs.put(CommandType.ZRANGEBYLEX, new CommandSpec("ZRANGEBYLEX", ReturnType.ARRAY));
+        specs.put(CommandType.ZRANGEBYSCORE, new CommandSpec("ZRANGEBYSCORE", ReturnType.ARRAY));
+        specs.put(CommandType.ZRANK, new CommandSpec("ZRANK", ReturnType.LONG));
+        specs.put(CommandType.ZREM, new CommandSpec("ZREM", ReturnType.LONG));
+        specs.put(CommandType.ZREMRANGEBYLEX, new CommandSpec("ZREMRANGEBYLEX", ReturnType.LONG));
+        specs.put(CommandType.ZREMRANGEBYRANK, new CommandSpec("ZREMRANGEBYRANK", ReturnType.LONG));
+        specs.put(CommandType.ZREMRANGEBYSCORE, new CommandSpec("ZREMRANGEBYSCORE", ReturnType.LONG));
+        specs.put(CommandType.ZREVRANGE, new CommandSpec("ZREVRANGE", ReturnType.ARRAY));
+        specs.put(CommandType.ZREVRANGEBYLEX, new CommandSpec("ZREVRANGEBYLEX", ReturnType.ARRAY));
+        specs.put(CommandType.ZREVRANGEBYSCORE, new CommandSpec("ZREVRANGEBYSCORE", ReturnType.ARRAY));
+        specs.put(CommandType.ZREVRANK, new CommandSpec("ZREVRANK", ReturnType.LONG));
+        specs.put(CommandType.ZSCORE, new CommandSpec("ZSCORE", ReturnType.DOUBLE));
+        specs.put(CommandType.ZUNION, new CommandSpec("ZUNION", ReturnType.ARRAY));
+        specs.put(CommandType.ZUNIONSTORE, new CommandSpec("ZUNIONSTORE", ReturnType.LONG));
 
         // Generic commands
-        specs.put(RequestType.Del, new CommandSpec("DEL", ReturnType.LONG));
-        specs.put(RequestType.Exists, new CommandSpec("EXISTS", ReturnType.LONG));
-        specs.put(RequestType.Expire, new CommandSpec("EXPIRE", ReturnType.BOOLEAN));
-        specs.put(RequestType.ExpireAt, new CommandSpec("EXPIREAT", ReturnType.BOOLEAN));
-        specs.put(RequestType.ExpireTime, new CommandSpec("EXPIRETIME", ReturnType.LONG));
-        specs.put(RequestType.Keys, new CommandSpec("KEYS", ReturnType.ARRAY));
-        specs.put(RequestType.Move, new CommandSpec("MOVE", ReturnType.BOOLEAN));
-        specs.put(RequestType.Persist, new CommandSpec("PERSIST", ReturnType.BOOLEAN));
-        specs.put(RequestType.PExpire, new CommandSpec("PEXPIRE", ReturnType.BOOLEAN));
-        specs.put(RequestType.PExpireAt, new CommandSpec("PEXPIREAT", ReturnType.BOOLEAN));
-        specs.put(RequestType.PExpireTime, new CommandSpec("PEXPIRETIME", ReturnType.LONG));
-        specs.put(RequestType.PTTL, new CommandSpec("PTTL", ReturnType.LONG));
-        specs.put(RequestType.RandomKey, new CommandSpec("RANDOMKEY", ReturnType.STRING));
-        specs.put(RequestType.Rename, new CommandSpec("RENAME", ReturnType.STRING));
-        specs.put(RequestType.RenameNX, new CommandSpec("RENAMENX", ReturnType.BOOLEAN));
-        specs.put(RequestType.Touch, new CommandSpec("TOUCH", ReturnType.LONG));
-        specs.put(RequestType.TTL, new CommandSpec("TTL", ReturnType.LONG));
-        specs.put(RequestType.Type, new CommandSpec("TYPE", ReturnType.STRING));
-        specs.put(RequestType.Unlink, new CommandSpec("UNLINK", ReturnType.LONG));
+        specs.put(CommandType.DEL, new CommandSpec("DEL", ReturnType.LONG));
+        specs.put(CommandType.EXISTS, new CommandSpec("EXISTS", ReturnType.LONG));
+        specs.put(CommandType.EXPIRE, new CommandSpec("EXPIRE", ReturnType.BOOLEAN));
+        specs.put(CommandType.EXPIREAT, new CommandSpec("EXPIREAT", ReturnType.BOOLEAN));
+        specs.put(CommandType.EXPIRETIME, new CommandSpec("EXPIRETIME", ReturnType.LONG));
+        specs.put(CommandType.KEYS, new CommandSpec("KEYS", ReturnType.ARRAY));
+        specs.put(CommandType.MOVE, new CommandSpec("MOVE", ReturnType.BOOLEAN));
+        specs.put(CommandType.PERSIST, new CommandSpec("PERSIST", ReturnType.BOOLEAN));
+        specs.put(CommandType.PEXPIRE, new CommandSpec("PEXPIRE", ReturnType.BOOLEAN));
+        specs.put(CommandType.PEXPIREAT, new CommandSpec("PEXPIREAT", ReturnType.BOOLEAN));
+        specs.put(CommandType.PEXPIRETIME, new CommandSpec("PEXPIRETIME", ReturnType.LONG));
+        specs.put(CommandType.PTTL, new CommandSpec("PTTL", ReturnType.LONG));
+        specs.put(CommandType.RANDOMKEY, new CommandSpec("RANDOMKEY", ReturnType.STRING));
+        specs.put(CommandType.RENAME, new CommandSpec("RENAME", ReturnType.STRING));
+        specs.put(CommandType.RENAMENX, new CommandSpec("RENAMENX", ReturnType.BOOLEAN));
+        specs.put(CommandType.TOUCH, new CommandSpec("TOUCH", ReturnType.LONG));
+        specs.put(CommandType.TTL, new CommandSpec("TTL", ReturnType.LONG));
+        specs.put(CommandType.TYPE, new CommandSpec("TYPE", ReturnType.STRING));
+        specs.put(CommandType.UNLINK, new CommandSpec("UNLINK", ReturnType.LONG));
 
         // Connection commands
-        specs.put(RequestType.Echo, new CommandSpec("ECHO", ReturnType.STRING));
-        specs.put(RequestType.Ping, new CommandSpec("PING", ReturnType.STRING));
-        specs.put(RequestType.Select, new CommandSpec("SELECT", ReturnType.STRING));
+        specs.put(CommandType.ECHO, new CommandSpec("ECHO", ReturnType.STRING));
+        specs.put(CommandType.PING, new CommandSpec("PING", ReturnType.STRING));
+        specs.put(CommandType.SELECT, new CommandSpec("SELECT", ReturnType.STRING));
 
         // TODO: Add remaining 100+ commands for complete coverage
         // This covers the most commonly used commands to get basic functionality working
@@ -215,150 +213,177 @@ public class CommandManager {
     /**
      * Execute a command expecting a String result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with String result
      */
     public CompletableFuture<String> executeStringCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeStringCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeStringCommand(spec.command, arguments);
+        CompletableFuture<String> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting a String result with routing.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @param route Route for command execution
      * @return CompletableFuture with String result
      */
     public CompletableFuture<String> executeStringCommand(
-            RequestType requestType, String[] arguments, Route route) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeStringCommand(spec.command, arguments, route);
+            CommandType commandType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeStringCommand(spec.command, arguments, route);
+        CompletableFuture<String> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting a Long result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with Long result
      */
     public CompletableFuture<Long> executeLongCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeLongCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeLongCommand(spec.command, arguments);
+        CompletableFuture<Long> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting a Double result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with Double result
      */
     public CompletableFuture<Double> executeDoubleCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeDoubleCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeDoubleCommand(spec.command, arguments);
+        CompletableFuture<Double> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting a Boolean result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with Boolean result
      */
     public CompletableFuture<Boolean> executeBooleanCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeBooleanCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeBooleanCommand(spec.command, arguments);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting an Object[] result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with Object[] result
      */
     public CompletableFuture<Object[]> executeArrayCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeArrayCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeArrayCommand(spec.command, arguments);
+        CompletableFuture<Object[]> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting an Object[] result with routing.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @param route Route for command execution
      * @return CompletableFuture with Object[] result
      */
     public CompletableFuture<Object[]> executeArrayCommand(
-            RequestType requestType, String[] arguments, Route route) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeArrayCommand(spec.command, arguments, route);
+            CommandType commandType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeArrayCommand(spec.command, arguments, route);
+        CompletableFuture<Object[]> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting any Object result.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with Object result
      */
     public CompletableFuture<Object> executeObjectCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeObjectCommand(spec.command, arguments);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeObjectCommand(spec.command, arguments);
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
      * Execute a command expecting any Object result with routing.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @param route Route for command execution
      * @return CompletableFuture with Object result
      */
     public CompletableFuture<Object> executeObjectCommand(
-            RequestType requestType, String[] arguments, Route route) {
-        CommandSpec spec = getCommandSpec(requestType);
-        return jniClient.executeObjectCommand(spec.command, arguments, route);
+            CommandType commandType, String[] arguments, Route route) {
+        CommandSpec spec = getCommandSpec(commandType);
+        // TODO: Replace with jniClient.executeObjectCommand(spec.command, arguments, route);
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        future.completeExceptionally(new UnsupportedOperationException("JNI client not yet integrated"));
+        return future;
     }
 
     /**
-     * Execute a command with automatic type detection based on RequestType.
+     * Execute a command with automatic type detection based on CommandType.
      * This provides backward compatibility with existing code patterns.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Command arguments
      * @return CompletableFuture with correctly typed result
      */
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<T> executeCommand(
-            RequestType requestType, String[] arguments) {
-        CommandSpec spec = getCommandSpec(requestType);
+            CommandType commandType, String[] arguments) {
+        CommandSpec spec = getCommandSpec(commandType);
         
         switch (spec.returnType) {
             case STRING:
-                return (CompletableFuture<T>) executeStringCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeStringCommand(commandType, arguments);
             case LONG:
-                return (CompletableFuture<T>) executeLongCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeLongCommand(commandType, arguments);
             case DOUBLE:
-                return (CompletableFuture<T>) executeDoubleCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeDoubleCommand(commandType, arguments);
             case BOOLEAN:
-                return (CompletableFuture<T>) executeBooleanCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeBooleanCommand(commandType, arguments);
             case ARRAY:
-                return (CompletableFuture<T>) executeArrayCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeArrayCommand(commandType, arguments);
             case OBJECT:
             default:
-                return (CompletableFuture<T>) executeObjectCommand(requestType, arguments);
+                return (CompletableFuture<T>) executeObjectCommand(commandType, arguments);
         }
     }
 
@@ -370,7 +395,7 @@ public class CommandManager {
      * Build a command and send - LEGACY COMPATIBILITY METHOD
      * This method maintains API compatibility but eliminates protobuf usage.
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object - IGNORED in JNI implementation
      * @return A result promise of type T
@@ -378,17 +403,17 @@ public class CommandManager {
      */
     @Deprecated
     public <T> CompletableFuture<T> submitNewCommand(
-            RequestType requestType,
+            CommandType commandType,
             String[] arguments,
             GlideExceptionCheckedFunction<?, T> responseHandler) {
         // Execute command directly via JNI, ignore the response handler
-        return executeCommand(requestType, arguments);
+        return executeCommand(commandType, arguments);
     }
 
     /**
      * Build a command and send - LEGACY COMPATIBILITY METHOD
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object - IGNORED in JNI implementation
      * @return A result promise of type T
@@ -396,17 +421,17 @@ public class CommandManager {
      */
     @Deprecated
     public <T> CompletableFuture<T> submitNewCommand(
-            RequestType requestType,
+            CommandType commandType,
             GlideString[] arguments,
             GlideExceptionCheckedFunction<?, T> responseHandler) {
         String[] stringArgs = convertGlideStringsToStrings(arguments);
-        return executeCommand(requestType, stringArgs);
+        return executeCommand(commandType, stringArgs);
     }
 
     /**
      * Build a command and send with routing - LEGACY COMPATIBILITY METHOD
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object - IGNORED in JNI implementation
@@ -415,19 +440,19 @@ public class CommandManager {
      */
     @Deprecated
     public <T> CompletableFuture<T> submitNewCommand(
-            RequestType requestType,
+            CommandType commandType,
             String[] arguments,
             Route route,
             GlideExceptionCheckedFunction<?, T> responseHandler) {
         // TODO: Implement routing support in JNI client
         // For now, execute without routing
-        return executeCommand(requestType, arguments);
+        return executeCommand(commandType, arguments);
     }
 
     /**
      * Build a command and send with routing - LEGACY COMPATIBILITY METHOD
      *
-     * @param requestType Valkey command type
+     * @param commandType Valkey command type
      * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object - IGNORED in JNI implementation
@@ -436,12 +461,12 @@ public class CommandManager {
      */
     @Deprecated
     public <T> CompletableFuture<T> submitNewCommand(
-            RequestType requestType,
+            CommandType commandType,
             GlideString[] arguments,
             Route route,
             GlideExceptionCheckedFunction<?, T> responseHandler) {
         String[] stringArgs = convertGlideStringsToStrings(arguments);
-        return executeCommand(requestType, stringArgs);
+        return executeCommand(commandType, stringArgs);
     }
 
     // ==================== UNSUPPORTED OPERATIONS (TODO) ====================
@@ -527,12 +552,12 @@ public class CommandManager {
     // ==================== HELPER METHODS ====================
 
     /**
-     * Get command specification for a RequestType.
+     * Get command specification for a CommandType.
      */
-    private CommandSpec getCommandSpec(RequestType requestType) {
-        CommandSpec spec = COMMAND_SPECS.get(requestType);
+    private CommandSpec getCommandSpec(CommandType commandType) {
+        CommandSpec spec = COMMAND_SPECS.get(commandType);
         if (spec == null) {
-            throw new UnsupportedOperationException("Command not yet mapped: " + requestType);
+            throw new UnsupportedOperationException("Command not yet mapped: " + commandType);
         }
         return spec;
     }

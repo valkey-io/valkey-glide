@@ -112,32 +112,32 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
         // Create ConnectionRequest to match glide-core API
         let mut connection_request = ConnectionRequest::default();
         connection_request.addresses = parsed_addresses;
-        
+
         if let Some(db_id) = db_id {
             connection_request.database_id = db_id;
         }
-        
+
         if username_opt.is_some() || password_opt.is_some() {
             connection_request.authentication_info = Some(AuthenticationInfo {
                 username: username_opt,
                 password: password_opt,
             });
         }
-        
+
         if let Some(tls) = tls_mode {
             connection_request.tls_mode = Some(tls);
         }
-        
+
         connection_request.cluster_mode_enabled = cluster_mode == JNI_TRUE;
-        
+
         if let Some(timeout) = request_timeout {
             connection_request.request_timeout = Some(timeout.as_millis() as u32);
         }
-        
+
         if let Some(timeout) = connection_timeout {
             connection_request.connection_timeout = Some(timeout.as_millis() as u32);
         }
-        
+
         // Create the actual glide-core client
         let client = get_runtime().block_on(async {
             Client::new(connection_request, None).await
@@ -179,10 +179,10 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_get(
 
         let client = unsafe { &mut *(client_ptr as *mut Client) };
         let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
-        
+
         let mut cmd = cmd("GET");
         cmd.arg(&key_str);
-        
+
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
         })?;
@@ -219,14 +219,14 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_set(
         let client = unsafe { &mut *(client_ptr as *mut Client) };
         let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
         let value_str: String = env.get_string(&unsafe { JString::from_raw(value) })?.into();
-        
+
         let mut cmd = cmd("SET");
         cmd.arg(&key_str).arg(&value_str);
-        
+
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
         })?;
-        
+
         match response {
             Value::SimpleString(ref s) if s.to_uppercase() == "OK" => Ok(JNI_TRUE),
             Value::Okay => Ok(JNI_TRUE),
@@ -244,15 +244,15 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_ping(
     _class: JClass,
     client_ptr: jlong,
 ) -> jstring {
-    let mut result = || -> JniResult<jstring> {
+    let result = || -> JniResult<jstring> {
         if client_ptr == 0 {
             return Err(jni_error!(NullPointer, "Client pointer is null"));
         }
 
         let client = unsafe { &mut *(client_ptr as *mut Client) };
-        
+
         let cmd = cmd("PING");
-        
+
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
         })?;
@@ -285,13 +285,13 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCom
 
         let client = unsafe { &mut *(client_ptr as *mut Client) };
         let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse the byte[][] args parameter
         let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
         let args_length = env.get_array_length(&args_array)?;
-        
+
         let mut cmd = cmd(&command_str);
-        
+
         // Add each argument to the command
         for i in 0..args_length {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
@@ -300,7 +300,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCom
             let arg_bytes = env.convert_byte_array(&byte_array)?;
             cmd.arg(&arg_bytes);
         }
-        
+
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
         })?;
@@ -344,13 +344,13 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
             // Create an Object array to hold the results
             let object_class = env.find_class("java/lang/Object")?;
             let java_array = env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
-            
+
             for (i, item) in arr.into_iter().enumerate() {
                 let java_item = convert_value_to_java_object(env, item)?;
                 let java_item_obj = unsafe { JObject::from_raw(java_item) };
                 env.set_object_array_element(&java_array, i as i32, java_item_obj)?;
             }
-            
+
             Ok(java_array.into_raw())
         }
         Value::Okay => {
@@ -387,18 +387,18 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStr
     let mut result = || -> JniResult<jstring> {
         let client = get_client(client_ptr)?;
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse arguments
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
-        
+
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
             cmd.arg(&arg_str);
         }
-        
+
         // Execute command via glide-core
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
@@ -443,18 +443,18 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLon
     let mut result = || -> JniResult<jlong> {
         let client = get_client(client_ptr)?;
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse arguments
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
-        
+
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
             cmd.arg(&arg_str);
         }
-        
+
         // Execute command via glide-core
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
@@ -488,18 +488,18 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDou
     let mut result = || -> JniResult<f64> {
         let client = get_client(client_ptr)?;
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse arguments
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
-        
+
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
             cmd.arg(&arg_str);
         }
-        
+
         // Execute command via glide-core
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
@@ -532,18 +532,18 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBoo
     let mut result = || -> JniResult<jboolean> {
         let client = get_client(client_ptr)?;
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse arguments
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
-        
+
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
             cmd.arg(&arg_str);
         }
-        
+
         // Execute command via glide-core
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await
@@ -580,18 +580,18 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArr
     let mut result = || -> JniResult<jobject> {
         let client = get_client(client_ptr)?;
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
-        
+
         // Parse arguments
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
-        
+
         for i in 0..arg_count {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
             cmd.arg(&arg_str);
         }
-        
+
         // Execute command via glide-core
         let response = get_runtime().block_on(async {
             client.send_command(&cmd, None).await

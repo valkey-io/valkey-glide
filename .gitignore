@@ -78,5 +78,5 @@ copilot-instructions.md
 **/.gradle/
 MANIFEST.MF
 *.so
-java-jni/build/
+**/build/
 .claude/**
