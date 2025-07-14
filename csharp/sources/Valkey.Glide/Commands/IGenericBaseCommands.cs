@@ -51,7 +51,7 @@ public interface IGenericBaseCommands
 
     /// <summary>
     /// Unlinks (removes) the specified key from the database. A key is ignored if it does not exist.
-    /// This command is similar to DEL, however, this command does not block the server.
+    /// This command is similar to <seealso cref="KeyDeleteAsync(ValkeyKey, CommandFlags)"/>, however, this command does not block the server.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/unlink"/>
     /// <param name="key">The key to unlink.</param>
@@ -68,7 +68,7 @@ public interface IGenericBaseCommands
 
     /// <summary>
     /// Unlinks (removes) the specified key from the database. A key is ignored if it does not exist.
-    /// This command is similar to DEL, however, this command does not block the server.
+    /// This command is similar to <seealso cref="KeyDeleteAsync(ValkeyKey[], CommandFlags)"/>, however, this command does not block the server.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/unlink"/>
     /// <note>When in cluster mode, if keys in keys map to different hash slots, the command
@@ -281,7 +281,7 @@ public interface IGenericBaseCommands
 
     /// <summary>
     /// Creates a key associated with a value that is obtained by
-    /// deserializing the provided serialized value (obtained via Dump).
+    /// deserializing the provided serialized value (obtained via <seealso cref="KeyDumpAsync"/>).
     /// This method takes a duration for the expiry.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/restore"/>
@@ -302,7 +302,7 @@ public interface IGenericBaseCommands
 
     /// <summary>
     /// Creates a key associated with a value that is obtained by
-    /// deserializing the provided serialized value (obtained via Dump).
+    /// deserializing the provided serialized value (obtained via <seealso cref="KeyDumpAsync"/>).
     /// This method takes an exact date and time for the expiry.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/restore"/>

@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using static Valkey.Glide.Commands.Constants.Constants;
+
 namespace Valkey.Glide.Commands.Options;
 
 /// <summary>
@@ -11,26 +13,6 @@ namespace Valkey.Glide.Commands.Options;
 /// </remarks>
 public class RestoreOptions
 {
-    /// <summary>
-    /// REPLACE subcommand string to replace existing key
-    /// </summary>
-    public const string ReplaceValkeyApi = "REPLACE";
-
-    /// <summary>
-    /// ABSTTL subcommand string to represent absolute timestamp (in milliseconds) for TTL
-    /// </summary>
-    public const string AbsttlValkeyApi = "ABSTTL";
-
-    /// <summary>
-    /// IDLETIME subcommand string to set Object Idletime
-    /// </summary>
-    public const string IdletimeValkeyApi = "IDLETIME";
-
-    /// <summary>
-    /// FREQ subcommand string to set Object Frequency
-    /// </summary>
-    public const string FreqValkeyApi = "FREQ";
-
     /// <summary>
     /// When true, it represents REPLACE keyword has been used
     /// </summary>
@@ -83,13 +65,13 @@ public class RestoreOptions
     /// </summary>
     /// <returns>A string array that holds the subcommands and their arguments</returns>
     /// <exception cref="ArgumentException">Thrown when both IDLETIME and FREQ are set</exception>
-    public GlideString[] ToArgs()
+    internal GlideString[] ToArgs()
     {
         List<GlideString> resultList = [];
 
         if (HasReplace)
         {
-            resultList.Add((GlideString)ReplaceValkeyApi);
+            resultList.Add((GlideString)ReplaceKeyword);
         }
 
         if (Idletime.HasValue && Frequency.HasValue)
@@ -99,13 +81,13 @@ public class RestoreOptions
 
         if (Idletime.HasValue)
         {
-            resultList.Add((GlideString)IdletimeValkeyApi);
+            resultList.Add((GlideString)IdletimeKeyword);
             resultList.Add(Idletime.Value.ToGlideString());
         }
 
         if (Frequency.HasValue)
         {
-            resultList.Add((GlideString)FreqValkeyApi);
+            resultList.Add((GlideString)FreqKeyword);
             resultList.Add(Frequency.Value.ToGlideString());
         }
 

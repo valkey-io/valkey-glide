@@ -239,7 +239,7 @@ internal partial class Request
         }
 
         args.Add(value.ToGlideString());
-        args.Add(RestoreOptions.AbsttlValkeyApi); // By default needs to be added here
+        args.Add(Constants.AbsttlKeyword); // By default needs to be added here
 
         if (restoreOptions != null)
         {

@@ -9,9 +9,7 @@ namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests(TestConfiguration config)
 {
-#pragma warning disable xUnit1047 // Avoid using TheoryDataRow arguments that might not be serializable
-    public static IEnumerable<TheoryDataRow<bool>> GetAtomic => [new(true), new(false)];
-#pragma warning restore xUnit1047 // Avoid using TheoryDataRow arguments that might not be serializable
+    public static TheoryData<bool> GetAtomic => [true, false];
 
     public TestConfiguration Config { get; } = config;
 
@@ -145,8 +143,9 @@ public class StandaloneClientTests(TestConfiguration config)
         Assert.True(await client.KeyMoveAsync(key, 2));
     }
 
-    [Theory(DisableDiscoveryEnumeration = true)]
-    [MemberData(nameof(GetAtomic))]
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
     {
         GlideClient client = TestConfiguration.DefaultStandaloneClient();
