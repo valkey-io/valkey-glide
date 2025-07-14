@@ -70,7 +70,7 @@ public class Command {
      *
      * @return Array of command arguments (direct reference)
      */
-    String[] getArgumentsArray() {
+    public String[] getArgumentsArray() {
         return arguments;
     }
 

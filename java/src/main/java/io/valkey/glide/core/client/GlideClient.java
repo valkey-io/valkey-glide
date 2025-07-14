@@ -1,5 +1,6 @@
 package io.valkey.glide.core.client;
 
+import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
@@ -226,7 +227,14 @@ public class GlideClient implements AutoCloseable {
         checkNotClosed();
 
         try {
-            Object result = executeCommand(nativeClientPtr, command.getCommand(), command.getArgumentsArray());
+            // Convert String[] to byte[][]
+            String[] args = command.getArgumentsArray();
+            byte[][] byteArgs = new byte[args.length][];
+            for (int i = 0; i < args.length; i++) {
+                byteArgs[i] = args[i].getBytes();
+            }
+
+            Object result = executeCommand(nativeClientPtr, command.getCommand(), byteArgs);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
