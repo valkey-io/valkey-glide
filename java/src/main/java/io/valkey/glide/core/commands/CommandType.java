@@ -1,4 +1,4 @@
-package io.valkey.glide.jni.commands;
+package io.valkey.glide.core.commands;
 
 /**
  * Enum representing all supported Valkey commands.

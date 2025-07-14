@@ -1,12 +1,13 @@
-package io.valkey.glide.jni.client;
+package io.valkey.glide.core.client;
 
+import io.valkey.glide.core.commands.CommandType;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * High-performance JNI client for Valkey GLIDE with direct glide-core integration.
+ * High-performance client for Valkey GLIDE with direct glide-core integration.
  * <p>
  * This implementation bypasses Unix Domain Sockets and uses direct JNI calls
  * to the Rust glide-core for maximum performance while maintaining the same

@@ -1,20 +1,19 @@
-package io.valkey.glide.jni.managers;
+package io.valkey.glide.managers;
 
-import io.valkey.glide.jni.client.GlideJniClient;
-import io.valkey.glide.jni.commands.CommandType;
+import io.valkey.glide.core.client.GlideClient;
+import io.valkey.glide.core.commands.CommandType;
 
 import java.util.concurrent.CompletableFuture;
 
 /**
- * JNI-based implementation of CommandManager that replaces UDS communication
- * with direct JNI calls to glide-core.
+ * Command manager that provides direct access to glide-core.
  */
-public class JniCommandManager {
+public class CommandManager {
     
-    private final GlideJniClient jniClient;
+    private final GlideClient client;
     
-    public JniCommandManager(GlideJniClient jniClient) {
-        this.jniClient = jniClient;
+    public CommandManager(GlideClient client) {
+        this.client = client;
     }
     
     /**
@@ -27,7 +26,7 @@ public class JniCommandManager {
     public CompletableFuture<String> executeStringCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeStringCommand(commandType.getCommandName(), arguments);
+        return client.executeStringCommand(commandType.toString(), arguments);
     }
     
     /**
@@ -40,7 +39,7 @@ public class JniCommandManager {
     public CompletableFuture<Long> executeLongCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeLongCommand(commandType.getCommandName(), arguments);
+        return client.executeLongCommand(commandType.toString(), arguments);
     }
     
     /**
@@ -53,7 +52,7 @@ public class JniCommandManager {
     public CompletableFuture<Double> executeDoubleCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeDoubleCommand(commandType.getCommandName(), arguments);
+        return client.executeDoubleCommand(commandType.toString(), arguments);
     }
     
     /**
@@ -66,7 +65,7 @@ public class JniCommandManager {
     public CompletableFuture<Boolean> executeBooleanCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeBooleanCommand(commandType.getCommandName(), arguments);
+        return client.executeBooleanCommand(commandType.toString(), arguments);
     }
     
     /**
@@ -79,7 +78,7 @@ public class JniCommandManager {
     public CompletableFuture<Object[]> executeArrayCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeArrayCommand(commandType.getCommandName(), arguments);
+        return client.executeArrayCommand(commandType.toString(), arguments);
     }
     
     /**
@@ -92,6 +91,6 @@ public class JniCommandManager {
     public CompletableFuture<Object> executeObjectCommand(
             CommandType commandType,
             String[] arguments) {
-        return jniClient.executeObjectCommand(commandType.getCommandName(), arguments);
+        return client.executeObjectCommand(commandType.toString(), arguments);
     }
 }

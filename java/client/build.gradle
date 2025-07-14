@@ -27,7 +27,6 @@ dependencies {
     // Add dependency on main JNI module (root project)
     implementation project(':')
 
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
@@ -51,53 +50,8 @@ dependencies {
 }
 
 ext {
-    checkProtocVersion = { String output ->
-        // Line in format like: libprotoc 29.1
-        int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
-        int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
-        if (majorVersion < 29) {
-            throw new GradleException("Protobuf compiler (protoc) version 29.0 or newer is required. Current version: $output");
-        }
-        return output.split(" ")[1]
-    }
-
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
-}
-
-tasks.register('protobuf', Exec) {
-    doFirst {
-        try {
-            new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    commandLine 'protoc', '--version'
-                    workingDir Paths.get(project.rootDir.path, '..').toFile()
-                    standardOutput = os
-                }
-                checkProtocVersion(os.toString());
-            }
-        } catch (Exception e) {
-            if (e.getMessage().startsWith("A problem occurred starting process")) {
-                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 29.0 or newer is required.");
-            }
-            throw e
-        }
-
-        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
-    }
-    commandLine 'protoc',
-        '-Iprotobuf=glide-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/glide/models/protobuf',
-        'glide-core/src/protobuf/connection_request.proto',
-        'glide-core/src/protobuf/command_request.proto',
-        'glide-core/src/protobuf/response.proto'
-    workingDir Paths.get(project.rootDir.path, '..').toFile()
-}
-
-tasks.register('cleanProtobuf') {
-    doFirst {
-        project.delete(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
-    }
 }
 
 tasks.register('cleanRust') {
@@ -107,6 +61,7 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
+    // Rust is now built in the root project, just add environment variables for consistency
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
     } else {
@@ -115,36 +70,24 @@ tasks.register('buildRust', Exec) {
 
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
+    environment 'GLIDE_NAME', 'valkey-glide'
+    environment 'GLIDE_VERSION', project.ext.defaultReleaseVersion
 }
 
 tasks.register('buildRustFfi', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+    environment 'GLIDE_NAME', 'valkey-glide'
+    environment 'GLIDE_VERSION', project.ext.defaultReleaseVersion
 }
 
-tasks.register('buildWithRust') {
+tasks.register('buildAll') {
     dependsOn 'buildRust'
     finalizedBy 'build'
 }
 
-tasks.register('buildWithProto') {
-    dependsOn 'protobuf'
-    finalizedBy 'build'
-}
-
-tasks.register('testFfi', Test) {
-    dependsOn 'buildRustFfi'
-    include "glide/ffi/FfiTest.class"
-}
-
-tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust', 'testFfi'
-    finalizedBy 'build'
-}
-
-compileJava.dependsOn('protobuf')
-clean.dependsOn('cleanProtobuf', 'cleanRust')
+clean.dependsOn('cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
@@ -162,7 +105,7 @@ javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
+test.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -266,64 +209,12 @@ jar {
     archiveClassifier = osdetector.classifier
 }
 
-import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.TransformerContext
-import org.apache.tools.zip.ZipOutputStream
-import org.apache.tools.zip.ZipEntry
-
-// https://github.com/grpc/grpc-java/blob/b3db8c2489af25b0d10b6f45e60fd50771aa93d1/netty/shaded/build.gradle#L149
-/**
- * A Transformer which updates the Netty JAR META-INF/ resources to accurately
- * reference shaded class names.
- */
-@CacheableTransformer
-class NettyResourceTransformer implements Transformer {
-
-    // A map of resource file paths to be modified
-    private Map<String, String> resources = [:]
-
-    @Override
-    boolean canTransformResource(FileTreeElement fileTreeElement) {
-        fileTreeElement.name.startsWith("META-INF/native-image/io.netty")
-    }
-
-    @Override
-    void transform(TransformerContext context) {
-        String updatedPath = context.path.replace("io.netty", "glide.io.netty")
-        String updatedContent = context.is.getText().replace("io.netty", "glide.io.netty")
-        resources.put(updatedPath, updatedContent)
-    }
-
-    @Override
-    boolean hasTransformedResource() {
-        resources.size() > 0
-    }
-
-    @Override
-    void modifyOutputStream(ZipOutputStream outputStream, boolean preserveFileTimestamps) {
-        for (resourceEntry in resources) {
-            ZipEntry entry = new ZipEntry(resourceEntry.key)
-            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
-
-            outputStream.putNextEntry(entry)
-            outputStream.write(resourceEntry.value.getBytes())
-            outputStream.closeEntry()
-        }
-    }
-}
-
 shadowJar {
     dependsOn('copyNativeLib')
     archiveClassifier = osdetector.classifier
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')
-    relocate('com.google.protobuf', 'glide.com.google.protobuf')
     mergeServiceFiles()
-
-    relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
-    relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
-    transform(NettyResourceTransformer.class)
 }
 
 sourcesJar {
