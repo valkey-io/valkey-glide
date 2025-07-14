@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.ComponentModel;
+
 namespace Valkey.Glide.Commands;
 
 /// <summary>
@@ -9,6 +11,14 @@ namespace Valkey.Glide.Commands;
 /// </summary>
 internal interface ISortedSetCommands
 {
+    /// <inheritdoc cref="SortedSetAddAsync(ValkeyKey, ValkeyValue, double, SortedSetWhen, CommandFlags)" />
+    [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+    Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, CommandFlags flags);
+
+    /// <inheritdoc cref="SortedSetAddAsync(ValkeyKey, ValkeyValue, double, SortedSetWhen, CommandFlags)" />
+    [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+    Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, When when, CommandFlags flags = CommandFlags.None);
+
     /// <summary>
     /// Adds members with their scores to the sorted set stored at key.
     /// If a member is already a part of the sorted set, its score is updated.
@@ -28,6 +38,14 @@ internal interface ISortedSetCommands
     /// </example>
     /// </remarks>
     Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None);
+
+    /// <inheritdoc cref="SortedSetAddAsync(ValkeyKey, SortedSetEntry[], SortedSetWhen, CommandFlags)" />
+    [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+    Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, CommandFlags flags);
+
+    /// <inheritdoc cref="SortedSetAddAsync(ValkeyKey, SortedSetEntry[], SortedSetWhen, CommandFlags)" />
+    [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+    Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, When when, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Adds members with their scores to the sorted set stored at key.
