@@ -96,7 +96,7 @@ public class SharedBatchTests
 
         Assert.Multiple(
             () => Assert.Equal(2, res.Length),
-            () => Assert.True((bool)res[0]),
+            () => Assert.True((bool)res[0]!),
             () => Assert.IsType<byte[]?>(res[1])
         );
 

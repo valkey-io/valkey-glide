@@ -173,8 +173,8 @@ public class StandaloneClientTests(TestConfiguration config)
         object?[] results2 = (await client.Exec((Batch)batch2, false))!;
 
         Assert.Multiple(
-            () => Assert.True((bool)results[0]), // Set sourceKey
-            () => Assert.True((bool)results[1]), // Set moveKey
+            () => Assert.True((bool)results[0]!), // Set sourceKey
+            () => Assert.True((bool)results[1]!), // Set moveKey
             () => Assert.True((bool)results2[0]!), // KeyCopy result
             () => Assert.True((bool)results2[1]!)  // KeyMove result
         );
