@@ -5,6 +5,7 @@ plugins {
 }
 
 ext {
+    defaultReleaseVersion = "1.0.0-SNAPSHOT"
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
 }

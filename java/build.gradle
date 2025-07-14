@@ -20,11 +20,11 @@ ext {
 
 allprojects {
     apply plugin: 'jacoco'
-    
+
     ext {
         defaultReleaseVersion = "255.255.255"
     }
-    
+
     jacoco {
         toolVersion = "0.8.9"
     }
@@ -64,8 +64,10 @@ dependencies {
 
 // Create a task for running the Cargo build
 task buildNative(type: Exec) {
-    workingDir '../rust-jni'
+    workingDir '.'
     commandLine 'cargo', 'build', '--release'
+    environment 'GLIDE_NAME', 'valkey-glide'
+    environment 'GLIDE_VERSION', version
 }
 
 // Make Java build depend on native build
@@ -73,7 +75,7 @@ compileJava.dependsOn buildNative
 
 // Copy native libraries to resources
 task copyNativeLibs(type: Copy, dependsOn: buildNative) {
-    from '../rust-jni/target/release/'
+    from 'target/release/'
     into 'src/main/resources/native/'
     include '*.so', '*.dylib', '*.dll'
 }
@@ -85,7 +87,7 @@ sourcesJar.dependsOn copyNativeLibs
 test {
     useJUnitPlatform()
 
-    systemProperty 'java.library.path', file('../rust-jni/target/release').absolutePath
+    systemProperty 'java.library.path', file('target/release').absolutePath
 }
 
 publishing {

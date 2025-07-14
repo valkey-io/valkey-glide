@@ -4,6 +4,7 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
+    id 'jacoco'
     id 'io.freefair.lombok' version '8.6'
     id 'com.github.spotbugs' version '6.0.18'
     id 'com.google.osdetector' version '1.7.3'
@@ -14,6 +15,10 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    defaultReleaseVersion = "1.0.0-SNAPSHOT"
+}
+
 configurations {
     testImplementation { extendsFrom shadow }
 }
@@ -21,7 +26,7 @@ configurations {
 dependencies {
     // Add dependency on main JNI module (root project)
     implementation project(':')
-    
+
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
