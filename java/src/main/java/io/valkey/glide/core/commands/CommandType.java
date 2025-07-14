@@ -23,7 +23,7 @@ public enum CommandType {
     DECR("DECR"),
     DECRBY("DECRBY"),
     LCS("LCS"),
-    
+
     // Hash commands
     HGET("HGET"),
     HSET("HSET"),
@@ -40,7 +40,7 @@ public enum CommandType {
     HSETNX("HSETNX"),
     HSTRLEN("HSTRLEN"),
     HVALS("HVALS"),
-    
+
     // List commands
     BLMOVE("BLMOVE"),
     BLMPOP("BLMPOP"),
@@ -61,7 +61,7 @@ public enum CommandType {
     RPOP("RPOP"),
     RPUSH("RPUSH"),
     RPUSHX("RPUSHX"),
-    
+
     // Set commands
     SADD("SADD"),
     SCARD("SCARD"),
@@ -78,7 +78,7 @@ public enum CommandType {
     SREM("SREM"),
     SUNION("SUNION"),
     SUNIONSTORE("SUNIONSTORE"),
-    
+
     // Sorted set commands
     ZADD("ZADD"),
     ZCARD("ZCARD"),
@@ -111,12 +111,12 @@ public enum CommandType {
     BZMPOP("BZMPOP"),
     BZPOPMAX("BZPOPMAX"),
     BZPOPMIN("BZPOPMIN"),
-    
+
     // Connection commands
     PING("PING"),
     ECHO("ECHO"),
     SELECT("SELECT"),
-    
+
     // Server commands
     INFO("INFO"),
     TIME("TIME"),
@@ -130,7 +130,7 @@ public enum CommandType {
     CONFIG_REWRITE("CONFIG REWRITE"),
     CLIENT_ID("CLIENT ID"),
     CLIENT_GETNAME("CLIENT GETNAME"),
-    
+
     // Function commands
     FUNCTION_LOAD("FUNCTION LOAD"),
     FUNCTION_DELETE("FUNCTION DELETE"),
@@ -142,12 +142,12 @@ public enum CommandType {
     FUNCTION_STATS("FUNCTION STATS"),
     FCALL("FCALL"),
     FCALL_RO("FCALL_RO"),
-    
+
     // Script commands
     SCRIPT_EXISTS("SCRIPT EXISTS"),
     SCRIPT_FLUSH("SCRIPT FLUSH"),
     SCRIPT_KILL("SCRIPT KILL"),
-    
+
     // PubSub commands
     PUBLISH("PUBLISH"),
     SPUBLISH("SPUBLISH"),
@@ -156,11 +156,11 @@ public enum CommandType {
     PUBSUB_NUMSUB("PUBSUB NUMSUB"),
     PUBSUB_SHARDCHANNELS("PUBSUB SHARDCHANNELS"),
     PUBSUB_SHARDNUMSUB("PUBSUB SHARDNUMSUB"),
-    
+
     // Transaction commands
     WATCH("WATCH"),
     UNWATCH("UNWATCH"),
-    
+
     // Key management commands
     DEL("DEL"),
     UNLINK("UNLINK"),
@@ -179,28 +179,28 @@ public enum CommandType {
     TOUCH("TOUCH"),
     MOVE("MOVE"),
     RANDOMKEY("RANDOMKEY"),
-    
+
     // Bit commands
     BITCOUNT("BITCOUNT"),
     BITFIELD("BITFIELD"),
     BITFIELD_RO("BITFIELD_RO"),
     BITOP("BITOP"),
     BITPOS("BITPOS"),
-    
+
     // Object commands
     OBJECT_ENCODING("OBJECT ENCODING"),
     OBJECT_FREQ("OBJECT FREQ"),
     OBJECT_IDLETIME("OBJECT IDLETIME"),
     OBJECT_REFCOUNT("OBJECT REFCOUNT"),
-    
+
     // Copy and dump commands
     COPY("COPY"),
     DUMP("DUMP"),
     RESTORE("RESTORE"),
-    
+
     // Misc commands
     LOLWUT("LOLWUT"),
-    
+
     // Generic custom command
     CUSTOM_COMMAND("CUSTOM");
 
@@ -212,16 +212,16 @@ public enum CommandType {
 
     /**
      * Get the command name as used in the Valkey protocol.
-     * 
+     *
      * @return The command name string
      */
     public String getCommandName() {
         return commandName;
     }
-    
+
     /**
      * Convert a string command name to a CommandType enum.
-     * 
+     *
      * @param commandName The command name to convert
      * @return The CommandType enum value, or CUSTOM_COMMAND if not found
      */
@@ -229,14 +229,14 @@ public enum CommandType {
         if (commandName == null || commandName.isEmpty()) {
             throw new IllegalArgumentException("Command name cannot be null or empty");
         }
-        
+
         String upperCommand = commandName.toUpperCase();
         for (CommandType type : values()) {
             if (type.commandName.equals(upperCommand)) {
                 return type;
             }
         }
-        
+
         // No matching enum found, return custom command
         return CUSTOM_COMMAND;
     }

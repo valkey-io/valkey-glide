@@ -9,13 +9,13 @@ import java.util.concurrent.CompletableFuture;
  * Command manager that provides direct access to glide-core.
  */
 public class CommandManager {
-    
+
     private final GlideClient client;
-    
+
     public CommandManager(GlideClient client) {
         this.client = client;
     }
-    
+
     /**
      * Execute a command that returns a String response.
      *
@@ -28,7 +28,7 @@ public class CommandManager {
             String[] arguments) {
         return client.executeStringCommand(commandType.toString(), arguments);
     }
-    
+
     /**
      * Execute a command that returns a Long response.
      *
@@ -41,7 +41,7 @@ public class CommandManager {
             String[] arguments) {
         return client.executeLongCommand(commandType.toString(), arguments);
     }
-    
+
     /**
      * Execute a command that returns a Double response.
      *
@@ -54,7 +54,7 @@ public class CommandManager {
             String[] arguments) {
         return client.executeDoubleCommand(commandType.toString(), arguments);
     }
-    
+
     /**
      * Execute a command that returns a Boolean response.
      *
@@ -67,7 +67,7 @@ public class CommandManager {
             String[] arguments) {
         return client.executeBooleanCommand(commandType.toString(), arguments);
     }
-    
+
     /**
      * Execute a command that returns an Object array response.
      *
@@ -80,7 +80,7 @@ public class CommandManager {
             String[] arguments) {
         return client.executeArrayCommand(commandType.toString(), arguments);
     }
-    
+
     /**
      * Execute a command that returns an Object response (for mixed/complex types).
      *

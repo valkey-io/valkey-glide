@@ -93,11 +93,11 @@ public class Command {
         if (additionalArgs == null || additionalArgs.length == 0) {
             return this;
         }
-        
+
         String[] newArgs = new String[arguments.length + additionalArgs.length];
         System.arraycopy(arguments, 0, newArgs, 0, arguments.length);
         System.arraycopy(additionalArgs, 0, newArgs, arguments.length, additionalArgs.length);
-        
+
         return new Command(command, newArgs);
     }
 
@@ -122,7 +122,7 @@ public class Command {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-        
+
         Command other = (Command) obj;
         return command.equals(other.command) && Arrays.equals(arguments, other.arguments);
     }

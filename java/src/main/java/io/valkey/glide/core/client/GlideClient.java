@@ -121,7 +121,7 @@ public class GlideClient implements AutoCloseable {
             config.getRequestTimeoutMs(),
             config.getConnectionTimeoutMs()
         );
-        
+
         if (this.nativeClientPtr == 0) {
             throw new RuntimeException("Failed to create client");
         }
@@ -381,7 +381,7 @@ public class GlideClient implements AutoCloseable {
             if (expectedType.isInstance(result)) {
                 return (T) result;
             }
-            throw new ClassCastException("Expected " + expectedType.getSimpleName() + 
+            throw new ClassCastException("Expected " + expectedType.getSimpleName() +
                                        " but got " + result.getClass().getSimpleName());
         });
     }

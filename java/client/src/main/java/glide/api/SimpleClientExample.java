@@ -11,36 +11,36 @@ import java.util.concurrent.CompletableFuture;
  * This demonstrates the basic functionality without any protobuf dependencies.
  */
 public class SimpleClientExample {
-    
+
     public static void main(String[] args) {
         System.out.println("Starting Simple Client Example (No Protobuf)");
-        
+
         try {
             // Create a simple standalone client
             SimpleStandaloneClient client = SimpleStandaloneClient.create("localhost", 6379);
-            
+
             System.out.println("✓ Created client successfully");
-            
+
             // Test basic operations
             testBasicOperations(client).get();
             testHashOperations(client).get();
             testMultiOperations(client).get();
-            
+
             // Close the client
             client.close();
             System.out.println("✓ Client closed successfully");
-            
+
             System.out.println("\n🎉 All tests passed! Simple client working without protobuf.");
-            
+
         } catch (Exception e) {
             System.err.println("❌ Error: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    
+
     private static CompletableFuture<Void> testBasicOperations(SimpleStandaloneClient client) {
         System.out.println("\n--- Testing Basic Operations ---");
-        
+
         return client.ping()
             .thenCompose(response -> {
                 System.out.println("PING: " + response);
@@ -64,10 +64,10 @@ public class SimpleClientExample {
                 return null;
             });
     }
-    
+
     private static CompletableFuture<Void> testHashOperations(SimpleStandaloneClient client) {
         System.out.println("\n--- Testing Hash Operations ---");
-        
+
         return client.hset("test:hash", "field1", "value1")
             .thenCompose(result -> {
                 System.out.println("HSET: " + result);
@@ -91,15 +91,15 @@ public class SimpleClientExample {
                 return null;
             });
     }
-    
+
     private static CompletableFuture<Void> testMultiOperations(SimpleStandaloneClient client) {
         System.out.println("\n--- Testing Multi Operations ---");
-        
+
         Map<String, String> keyValues = new HashMap<>();
         keyValues.put("test:key1", "value1");
         keyValues.put("test:key2", "value2");
         keyValues.put("test:key3", "value3");
-        
+
         return client.mset(keyValues)
             .thenCompose(response -> {
                 System.out.println("MSET: " + response);
@@ -115,7 +115,7 @@ public class SimpleClientExample {
                 return null;
             });
     }
-    
+
     /**
      * Display available command types - showing we have all the protobuf-free commands
      */
@@ -123,7 +123,7 @@ public class SimpleClientExample {
         System.out.println("\n--- Available Commands (No Protobuf) ---");
         CommandType[] commands = CommandType.values();
         System.out.println("Total commands available: " + commands.length);
-        
+
         // Show a sampling of commands
         int count = 0;
         for (CommandType cmd : commands) {

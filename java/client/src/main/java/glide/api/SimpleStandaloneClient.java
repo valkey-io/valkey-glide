@@ -11,14 +11,14 @@ import java.util.concurrent.CompletableFuture;
  * This client extends SimpleBaseClient and provides additional standalone-specific commands.
  */
 public class SimpleStandaloneClient extends SimpleBaseClient {
-    
+
     private SimpleStandaloneClient(GlideClient client) {
         super(client);
     }
-    
+
     /**
      * Create a new connection to a Valkey standalone instance.
-     * 
+     *
      * @param host The host to connect to
      * @param port The port to connect to
      * @return A new SimpleStandaloneClient instance
@@ -33,19 +33,20 @@ public class SimpleStandaloneClient extends SimpleBaseClient {
             throw new RuntimeException("Failed to create standalone client", e);
         }
     }
-    
+
     /**
-     * Create a new connection to a Valkey standalone instance with default localhost:6379.
-     * 
+     * Create a new connection to a Valkey standalone instance with default
+     * localhost:6379.
+     *
      * @return A new SimpleStandaloneClient instance
      */
     public static SimpleStandaloneClient create() {
         return create("localhost", 6379);
     }
-    
+
     /**
      * Select the DB with the specified zero-based numeric index.
-     * 
+     *
      * @param index The database index
      * @return A CompletableFuture containing "OK" if successful
      */
@@ -53,30 +54,30 @@ public class SimpleStandaloneClient extends SimpleBaseClient {
         return executeCommand(CommandType.SELECT, String.valueOf(index))
             .thenApply(result -> result.toString());
     }
-    
+
     /**
      * Returns the number of keys in the currently-selected database.
-     * 
+     *
      * @return A CompletableFuture containing the number of keys
      */
     public CompletableFuture<Long> dbsize() {
         return executeCommand(CommandType.DBSIZE)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
-    
+
     /**
      * Delete all the keys of the currently selected DB.
-     * 
+     *
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushdb() {
         return executeCommand(CommandType.FLUSHDB)
             .thenApply(result -> result.toString());
     }
-    
+
     /**
      * Delete all the keys of all the existing databases.
-     * 
+     *
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall() {
