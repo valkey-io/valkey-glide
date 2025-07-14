@@ -51,12 +51,9 @@ public static class GlideStringExtensions
             return new("-inf");
         }
 
-        if (double.IsNaN(@double))
-        {
-            return new("nan");
-        }
-
-        return new(@double.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
+        return double.IsNaN(@double) 
+            ? new("nan") 
+            : new(@double.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>
