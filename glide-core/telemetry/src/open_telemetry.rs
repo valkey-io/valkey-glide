@@ -73,6 +73,41 @@ pub enum GlideOpenTelemetrySignalsExporter {
     File(PathBuf),
 }
 
+/// Signal types supported when reading protocol configuration from the
+/// environment.
+#[derive(Clone, Copy)]
+enum OtelSignal {
+    Traces,
+    Metrics,
+}
+
+/// Parse the OTLP protocol environment variables for the given signal. Returns
+/// `Some(Protocol)` when the environment specifies a supported protocol,
+/// otherwise `None`.
+fn protocol_from_env(signal: OtelSignal) -> Option<Protocol> {
+    fn parse(value: &str) -> Option<Protocol> {
+        match value.to_ascii_lowercase().as_str() {
+            "grpc" => Some(Protocol::Grpc),
+            "http/protobuf" | "http/binary" | "http" | "http_proto" => Some(Protocol::HttpBinary),
+            "http/json" => Some(Protocol::HttpJson),
+            _ => None,
+        }
+    }
+
+    let specific = match signal {
+        OtelSignal::Traces => "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+        OtelSignal::Metrics => "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+    };
+
+    if let Ok(val) = std::env::var(specific) {
+        parse(&val)
+    } else if let Ok(val) = std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL") {
+        parse(&val)
+    } else {
+        None
+    }
+}
+
 impl std::str::FromStr for GlideOpenTelemetrySignalsExporter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -542,6 +577,7 @@ impl GlideOpenTelemetry {
             .with_scheduled_delay(flush_interval_ms)
             .build();
 
+        let env_protocol = protocol_from_env(OtelSignal::Traces);
         let trace_exporter = match trace_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p.clone()).map_err(|e| {
@@ -550,20 +586,44 @@ impl GlideOpenTelemetry {
                 build_span_exporter(batch_config, exporter)
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {
-                let exporter = opentelemetry_otlp::SpanExporter::builder()
-                    .with_http()
-                    .with_endpoint(url)
-                    .with_protocol(Protocol::HttpBinary)
-                    .build()?;
-                build_span_exporter(batch_config, exporter)
+                match env_protocol.unwrap_or(Protocol::HttpBinary) {
+                    Protocol::Grpc => {
+                        let exporter = opentelemetry_otlp::SpanExporter::builder()
+                            .with_tonic()
+                            .with_endpoint(url)
+                            .with_protocol(Protocol::Grpc)
+                            .build()?;
+                        build_span_exporter(batch_config, exporter)
+                    }
+                    protocol => {
+                        let exporter = opentelemetry_otlp::SpanExporter::builder()
+                            .with_http()
+                            .with_endpoint(url)
+                            .with_protocol(protocol)
+                            .build()?;
+                        build_span_exporter(batch_config, exporter)
+                    }
+                }
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
-                let exporter = opentelemetry_otlp::SpanExporter::builder()
-                    .with_tonic()
-                    .with_endpoint(url)
-                    .with_protocol(Protocol::Grpc)
-                    .build()?;
-                build_span_exporter(batch_config, exporter)
+                match env_protocol.unwrap_or(Protocol::Grpc) {
+                    Protocol::Grpc => {
+                        let exporter = opentelemetry_otlp::SpanExporter::builder()
+                            .with_tonic()
+                            .with_endpoint(url)
+                            .with_protocol(Protocol::Grpc)
+                            .build()?;
+                        build_span_exporter(batch_config, exporter)
+                    }
+                    protocol => {
+                        let exporter = opentelemetry_otlp::SpanExporter::builder()
+                            .with_http()
+                            .with_endpoint(url)
+                            .with_protocol(protocol)
+                            .build()?;
+                        build_span_exporter(batch_config, exporter)
+                    }
+                }
             }
         };
 
@@ -581,6 +641,7 @@ impl GlideOpenTelemetry {
         flush_interval_ms: Duration,
         metrics_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
+        let env_protocol = protocol_from_env(OtelSignal::Metrics);
         let metrics_exporter = match metrics_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::FileMetricExporter::new(p.clone()).map_err(|e| {
@@ -591,21 +652,37 @@ impl GlideOpenTelemetry {
                     .build()
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {
-                let exporter = MetricExporter::builder()
-                    .with_http()
-                    .with_endpoint(url)
-                    .with_protocol(Protocol::HttpBinary)
-                    .build()?;
+                let protocol = env_protocol.unwrap_or(Protocol::HttpBinary);
+                let exporter = match protocol {
+                    Protocol::Grpc => MetricExporter::builder()
+                        .with_tonic()
+                        .with_endpoint(url)
+                        .with_protocol(Protocol::Grpc)
+                        .build()?,
+                    p => MetricExporter::builder()
+                        .with_http()
+                        .with_endpoint(url)
+                        .with_protocol(p)
+                        .build()?,
+                };
                 opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
                     .build()
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
-                let exporter = MetricExporter::builder()
-                    .with_tonic()
-                    .with_endpoint(url)
-                    .with_protocol(Protocol::Grpc)
-                    .build()?;
+                let protocol = env_protocol.unwrap_or(Protocol::Grpc);
+                let exporter = match protocol {
+                    Protocol::Grpc => MetricExporter::builder()
+                        .with_tonic()
+                        .with_endpoint(url)
+                        .with_protocol(Protocol::Grpc)
+                        .build()?,
+                    p => MetricExporter::builder()
+                        .with_http()
+                        .with_endpoint(url)
+                        .with_protocol(p)
+                        .build()?,
+                };
                 opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
                     .build()
@@ -1034,5 +1111,39 @@ mod tests {
             assert!(status.starts_with("Error"));
             assert!(status.contains("simple error"));
         });
+    }
+
+    #[test]
+    fn test_protocol_from_env() {
+        unsafe {
+            std::env::remove_var("OTEL_EXPORTER_OTLP_PROTOCOL");
+            std::env::remove_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL");
+            std::env::remove_var("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL");
+        }
+
+        // default: None
+        assert!(protocol_from_env(OtelSignal::Traces).is_none());
+
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc") };
+        assert_eq!(protocol_from_env(OtelSignal::Traces), Some(Protocol::Grpc));
+
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/protobuf") };
+        assert_eq!(
+            protocol_from_env(OtelSignal::Metrics),
+            Some(Protocol::HttpBinary)
+        );
+
+        unsafe {
+            std::env::remove_var("OTEL_EXPORTER_OTLP_PROTOCOL");
+            std::env::set_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/json");
+        }
+        assert_eq!(
+            protocol_from_env(OtelSignal::Traces),
+            Some(Protocol::HttpJson)
+        );
+        unsafe {
+            std::env::remove_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL");
+            std::env::remove_var("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL");
+        }
     }
 }
