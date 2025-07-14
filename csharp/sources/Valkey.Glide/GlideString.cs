@@ -40,19 +40,10 @@ public static class GlideStringExtensions
     /// <param name="double">A <see langword="double" /> to convert.</param>
     /// <returns>A <see cref="GlideString" />.</returns>
     public static GlideString ToGlideString(this double @double)
-    {
-        if (double.IsPositiveInfinity(@double))
-        {
-            return new("+inf");
-        }
-
-        if (double.IsNegativeInfinity(@double))
-        {
-            return new("-inf");
-        }
-
-        return double.IsNaN(@double) ? new("nan") : new(@double.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
-    }
+        => double.IsPositiveInfinity(@double) ? new("+inf")
+            : double.IsNegativeInfinity(@double) ? new("-inf")
+            : double.IsNaN(@double) ? new("nan")
+            : new(@double.ToString("G17", System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Convert a <paramref name="bytes"/> to a <see cref="GlideString" />.
