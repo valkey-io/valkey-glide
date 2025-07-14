@@ -321,6 +321,7 @@ internal class FFI
         MSet = 1514,
         SetRange = 1520,
         Strlen = 1521,
+        ZAdd = 1304,
         LPop = 811,
         LPush = 813,
     }
