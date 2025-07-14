@@ -2,8 +2,6 @@
 
 using Valkey.Glide.Pipeline;
 
-using gs = Valkey.Glide.GlideString;
-
 namespace Valkey.Glide.IntegrationTests;
 
 internal class BatchTestUtils
@@ -25,9 +23,9 @@ internal class BatchTestUtils
         _ = batch.StringSet(key2, value2);
         testData.Add(new(true, "StringSet(key2, value2)"));
         _ = batch.StringGet(key1);
-        testData.Add(new(new GlideString(value1), "StringGet(key1)"));
+        testData.Add(new(new gs(value1), "StringGet(key1)"));
         _ = batch.StringGet(key2);
-        testData.Add(new(new GlideString(value2), "StringGet(key2)"));
+        testData.Add(new(new gs(value2), "StringGet(key2)"));
         _ = batch.StringLength(key1);
         testData.Add(new((long)value1.Length, "StringLength(key1)"));
         _ = batch.StringLength(key2);
