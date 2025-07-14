@@ -16,8 +16,8 @@ public class BatchTests
         IDatabase db = conn.GetDatabase();
         IBatch batch = db.CreateBatch();
         string key = Guid.NewGuid().ToString();
-        Task<string> t1 = batch.Set(key, "val");
-        Task<gs?> t2 = batch.Get(key);
+        Task<bool> t1 = batch.StringSetAsync(key, "val");
+        Task<ValkeyValue> t2 = batch.StringGetAsync(key);
         Task<object?> t3 = batch.CustomCommand(["time"]); // This cmd is queued
         Task<object?> t4 = db.CustomCommand(["time"]); // This cmd is send
 
@@ -30,7 +30,7 @@ public class BatchTests
         DateTime dt4 = ParseTimeResponse(await t4);
         Assert.True(dt3 > dt4);
         Assert.Equal("val", await t2);
-        Assert.Equal("OK", await t1);
+        Assert.True(await t1);
     }
 
     [Theory]
@@ -45,8 +45,8 @@ public class BatchTests
         IDatabase db = conn.GetDatabase();
         ITransaction transaction = db.CreateTransaction();
         string key = Guid.NewGuid().ToString();
-        Task<string> t1 = transaction.Set(key, "val");
-        Task<gs?> t2 = transaction.Get(key);
+        Task<bool> t1 = transaction.StringSetAsync(key, "val");
+        Task<ValkeyValue> t2 = transaction.StringGetAsync(key);
         Task<object?> t3 = transaction.CustomCommand(["time"]); // This cmd is queued
         Task<object?> t4 = db.CustomCommand(["time"]); // This cmd is send
 
@@ -59,7 +59,7 @@ public class BatchTests
         DateTime dt4 = ParseTimeResponse(await t4);
         Assert.True(dt3 > dt4);
         Assert.Equal("val", await t2);
-        Assert.Equal("OK", await t1);
+        Assert.True(await t1);
     }
 
     private DateTime ParseTimeResponse(object? res)

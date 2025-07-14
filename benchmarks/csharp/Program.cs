@@ -287,8 +287,12 @@ public static class MainClass
                     glideClient = GlideClusterClient.CreateClient(config).GetAwaiter().GetResult();
                 }
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await glideClient.Get(key),
-                     async (key, value) => await glideClient.Set(key, value),
+                    (async (key) =>
+                    {
+                        ValkeyValue result = await glideClient.StringGetAsync(key);
+                        return result.IsNull ? null : result.ToString();
+                    },
+                     async (key, value) => await glideClient.StringSetAsync(key, value),
                      () => glideClient.Dispose()));
             });
 

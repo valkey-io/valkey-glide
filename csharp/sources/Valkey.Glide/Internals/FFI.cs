@@ -211,7 +211,7 @@ internal class FFI
             RetryStrategy? retryStrategy,
             AuthenticationInfo? authenticationInfo,
             uint databaseId,
-            Protocol? protocol,
+            ConnectionConfiguration.Protocol? protocol,
             string? clientName)
         {
             _addresses = addresses;
@@ -316,6 +316,13 @@ internal class FFI
         SInterStore = 1207,
         SUnion = 1216,
         SUnionStore = 1217,
+        GetRange = 1507,
+        MGet = 1513,
+        MSet = 1514,
+        SetRange = 1520,
+        Strlen = 1521,
+        LPop = 811,
+        LPush = 813,
     }
 
     internal enum RouteType : uint
@@ -324,7 +331,7 @@ internal class FFI
         AllNodes,
         AllPrimaries,
         SlotId,
-        SlotType,
+        SlotKey,
         ByAddress,
     }
 
@@ -369,7 +376,7 @@ internal class FFI
         public uint DatabaseId;
         [MarshalAs(UnmanagedType.U1)]
         public bool HasProtocol;
-        public Protocol Protocol;
+        public ConnectionConfiguration.Protocol Protocol;
         [MarshalAs(UnmanagedType.LPStr)]
         public string? ClientName;
         // TODO more config params, see ffi.rs
