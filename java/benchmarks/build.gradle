@@ -19,7 +19,7 @@ dependencies {
     version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 
     implementation "io.valkey:valkey-glide:${version}:${osdetector.classifier}"
-    implementation project(':java-jni')
+    implementation project(':')
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'

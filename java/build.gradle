@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'jacoco'
 }
 
 group = 'io.valkey'
@@ -11,6 +12,35 @@ java {
     targetCompatibility = JavaVersion.VERSION_11
     withJavadocJar()
     withSourcesJar()
+}
+
+ext {
+    defaultReleaseVersion = "255.255.255"
+}
+
+allprojects {
+    apply plugin: 'jacoco'
+    
+    ext {
+        defaultReleaseVersion = "255.255.255"
+    }
+    
+    jacoco {
+        toolVersion = "0.8.9"
+    }
+
+    jacocoTestCoverageVerification {
+        violationRules {
+            rule {
+                element = 'CLASS'
+                excludes = [
+                    'glide.models.protobuf.*',
+                    'glide.connectors.resources.*',
+                    'glide.connectors.handlers.*'
+                ]
+            }
+        }
+    }
 }
 
 repositories {
