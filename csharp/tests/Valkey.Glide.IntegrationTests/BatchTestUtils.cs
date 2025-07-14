@@ -183,10 +183,6 @@ internal class BatchTestUtils
         _ = batch.SortedSetAdd(key1, entries);
         testData.Add(new(2L, "SortedSetAdd(key1, [member2:8.2, member3:15.0])"));
 
-        // Test increment
-        _ = batch.SortedSetIncrement(key1, "member1", 5.0);
-        testData.Add(new(15.5, "SortedSetIncrement(key1, member1, 5.0)"));
-
         // Test add with NX (should not add existing member)
         _ = batch.SortedSetAdd(key1, "member1", 20.0, SortedSetWhen.NotExists);
         testData.Add(new(false, "SortedSetAdd(key1, member1, 20.0, NotExists)"));
@@ -195,9 +191,9 @@ internal class BatchTestUtils
         _ = batch.SortedSetAdd(key1, "member2", 12.0, SortedSetWhen.Exists);
         testData.Add(new(false, "SortedSetAdd(key1, member2, 12.0, Exists)"));
 
-        // Test increment with NX on new member
-        _ = batch.SortedSetIncrement(key2, "newMember", 7.5, SortedSetWhen.NotExists);
-        testData.Add(new(7.5, "SortedSetIncrement(key2, newMember, 7.5, NotExists)"));
+        // Test add new member with NX
+        _ = batch.SortedSetAdd(key2, "newMember", 7.5, SortedSetWhen.NotExists);
+        testData.Add(new(true, "SortedSetAdd(key2, newMember, 7.5, NotExists)"));
 
         return testData;
     }

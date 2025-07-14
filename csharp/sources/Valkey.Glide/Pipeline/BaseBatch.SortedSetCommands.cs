@@ -15,11 +15,7 @@ public abstract partial class BaseBatch<T>
     /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetAdd(ValkeyKey, SortedSetEntry[], SortedSetWhen)" />
     public T SortedSetAdd(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always) => AddCmd(SortedSetAddAsync(key, values, when));
 
-    /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetIncrement(ValkeyKey, ValkeyValue, double, SortedSetWhen)" />
-    public T SortedSetIncrement(ValkeyKey key, ValkeyValue member, double increment, SortedSetWhen when = SortedSetWhen.Always) => AddCmd(SortedSetIncrementAsync(key, member, increment, when));
-
     // Explicit interface implementations for IBatchSortedSetCommands
     IBatch IBatchSortedSetCommands.SortedSetAdd(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when) => SortedSetAdd(key, member, score, when);
     IBatch IBatchSortedSetCommands.SortedSetAdd(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when) => SortedSetAdd(key, values, when);
-    IBatch IBatchSortedSetCommands.SortedSetIncrement(ValkeyKey key, ValkeyValue member, double increment, SortedSetWhen when) => SortedSetIncrement(key, member, increment, when);
 }
