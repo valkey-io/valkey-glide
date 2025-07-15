@@ -125,9 +125,14 @@ jobs:
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
-                  # Log the edited Cargo.toml file
-                  cat Cargo.toml
+                  # Set the version for the Async, Sync and Shared packages
+                  # List of packages to update
+                  for package in glide-async glide-sync glide-shared; do
+                    echo "Patching version in $package/pyproject.toml"
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \["version"\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    # Log the updated file
+                    cat "./$package/pyproject.toml"
+                  done
 
             - name: Set up Python
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -166,7 +171,7 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'linux')
               uses: PyO3/maturin-action@v1
               with:
-                  working-directory: ./python
+                  working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
                   args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
                   manylinux: auto
@@ -290,7 +295,7 @@ jobs:
               uses: PyO3/maturin-action@v1
               with:
                   maturin-version: 0.14.17
-                  working-directory: ./python
+                  working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
                   args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
 
@@ -318,19 +323,27 @@ jobs:
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  sed -i "s|0.1.0|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  # Set the version for the Async, Sync and Shared packages
+                  # List of packages to update
+                  for package in glide-async glide-sync glide-shared; do
+                    echo "Patching version in $package/pyproject.toml"
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \["version"\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    # Log the updated file
+                    cat "./$package/pyproject.toml"
+                  done
 
             - name: Build source distributions
               uses: PyO3/maturin-action@v1
               with:
-                  working-directory: ./python
+                  working-directory: ./python/glide-async
                   command: sdist
                   args: --out sdist
 
             - name: Download binaries
               uses: actions/download-artifact@v4
               with:
-                  path: python/wheels
+                  path: python/glide-async/wheels
                   merge-multiple: true
 
             - name: Publish binaries and source to PyPI
@@ -341,7 +354,7 @@ jobs:
                   MATURIN_REPOSITORY: pypi
               with:
                   command: upload
-                  args: --skip-existing python/wheels/* python/sdist/*
+                  args: --skip-existing python/glide-async/wheels/* python/glide-async/sdist/*
 
     test-release:
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
