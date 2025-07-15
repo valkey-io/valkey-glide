@@ -1,7 +1,7 @@
 package io.valkey.glide.managers;
 
 import io.valkey.glide.core.client.GlideClient;
-import io.valkey.glide.api.commands.CommandType;
+import io.valkey.glide.core.commands.CommandType;
 
 import java.util.concurrent.CompletableFuture;
 

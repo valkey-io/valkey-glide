@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import io.valkey.glide.api.commands.Command;
-import io.valkey.glide.api.commands.CommandType;
+import io.valkey.glide.core.commands.Command;
+import io.valkey.glide.core.commands.CommandType;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -88,5 +88,4 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public boolean isEmpty() {
         return commands.isEmpty();
     }
-}
 }

@@ -61,7 +61,7 @@ public class GlideClusterClient extends BaseClient {
      * @return A CompletableFuture containing the info response
      */
     public CompletableFuture<String> info(InfoOptions.Section[] sections) {
-        return executeCommand(io.valkey.glide.api.commands.CommandType.INFO)
+        return executeCommand(io.valkey.glide.core.commands.CommandType.INFO)
             .thenApply(result -> result.toString());
     }
 
