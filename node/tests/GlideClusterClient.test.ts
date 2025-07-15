@@ -65,8 +65,8 @@ describe("GlideClusterClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
     let azCluster: ValkeyCluster;
-    let client: GlideClusterClient | undefined;
-    let azClient: GlideClusterClient | undefined;
+    let client: GlideClusterClient;
+    let azClient: GlideClusterClient;
     beforeAll(async () => {
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
 
@@ -115,10 +115,6 @@ describe("GlideClusterClient", () => {
             // Log error but don't fail the test cleanup
             console.warn("Error closing azClient:", error);
         }
-
-        // Reset client variables to ensure clean state for next test
-        client = undefined;
-        azClient = undefined;
 
         // Small delay to allow socket cleanup to complete
         await new Promise((resolve) => setTimeout(resolve, 10));
