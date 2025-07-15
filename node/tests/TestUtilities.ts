@@ -538,9 +538,9 @@ export async function flushAndCloseClient(
         // Only flush if we have a client to work with
         if (client && !client.isClientClosed) {
             try {
-                // Cast client to appropriate type to access customCommand
+                // Cast client to appropriate type to access flushall
                 const glideClient = client as GlideClient | GlideClusterClient;
-                await glideClient.customCommand(["FLUSHALL"]);
+                await glideClient.flushall();
             } catch (error) {
                 // If flush fails, create a new client to flush
                 console.warn(
