@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import glide.api.models.GlideString;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
@@ -194,6 +195,71 @@ public abstract class BaseClient {
             // If command is not in enum, execute as raw command
             return executeCommand(CommandType.GET, args); // Fallback - this needs proper handling
         }
+    }
+
+    /**
+     * Execute a custom command with GlideString arguments.
+     *
+     * @param args The command arguments as GlideString array
+     * @return A CompletableFuture containing the command result
+     */
+    public CompletableFuture<Object> customCommand(GlideString[] args) {
+        if (args.length == 0) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        // Convert GlideString[] to String[]
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+
+        return customCommand(stringArgs);
+    }
+
+    /**
+     * Removes and returns the first element from the list stored at key.
+     * Blocks until an element is available or timeout is reached.
+     *
+     * @param keys    The keys of the lists to pop from
+     * @param timeout The timeout in seconds
+     * @return A CompletableFuture containing an array with the key and the popped
+     *         element
+     */
+    public CompletableFuture<String[]> blpop(String[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        System.arraycopy(keys, 0, args, 0, keys.length);
+        args[keys.length] = String.valueOf(timeout);
+
+        return executeCommand(CommandType.BLPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return null;
+                });
+    }
+
+    /**
+     * Inserts elements at the head of the list stored at key.
+     *
+     * @param key      The key of the list
+     * @param elements The elements to push
+     * @return A CompletableFuture containing the length of the list after the push
+     *         operation
+     */
+    public CompletableFuture<Long> lpush(String key, String[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+
+        return executeCommand(CommandType.LPUSH, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
     }
 
     /**

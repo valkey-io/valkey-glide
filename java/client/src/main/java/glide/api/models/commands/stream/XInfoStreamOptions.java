@@ -2,11 +2,10 @@
 package glide.api.models.commands.stream;
 
 import glide.api.commands.StreamBaseCommands;
-import glide.api.models.BaseBatch;
 
 /**
  * Valkey API Keywords for <code>XINFO STREAM</code> command represented by {@link
- * StreamBaseCommands#xinfoStreamFull} and {@link BaseBatch#xinfoStreamFull}.
+ * StreamBaseCommands#xinfoStreamFull}.
  */
 public abstract class XInfoStreamOptions {
     /** Used by <code>XINFO STREAM</code> to query detailed info. */
