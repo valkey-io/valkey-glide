@@ -395,8 +395,8 @@ class TestFt:
             == 1
         )
 
-        # Wait longer for the index to be updated to avoid flaky results
-        time.sleep(self.sleep_wait_time * 3)  # Increase wait time from 1 to 3 seconds
+        # Wait for the index to be updated to avoid flaky results
+        time.sleep(self.sleep_wait_time)  # 1 second should be sufficient for Valkey
 
         vector_param_name = "query_vector"
         knn_query = f"*=>[KNN 1 @{vector_field_name} ${vector_param_name}]"
