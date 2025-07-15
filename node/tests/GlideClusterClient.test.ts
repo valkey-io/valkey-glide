@@ -108,18 +108,20 @@ describe("GlideClusterClient", () => {
             // Log error but don't fail the test cleanup
             console.warn("Error closing client:", error);
         }
+
         try {
             await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
         } catch (error) {
             // Log error but don't fail the test cleanup
             console.warn("Error closing azClient:", error);
         }
+
         // Reset client variables to ensure clean state for next test
         client = undefined;
         azClient = undefined;
-        
+
         // Small delay to allow socket cleanup to complete
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
     afterAll(async () => {

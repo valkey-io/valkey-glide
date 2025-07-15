@@ -483,16 +483,17 @@ export async function testTeardown(
     option: BaseClientConfiguration,
 ) {
     let client;
+
     try {
         client = cluster_mode
             ? await GlideClusterClient.createClient({
-                ...option,
-                requestTimeout: 5000, // Override with a reasonable timeout
-            })
+                  ...option,
+                  requestTimeout: 5000, // Override with a reasonable timeout
+              })
             : await GlideClient.createClient({
-                ...option,
-                requestTimeout: 5000, // Override with a reasonable timeout
-            });
+                  ...option,
+                  requestTimeout: 5000, // Override with a reasonable timeout
+              });
 
         await client.customCommand(["FLUSHALL"]);
     } catch (error) {
@@ -540,13 +541,20 @@ export async function flushAndCloseClient(
                 await client.customCommand(["FLUSHALL"]);
             } catch (error) {
                 // If flush fails, create a new client to flush
-                console.warn("Direct flush failed, creating new client for flush:", error);
+                console.warn(
+                    "Direct flush failed, creating new client for flush:",
+                    error,
+                );
                 await testTeardown(
                     cluster_mode,
-                    getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-                        ...tlsConfig,
-                        requestTimeout: 2000,
-                    }),
+                    getClientConfigurationOption(
+                        addresses,
+                        ProtocolVersion.RESP3,
+                        {
+                            ...tlsConfig,
+                            requestTimeout: 2000,
+                        },
+                    ),
                 );
             }
         } else {
