@@ -66,49 +66,57 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
 
 
 async def wait_for_spans_to_be_flushed(
-    span_file_path: str, 
-    expected_span_names: List[str], 
-    timeout: float = 15.0, 
-    check_interval: float = 0.5
+    span_file_path: str,
+    expected_span_names: List[str],
+    timeout: float = 15.0,
+    check_interval: float = 0.5,
 ) -> None:
     """
     Wait for spans to be flushed to the span file with retry mechanism.
-    
+
     Args:
         span_file_path: Path to the span file
         expected_span_names: List of expected span names to wait for
         timeout: Maximum time to wait in seconds
         check_interval: Interval between checks in seconds
-    
+
     Raises:
         Exception: If timeout is reached or spans are not found
     """
     start_time = time.time()
-    
+
     while time.time() - start_time < timeout:
         # Check if file exists and is readable
         if os.path.exists(span_file_path) and os.path.getsize(span_file_path) > 0:
             try:
                 _, _, span_names = read_and_parse_span_file(span_file_path)
                 # Check if all expected spans are present
-                missing_spans = [name for name in expected_span_names if name not in span_names]
+                missing_spans = [
+                    name for name in expected_span_names if name not in span_names
+                ]
                 if not missing_spans:
                     return  # All expected spans found
             except Exception:
                 # File might be in the process of being written, continue waiting
                 pass
-        
+
         await anyio.sleep(check_interval)
-    
+
     # If we get here, timeout was reached
     if os.path.exists(span_file_path):
         try:
             _, _, span_names = read_and_parse_span_file(span_file_path)
-            raise Exception(f"Timeout waiting for spans. Expected {expected_span_names}, but found {span_names}")
+            raise Exception(
+                f"Timeout waiting for spans. Expected {expected_span_names}, but found {span_names}"
+            )
         except Exception as e:
-            raise Exception(f"Timeout waiting for spans. File exists but couldn't be read: {str(e)}")
+            raise Exception(
+                f"Timeout waiting for spans. File exists but couldn't be read: {str(e)}"
+            )
     else:
-        raise Exception(f"Timeout waiting for spans. Span file {span_file_path} does not exist")
+        raise Exception(
+            f"Timeout waiting for spans. Span file {span_file_path} does not exist"
+        )
 
 
 def test_wrong_opentelemetry_config():
@@ -254,11 +262,11 @@ class TestOpenTelemetryGlide:
 
         # Initialize OpenTelemetry
         OpenTelemetry.init(opentelemetry_config)
-        
+
         # Clean up before each test - ensure file is completely removed
         if os.path.exists(VALID_ENDPOINT_TRACES):
             os.unlink(VALID_ENDPOINT_TRACES)
-        
+
         # Give a small delay to ensure OpenTelemetry is fully initialized
         await anyio.sleep(0.1)
 
@@ -478,7 +486,9 @@ class TestOpenTelemetryGlide:
             await client.get(key)
 
         # Wait for spans to be flushed
-        await wait_for_spans_to_be_flushed(VALID_ENDPOINT_TRACES, expected_span_names=["Get"])
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -565,7 +575,9 @@ class TestOpenTelemetryGlide:
             assert response[1] >= 1  # batch.object_refcount("test_key")
 
         # Wait for spans to be flushed
-        await wait_for_spans_to_be_flushed(VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"])
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -614,7 +626,9 @@ class TestOpenTelemetryGlide:
         await client2.get("test_key")
 
         # Wait for spans to be flushed with retry mechanism
-        await wait_for_spans_to_be_flushed(VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"])
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
