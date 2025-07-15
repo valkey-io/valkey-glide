@@ -56,14 +56,14 @@ mod cluster_async {
     ) -> redis::RedisResult<redis::Value> {
         use futures_time::time::Duration;
         let mut delay_ms = 100u64;
-        
+
         for attempt in 0..max_retries {
             let result = redis::cmd("PUBLISH")
                 .arg(channel)
                 .arg(message)
                 .query_async(connection)
                 .await;
-            
+
             match result {
                 Ok(redis::Value::Int(count)) if count == expected_count => {
                     return Ok(redis::Value::Int(count));
@@ -81,7 +81,7 @@ mod cluster_async {
                 Err(e) => return Err(e),
             }
         }
-        
+
         // This should not be reached due to the loop logic above
         unreachable!()
     }
@@ -95,14 +95,14 @@ mod cluster_async {
     ) -> redis::RedisResult<redis::Value> {
         use futures_time::time::Duration;
         let mut delay_ms = 100u64;
-        
+
         for attempt in 0..max_retries {
             let result = redis::cmd("SPUBLISH")
                 .arg(channel)
                 .arg(message)
                 .query_async(connection)
                 .await;
-            
+
             match result {
                 Ok(redis::Value::Int(count)) if count == expected_count => {
                     return Ok(redis::Value::Int(count));
@@ -120,7 +120,7 @@ mod cluster_async {
                 Err(e) => return Err(e),
             }
         }
-        
+
         // This should not be reached due to the loop logic above
         unreachable!()
     }
