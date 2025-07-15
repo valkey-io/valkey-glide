@@ -24,23 +24,30 @@ describe("tls GlideClusterClient", () => {
     let client: GlideClusterClient;
 
     beforeAll(async () => {
-        cluster = await ValkeyCluster.createCluster(
-            true,
-            3,
-            2,
-            getServerVersion,
-            true,
-            TLS_OPTIONS,
-        );
+        try {
+            cluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                2,
+                getServerVersion,
+                true,
+                TLS_OPTIONS,
+            );
+        } catch (error) {
+            console.error("Failed to create cluster:", error);
+            throw new Error("Unable to create cluster for TLS tests");
+        }
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(
-            true,
-            cluster.getAddresses(),
-            client,
-            TLS_OPTIONS,
-        );
+        if (cluster) {
+            await flushAndCloseClient(
+                true,
+                cluster.getAddresses(),
+                client,
+                TLS_OPTIONS,
+            );
+        }
     });
 
     afterAll(async () => {
@@ -52,6 +59,10 @@ describe("tls GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clusterClient connect with insecure TLS (protocol: %p)",
         async (protocol) => {
+            if (!cluster) {
+                throw new Error("Cluster not available for testing");
+            }
+            
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -75,23 +86,30 @@ describe("tls GlideClient", () => {
     let client: GlideClient;
 
     beforeAll(async () => {
-        cluster = await ValkeyCluster.createCluster(
-            false,
-            1,
-            1,
-            getServerVersion,
-            true,
-            TLS_OPTIONS,
-        );
+        try {
+            cluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+                true,
+                TLS_OPTIONS,
+            );
+        } catch (error) {
+            console.error("Failed to create cluster:", error);
+            throw new Error("Unable to create cluster for TLS tests");
+        }
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(
-            false,
-            cluster.getAddresses(),
-            client,
-            TLS_OPTIONS,
-        );
+        if (cluster) {
+            await flushAndCloseClient(
+                false,
+                cluster.getAddresses(),
+                client,
+                TLS_OPTIONS,
+            );
+        }
     });
 
     afterAll(async () => {
@@ -103,6 +121,10 @@ describe("tls GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Standalone client connect with insecure TLS (protocol: %p)",
         async (protocol) => {
+            if (!cluster) {
+                throw new Error("Cluster not available for testing");
+            }
+            
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
