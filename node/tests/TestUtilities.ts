@@ -42,7 +42,7 @@ import {
     UnsignedEncoding,
     convertRecordToGlideRecord,
 } from "../build-ts";
-import { CleanupSocketFiles } from "../build-ts/native";
+
 const execAsync = promisify(exec);
 
 export function getRandomKey() {
@@ -525,9 +525,6 @@ export async function flushAndCloseClient(
     } finally {
         // some tests don't initialize a client
         client?.close();
-
-        // Clean up socket files to prevent accumulation and address reuse issues
-        CleanupSocketFiles();
     }
 }
 

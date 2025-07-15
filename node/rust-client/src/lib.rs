@@ -20,7 +20,7 @@ use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::client::ConnectionError;
 use glide_core::client::get_or_init_runtime;
 use glide_core::start_socket_listener;
-use glide_core::cleanup_socket_files;
+
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
@@ -196,11 +196,7 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
-#[napi(js_name = "CleanupSocketFiles")]
-pub fn cleanup_socket_files_external() -> Result<()> {
-    cleanup_socket_files();
-    Ok(())
-}
+
 
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
