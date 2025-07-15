@@ -395,8 +395,7 @@ class TestFt:
             == 1
         )
 
-        # Wait for the index to be updated to avoid flaky results
-        time.sleep(self.sleep_wait_time)  # 1 second should be sufficient for Valkey
+        time.sleep(self.sleep_wait_time)
 
         vector_param_name = "query_vector"
         knn_query = f"*=>[KNN 1 @{vector_field_name} ${vector_param_name}]"
@@ -408,7 +407,6 @@ class TestFt:
             ],
         )
 
-        # Try the search with retry logic to handle timing issues
         max_retries = 3
         last_exception = None
 
@@ -433,16 +431,14 @@ class TestFt:
                     }
                 }
                 assert knn_result[1] == expected_result
-                break  # Success, exit retry loop
+                break
 
             except AssertionError as e:
                 last_exception = e
                 if attempt < max_retries - 1:
-                    # Wait a bit more before retrying
                     time.sleep(self.sleep_wait_time)
                     continue
                 else:
-                    # Last attempt failed, re-raise the exception
                     raise last_exception
 
         assert await ft.dropindex(glide_client, json_index) == OK
