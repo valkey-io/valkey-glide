@@ -1776,7 +1776,6 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @Disabled("flaky test") // Related to issue #2277, #2642
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -1784,14 +1783,20 @@ public class CommandTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
-        // intentionally using a REPLICA route
-        Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
-        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         String funcName = libName;
+
+        // Create an actual key to get deterministic routing
+        String testKey = "test_key_for_routing_" + UUID.randomUUID().toString().replace("-", "_");
+        assertEquals(OK, clusterClient.set(testKey, "test_value").get());
+
+        // Use the actual key to get deterministic primary and replica routes
+        Route replicaRoute = new SlotKeyRoute(testKey, REPLICA);
+        Route primaryRoute = new SlotKeyRoute(testKey, PRIMARY);
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
+        // Load the function to all primary nodes to ensure it's available
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
         assertEquals(1L, clusterClient.wait(1L, 5000L).get());
@@ -1833,7 +1838,9 @@ public class CommandTests {
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
+        // Clean up: delete the function and test key
         assertEquals(OK, clusterClient.functionDelete(libName).get());
+        assertEquals(1L, clusterClient.del(new String[] {testKey}).get());
     }
 
     @SneakyThrows
@@ -1846,10 +1853,16 @@ public class CommandTests {
                 "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
-        // intentionally using a REPLICA route
-        Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
-        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         GlideString funcName = gs("fcall_readonly_function");
+
+        // Create an actual key to get deterministic routing
+        String testKey =
+                "test_key_for_routing_binary_" + UUID.randomUUID().toString().replace("-", "_");
+        assertEquals(OK, clusterClient.set(testKey, "test_value").get());
+
+        // Use the actual key to get deterministic primary and replica routes
+        Route replicaRoute = new SlotKeyRoute(testKey, REPLICA);
+        Route primaryRoute = new SlotKeyRoute(testKey, PRIMARY);
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
@@ -1892,7 +1905,9 @@ public class CommandTests {
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
 
+        // Clean up: delete the function and test key
         assertEquals(OK, clusterClient.functionDelete(libName).get());
+        assertEquals(1L, clusterClient.del(new String[] {testKey}).get());
     }
 
     @Timeout(20)
