@@ -17,6 +17,8 @@ use redis::{
     ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
     RedisResult, RetryStrategy, ScanStateRC, Value,
 };
+use std::sync::Arc;
+use bytes::BytesMut;
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
@@ -700,6 +702,7 @@ impl Client {
         hash: &'a str,
         keys: &Vec<&[u8]>,
         args: &Vec<&[u8]>,
+        code: Option<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
         let _ = self.get_or_initialize_client().await?;
@@ -710,10 +713,18 @@ impl Client {
             return result;
         };
         if err.kind() == ErrorKind::NoScriptError {
-            let Some(code) = get_script(hash) else {
+            // First try to get the script from the local container
+            let script_code: Arc<BytesMut> = if let Some(local_code) = get_script(hash) {
+                local_code
+            } else if let Some(provided_code) = code {
+                // If not found locally, use the provided code
+                Arc::new(BytesMut::from(provided_code))
+            } else {
+                // No script code available
                 return Err(err);
             };
-            let load = load_cmd(&code);
+            
+            let load = load_cmd(&script_code);
             self.send_command(&load, None).await?;
             self.send_command(&eval, routing).await
         } else {

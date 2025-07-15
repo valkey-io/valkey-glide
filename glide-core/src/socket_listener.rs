@@ -375,6 +375,7 @@ async fn invoke_script(
     hash: Chars,
     keys: Option<Vec<Bytes>>,
     args: Option<Vec<Bytes>>,
+    code: Option<Bytes>,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
@@ -389,7 +390,7 @@ async fn invoke_script(
         .unwrap_or_default();
 
     client
-        .invoke_script(&hash, &keys, &args, routing)
+        .invoke_script(&hash, &keys, &args, code.as_ref().map(|c| c.as_ref()), routing)
         .await
         .map_err(|err| err.into())
 }
@@ -578,6 +579,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                                     script.hash,
                                     Some(script.keys),
                                     Some(script.args),
+                                    script.code,
                                     client,
                                     routes,
                                 )
@@ -595,7 +597,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
-                                invoke_script(script.hash, keys, args, client, routes).await
+                                invoke_script(script.hash, keys, args, None, client, routes).await
                             }
                             Err(e) => Err(e),
                         }

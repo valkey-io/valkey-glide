@@ -495,6 +495,7 @@ message ScriptInvocation {
     string hash = 1;
     repeated bytes keys = 2;
     repeated bytes args = 3;
+    optional bytes code = 4;
 }
 
 message Batch {

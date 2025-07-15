@@ -582,6 +582,7 @@ pub fn drop_otel_span(span_ptr: BigInt) {
 /// A wrapper for a script object. As long as this object is alive, the script's code is saved in memory, and can be resent to the server.
 struct Script {
     hash: String,
+    code: Vec<u8>,
 }
 
 #[napi]
@@ -590,11 +591,17 @@ impl Script {
     #[napi(constructor)]
     #[allow(dead_code)]
     pub fn new(code: Either<String, Uint8Array>) -> Self {
+        let code_bytes = match &code {
+            Either::A(code_str) => code_str.as_bytes().to_vec(),
+            Either::B(code_bytes) => code_bytes.to_vec(),
+        };
+        
         let hash = match code {
             Either::A(code_str) => glide_core::scripts_container::add_script(code_str.as_bytes()),
             Either::B(code_bytes) => glide_core::scripts_container::add_script(&code_bytes),
         };
-        Self { hash }
+        
+        Self { hash, code: code_bytes }
     }
 
     /// Returns the hash of the script.
@@ -602,6 +609,13 @@ impl Script {
     #[allow(dead_code)]
     pub fn get_hash(&self) -> String {
         self.hash.clone()
+    }
+
+    /// Returns the original code of the script.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn get_code(&self) -> Uint8Array {
+        self.code.clone().into()
     }
 
     /// Internal release logic used both by Drop and napi-exposed `release()`.

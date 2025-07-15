@@ -4356,6 +4356,7 @@ export class BaseClient {
             args: options?.args?.map((arg) =>
                 typeof arg === "string" ? Buffer.from(arg) : arg,
             ),
+            code: script.getCode(),
         });
         return this.createScriptInvocationPromise(scriptInvocation, options);
     }
