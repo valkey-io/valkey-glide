@@ -2,6 +2,7 @@
 package glide.api;
 
 import glide.api.models.GlideString;
+import glide.api.models.BaseBatch;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
