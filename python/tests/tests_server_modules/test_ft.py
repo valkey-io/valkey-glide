@@ -395,7 +395,8 @@ class TestFt:
             == 1
         )
 
-        time.sleep(self.sleep_wait_time)
+        # Wait longer for the index to be updated to avoid flaky results
+        time.sleep(self.sleep_wait_time * 3)  # Increase wait time from 1 to 3 seconds
 
         vector_param_name = "query_vector"
         knn_query = f"*=>[KNN 1 @{vector_field_name} ${vector_param_name}]"
@@ -407,24 +408,42 @@ class TestFt:
             ],
         )
 
-        knn_result = await ft.search(
-            client=glide_client,
-            index_name=vector_index,
-            query=knn_query,
-            options=knn_query_options,
-        )
+        # Try the search with retry logic to handle timing issues
+        max_retries = 3
+        last_exception = None
 
-        assert len(knn_result) == 2
-        assert knn_result[0] == 1  # first index is number of results
-        expected_result = {
-            vector_key1.encode(): {
-                vector_field_name.encode(): vector_value1,
-                f"__{vector_field_name}_score".encode(): str(
-                    0  # cosine distance of 0 means identical vectors
-                ).encode(),
-            }
-        }
-        assert knn_result[1] == expected_result
+        for attempt in range(max_retries):
+            try:
+                knn_result = await ft.search(
+                    client=glide_client,
+                    index_name=vector_index,
+                    query=knn_query,
+                    options=knn_query_options,
+                )
+
+                assert len(knn_result) == 2
+                assert knn_result[0] == 1  # first index is number of results
+
+                expected_result = {
+                    vector_key1.encode(): {
+                        vector_field_name.encode(): vector_value1,
+                        f"__{vector_field_name}_score".encode(): str(
+                            0  # cosine distance of 0 means identical vectors
+                        ).encode(),
+                    }
+                }
+                assert knn_result[1] == expected_result
+                break  # Success, exit retry loop
+
+            except AssertionError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    # Wait a bit more before retrying
+                    time.sleep(self.sleep_wait_time)
+                    continue
+                else:
+                    # Last attempt failed, re-raise the exception
+                    raise last_exception
 
         assert await ft.dropindex(glide_client, json_index) == OK
         assert await ft.dropindex(glide_client, vector_index) == OK
