@@ -7,7 +7,7 @@ import { CleanupSocketFiles } from "../build-ts/native";
 beforeAll(() => {
     Logger.init("error", "log.log");
     // Logger.setLoggerConfig("off");
-    
+
     // Clean up any leftover socket files from previous test runs
     // This helps prevent "Can't assign requested address" errors on MacOS
     CleanupSocketFiles();
@@ -24,15 +24,15 @@ afterEach(() => {
 const cleanupOnExit = () => {
     try {
         CleanupSocketFiles();
-    } catch (error) {
+    } catch {
         // Ignore errors during cleanup
     }
 };
 
-process.on('exit', cleanupOnExit);
-process.on('SIGINT', cleanupOnExit);
-process.on('SIGTERM', cleanupOnExit);
-process.on('SIGQUIT', cleanupOnExit);
+process.on("exit", cleanupOnExit);
+process.on("SIGINT", cleanupOnExit);
+process.on("SIGTERM", cleanupOnExit);
+process.on("SIGQUIT", cleanupOnExit);
 
 declare global {
     var CLI_ARGS: Record<string, string | boolean | number>;

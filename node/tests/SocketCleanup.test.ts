@@ -17,10 +17,10 @@ describe("Socket Cleanup Tests", () => {
 
     afterEach(() => {
         // Clean up test files
-        testSocketPaths.forEach(path => {
+        testSocketPaths.forEach((path) => {
             try {
                 fs.unlinkSync(path);
-            } catch (error) {
+            } catch {
                 // Ignore errors - file might already be cleaned up
             }
         });
@@ -32,16 +32,16 @@ describe("Socket Cleanup Tests", () => {
         const testFiles = [
             `${SOCKET_DIR}/glide-socket-12345-abc123.sock`,
             `${SOCKET_DIR}/glide-socket-67890-def456.sock`,
-            `${SOCKET_DIR}/glide-socket-11111-ghi789.sock`
+            `${SOCKET_DIR}/glide-socket-11111-ghi789.sock`,
         ];
 
-        testFiles.forEach(path => {
+        testFiles.forEach((path) => {
             fs.writeFileSync(path, "");
             testSocketPaths.push(path);
         });
 
         // Verify files exist before cleanup
-        testFiles.forEach(path => {
+        testFiles.forEach((path) => {
             expect(fs.existsSync(path)).toBe(true);
         });
 
@@ -49,7 +49,7 @@ describe("Socket Cleanup Tests", () => {
         CleanupSocketFiles();
 
         // Verify files are removed after cleanup
-        testFiles.forEach(path => {
+        testFiles.forEach((path) => {
             expect(fs.existsSync(path)).toBe(false);
         });
     });
@@ -60,16 +60,16 @@ describe("Socket Cleanup Tests", () => {
             `${SOCKET_DIR}/other-socket-12345.sock`,
             `${SOCKET_DIR}/glide-socket-12345.txt`, // wrong extension
             `${SOCKET_DIR}/glide-socket-12345`, // no extension
-            `${SOCKET_DIR}/socket-12345.sock` // wrong prefix
+            `${SOCKET_DIR}/socket-12345.sock`, // wrong prefix
         ];
 
-        nonMatchingFiles.forEach(path => {
+        nonMatchingFiles.forEach((path) => {
             fs.writeFileSync(path, "");
             testSocketPaths.push(path);
         });
 
         // Verify files exist before cleanup
-        nonMatchingFiles.forEach(path => {
+        nonMatchingFiles.forEach((path) => {
             expect(fs.existsSync(path)).toBe(true);
         });
 
@@ -77,7 +77,7 @@ describe("Socket Cleanup Tests", () => {
         CleanupSocketFiles();
 
         // Verify files are NOT removed after cleanup
-        nonMatchingFiles.forEach(path => {
+        nonMatchingFiles.forEach((path) => {
             expect(fs.existsSync(path)).toBe(true);
         });
     });
