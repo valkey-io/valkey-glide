@@ -178,6 +178,11 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
+    }
+
+    @SneakyThrows
     public static Stream<Arguments> getClientsWithAtomic() {
         return clients.stream()
                 .flatMap(

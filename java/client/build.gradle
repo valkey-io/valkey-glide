@@ -99,11 +99,8 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
-    } else {
-        commandLine 'cargo', 'build', '--release'
-    }
+    // Temporarily disable zigbuild for development/testing
+    commandLine 'cargo', 'build', '--release'
 
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'

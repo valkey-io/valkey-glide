@@ -65,6 +65,11 @@ public class SharedClientTests {
     }
 
     @SneakyThrows
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
+    }
+
+    @SneakyThrows
     public static Stream<Arguments> getTimeoutClients() {
         return Stream.of(
                 Arguments.of(named("GlideClient", createGlideClientWithTimeout())),
