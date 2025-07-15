@@ -44,14 +44,20 @@ describe("Scan GlideClusterClient", () => {
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(true, cluster.getAddresses(), client);
+        if (cluster) {
+            await flushAndCloseClient(true, cluster.getAddresses(), client);
+        }
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
+            if (cluster) {
+                await cluster.close();
+            }
         } else {
-            await cluster.close(true);
+            if (cluster) {
+                await cluster.close(true);
+            }
         }
     });
 
@@ -560,14 +566,20 @@ describe("Scan GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
+        if (cluster) {
+            await flushAndCloseClient(false, cluster.getAddresses(), client);
+        }
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
+            if (cluster) {
+                await cluster.close();
+            }
         } else {
-            await cluster.close(true);
+            if (cluster) {
+                await cluster.close(true);
+            }
         }
     });
 

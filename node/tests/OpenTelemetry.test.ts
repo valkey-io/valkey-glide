@@ -206,14 +206,20 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     afterEach(async () => {
         await teardown_otel_test();
-        await flushAndCloseClient(true, cluster.getAddresses(), client);
+        if (cluster) {
+            await flushAndCloseClient(true, cluster.getAddresses(), client);
+        }
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
+            if (cluster) {
+                await cluster.close();
+            }
         } else {
-            await cluster.close(true);
+            if (cluster) {
+                await cluster.close(true);
+            }
         }
     });
 
@@ -509,14 +515,20 @@ describe("OpenTelemetry GlideClient", () => {
             fs.unlinkSync(VALID_ENDPOINT_TRACES);
         }
 
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
+        if (cluster) {
+            await flushAndCloseClient(false, cluster.getAddresses(), client);
+        }
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
+            if (cluster) {
+                await cluster.close();
+            }
         } else {
-            await cluster.close(true);
+            if (cluster) {
+                await cluster.close(true);
+            }
         }
     });
 

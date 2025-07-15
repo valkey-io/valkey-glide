@@ -78,17 +78,29 @@ describe("GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
-        await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
+        if (cluster) {
+            await flushAndCloseClient(false, cluster.getAddresses(), client);
+        }
+        if (azCluster) {
+            await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
+        }
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.close();
-            await azCluster.close();
+            if (cluster) {
+                await cluster.close();
+            }
+            if (azCluster) {
+                await azCluster.close();
+            }
         } else {
-            await cluster.close(true);
-            await azCluster.close();
+            if (cluster) {
+                await cluster.close(true);
+            }
+            if (azCluster) {
+                await azCluster.close();
+            }
         }
     }, TIMEOUT);
 
