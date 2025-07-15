@@ -71,9 +71,6 @@ internal interface ISortedSetCommands
     /// </remarks>
     Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None);
 
-    /// <inheritdoc cref="SortedSetRemoveAsync(ValkeyKey, ValkeyValue, CommandFlags)" />
-
-
     /// <summary>
     /// Removes the specified member from the sorted set stored at key.
     /// Non existing members are ignored.
@@ -104,7 +101,7 @@ internal interface ISortedSetCommands
     /// <remarks>
     /// <example>
     /// <code>
-    /// long result = await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" });
+    /// long result = await client.SortedSetRemoveAsync(key, ["member1", "member2"]);
     /// </code>
     /// </example>
     /// </remarks>
